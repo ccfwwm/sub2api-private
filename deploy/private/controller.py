@@ -234,7 +234,7 @@ class Controller:
 
     def sql(self, query, container="sub2api-postgres"):
         return run(["docker", "exec", "-i", container, "sh", "-c",
-                    'PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000" '
+                    'PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000 -c timezone=UTC" '
                     'psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
                    stdin=query.encode()).decode().strip()
 
@@ -310,7 +310,7 @@ class Controller:
                     'psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            process.stdin.write("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT pg_export_snapshot();\n")
+            process.stdin.write("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET LOCAL TIME ZONE 'UTC'; SELECT pg_export_snapshot();\n")
             process.stdin.flush()
             snapshot = process.stdout.readline().strip()
             if not re.fullmatch(r"[0-9A-Fa-f-]+", snapshot):
@@ -347,7 +347,7 @@ class Controller:
         if table not in PROTECTED:
             raise ValueError("table not allowed")
         return (f'SELECT count(*)::text || \'|\' || md5(coalesce(string_agg(h, \'\' ORDER BY h), \'\')) '
-                f'FROM (SELECT md5(row_to_json(t)::text) h FROM "{table}" t) rows;')
+                f'FROM (SELECT md5(row_to_json(t)::text) h FROM "{table}" t) fingerprint_rows;')
 
     def rehearse(self, job, backup):
         prefix = "sub2api-rehearsal-" + job["id"][:12]

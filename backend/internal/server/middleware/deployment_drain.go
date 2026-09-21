@@ -47,6 +47,12 @@ func DeploymentDrain(marker string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Maintenance in progress; retry shortly"})
 			return
 		}
+		// The admin dashboard keeps a read-only telemetry socket open forever.
+		// It may reconnect after maintenance and must not prevent business drain.
+		if c.Request.URL.Path == "/api/v1/admin/ops/ws/qps" {
+			c.Next()
+			return
+		}
 		active.Add(1)
 		defer active.Add(-1)
 		c.Next()

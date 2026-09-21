@@ -52,7 +52,7 @@ def main():
                'ADMIN_EMAIL': 'fixture@example.invalid', 'ADMIN_PASSWORD': secrets.token_hex(20)}
         compose = {'services': {
             'postgres': {'image': 'postgres:18-alpine', 'container_name': 'sub2api-postgres',
-                         'environment': {'POSTGRES_USER': 'sub2api', 'POSTGRES_DB': 'sub2api', 'POSTGRES_PASSWORD': password}},
+                         'environment': {'POSTGRES_USER': 'sub2api', 'POSTGRES_DB': 'sub2api', 'POSTGRES_PASSWORD': password, 'TZ': 'Asia/Shanghai'}},
             'redis': {'image': 'redis:8-alpine', 'container_name': 'sub2api-redis'},
             'sub2api': {'image': base, 'container_name': 'sub2api', 'environment': env,
                         'ports': ['127.0.0.1:8081:8080'], 'volumes': [str(prod / 'data') + ':/app/data']}},

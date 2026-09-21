@@ -52,7 +52,7 @@ func CallImageDeployment(ctx context.Context, request *ImageDeploymentRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("host deployment service is unavailable")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024+1))
 	if err != nil || len(data) > 1024*1024 || !json.Valid(data) {
 		return nil, fmt.Errorf("invalid host deployment response")

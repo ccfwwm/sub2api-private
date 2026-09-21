@@ -64,7 +64,12 @@ func NewGitHubReleaseClient(proxyURL string, allowDirectOnProxyError bool) servi
 
 	token := os.Getenv("UPDATE_GITHUB_TOKEN")
 	if path := os.Getenv("UPDATE_GITHUB_TOKEN_FILE"); path != "" {
-		content, readErr := os.ReadFile(path)
+		// Only the dedicated read-only secret mount is accepted. This is not a
+		// general file-reading capability for application settings.
+		if path != "/run/secrets/sub2api-release-token" {
+			return &githubReleaseClientError{err: fmt.Errorf("unsupported private release credential path")}
+		}
+		content, readErr := os.ReadFile("/run/secrets/sub2api-release-token")
 		if readErr != nil {
 			return &githubReleaseClientError{err: fmt.Errorf("cannot read private release credential file")}
 		}
