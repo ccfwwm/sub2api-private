@@ -361,7 +361,7 @@ class Manager:
             self.save(job, 'succeeded')
             return
         original = self.preflight()
-        if action == 'upgrade':
+        if action in ('prepare', 'upgrade'):
             image, manifest = self.offline(arg)
             self.c.assert_migrations(manifest)
         else:
@@ -372,8 +372,12 @@ class Manager:
         folder, meta = self.backup(job)
         rescue = self.target(inspect(meta['runtime_image'])['Id'])
         atomic_json(self.state / 'jobs' / (job['id'] + '-rescue.json'), rescue)
-        if action == 'upgrade':
+        if action in ('prepare', 'upgrade'):
             self.rehearse(job, folder, meta, image, arg)
+            if action == 'prepare':
+                job['prepared_only'] = True
+                self.save(job, 'succeeded')
+                return
             target = self.target(image)
         elif action == 'rollback':
             self.rehearse(job, folder, meta, image)
@@ -392,7 +396,7 @@ class Manager:
 
 def main():
     parser = argparse.ArgumentParser(description='Sub2API 离线生产管理。任务由 systemd 后台执行，SSH 断开不影响。')
-    parser.add_argument('action', choices=['status', 'logs', 'list', 'backup', 'verify', 'upgrade', 'rollback', 'restore', 'rescue', '_worker'])
+    parser.add_argument('action', choices=['status', 'logs', 'list', 'backup', 'verify', 'prepare', 'upgrade', 'rollback', 'restore', 'rescue', '_worker'])
     parser.add_argument('target', nargs='?', default='')
     parser.add_argument('--confirm', default='', help='写操作须与动作同名大写：BACKUP / VERIFY / UPGRADE / ROLLBACK / RESTORE')
     args = parser.parse_args()
@@ -436,7 +440,7 @@ def main():
         return
     if args.confirm != args.action.upper():
         raise SystemExit('未执行。备份/验证增加磁盘与 CPU 负载；升级/回滚短暂停服；恢复会让应用使用备份时的数据。确认后加 --confirm ' + args.action.upper())
-    if args.action == 'upgrade':
+    if args.action in ('prepare', 'upgrade'):
         if not VERSION.fullmatch(args.target):
             raise SystemExit('upgrade requires vMAJOR.MINOR.PATCH')
     elif args.action != 'backup':

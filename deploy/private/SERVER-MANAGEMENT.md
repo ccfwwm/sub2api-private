@@ -20,6 +20,8 @@
 /root/sub2api-manage backup --confirm BACKUP
 # 用备份实际恢复临时数据库，核对核心表指纹并验证程序启动
 /root/sub2api-manage verify <备份ID> --confirm VERIFY
+# 仅做升级前准备：备份并验证指定新镜像，不排空请求、不切换容器
+/root/sub2api-manage prepare v1.0.1 --confirm PREPARE
 # 升级到已经预置且注册了发布清单的私有镜像
 /root/sub2api-manage upgrade v1.0.1 --confirm UPGRADE
 # 只回滚程序到某次备份捕获的实际运行版本，保留当前数据库

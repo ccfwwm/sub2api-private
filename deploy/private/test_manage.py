@@ -61,6 +61,20 @@ class ManagementSafetyTests(unittest.TestCase):
             self.manager.c.sql('SELECT 1;')
         self.assertEqual(run.call_args.args[0][3], 'recovered-pg')
 
+    def test_prepare_never_enters_cutover(self):
+        job = {'id': 'a' * 32, 'action': 'prepare', 'target': 'v1.0.1'}
+        with patch.object(self.manager, 'preflight', return_value={'Id': 'old'}), \
+             patch.object(self.manager, 'offline', return_value=('image', {})), \
+             patch.object(self.manager.c, 'assert_migrations'), \
+             patch.object(self.manager, 'backup', return_value=(self.root, {'runtime_image': 'old'})), \
+             patch('manage.inspect', return_value={'Id': 'old'}), \
+             patch.object(self.manager, 'rehearse'), \
+             patch.object(self.manager, 'cutover') as cutover:
+            self.manager.execute(job)
+        self.assertTrue(job['prepared_only'])
+        self.assertEqual(job['status'], 'succeeded')
+        cutover.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
