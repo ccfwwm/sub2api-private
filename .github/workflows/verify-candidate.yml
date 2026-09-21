@@ -11,6 +11,10 @@ on:
         required: true
         default: v1.0.0
         type: string
+      operations:
+        description: 'Also test server management backup/restore/upgrade scripts'
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: read
@@ -30,6 +34,7 @@ jobs:
           DIGEST: ${{ inputs.digest }}
           VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPS: ${{ inputs.operations }}
         run: |
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "$VERSION" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]
@@ -44,3 +49,6 @@ jobs:
           python3 -c 'import json,pathlib; p=pathlib.Path("deployment.json"); m=json.loads(p.read_text()); m["commit"]=pathlib.Path("image-commit.txt").read_text().strip(); p.write_text(json.dumps(m))'
           sudo install -d -m 755 /run/sub2api-deployer
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
+          if [ "$OPS" = true ]; then
+            sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
+          fi

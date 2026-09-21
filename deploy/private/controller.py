@@ -232,13 +232,14 @@ class Controller:
     def inspect(self):
         return json.loads(run(["docker", "inspect", "sub2api"]))[0]
 
-    def sql(self, query, container="sub2api-postgres"):
+    def sql(self, query, container=None):
+        container = container or self.config.get("database_container", "sub2api-postgres")
         return run(["docker", "exec", "-i", container, "sh", "-c",
                     'PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000 -c timezone=UTC" '
                     'psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
                    stdin=query.encode()).decode().strip()
 
-    def migrations(self, container="sub2api-postgres"):
+    def migrations(self, container=None):
         rows = self.sql("SELECT filename || '|' || checksum FROM schema_migrations ORDER BY filename;", container)
         return dict(line.split("|") for line in rows.splitlines())
 
@@ -305,7 +306,8 @@ class Controller:
     def backup_database(self, backup):
         # Hold one exported MVCC snapshot for both the dump and protected-table
         # fingerprints. Concurrent production writes do not invalidate comparison.
-        process = subprocess.Popen(["docker", "exec", "-i", "sub2api-postgres", "sh", "-c",
+        container = self.config.get("database_container", "sub2api-postgres")
+        process = subprocess.Popen(["docker", "exec", "-i", container, "sh", "-c",
                     'PGOPTIONS="-c statement_timeout=30000 -c idle_in_transaction_session_timeout=3600000" '
                     'psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -324,7 +326,7 @@ class Controller:
                     raise RuntimeError("cannot fingerprint protected table")
                 expected[table] = fingerprint
             with (backup / "database.dump").open("wb") as f:
-                run(["docker", "exec", "sub2api-postgres", "sh", "-c",
+                run(["docker", "exec", container, "sh", "-c",
                      'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc '
                      '--exclude-table-data=public.ops_system_logs --snapshot="$1"', "sh", snapshot], stdout=f)
             atomic_json(backup / "protected-snapshot.json", expected)
@@ -339,7 +341,7 @@ class Controller:
                 process.kill()
                 process.wait()
         with (backup / "globals.sql").open("wb") as f:
-            run(["docker", "exec", "sub2api-postgres", "sh", "-c",
+            run(["docker", "exec", container, "sh", "-c",
                  'pg_dumpall -U "$POSTGRES_USER" --globals-only'], stdout=f)
 
     @staticmethod

@@ -22,6 +22,7 @@ def main():
         raise SystemExit('Disposable GitHub-hosted CI runner required')
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', required=True)
+    parser.add_argument('--ops', action='store_true')
     args = parser.parse_args()
     manifest = json.loads(Path(args.manifest).read_text())
     image = manifest['image'] + '@' + manifest['digest']
@@ -71,6 +72,33 @@ def main():
             run(['docker', 'exec', '-u', '0', 'sub2api', 'touch', '/app/fixture-runtime-marker'])
             dependencies = {n: json.loads(run(['docker', 'inspect', n]))[0]['State']['StartedAt']
                             for n in ['sub2api-postgres', 'sub2api-redis']}
+            if args.ops:
+                from manage import Manager
+                manager = Manager(root / 'ops-state', prod)
+                release = manager.state / 'releases' / manifest['version']
+                release.mkdir(parents=True)
+                (release / 'deployment.json').write_text(json.dumps(manifest))
+                (release / 'image-inspect.json').write_bytes(run(['docker', 'image', 'inspect', image]))
+                run(['docker', 'tag', image, manifest['image'] + ':' + manifest['version']])
+                def operation(action, target=''):
+                    j = {'id': uuid.uuid4().hex, 'action': action, 'target': target}
+                    manager.execute(j)
+                    assert j['status'] == 'succeeded', j
+                    return j
+                backup = operation('backup')['backup_id']
+                operation('verify', backup)
+                operation('upgrade', manifest['version'])
+                operation('rollback', backup)
+                run(['docker', 'exec', 'sub2api', 'test', '-f', '/app/fixture-runtime-marker'])
+                restored = operation('restore', backup)
+                assert manager.active()['x-ops']['postgres'] != 'sub2api-postgres'
+                operation('backup')  # must back up the active recovered database
+                operation('rescue', restored['id'])
+                assert manager.active()['x-ops']['postgres'] == 'sub2api-postgres'
+                for n, started in dependencies.items():
+                    assert json.loads(run(['docker', 'inspect', n]))[0]['State']['StartedAt'] == started
+                print('PASS OPS: offline upgrade, runtime rollback, isolated restore, recovered-database backup, emergency rescue; original DB/Redis unchanged')
+                return
             job = {'id': uuid.uuid4().hex, 'version': manifest['version']}
             c.prepare(job)
             assert job['status'] == 'ready'
@@ -89,7 +117,7 @@ def main():
             for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis']:
                 subprocess.run(['docker', 'logs', '--tail', '35', name], check=False)
                 subprocess.run(['docker', 'inspect', '--format', '{{json .State}}', name], check=False)
-            errors = c.state / 'command-errors.log'
+            errors = (manager.state if args.ops else c.state) / 'command-errors.log'
             if errors.exists():
                 print(errors.read_text(errors='replace')[-6000:])
             raise
