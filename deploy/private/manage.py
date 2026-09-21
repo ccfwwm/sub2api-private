@@ -118,9 +118,13 @@ class Manager:
              '.env', 'docker-compose.yml', 'docker-compose.override.yml', 'pricing-overlay'])
         redis = self.active()['x-ops']['redis']
         rdb = '/tmp/sub2api-ops-' + bid + '.rdb'
+        redis_password = dict(x.split('=', 1) for x in original['Config']['Env']).get('REDIS_PASSWORD', '')
+        redis_exec = ['docker', 'exec']
+        if redis_password:
+            redis_exec += ['-e', 'REDISCLI_AUTH=' + redis_password]
         with (folder / 'redis.rdb').open('wb') as out:
-            run(['docker', 'exec', redis, 'sh', '-c',
-                 'export REDISCLI_AUTH="${REDIS_PASSWORD:-}"; redis-cli --rdb "$1" >/dev/null 2>&1 && cat "$1" && rm "$1"', 'sh', rdb], stdout=out)
+            run(redis_exec + [redis, 'sh', '-c',
+                 'redis-cli --rdb "$1" >/dev/null && cat "$1" && rm "$1"', 'sh', rdb], stdout=out)
         metadata = {'id': bid, 'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     'runtime_image': tag, 'binary_sha256': binary.decode(), 'migrations': self.c.migrations(),
                     'active': self.active(), 'application': original,
@@ -361,6 +365,8 @@ class Manager:
             raise ValueError('unknown action')
         if self.c.inspect()['Id'] != original['Id'] or self.c.config_hashes() != meta['compose_hashes']:
             raise ValueError('production changed during preparation')
+        if run(['docker', 'exec', 'sub2api', 'sha256sum', '/app/sub2api']).decode().split()[0] != meta['binary_sha256']:
+            raise ValueError('production runtime changed during preparation')
         self.c.assert_migrations({'migrations': meta['migrations']})
         self.cutover(job, target, rescue, arg if action == 'upgrade' else '')
 
