@@ -488,6 +488,10 @@ class Controller:
             self.save(job, "switching")
             self.switch(job["image"])
             marker.unlink(missing_ok=True)
+            # The application caches the drain marker briefly. Health bypasses
+            # draining, so wait for normal admission before verifying settings.
+            self.wait_command(["curl", "-fsS", "--max-time", "5",
+                               "http://127.0.0.1:8081/api/v1/settings/public"], 30)
             settings = json.loads(run(["curl", "-fsS", "--max-time", "10",
                                       "http://127.0.0.1:8081/api/v1/settings/public"]))
             if settings.get("data", {}).get("version", "").lstrip("v") != job["version"][1:]:
