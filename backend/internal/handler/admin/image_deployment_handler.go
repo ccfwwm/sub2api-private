@@ -7,6 +7,15 @@ import (
 	"net/http"
 )
 
+func (h *SystemHandler) ImageReleases(c *gin.Context) {
+	versions, err := h.updateSvc.ListImageReleases(c.Request.Context())
+	if err != nil {
+		response.Error(c, http.StatusBadGateway, "Private release list is unavailable; check the read-only GitHub credential")
+		return
+	}
+	response.Success(c, gin.H{"versions": versions})
+}
+
 func (h *SystemHandler) ImageDeploymentStatus(c *gin.Context) {
 	result, err := service.CallImageDeployment(c.Request.Context(), nil)
 	if err != nil {

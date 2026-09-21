@@ -31,6 +31,8 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_request({'action': 'prepare', 'version': value, 'confirm': True})
         for req in [{'action': 'prepare', 'version': 'v1.0.0'},
+                    {'action': 'prepare', 'version': 1, 'confirm': True},
+                    {'action': 'deploy', 'job_id': None, 'confirm': True},
                     {'action': 'deploy', 'job_id': '../test', 'confirm': True},
                     {'action': 'prepare', 'version': 'v1.0.0', 'confirm': True, 'command': 'id'}]:
             with self.assertRaises(ValueError):

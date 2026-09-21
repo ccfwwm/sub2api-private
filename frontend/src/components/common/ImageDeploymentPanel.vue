@@ -12,8 +12,12 @@
       <p>构建不会自动上线。先准备版本并验证备份，再手动执行切换。</p>
       <p v-if="error" role="alert" class="break-words text-red-600">{{ error }}</p>
       <p v-if="state && !state.enabled" class="text-amber-700">生产部署尚未启用，请先由服务器管理员完成安装与授权。</p>
-      <label class="block">版本标签
-        <input v-model="target" placeholder="v1.0.0" class="mt-1 w-full rounded border p-2 dark:bg-dark-900" :disabled="busy" />
+      <p v-if="releaseError" class="text-amber-700">{{ releaseError }}</p>
+      <label class="block">已构建并验证的正式版本
+        <select v-model="target" class="mt-1 w-full rounded border p-2 dark:bg-dark-900" :disabled="busy || !versions.length">
+          <option value="">选择版本</option>
+          <option v-for="release in versions" :key="release.version" :value="release.version">{{ release.version }}</option>
+        </select>
       </label>
       <label class="flex gap-2">
         <input v-model="confirmed" type="checkbox" :disabled="busy" />
@@ -35,7 +39,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { getImageDeployment, requestImageDeployment, type ImageDeploymentState } from '@/api/admin/system'
+import { getImageDeployment, getImageReleases, requestImageDeployment, type ImageDeploymentState, type RollbackVersionInfo } from '@/api/admin/system'
 
 withDefaults(defineProps<{ version?: string; repository?: string }>(), { repository: 'ccfwwm/sub2api-private' })
 const open = ref(false)
@@ -43,6 +47,8 @@ const target = ref('')
 const confirmed = ref(false)
 const busy = ref(false)
 const error = ref('')
+const releaseError = ref('')
+const versions = ref<RollbackVersionInfo[]>([])
 const state = ref<ImageDeploymentState | null>(null)
 let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
@@ -74,7 +80,13 @@ async function refresh() {
 }
 async function toggle() {
   open.value = !open.value
-  if (open.value) await refresh()
+  if (open.value) {
+    void refresh()
+    try {
+      versions.value = (await getImageReleases()).versions
+      releaseError.value = versions.value.length ? '' : '暂无已验证的正式版本'
+    } catch { releaseError.value = '无法读取私有版本列表，请检查 GitHub 只读凭据。' }
+  }
   else clearTimeout(timer)
 }
 async function act(action: 'prepare' | 'deploy' | 'rollback') {

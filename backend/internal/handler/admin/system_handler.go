@@ -21,6 +21,7 @@ type systemUpdateService interface {
 	PerformUpdate(ctx context.Context) error
 	Rollback() error
 	ListRollbackVersions(ctx context.Context) ([]service.RollbackVersion, error)
+	ListImageReleases(ctx context.Context) ([]service.RollbackVersion, error)
 	RollbackToVersion(ctx context.Context, version string) error
 }
 

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -21,6 +22,31 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
+
+var privateReleaseTag = regexp.MustCompile(`^v[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
+
+// ListImageReleases exposes only stable releases containing the deployment
+// inventory produced after image validation. The host revalidates on prepare.
+func (s *UpdateService) ListImageReleases(ctx context.Context) ([]RollbackVersion, error) {
+	releases, err := s.githubClient.FetchRecentReleases(ctx, githubRepo, 30)
+	if err != nil {
+		return nil, err
+	}
+	versions := make([]RollbackVersion, 0)
+	for _, release := range releases {
+		if release == nil || release.Draft || release.Prerelease || !privateReleaseTag.MatchString(release.TagName) {
+			continue
+		}
+		for _, asset := range release.Assets {
+			if asset.Name == "deployment.json" {
+				versions = append(versions, RollbackVersion{Version: release.TagName, PublishedAt: release.PublishedAt, HTMLURL: release.HTMLURL})
+				break
+			}
+		}
+	}
+	sort.SliceStable(versions, func(i, j int) bool { return compareVersions(versions[i].Version, versions[j].Version) > 0 })
+	return versions, nil
+}
 
 var (
 	ErrNoUpdateAvailable         = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")

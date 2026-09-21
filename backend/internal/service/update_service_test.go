@@ -28,6 +28,23 @@ func TestUpdateServiceRejectsOfficialCacheAfterPrivateSourceSwitch(t *testing.T)
 	require.True(t, info.Cached)
 }
 
+func TestUpdateServiceListsOnlyValidatedStableImages(t *testing.T) {
+	asset := []GitHubAsset{{Name: "deployment.json"}}
+	svc := NewUpdateService(nil, &updateServiceGitHubClientStub{recentReleases: []*GitHubRelease{
+		{TagName: "v1.0.0", Assets: asset},
+		{TagName: "v1.2.0", Assets: asset},
+		{TagName: "v1.3.0", Assets: asset, Draft: true},
+		{TagName: "v1.4.0", Assets: asset, Prerelease: true},
+		{TagName: "v1.5.0"},
+		{TagName: "v1.6.0-rc1", Assets: asset},
+	}}, "1.0.0", "release")
+	versions, err := svc.ListImageReleases(context.Background())
+	require.NoError(t, err)
+	require.Len(t, versions, 2)
+	require.Equal(t, "v1.2.0", versions[0].Version)
+	require.Equal(t, "v1.0.0", versions[1].Version)
+}
+
 type updateServiceCacheStub struct {
 	data string
 }

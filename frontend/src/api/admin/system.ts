@@ -127,6 +127,10 @@ export interface ImageDeploymentState {
   image: string
   job: ImageDeploymentJob | null
 }
+export async function getImageReleases(): Promise<{ versions: RollbackVersionInfo[] }> {
+  const { data } = await apiClient.get<{ versions: RollbackVersionInfo[] }>('/admin/system/image-releases')
+  return data
+}
 export async function getImageDeployment(): Promise<ImageDeploymentState> {
   const { data } = await apiClient.get<ImageDeploymentState>('/admin/system/image-deployment')
   return data

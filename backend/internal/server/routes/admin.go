@@ -659,6 +659,7 @@ func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	system := admin.Group("/system")
 	{
 		system.GET("/image-deployment", h.Admin.System.ImageDeploymentStatus)
+		system.GET("/image-releases", h.Admin.System.ImageReleases)
 		system.POST("/image-deployment", h.Admin.System.RequestImageDeployment)
 		system.GET("/version", h.Admin.System.GetVersion)
 		system.GET("/check-updates", h.Admin.System.CheckUpdates)

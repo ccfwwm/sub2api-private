@@ -129,9 +129,9 @@ def validate_request(request):
     if action not in ("prepare", "deploy", "rollback") or request.get("confirm") is not True:
         raise ValueError("explicit action confirmation is required")
     if action == "prepare":
-        if not VERSION.fullmatch(request.get("version", "")):
+        if not isinstance(request.get("version"), str) or not VERSION.fullmatch(request["version"]):
             raise ValueError("invalid release version")
-    elif not JOB.fullmatch(request.get("job_id", "")):
+    elif not isinstance(request.get("job_id"), str) or not JOB.fullmatch(request["job_id"]):
         raise ValueError("invalid preparation job")
     return action
 

@@ -36,6 +36,10 @@ type systemHandlerUpdateServiceStub struct {
 	rollbackVersionsCall  int
 }
 
+func (s *systemHandlerUpdateServiceStub) ListImageReleases(context.Context) ([]service.RollbackVersion, error) {
+	return s.rollbackVersions, s.rollbackVersionsErr
+}
+
 func (s *systemHandlerUpdateServiceStub) CheckUpdate(_ context.Context, force bool) (*service.UpdateInfo, error) {
 	s.checkForces = append(s.checkForces, force)
 	return s.updateInfo, s.checkErr

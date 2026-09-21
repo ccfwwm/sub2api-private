@@ -1,20 +1,21 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageDeploymentPanel from '../ImageDeploymentPanel.vue'
-const api = vi.hoisted(() => ({ getImageDeployment: vi.fn(), requestImageDeployment: vi.fn() }))
+const api = vi.hoisted(() => ({ getImageDeployment: vi.fn(), getImageReleases: vi.fn(), requestImageDeployment: vi.fn() }))
 vi.mock('@/api/admin/system', () => api)
 
 describe('ImageDeploymentPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     api.getImageDeployment.mockResolvedValue({ enabled: true, job: null })
+    api.getImageReleases.mockResolvedValue({ versions: [{ version: 'v1.0.0' }] })
     api.requestImageDeployment.mockResolvedValue({ job: { id: 'a'.repeat(32), version: 'v1.0.0', status: 'queued_prepare' } })
   })
   it('requires confirmation before preparation and never auto deploys', async () => {
     const wrapper = mount(ImageDeploymentPanel, { props: { version: '1.0.0' } })
     await wrapper.find('button').trigger('click')
     await flushPromises()
-    await wrapper.find('input[placeholder="v1.0.0"]').setValue('v1.0.0')
+    await wrapper.find('select').setValue('v1.0.0')
     const prepare = wrapper.findAll('button').find(b => b.text().includes('准备版本：'))!
     expect(prepare.attributes('disabled')).toBeDefined()
     await wrapper.find('input[type="checkbox"]').setValue(true)
