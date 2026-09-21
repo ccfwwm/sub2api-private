@@ -38,7 +38,8 @@ def main():
         (prod / 'docker-compose.override.yml').write_text('{}')
         release_token = root / 'release-token'
         release_token.write_text('')
-        release_token.chmod(0o444)
+        os.chown(release_token, 0, 1000)
+        release_token.chmod(0o440)
         # Allow the non-root app to read the bind-mounted empty CI token.
         root.chmod(0o755)
         password = secrets.token_hex(24)

@@ -255,6 +255,12 @@ class Controller:
 
     def prepare(self, job):
         self.save(job, "validating")
+        credential = Path(self.config.get("release_token_file", "/etc/sub2api-deployer/release-token"))
+        if not credential.is_file():
+            raise ValueError("application release credential file is not installed")
+        mode = credential.stat()
+        if mode.st_uid != 0 or mode.st_gid != self.config.get("socket_gid", 1000) or not mode.st_mode & 0o040 or mode.st_mode & 0o007:
+            raise ValueError("release credential must be root-owned, app-group-readable and not world-readable")
         manifest = self.manifest(job["version"])
         image = validate_manifest(manifest, job["version"])
         self.assert_migrations(manifest)
@@ -324,7 +330,11 @@ class Controller:
             atomic_json(backup / "protected-snapshot.json", expected)
         finally:
             with contextlib.suppress(BrokenPipeError):
-                process.communicate("ROLLBACK;\n", timeout=10)
+                try:
+                    process.communicate("ROLLBACK;\n", timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
             if process.poll() is None:
                 process.kill()
                 process.wait()
@@ -517,7 +527,13 @@ class Controller:
                     raise ValueError("active requests did not drain; rollback aborted")
                 time.sleep(1)
             self.save(job, "rolling_back")
-            self.switch(job["rollback_image"])
+            try:
+                self.switch(job["rollback_image"])
+            except Exception:
+                # A failed manual rollback should attempt to restore the image
+                # that was healthy when the operator requested rollback.
+                self.switch(job["image"])
+                raise
             self.save(job, "rolled_back")
         finally:
             marker.unlink(missing_ok=True)
