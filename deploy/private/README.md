@@ -80,7 +80,9 @@ docker compose --project-name sub2api-deploy --project-directory /root/sub2api-d
 
 ### 仅预置镜像（不切换应用）
 
-`Export Validated Private Image` 工作流只接受已发布且带 `deployment.json` 的正式版本，按 digest 拉取镜像、核对源码提交并导出离线包。它不连接生产服务器。下载私有 Actions artifact 后，先核对 `offline-checksums.txt`，再传到服务器受限目录并重新校验，最后执行 `docker load`。同时比较导入镜像的 ID、源码标签和架构与 `image-inspect.json` 一致。
+`Export Validated Private Image` 工作流只接受已发布且带 `deployment.json` 的正式版本，按 digest 拉取镜像、核对源码提交并导出离线包。它不连接生产服务器。下载私有 Actions artifact 后，先核对 `offline-checksums.txt`，再传到服务器受限目录并重新校验，最后执行 `docker load`。同时核对导入镜像的源码标签、架构、全部 RootFS 层摘要和原始配置摘要。
+
+经典 Docker 存储显示的 image ID 是配置摘要，containerd 存储可能显示 manifest 摘要，二者不能直接比较。若 ID 不同，必须对导入镜像执行只读 `docker image save`，确认导出配置 blob 的 SHA-256 与 CI 记录的原始配置摘要一致，并核对全部层摘要；不能只凭版本标签判断相同。
 
 `docker load` 只预置镜像，不创建或重启容器，不更改数据挂载。离线导入可能不保留 registry RepoDigests，因此不能把本地版本标签当作控制器的 digest 拉取凭据；正式准备和切换前仍需配置专用 GHCR 只读凭据、控制器，并验证实际生产备份恢复。禁止在镜像导入后直接用默认 `docker run` 参数替换生产应用。
 
