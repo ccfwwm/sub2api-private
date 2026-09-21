@@ -8,6 +8,11 @@ on:
         description: 'Existing stable private tag, e.g. v1.0.0 (does not deploy production)'
         required: true
         type: string
+      candidate:
+        description: 'Validate the selected branch commit without creating a version tag or Release'
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -19,6 +24,7 @@ jobs:
     outputs:
       sha: ${{ steps.ref.outputs.sha }}
       tag: ${{ steps.ref.outputs.tag }}
+      image_tag: ${{ steps.ref.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -27,16 +33,24 @@ jobs:
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE: ${{ inputs.candidate || false }}
         run: |
           [[ "$TAG" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo 'This release is already published; use a new version.' >&2
-            exit 1
+          if [ "$CANDIDATE" = true ]; then
+            SHA=$(git rev-parse HEAD)
+            IMAGE_TAG="sha-$SHA"
+          else
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo 'This release is already published; use a new version.' >&2
+              exit 1
+            fi
+            SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
+            IMAGE_TAG="$TAG"
           fi
-          SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
           git merge-base --is-ancestor "$SHA" origin/main
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
   test:
     needs: validate
     runs-on: ubuntu-latest
@@ -85,7 +99,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          tags: ghcr.io/ccfwwm/sub2api-private:${{ needs.validate.outputs.tag }}
+          tags: ghcr.io/ccfwwm/sub2api-private:${{ needs.validate.outputs.image_tag }}
           build-args: |
             VERSION=${{ needs.validate.outputs.tag }}
             COMMIT=${{ needs.validate.outputs.sha }}
@@ -108,9 +122,18 @@ jobs:
           TAG: ${{ needs.validate.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest }}
           SHA: ${{ needs.validate.outputs.sha }}
+          CANDIDATE: ${{ inputs.candidate || false }}
         run: |
           python3 deploy/private/release_manifest.py --version "$TAG" --digest "$DIGEST" --output deployment.json
           sudo install -d -m 755 /run/sub2api-deployer
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           sha256sum deployment.json > checksums.txt
-          gh release create "$TAG" deployment.json checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
+          if [ "$CANDIDATE" != true ]; then
+            gh release create "$TAG" deployment.json checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: validated-deployment
+          path: |
+            deployment.json
+            checksums.txt
