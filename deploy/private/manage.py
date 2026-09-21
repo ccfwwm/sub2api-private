@@ -113,7 +113,8 @@ class Manager:
         data = [m['Source'] for m in original['Mounts'] if m['Destination'] == '/app/data']
         if len(data) != 1:
             raise ValueError('expected one application data mount')
-        run(['tar', '-czf', str(folder / 'application-data.tar.gz'), '-C', data[0], '.'])
+        # Live rolling logs are not restore inputs and change during tar reads.
+        run(['tar', '--exclude=./logs', '-czf', str(folder / 'application-data.tar.gz'), '-C', data[0], '.'])
         run(['tar', '-czf', str(folder / 'configuration.tar.gz'), '-C', str(self.production),
              '.env', 'docker-compose.yml', 'docker-compose.override.yml', 'pricing-overlay'])
         redis = self.active()['x-ops']['redis']
