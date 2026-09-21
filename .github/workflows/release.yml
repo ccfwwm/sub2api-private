@@ -105,5 +105,7 @@ jobs:
           SHA: ${{ needs.validate.outputs.sha }}
         run: |
           python3 deploy/private/release_manifest.py --version "$TAG" --digest "$DIGEST" --output deployment.json
+          sudo install -d -m 755 /run/sub2api-deployer
+          sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           sha256sum deployment.json > checksums.txt
           gh release create "$TAG" deployment.json checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
