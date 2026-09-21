@@ -288,8 +288,8 @@ class Controller:
         # Archive application files and configuration only; never copy live PGDATA.
         run(["tar", "-czf", str(backup / "application.tar.gz"), "-C", str(self.root),
              ".env", "docker-compose.yml", "docker-compose.override.yml", "data", "pricing-overlay"])
-        # Fetch a consistent Redis RDB through the replication protocol; no BGSAVE
-        # or service restart. The destination remains on the host, not in Git.
+        # Fetch a consistent Redis RDB through replication (Redis may fork a
+        # snapshot worker). No service restart; the backup stays on this host.
         with (backup / "redis.rdb").open("wb") as f:
             run(["docker", "exec", "sub2api-redis", "sh", "-c",
                  'redis-cli --rdb /tmp/sub2api-deployment.rdb >/dev/null 2>&1 && '
@@ -475,7 +475,9 @@ class Controller:
         marker.touch(mode=0o644)
         os.chmod(marker, 0o644)
         try:
-            if original["Config"]["Image"].startswith(IMAGE + "@"):
+            # Captured rollback images use a local image ID but still support
+            # draining once the controller's environment has been installed.
+            if "IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-deployer/drain" in original["Config"].get("Env", []):
                 deadline = time.monotonic() + 120
                 while True:
                     status = json.loads(run(["docker", "exec", "sub2api", "wget", "-qO-",
