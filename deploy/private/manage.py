@@ -238,13 +238,15 @@ class Manager:
 
     def cutover(self, job, target, rescue, version=''):
         self.save(job, 'draining')
+        # Record the rescue target before setting a persistent drain marker, so
+        # a host failure during drain can also be recovered from the CLI.
+        atomic_json(self.state / 'latest-cutover.json', {'id': job['id']})
         switched = False
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
                   for n in ['sub2api-postgres', 'sub2api-redis']}
         try:
             self.drain()
             self.save(job, 'switching')
-            atomic_json(self.state / 'latest-cutover.json', {'id': job['id']})
             switched = True
             self.switch(target)
             self.marker.unlink(missing_ok=True)
