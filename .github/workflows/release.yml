@@ -26,8 +26,13 @@ jobs:
       - id: ref
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           [[ "$TAG" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'This release is already published; use a new version.' >&2
+            exit 1
+          fi
           SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
           git merge-base --is-ancestor "$SHA" origin/main
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"

@@ -36,6 +36,7 @@ JOB = re.compile(r"[0-9a-f]{32}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 PROTECTED = ("users", "accounts", "api_keys", "groups", "settings", "user_subscriptions",
              "payment_orders", "channel_model_pricing", "security_secrets")
+COMMAND_ERROR_LOG = None
 
 
 def file_hash(path):
@@ -67,6 +68,13 @@ def run(args, *, stdin=None, stdout=None, timeout=1800):
     result = subprocess.run(args, input=stdin, stdout=stdout or subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=timeout, check=False)
     if result.returncode:
+        if COMMAND_ERROR_LOG:
+            # Diagnostics stay on the host in a root-only file; never return raw
+            # command output to the browser or GitHub SSH client.
+            with open(COMMAND_ERROR_LOG, "ab") as log:
+                os.chmod(COMMAND_ERROR_LOG, 0o600)
+                log.write((now() + " " + args[0] + " failed\n").encode())
+                log.write(result.stderr[-65536:])
         raise RuntimeError(f"{args[0]} failed (exit {result.returncode}); inspect restricted host logs")
     return result.stdout
 
@@ -130,10 +138,12 @@ def validate_request(request):
 
 class Controller:
     def __init__(self, config):
+        global COMMAND_ERROR_LOG
         self.config = config
         self.state = Path(config["state_dir"])
         self.root = Path(config["production_dir"])
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        COMMAND_ERROR_LOG = self.state / "command-errors.log"
         self.guard = threading.Lock()
 
     def compose(self, override=None):
@@ -432,6 +442,11 @@ class Controller:
         self.save(job, "checking_cutover")
         if not job.get("restore_verified") or not job.get("rollback_verified"):
             raise ValueError("restore and rollback rehearsal are required")
+        backup = self.state / "backups" / job["id"]
+        expected = json.loads((backup / "checksums.json").read_text())
+        for name, digest in expected.items():
+            if Path(name).name != name or file_hash(backup / name) != digest:
+                raise ValueError("preparation backup integrity check failed")
         original = self.inspect()
         if (original["Id"] != job["original_container"] or original["State"]["StartedAt"] != job["original_started"]
                 or self.config_hashes() != job["config_hashes"]):

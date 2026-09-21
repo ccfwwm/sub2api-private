@@ -80,9 +80,11 @@ docker compose --project-name sub2api-deploy --project-directory /root/sub2api-d
 
 ```sh
 python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
-go test -tags=unit ./internal/service ./internal/handler/admin ./internal/server/middleware ./internal/repository
+go -C backend test -tags=unit ./internal/service ./internal/handler/admin ./internal/server/middleware ./internal/repository
 pnpm --dir frontend exec vitest run src/components/common/__tests__/ImageDeploymentPanel.spec.ts
 pnpm --dir frontend run build
 ```
 
 生产验收应包括公网健康、当前镜像 digest、版本、原数据库/Redis/定价容器启动时间、登录、模型列表、定价、业务调用方访问及必要的受控流式请求。上线前未运行生产备份或恢复时，必须明确标记“待授权和执行”，不能用 CI 空库启动检查替代真实数据恢复验证。
+
+发布流程还会在 GitHub 临时 runner 上创建模拟生产栈，实际验证一致性快照、恢复指纹、两阶段切换和当前容器写入层回滚。它不读取真实生产数据；真实备份恢复仍需取得用户同意。宿主机命令错误详情保存在状态目录的 `command-errors.log`（0600），不要将该文件原样上传或发给非管理员。

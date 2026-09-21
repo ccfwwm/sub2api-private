@@ -81,6 +81,9 @@ class DeploymentTests(unittest.TestCase):
     def test_stale_production_aborts_before_backup_or_switch(self):
         job = {'id': 'a' * 32, 'version': 'v1.0.0', 'restore_verified': True, 'rollback_verified': True,
                'original_container': 'old', 'original_started': 'old'}
+        backup = Path(self.tmp.name) / 'backups' / job['id']
+        backup.mkdir(parents=True)
+        atomic_json(backup / 'checksums.json', {})
         with patch.object(self.controller, 'inspect', return_value={'Id': 'changed', 'State': {'StartedAt': 'new'}}), \
              patch('controller.run') as command:
             with self.assertRaisesRegex(ValueError, 'changed after preparation'):
