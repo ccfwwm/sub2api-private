@@ -76,6 +76,11 @@ jobs:
       - run: make -C backend test-unit
       - run: make -C backend test-integration
       - run: python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13
+          args: --timeout=30m
+          working-directory: backend
   image:
     needs: [validate, test]
     runs-on: ubuntu-latest
@@ -116,6 +121,12 @@ jobs:
           IMAGE: ghcr.io/ccfwwm/sub2api-private@${{ steps.build.outputs.digest }}
           TAG: ${{ needs.validate.outputs.tag }}
         run: python3 deploy/private/smoke_image.py --image "$IMAGE" --version "$TAG"
+      - name: Verify private repository and image visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
+          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
       - name: Publish validated release inventory
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
