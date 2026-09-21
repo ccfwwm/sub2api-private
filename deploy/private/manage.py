@@ -288,10 +288,15 @@ class Manager:
             raise ValueError('restored database fingerprint mismatch')
         (root / 'redis').mkdir(mode=0o700)
         shutil.copyfile(folder / 'redis.rdb', root / 'redis' / 'dump.rdb')
+        redis_password = secrets.token_hex(32)
+        redis_config = root / 'redis.conf'
+        redis_config.write_text('appendonly yes\nrequirepass ' + redis_password + '\n')
+        os.chmod(redis_config, 0o644)  # containing host directory stays root-only
         run(['docker', 'run', '-d', '--name', redis, '--restart', 'unless-stopped', '--network', network,
-             '--cpus=1', '--memory=1g', '-v', str(root / 'redis') + ':/data', 'redis:8-alpine',
-             'redis-server', '--appendonly', 'yes'])
-        self.c.wait_command(['docker', 'exec', redis, 'redis-cli', 'ping'], 60)
+             '--cpus=1', '--memory=1g', '-v', str(root / 'redis') + ':/data',
+             '-v', str(redis_config) + ':/etc/redis-recovery.conf:ro', 'redis:8-alpine',
+             'redis-server', '/etc/redis-recovery.conf'])
+        self.c.wait_command(['docker', 'exec', '-e', 'REDISCLI_AUTH=' + redis_password, redis, 'redis-cli', 'ping'], 60)
         data = root / 'data'
         data.mkdir(mode=0o700)
         with tarfile.open(folder / 'application-data.tar.gz') as archive:
@@ -299,7 +304,7 @@ class Manager:
         env = dict(x.split('=', 1) for x in meta['application']['Config']['Env'])
         env.update(DATABASE_HOST=pg, DATABASE_PORT='5432', DATABASE_USER='sub2api', DATABASE_DBNAME='sub2api',
                    DATABASE_PASSWORD=password, DATABASE_SSLMODE='disable', REDIS_HOST=redis, REDIS_PORT='6379',
-                   REDIS_PASSWORD='', IMAGE_DEPLOY_DRAIN_FILE='', AUTO_SETUP='true')
+                   REDIS_PASSWORD=redis_password, IMAGE_DEPLOY_DRAIN_FILE='', AUTO_SETUP='true')
         envfile = root / 'app.env'
         if any('\n' in v or '\r' in v for v in env.values()):
             raise ValueError('multiline environment unsupported')
@@ -387,6 +392,11 @@ def main():
             if p.name.endswith('-rescue.json'):
                 continue
             job = read(p)
+            if job.get('status') not in ('succeeded', 'failed_needs_inspection', 'failed_rolled_back'):
+                unit = subprocess.run(['systemctl', 'is-active', 'sub2api-ops-' + job['id']], capture_output=True, text=True)
+                job['worker_state'] = unit.stdout.strip()
+                if unit.returncode:
+                    job['attention'] = 'worker is not running; inspect logs, do not assume completion'
             print(json.dumps(job, ensure_ascii=False))
         if args.action == 'status':
             run_status = subprocess.run(['docker', 'ps', '--filter', 'name=sub2api', '--format', '{{.Names}} {{.Status}}'])
