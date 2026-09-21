@@ -283,7 +283,7 @@ class Manager:
         self.save(job, 'restoring_to_new_stores')
         run(['docker', 'network', 'create', '--internal', network])
         password = secrets.token_hex(32)
-        run(['docker', 'run', '-d', '--name', pg, '--restart', 'unless-stopped', '--network', network,
+        run(['docker', 'run', '-d', '--name', pg, '--restart', 'unless-stopped', '--network', network, '--network-alias', 'postgres',
              '--cpus=2', '--memory=3g', '-v', str(root / 'postgres') + ':/var/lib/postgresql',
              '-e', 'POSTGRES_USER=sub2api', '-e', 'POSTGRES_DB=sub2api', '-e', 'POSTGRES_PASSWORD=' + password, 'postgres:18-alpine'])
         self.c.wait_command(['docker', 'exec', pg, 'pg_isready', '-h', '127.0.0.1', '-U', 'sub2api'], 90)
@@ -300,7 +300,7 @@ class Manager:
         redis_config = root / 'redis.conf'
         redis_config.write_text('appendonly yes\nrequirepass ' + redis_password + '\n')
         os.chmod(redis_config, 0o644)  # containing host directory stays root-only
-        run(['docker', 'run', '-d', '--name', redis, '--restart', 'unless-stopped', '--network', network,
+        run(['docker', 'run', '-d', '--name', redis, '--restart', 'unless-stopped', '--network', network, '--network-alias', 'redis',
              '--cpus=1', '--memory=1g', '-v', str(root / 'redis') + ':/data',
              '-v', str(redis_config) + ':/etc/redis-recovery.conf:ro', 'redis:8-alpine',
              'redis-server', '/etc/redis-recovery.conf'])

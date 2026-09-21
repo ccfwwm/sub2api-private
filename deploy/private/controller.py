@@ -362,7 +362,7 @@ class Controller:
         # ports, bind mounts or credentials are passed into the cloned application.
         run(["docker", "network", "create", "--internal", network])
         try:
-            run(["docker", "run", "-d", "--name", pg, "--network", network,
+            run(["docker", "run", "-d", "--name", pg, "--network", network, "--network-alias", "postgres",
                  "--cpus=1", "--memory=2g", "-v", str(rehearsal / "postgres") + ":/var/lib/postgresql",
                  "-e", "POSTGRES_USER=sub2api", "-e", "POSTGRES_DB=sub2api",
                  "-e", "POSTGRES_PASSWORD=" + password, "postgres:18-alpine"])
@@ -383,7 +383,7 @@ class Controller:
             if restored != expected:
                 raise ValueError("restored protected-table fingerprints do not match backup snapshot")
             atomic_json(backup / "restored-fingerprints.json", restored)
-            run(["docker", "run", "-d", "--name", redis, "--network", network,
+            run(["docker", "run", "-d", "--name", redis, "--network", network, "--network-alias", "redis",
                  "--cpus=0.5", "--memory=512m", "redis:8-alpine"])
             original_env = dict(v.split("=", 1) for v in self.inspect()["Config"]["Env"] if "=" in v)
             env = {"AUTO_SETUP": "true", "DATABASE_HOST": pg, "DATABASE_PORT": "5432",
