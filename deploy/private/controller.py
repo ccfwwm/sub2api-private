@@ -364,7 +364,7 @@ class Controller:
                  "--cpus=1", "--memory=2g", "-v", str(rehearsal / "postgres") + ":/var/lib/postgresql",
                  "-e", "POSTGRES_USER=sub2api", "-e", "POSTGRES_DB=sub2api",
                  "-e", "POSTGRES_PASSWORD=" + password, "postgres:18-alpine"])
-            self.wait_command(["docker", "exec", pg, "pg_isready", "-U", "sub2api"], 90)
+            self.wait_command(["docker", "exec", pg, "pg_isready", "-h", "127.0.0.1", "-U", "sub2api", "-d", "sub2api"], 90)
             with (backup / "database.dump").open("rb") as f:
                 proc = subprocess.run(["docker", "exec", "-i", pg, "pg_restore", "-U", "sub2api", "-d", "sub2api",
                                        "--exit-on-error", "--no-owner", "--no-acl"], stdin=f,

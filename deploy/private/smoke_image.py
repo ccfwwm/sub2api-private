@@ -33,7 +33,7 @@ try:
     run(['docker', 'run', '-d', '--name', names[2], '--network', network,
          '-e', 'POSTGRES_USER=sub2api', '-e', 'POSTGRES_DB=sub2api', '-e', 'POSTGRES_PASSWORD=' + password,
          'postgres:18-alpine'])
-    wait(['docker', 'exec', names[2], 'pg_isready', '-U', 'sub2api'])
+    wait(['docker', 'exec', names[2], 'pg_isready', '-h', '127.0.0.1', '-U', 'sub2api', '-d', 'sub2api'])
     run(['docker', 'run', '-d', '--name', names[1], '--network', network, 'redis:8-alpine'])
     env = {'AUTO_SETUP': 'true', 'DATABASE_HOST': names[2], 'DATABASE_PORT': '5432',
            'DATABASE_USER': 'sub2api', 'DATABASE_DBNAME': 'sub2api', 'DATABASE_PASSWORD': password,
