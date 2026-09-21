@@ -47,7 +47,14 @@ try:
     wait(['docker', 'exec', names[0], 'wget', '-qO-', 'http://127.0.0.1:8080/health'])
     settings = json.loads(run(['docker', 'exec', names[0], 'wget', '-qO-', 'http://127.0.0.1:8080/api/v1/settings/public']))
     assert settings['data']['version'].lstrip('v') == a.version.lstrip('v'), settings['data']['version']
-    print('PASS: image health, database initialization and embedded version')
+    page = run(['docker', 'exec', names[0], 'wget', '-qO-', 'http://127.0.0.1:8080/'])
+    assert '<html' in page.lower(), 'embedded frontend missing'
+    login = json.loads(run(['docker', 'exec', names[0], 'wget', '-qO-',
+                           '--header=Content-Type: application/json',
+                           '--post-data=' + json.dumps({'email': env['ADMIN_EMAIL'], 'password': env['ADMIN_PASSWORD']}),
+                           'http://127.0.0.1:8080/api/v1/auth/login']))
+    assert login.get('data', {}).get('access_token'), 'fresh admin login failed'
+    print('PASS: image health, database initialization, embedded frontend/version and admin login')
 finally:
     for name in names:
         subprocess.run(['docker', 'rm', '-fv', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
