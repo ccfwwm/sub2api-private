@@ -121,7 +121,10 @@ class Manager:
         rdb = '/tmp/sub2api-ops-' + bid + '.rdb'
         redis_password = dict(x.split('=', 1) for x in original['Config']['Env']).get('REDIS_PASSWORD', '')
         redis_exec = ['docker', 'exec']
-        if redis_password:
+        probe = subprocess.run(['docker', 'exec', redis, 'redis-cli', 'ping'], capture_output=True, text=True)
+        if probe.returncode != 0 or probe.stdout.strip() != 'PONG':
+            if not redis_password:
+                raise ValueError('Redis requires authentication but no backup credential is configured')
             redis_exec += ['-e', 'REDISCLI_AUTH=' + redis_password]
         with (folder / 'redis.rdb').open('wb') as out:
             run(redis_exec + [redis, 'sh', '-c',
