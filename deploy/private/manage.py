@@ -317,8 +317,14 @@ class Manager:
             self.c.wait_command(['docker', 'exec', probe, 'wget', '-qO-', 'http://127.0.0.1:8080/health'], 180)
         finally:
             subprocess.run(['docker', 'rm', '-f', probe], capture_output=True)
+        base_compose = json.loads(run(self.c.compose() + ['config', '--format', 'json']))
+        base_networks = base_compose['services']['sub2api'].get('networks', {'default': {}})
+        if isinstance(base_networks, list):
+            base_networks = {name: {} for name in base_networks}
+        networks = copy.deepcopy(base_networks)
+        networks[network] = {}
         target = self.target(image, {'services': {'sub2api': {'environment': env,
-                            'volumes': [str(data) + ':/app/data'], 'networks': {network: {}}}},
+                            'volumes': [str(data) + ':/app/data'], 'networks': networks}},
                             'networks': {network: {'external': True, 'name': network}},
                             'x-ops': {'postgres': pg, 'redis': redis}})
         return target
