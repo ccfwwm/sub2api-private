@@ -42,6 +42,7 @@ export const useAppStore = defineStore('app', () => {
   const latestVersion = ref<string>('')
   const hasUpdate = ref<boolean>(false)
   const buildType = ref<string>('source')
+  const updateRepository = ref('ccfwwm/sub2api-private')
   const releaseInfo = ref<ReleaseInfo | null>(null)
 
   // Auto-incrementing ID for toasts
@@ -265,6 +266,7 @@ export const useAppStore = defineStore('app', () => {
       latestVersion.value = data.latest_version
       hasUpdate.value = data.has_update
       buildType.value = data.build_type || 'source'
+      updateRepository.value = data.repository || 'ccfwwm/sub2api-private'
       releaseInfo.value = data.release_info || null
       versionLoaded.value = true
       return data
@@ -461,6 +463,7 @@ export const useAppStore = defineStore('app', () => {
     latestVersion,
     hasUpdate,
     buildType,
+    updateRepository,
     releaseInfo,
 
     // Computed

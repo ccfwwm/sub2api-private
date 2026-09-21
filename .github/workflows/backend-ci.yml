@@ -3,11 +3,19 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
+  private-deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m unittest discover -s deploy/private -p "test_*.py" -v
+      - run: bash -n deploy/private/install.sh
+
   shell:
     runs-on: macos-15
     steps:

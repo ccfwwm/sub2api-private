@@ -1,0 +1,60 @@
+name: Manual Production Deployment
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'prepare reads production data; deploy/rollback interrupt application service'
+        required: true
+        type: choice
+        options: [status, prepare, deploy, rollback]
+      target:
+        description: 'prepare: v1.0.0; deploy/rollback: preparation job ID; status: empty'
+        type: string
+      confirmation:
+        description: 'For changes enter CONFIRM. No action runs on push or release.'
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: sub2api-production
+  cancel-in-progress: false
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Submit to the restricted host controller
+        env:
+          ACTION: ${{ inputs.action }}
+          TARGET: ${{ inputs.target }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY" && test -n "$KNOWN_HOSTS"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          if [ "$ACTION" = status ]; then
+            COMMAND=status
+          else
+            test "$CONFIRMATION" = CONFIRM
+            case "$ACTION" in
+              prepare) [[ "$TARGET" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]] ;;
+              deploy|rollback) [[ "$TARGET" =~ ^[0-9a-f]{32}$ ]] ;;
+              *) exit 1 ;;
+            esac
+            COMMAND="$ACTION $TARGET CONFIRM"
+          fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/sub2api-ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/sub2api-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/sub2api-ssh/known_hosts"
+          trap 'rm -rf "$RUNNER_TEMP/sub2api-ssh"' EXIT
+          ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST" "$COMMAND"

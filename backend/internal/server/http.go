@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -49,6 +50,7 @@ func ProvideRouter(
 
 	r := gin.New()
 	r.Use(middleware2.Recovery())
+	r.Use(middleware2.DeploymentDrain(os.Getenv("IMAGE_DEPLOY_DRAIN_FILE")))
 	configureTrustedProxies(r, cfg.Server)
 
 	// Wire up websearch Manager builder so it initializes on startup and rebuilds on config save.

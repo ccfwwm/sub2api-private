@@ -62,10 +62,18 @@ func NewGitHubReleaseClient(proxyURL string, allowDirectOnProxyError bool) servi
 	}
 	downloadClient = cloneHTTPClient(downloadClient)
 
+	token := os.Getenv("UPDATE_GITHUB_TOKEN")
+	if path := os.Getenv("UPDATE_GITHUB_TOKEN_FILE"); path != "" {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return &githubReleaseClientError{err: fmt.Errorf("cannot read private release credential file")}
+		}
+		token = strings.TrimSpace(string(content))
+	}
 	return &githubReleaseClient{
 		httpClient:         apiClient,
 		downloadHTTPClient: downloadClient,
-		updateGitHubToken:  os.Getenv("UPDATE_GITHUB_TOKEN"),
+		updateGitHubToken:  token,
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -184,7 +185,11 @@ func runMainServer() {
 
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownTimeout := 120 * time.Second
+	if seconds, err := strconv.Atoi(os.Getenv("SERVER_SHUTDOWN_TIMEOUT_SECONDS")); err == nil && seconds >= 5 && seconds <= 600 {
+		shutdownTimeout = time.Duration(seconds) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := app.Server.Shutdown(ctx); err != nil {

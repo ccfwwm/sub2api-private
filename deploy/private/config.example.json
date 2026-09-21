@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "production_dir": "/root/sub2api-deploy",
+  "state_dir": "/var/lib/sub2api-deployer",
+  "github_token_file": "/etc/sub2api-deployer/github-token",
+  "socket_gid": 1000,
+  "release_token_file": "/etc/sub2api-deployer/release-token",
+  "health_urls": [
+    "https://code.aicodeme.cn/health",
+    "https://code.aicodeme.xyz/health",
+    "https://fast.aicodeme.cn/health"
+  ]
+}

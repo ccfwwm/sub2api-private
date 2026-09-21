@@ -1,0 +1,20 @@
+[Unit]
+Description=Sub2API opt-in image deployment controller
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+UMask=0077
+RuntimeDirectory=sub2api-deployer
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/python3 /opt/sub2api-deployer/controller.py serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=3700
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

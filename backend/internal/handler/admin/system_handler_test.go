@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -117,167 +116,20 @@ func requireSystemLockStatus(t *testing.T, repo *memoryIdempotencyRepoStub, want
 	t.Fatalf("system lock status %q not found in records: %#v", wantStatus, repo.data)
 }
 
-func TestSystemHandlerPerformUpdateAlreadyUpToDateReturnsOK(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{
-		performErr: service.ErrNoUpdateAvailable,
-		updateInfo: &service.UpdateInfo{
-			CurrentVersion: "0.1.132",
-			LatestVersion:  "0.1.132",
-			HasUpdate:      false,
-		},
+func TestSystemHandlerBlocksLegacyMutations(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &systemHandlerUpdateServiceStub{}
+	h := NewSystemHandler(svc, nil)
+	for _, handler := range []gin.HandlerFunc{h.PerformUpdate, h.Rollback, h.RestartService} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+		handler(c)
+		require.Equal(t, http.StatusConflict, w.Code)
 	}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update", nil)
-	req.Header.Set("Idempotency-Key", "already-up-to-date")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, 1, updateSvc.performCall)
-	require.Equal(t, []bool{false}, updateSvc.checkForces)
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusSucceeded)
-
-	var body systemUpdateResponseEnvelope
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Equal(t, 0, body.Code)
-	require.Equal(t, "success", body.Message)
-	require.Equal(t, "Already up to date", body.Data.Message)
-	require.True(t, body.Data.AlreadyUpToDate)
-	require.Equal(t, "0.1.132", body.Data.CurrentVersion)
-	require.Equal(t, "0.1.132", body.Data.LatestVersion)
-	require.NotEmpty(t, body.Data.OperationID)
-}
-
-func TestSystemHandlerPerformUpdateFailureStillReturnsInternalError(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{
-		performErr: errors.New("download failed"),
-	}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update", nil)
-	req.Header.Set("Idempotency-Key", "real-failure")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusInternalServerError, rec.Code)
-	require.Equal(t, 1, updateSvc.performCall)
-	require.Empty(t, updateSvc.checkForces)
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusFailedRetryable)
-
-	var body systemUpdateErrorEnvelope
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Equal(t, http.StatusInternalServerError, body.Code)
-	require.Equal(t, "internal error", body.Message)
-}
-
-// TestSystemHandlerPerformUpdateSurvivesClientDisconnect reproduces #4504:
-// the browser or a reverse proxy (axios 30s default, nginx proxy_read_timeout
-// 60s) aborts the long-running update request and cancels the request
-// context. The download must keep running on a detached, bounded context
-// instead of dying with "download failed: context canceled".
-func TestSystemHandlerPerformUpdateSurvivesClientDisconnect(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update", nil)
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	req = req.WithContext(canceledCtx)
-	req.Header.Set("Idempotency-Key", "disconnected-update")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, 1, updateSvc.performCall)
-	require.NoError(t, updateSvc.performCtxErr,
-		"update must not observe the canceled request context")
-	require.True(t, updateSvc.performHasDeadline,
-		"detached update context must still be bounded by a deadline")
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusSucceeded)
-}
-
-func TestSystemHandlerRollbackToVersionSurvivesClientDisconnect(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/rollback",
-		strings.NewReader(`{"version":"0.1.146"}`))
-	req.Header.Set("Content-Type", "application/json")
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	req = req.WithContext(canceledCtx)
-	req.Header.Set("Idempotency-Key", "disconnected-rollback")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, 1, updateSvc.rollbackToCall)
-	require.NoError(t, updateSvc.rollbackToCtxErr,
-		"versioned rollback must not observe the canceled request context")
-	require.True(t, updateSvc.rollbackToHasDeadline,
-		"detached rollback context must still be bounded by a deadline")
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusSucceeded)
-}
-
-func TestSystemHandlerRollbackWithoutBodyUsesLegacyBackup(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/rollback", nil)
-	req.Header.Set("Idempotency-Key", "legacy-rollback")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, 1, updateSvc.rollbackCall)
-	require.Equal(t, 0, updateSvc.rollbackToCall)
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusSucceeded)
-}
-
-func TestSystemHandlerRollbackWithVersionCallsRollbackToVersion(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/rollback",
-		strings.NewReader(`{"version":"0.1.146"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", "rollback-to-146")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, 0, updateSvc.rollbackCall)
-	require.Equal(t, 1, updateSvc.rollbackToCall)
-	require.Equal(t, []string{"0.1.146"}, updateSvc.rollbackToVersions)
-	requireSystemLockStatus(t, repo, service.IdempotencyStatusSucceeded)
-
-	var body systemUpdateResponseEnvelope
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Equal(t, 0, body.Code)
-	require.Equal(t, "Rollback completed. Please restart the service.", body.Data.Message)
-}
-
-func TestSystemHandlerRollbackWithDisallowedVersionReturnsBadRequest(t *testing.T) {
-	updateSvc := &systemHandlerUpdateServiceStub{
-		rollbackToErr: service.ErrRollbackVersionNotAllowed,
-	}
-	repo := newMemoryIdempotencyRepoStub()
-	router := newSystemHandlerTestRouter(t, updateSvc, repo)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/rollback",
-		strings.NewReader(`{"version":"9.9.9"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", "rollback-to-bad")
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Equal(t, 1, updateSvc.rollbackToCall)
+	require.Zero(t, svc.performCall)
+	require.Zero(t, svc.rollbackCall)
+	require.Zero(t, svc.rollbackToCall)
 }
 
 func TestSystemHandlerGetRollbackVersions(t *testing.T) {

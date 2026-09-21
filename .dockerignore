@@ -83,3 +83,8 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Local audit artifacts never enter image build context
+output/
+backend/.gocache/
+**/__pycache__/

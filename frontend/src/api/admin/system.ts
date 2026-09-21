@@ -12,6 +12,9 @@ export interface ReleaseInfo {
 }
 
 export interface VersionInfo {
+  update_mode?: string
+  repository?: string
+  image?: string
   current_version: string
   latest_version: string
   has_update: boolean
@@ -111,3 +114,26 @@ export const systemAPI = {
 }
 
 export default systemAPI
+
+export interface ImageDeploymentJob {
+  id: string
+  version: string
+  status: string
+  error?: string
+}
+export interface ImageDeploymentState {
+  enabled: boolean
+  repository: string
+  image: string
+  job: ImageDeploymentJob | null
+}
+export async function getImageDeployment(): Promise<ImageDeploymentState> {
+  const { data } = await apiClient.get<ImageDeploymentState>('/admin/system/image-deployment')
+  return data
+}
+export async function requestImageDeployment(request: {
+  action: 'prepare' | 'deploy' | 'rollback'; version?: string; job_id?: string; confirm: boolean
+}): Promise<{ job: ImageDeploymentJob }> {
+  const { data } = await apiClient.post('/admin/system/image-deployment', request)
+  return data
+}
