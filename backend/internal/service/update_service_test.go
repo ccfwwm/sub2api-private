@@ -4,12 +4,29 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestUpdateServiceRejectsOfficialCacheAfterPrivateSourceSwitch(t *testing.T) {
+	data, err := json.Marshal(map[string]any{"latest": "99.0.0", "timestamp": time.Now().Unix(), "repository": "Wei-Shaw/sub2api"})
+	require.NoError(t, err)
+	cache := &updateServiceCacheStub{data: string(data)}
+	svc := NewUpdateService(cache, &updateServiceGitHubClientStub{release: &GitHubRelease{TagName: "v1.0.0"}}, "1.0.0", "release")
+	info, err := svc.CheckUpdate(context.Background(), false)
+	require.NoError(t, err)
+	require.Equal(t, "1.0.0", info.LatestVersion)
+	require.Equal(t, "ccfwwm/sub2api-private", info.Repository)
+	require.Equal(t, "image", info.UpdateMode)
+	require.False(t, info.HasUpdate)
+	info, err = svc.CheckUpdate(context.Background(), false)
+	require.NoError(t, err)
+	require.True(t, info.Cached)
+}
 
 type updateServiceCacheStub struct {
 	data string

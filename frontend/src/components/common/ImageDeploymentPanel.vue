@@ -45,6 +45,7 @@ const busy = ref(false)
 const error = ref('')
 const state = ref<ImageDeploymentState | null>(null)
 let timer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
 const terminal = new Set(['ready', 'succeeded', 'failed', 'rolled_back', 'interrupted'])
 const running = computed(() => !!state.value?.job && !terminal.has(state.value.job.status))
 const canPrepare = computed(() => state.value?.enabled && confirmed.value && !busy.value && !running.value && /^v[1-9]\d*\.\d+\.\d+$/.test(target.value))
@@ -69,7 +70,7 @@ async function refresh() {
     error.value = ''
   } catch (err) { error.value = message(err) }
   // Keep retrying during the brief period when the application is being replaced.
-  if (open.value) timer = setTimeout(refresh, running.value ? 3000 : 15000)
+  if (open.value && !disposed) timer = setTimeout(refresh, running.value ? 3000 : 15000)
 }
 async function toggle() {
   open.value = !open.value
@@ -87,5 +88,5 @@ async function act(action: 'prepare' | 'deploy' | 'rollback') {
   } catch (err) { error.value = message(err) }
   finally { busy.value = false }
 }
-onBeforeUnmount(() => clearTimeout(timer))
+onBeforeUnmount(() => { disposed = true; clearTimeout(timer) })
 </script>

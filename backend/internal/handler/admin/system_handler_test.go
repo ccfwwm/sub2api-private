@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,6 +131,19 @@ func TestSystemHandlerBlocksLegacyMutations(t *testing.T) {
 	require.Zero(t, svc.performCall)
 	require.Zero(t, svc.rollbackCall)
 	require.Zero(t, svc.rollbackToCall)
+}
+
+func TestSystemHandlerImageDeploymentRequiresConfirmation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewSystemHandler(nil, nil)
+	for _, body := range []string{`{"action":"deploy","confirm":false}`, `{"action":"shell","confirm":true}`, `[]`} {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.RequestImageDeployment(c)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+	}
 }
 
 func TestSystemHandlerGetRollbackVersions(t *testing.T) {
