@@ -58,6 +58,14 @@ def main():
             'sub2api': {'image': base, 'container_name': 'sub2api', 'environment': env,
                         'ports': ['127.0.0.1:8081:8080'], 'volumes': [str(prod / 'data') + ':/app/data']}},
             'networks': {'default': {}}}
+        if args.ops:
+            # Match the existing production wrapper and stale Redis CLI env.
+            compose['services']['redis']['environment'] = {'REDISCLI_AUTH': 'stale-fixture-value'}
+            compose['services']['sub2api']['entrypoint'] = ['/bin/sh', '-c']
+            compose['services']['sub2api']['command'] = [
+                'until nc -z postgres 5432; do sleep 1; done; '
+                'until nc -z redis 6379; do sleep 1; done; '
+                'exec /app/docker-entrypoint.sh /app/sub2api']
         (prod / 'docker-compose.yml').write_text(json.dumps(compose))
         c = Controller({'enabled': True, 'production_dir': str(prod), 'state_dir': str(root / 'state'),
                         'release_token_file': str(release_token), 'health_urls': []})
