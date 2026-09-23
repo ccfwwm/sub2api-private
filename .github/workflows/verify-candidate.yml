@@ -48,7 +48,16 @@ jobs:
           docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' > image-commit.txt
           python3 -c 'import json,pathlib; p=pathlib.Path("deployment.json"); m=json.loads(p.read_text()); m["commit"]=pathlib.Path("image-commit.txt").read_text().strip(); p.write_text(json.dumps(m))'
           sudo install -d -m 755 /run/sub2api-deployer
-          sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
+          echo 'Runner disk before rehearsal:'
+          df -h /
+          docker system df || true
+          docker builder prune -af || true
+          sudo apt-get clean || true
+          sudo rm -rf /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          echo 'Runner disk after cleanup:'
+          df -h /
+          sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           if [ "$OPS" = true ]; then
-            sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
+            sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           fi
+

@@ -89,8 +89,22 @@ class Manager:
         if not env.get('JWT_SECRET') or not env.get('TOTP_ENCRYPTION_KEY'):
             raise ValueError('encryption keys must exist before backup')
         size = int(self.c.sql('SELECT pg_database_size(current_database());'))
-        if shutil.disk_usage(self.state).free < max(10 * 1024**3, size * 4):
-            raise ValueError('insufficient space for backup and isolated restore')
+        usage = shutil.disk_usage(self.state)
+        # Production keeps a conservative 4x database-size safety margin. The
+        # disposable GitHub rehearsal has no production data and may run on the
+        # hosted runner's smaller ephemeral disk; its workflow opts into a
+        # separately bounded requirement after cleaning runner caches.
+        ci_rehearsal = (os.environ.get('GITHUB_ACTIONS') == 'true' and
+                        os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted')
+        if ci_rehearsal:
+            minimum = int(os.environ.get('SUB2API_REHEARSAL_MIN_FREE_BYTES', str(4 * 1024**3)))
+            multiplier = int(os.environ.get('SUB2API_REHEARSAL_DISK_MULTIPLIER', '2'))
+        else:
+            minimum = 10 * 1024**3
+            multiplier = 4
+        required = max(minimum, size * multiplier)
+        if usage.free < required:
+            raise ValueError(f'insufficient space for backup and isolated restore: free={usage.free} required={required} db={size}')
         return original
 
     def backup(self, job):
@@ -460,3 +474,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
