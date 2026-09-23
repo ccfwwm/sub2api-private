@@ -21,9 +21,9 @@
 # 用备份实际恢复临时数据库，核对核心表指纹并验证程序启动
 /root/sub2api-manage verify <备份ID> --confirm VERIFY
 # 仅做升级前准备：备份并验证指定新镜像，不排空请求、不切换容器
-/root/sub2api-manage prepare v1.0.1 --confirm PREPARE
+/root/sub2api-manage prepare v1.0.2 --confirm PREPARE
 # 升级到已经预置且注册了发布清单的私有镜像
-/root/sub2api-manage upgrade v1.0.1 --confirm UPGRADE
+/root/sub2api-manage upgrade v1.0.2 --confirm UPGRADE
 # 只回滚程序到某次备份捕获的实际运行版本，保留当前数据库
 /root/sub2api-manage rollback <备份ID> --confirm ROLLBACK
 ```
@@ -61,3 +61,4 @@ rescue 不依赖当前应用健康，只允许最近一次已开始的切换任�
 - 当前镜像/恢复库覆盖配置保存在 `/root/sub2api-ops/state/active.json`。以后使用 Compose 维护时必须最后叠加该文件，否则可能切回旧官方镜像和原数据库。日常操作请统一使用此脚本。
 - 此脚本与 `/opt/sub2api-deployer` Web 控制器互斥，避免两套部署入口同时修改应用。当前以命令行脚本为生产入口，后台镜像面板尚未连接控制器。
 - 后续版本须先发布、下载并验证镜像，把对应的 `deployment.json` 和 `image-inspect.json` 放在 `/root/sub2api-ops/state/releases/<版本>/`，再调用 upgrade。脚本拒绝未登记的版本，当前已备好的版本无需联网下载。
+

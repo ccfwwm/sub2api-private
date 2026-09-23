@@ -70,4 +70,5 @@ jobs:
           tar -czf server-management.tar.gz -C tooling/deploy/private manage.py controller.py install-manager.sh SERVER-MANAGEMENT.md
           sha256sum deployment.json > checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json checksums.txt server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $VERSION (upstream 0.2.7)" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Production deployment remains a separate manual action."
+          gh release create "$VERSION" deployment.json checksums.txt server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $VERSION (upstream 0.2.8)" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Production deployment remains a separate manual action."
+
