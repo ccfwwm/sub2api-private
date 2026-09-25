@@ -108,7 +108,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.terminal-container').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="default-home"]').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
@@ -169,7 +169,7 @@ describe('HomeView compact mode', () => {
       model_plaza_require_auth: false,
     })
 
-    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
+    expect(wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/model-plaza?embedded=1')).toBe(true)
   })
 
   it('hides the model plaza link when the feature is disabled', () => {
