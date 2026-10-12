@@ -46,7 +46,7 @@ jobs:
           else
             test "$CONFIRMATION" = CONFIRM
             case "$ACTION" in
-              prepare) [[ "$TARGET" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]] ;;
+              prepare) [[ "$TARGET" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]] ;;
               deploy|rollback) [[ "$TARGET" =~ ^[0-9a-f]{32}$ ]] ;;
               *) exit 1 ;;
             esac

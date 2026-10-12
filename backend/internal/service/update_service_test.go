@@ -45,6 +45,42 @@ func TestUpdateServiceListsOnlyValidatedStableImages(t *testing.T) {
 	require.Equal(t, "v1.0.0", versions[1].Version)
 }
 
+func TestUpdateServiceUpstreamAlignedNumbering(t *testing.T) {
+	for _, versions := range [][2]string{{"v1.0.6", "v0.2.15"}, {"v0.2.15", "v0.2.16"}, {"v0.2.15", "v1.1.0"}} {
+		require.Equal(t, -1, compareReleaseVersions(versions[0], versions[1]))
+		require.Equal(t, 1, compareReleaseVersions(versions[1], versions[0]))
+	}
+	require.Equal(t, 0, compareReleaseVersions("v0.2.15", "0.2.15"))
+	for _, tag := range []string{"v0.2.15", "v1.0.6"} {
+		require.True(t, privateReleaseTag.MatchString(tag))
+	}
+	for _, tag := range []string{"v00.2.15", "v0.2.15-rc1", "v0.2.15;id", "latest"} {
+		require.False(t, privateReleaseTag.MatchString(tag))
+	}
+	client := &updateServiceGitHubClientStub{release: &GitHubRelease{TagName: "v0.2.15"}, recentReleases: []*GitHubRelease{
+		{TagName: "v1.0.6", Assets: []GitHubAsset{{Name: "deployment.json"}}},
+		{TagName: "v0.2.15", Assets: []GitHubAsset{{Name: "deployment.json"}}},
+	}}
+	svc := NewUpdateService(&updateServiceCacheStub{}, client, "1.0.6", "release")
+	info, err := svc.CheckUpdate(context.Background(), true)
+	require.NoError(t, err)
+	require.True(t, info.HasUpdate)
+	info, err = svc.CheckUpdate(context.Background(), false)
+	require.NoError(t, err)
+	require.True(t, info.Cached)
+	require.True(t, info.HasUpdate)
+	svc.currentVersion = "0.2.15"
+	images, err := svc.ListImageReleases(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "v0.2.15", images[0].Version)
+	rollback, err := svc.ListRollbackVersions(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "1.0.6", rollback[0].Version)
+	info, err = svc.CheckUpdate(context.Background(), false)
+	require.NoError(t, err)
+	require.False(t, info.HasUpdate)
+}
+
 type updateServiceCacheStub struct {
 	data string
 }

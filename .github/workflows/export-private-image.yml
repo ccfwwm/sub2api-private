@@ -27,7 +27,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]
           mkdir export
           gh release download "$VERSION" --pattern deployment.json --pattern checksums.txt --dir export
           (cd export && sha256sum -c checksums.txt)

@@ -2,9 +2,12 @@
   "repository": "ccfwwm/sub2api-private",
   "image": "ghcr.io/ccfwwm/sub2api-private",
   "upstream_repository": "Wei-Shaw/sub2api",
-  "upstream_commit": "96f4c115c9749078f90cbf210a01d39baf3f53b6",
-  "upstream_version": "0.2.11",
+  "upstream_commit": "f2669c8cf62555cd92389b3f55920e9e6e7c6ff2",
+  "upstream_version": "0.2.15",
   "first_private_version": "1.0.0",
   "deployment": "manual",
-  "platform": "linux/amd64"
+  "platform": "linux/amd64",
+  "version_scheme": "upstream-aligned",
+  "version_scheme_since": "0.2.15",
+  "legacy_private_versions": "1.0.0-1.0.6"
 }

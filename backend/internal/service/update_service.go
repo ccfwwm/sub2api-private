@@ -23,7 +23,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-var privateReleaseTag = regexp.MustCompile(`^v[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
+var privateReleaseTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$`)
 
 // ListImageReleases exposes only stable releases containing the deployment
 // inventory produced after image validation. The host revalidates on prepare.
@@ -44,7 +44,7 @@ func (s *UpdateService) ListImageReleases(ctx context.Context) ([]RollbackVersio
 			}
 		}
 	}
-	sort.SliceStable(versions, func(i, j int) bool { return compareVersions(versions[i].Version, versions[j].Version) > 0 })
+	sort.SliceStable(versions, func(i, j int) bool { return compareReleaseVersions(versions[i].Version, versions[j].Version) > 0 })
 	return versions, nil
 }
 
@@ -54,7 +54,7 @@ var (
 )
 
 const (
-	updateCacheKey = "update_check_cache"
+	updateCacheKey = "update_check_cache_upstream_aligned"
 	updateCacheTTL = 1200 // 20 minutes
 	githubRepo     = "ccfwwm/sub2api-private"
 
@@ -415,7 +415,7 @@ func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubR
 			continue
 		}
 		// Only versions strictly older than current (also excludes current itself)
-		if compareVersions(v, s.currentVersion) >= 0 {
+		if compareReleaseVersions(v, s.currentVersion) >= 0 {
 			continue
 		}
 		seen[v] = true
@@ -423,7 +423,7 @@ func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubR
 	}
 
 	sort.SliceStable(candidates, func(i, j int) bool {
-		return compareVersions(
+		return compareReleaseVersions(
 			strings.TrimPrefix(candidates[i].TagName, "v"),
 			strings.TrimPrefix(candidates[j].TagName, "v"),
 		) > 0
@@ -455,7 +455,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 	return &UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  latestVersion,
-		HasUpdate:      compareVersions(s.currentVersion, latestVersion) < 0,
+		HasUpdate:      compareReleaseVersions(s.currentVersion, latestVersion) < 0,
 		ReleaseInfo: &ReleaseInfo{
 			Name:        release.Name,
 			Body:        release.Body,
@@ -656,7 +656,7 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 	return &UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  cached.Latest,
-		HasUpdate:      compareVersions(s.currentVersion, cached.Latest) < 0,
+		HasUpdate:      compareReleaseVersions(s.currentVersion, cached.Latest) < 0,
 		ReleaseInfo:    cached.ReleaseInfo,
 		Cached:         true,
 		BuildType:      s.buildType,
@@ -678,6 +678,25 @@ func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 
 	data, _ := json.Marshal(cacheData)
 	_ = s.cache.SetUpdateInfo(ctx, string(data), time.Duration(updateCacheTTL)*time.Second)
+}
+
+// compareReleaseVersions accounts for the private numbering transition. Only
+// the seven historical private releases (1.0.0 through 1.0.6) predate the new
+// upstream-aligned 0.x series starting at 0.2.15. Other versions retain normal
+// semantic ordering, including future major releases.
+func compareReleaseVersions(current, latest string) int {
+	a, b := parseVersion(current), parseVersion(latest)
+	legacy := func(v [3]int) bool { return v[0] == 1 && v[1] == 0 && v[2] <= 6 }
+	aligned := func(v [3]int) bool {
+		return v[0] == 0 && (v[1] > 2 || (v[1] == 2 && v[2] >= 15))
+	}
+	if legacy(a) && aligned(b) {
+		return -1
+	}
+	if aligned(a) && legacy(b) {
+		return 1
+	}
+	return compareVersions(current, latest)
 }
 
 // compareVersions compares two semantic versions

@@ -54,7 +54,7 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 const terminal = new Set(['ready', 'succeeded', 'failed', 'rolled_back', 'interrupted'])
 const running = computed(() => !!state.value?.job && !terminal.has(state.value.job.status))
-const canPrepare = computed(() => state.value?.enabled && confirmed.value && !busy.value && !running.value && /^v[1-9]\d*\.\d+\.\d+$/.test(target.value))
+const canPrepare = computed(() => state.value?.enabled && confirmed.value && !busy.value && !running.value && /^v(0|[1-9]\d*)\.\d+\.\d+$/.test(target.value))
 const labels: Record<string, string> = {
   queued_prepare: '准备任务已提交', validating: '校验版本', backing_up: '备份中',
   restoring_and_testing: '隔离恢复与启动验证', ready: '待手动切换', queued_deploy: '切换任务已提交',

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing stable private tag, e.g. v1.0.0 (does not deploy production)'
+        description: 'Existing stable private tag, e.g. v0.2.15 (does not deploy production)'
         required: true
         type: string
       candidate:
@@ -35,7 +35,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE: ${{ inputs.candidate || false }}
         run: |
-          [[ "$TAG" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]
           if [ "$CANDIDATE" = true ]; then
             SHA=$(git rev-parse HEAD)
             IMAGE_TAG="sha-$SHA"
@@ -78,7 +78,7 @@ jobs:
       - run: python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13
+          version: v2.14.0
           args: --timeout=30m
           working-directory: backend
   image:

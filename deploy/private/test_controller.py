@@ -38,6 +38,15 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_request(req)
 
+    def test_upstream_aligned_and_legacy_stable_versions(self):
+        for version in ['v0.2.15', 'v1.0.6']:
+            validate_request({'action': 'prepare', 'version': version, 'confirm': True})
+            manifest = dict(self.manifest, version=version)
+            self.assertEqual(validate_manifest(manifest, version), IMAGE + '@sha256:' + 'a' * 64)
+        for version in ['v00.2.15', 'v0.2.15-rc1', 'v0.2.15;id', '../v0.2.15']:
+            with self.assertRaises(ValueError):
+                validate_request({'action': 'prepare', 'version': version, 'confirm': True})
+
     def test_manifest_is_bound_to_private_repo_digest_and_version(self):
         self.assertEqual(validate_manifest(self.manifest, 'v1.0.0'), IMAGE + '@sha256:' + 'a' * 64)
         for key, bad in [('repository', 'Wei-Shaw/sub2api'), ('image', 'evil/image'),
