@@ -1,0 +1,108 @@
+{
+  "verified_at": "2026-10-12T18:29:54.468184+00:00",
+  "version": "1.1.2",
+  "commit": "ecf8332560d49b59a881a6a28b66b2b38b63ba38",
+  "image_id": "sha256:26fd7344f86e73f11131ee27d963ec73273776aab56be64f43253951d9a06b5e",
+  "digest": "sha256:fa60314a66d84281c50cbc57e0d9cb5d1b2b57ca9471e4019e58702fdf623788",
+  "application_id": "a639a2ee9f815bcc5ed71d9c464c57f766201f1b7574336065ecef27e3b8d37b",
+  "application_changed": true,
+  "application_mounts_unchanged": true,
+  "application_networks_unchanged": true,
+  "neighbors": {
+    "sub2api-postgres": {
+      "id": "f3593bf6d71bbfa09c56e6fa6fde5e49c5dd0aa16f54a09e589fb336037fbd73",
+      "started_at": "2026-09-24T11:41:48.843414454Z",
+      "unchanged": true
+    },
+    "sub2api-redis": {
+      "id": "9860f0d8485675414aaebccf339e69f60dfb97209a50631680c176212869e2bb",
+      "started_at": "2026-09-24T11:41:48.842352295Z",
+      "unchanged": true
+    },
+    "sub2api-pricing-overlay": {
+      "id": "22371adcb0d14f33c00699c110bc96bd6ee92f23d9094475f6c6e05549a4aab5",
+      "started_at": "2026-09-24T11:41:48.841214701Z",
+      "unchanged": true
+    },
+    "codebuddy2api": {
+      "id": "c37fe0aebadd3ddb1b3de72852bddb4da76eb2a43fac204c29353bef43c59b4c",
+      "started_at": "2026-09-24T03:29:27.562002815Z",
+      "unchanged": true
+    }
+  },
+  "public_statuses": {
+    "/": 200,
+    "/health": 200,
+    "/api/v1/settings/public": 200,
+    "/v1/models": 401,
+    "/api/v1/admin/media/configs/capability": 401
+  },
+  "nginx_config_valid": true,
+  "media_tables_empty": {
+    "media_config_versions": 0,
+    "media_config_heads": 0,
+    "media_tasks": 0,
+    "media_quota_windows": 0,
+    "media_quota_holds": 0,
+    "media_ledger_entries": 0,
+    "media_artifacts": 0,
+    "media_cost_entries": 0
+  },
+  "migration_inventory_matches_release": true,
+  "maintenance_marker": false,
+  "new_media_configuration_enabled": false,
+  "embedded_frontend_imagevideo": true,
+  "embedded_frontend_media_redirect": true,
+  "test_configuration_not_imported": true,
+  "production_configuration_counts": {
+    "media_accounts": 0,
+    "media_groups": 0,
+    "media_sale_prices": 0,
+    "media_cost_prices": 0
+  },
+  "management_source": "14f73edf0500547038b7c95a8bdad2ccbfe7a97e",
+  "management_code": "85d114fc794af996",
+  "operations": [
+    {
+      "id": "192f2b28c0a34883a00eccc1dc5eeeb6",
+      "action": "prepare",
+      "backup_id": "9d86a4bd18784dcba40f1419ef71cabd",
+      "status": "succeeded",
+      "updated_at": "2026-10-12T18:25:26.559707+00:00"
+    },
+    {
+      "id": "40cf4bc14c1d4eebb85843c85047fb04",
+      "action": "media_migration_rehearsal",
+      "backup_id": "f943948c885d46c7b5898c9c6dc9e09d",
+      "status": "succeeded",
+      "updated_at": "2026-10-12T18:21:19.220898+00:00"
+    },
+    {
+      "id": "b98f8f6a38f344cca33ae58a92eb3446",
+      "action": "media_migration_apply",
+      "backup_id": "62205baa88f548f3b1ccca441c2a57f9",
+      "status": "succeeded",
+      "updated_at": "2026-10-12T18:23:19.092334+00:00"
+    },
+    {
+      "id": "bf528689fa3f498cb75dde487cfaa27e",
+      "action": "upgrade",
+      "backup_id": "2b926fb6ca764b33bcef4179e7cc6d08",
+      "status": "succeeded",
+      "updated_at": "2026-10-12T18:29:42.588242+00:00"
+    }
+  ],
+  "all_successful_operation_backups_verified": true,
+  "migration_rehearsal_evidence": {
+    "restore_verified": true,
+    "rollback_verified": true,
+    "additive_data_verified": true
+  },
+  "cutover_mode": "user_approved_immediate",
+  "release_run": "38283872233",
+  "export_run": "38288365384",
+  "migration_gate_failure_history_preserved": [
+    "bd8266aca8cf4fa097fce805b9407a42",
+    "00bca0fc8b924c7885bd091d315fa9e1"
+  ]
+}

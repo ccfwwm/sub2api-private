@@ -81,3 +81,11 @@ v1.1.1 已于 2026-10-12 完成生产迁移和切换，见 [生产发布记录](
 rehearse 做完整备份与隔离恢复，不改变生产 schema；必须验证核心业务数据指纹、新镜像和捕获的旧实际程序都可启动。apply 需要对应 sealed receipt、同一镜像/SQL/config/runtime，并做新的最终备份后短暂排空请求。243 仅增加媒体表、额度字段和索引，不覆盖余额/用户/Key/原价格。普通 prepare 完成后再 upgrade，仅替换应用容器。
 
 新增媒体模板默认关闭，测试账号、测试价卡及测试法律 fixture 不进入生产。生产价卡由管理员填写，未实测模型不得开启。以后若已存在媒体在途任务，不可回滚到不会继续查询和结算它们的旧版本；先停止新提交并处理在途任务。紧急恢复程序不会用旧数据库备份覆盖最新业务。
+
+## v1.1.2 统一媒体价格迁移
+
+2026-10-13 已完成 `244_unified_media_model_pricing.sql` 与 `245_unified_media_account_cost.sql` 的备份副本演练和正式加列，并完成 prepare/upgrade。两个迁移只新增可空 `media JSONB` 字段，原数据不变。专用迁移选择器为 `--schema unified-pricing`；已迁移生产不再重复 rehearse/apply，普通 prepare 仍要求完整清单相等。
+
+服务器管理代码为 `85d114fc794af996`，来源 `14f73edf0500547038b7c95a8bdad2ccbfe7a97e`。修复 SQL 整行注释导致的事务白名单误拒，保留原始文件校验值并生成两条固定允许语句；实际迁移文件回归与 30 项工具测试通过。历史失败任务保留，不代表最终升级失败；成功任务与备份 ID 见 [发布记录](../../docs/multimodal/PRODUCTION_ROLLOUT.md)。
+
+媒体配置改用原有账号、分组和渠道模型定价，价格手动设置，不导入来源或模板。查看状态：`/root/sub2api-manage status`；配置步骤见 [v1.1.2 说明](../../docs/MEDIA_PLATFORM_V112_CN.md)。

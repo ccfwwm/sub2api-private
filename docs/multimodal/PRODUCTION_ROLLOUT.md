@@ -1,5 +1,33 @@
 # 多模态生产发布记录
 
+## 当前生产：v1.1.2
+
+北京时间 **2026-10-13 02:29** 已完成 v1.1.2 切换与验收。媒体平台 `imagevideo` 融入现有账号、分组和渠道模型定价；用户使用模型广场和使用记录，旧 `/admin/media` 跳转到渠道管理。价格手动配置，不同步供应商价格、不建立来源或模板。配置步骤见 [v1.1.2 配置说明](../MEDIA_PLATFORM_V112_CN.md)。
+
+- 应用提交：`ecf8332560d49b59a881a6a28b66b2b38b63ba38`，基线仍为官方 v0.2.15。
+- 不可变镜像：`ghcr.io/ccfwwm/sub2api-private@sha256:fa60314a66d84281c50cbc57e0d9cb5d1b2b57ca9471e4019e58702fdf623788`。
+- [私有发布](https://github.com/ccfwwm/sub2api-private/releases/tag/v1.1.2)、[发布验证与镜像构建](https://github.com/ccfwwm/sub2api-private/actions/runs/38283872233)、[离线导出](https://github.com/ccfwwm/sub2api-private/actions/runs/38288365384)。直接发布已验证候选的清单与 digest，未重新构建镜像。
+- 部署工具修复提交：`14f73edf0500547038b7c95a8bdad2ccbfe7a97e`；管理包取自该提交的 canonical Git 文件，服务器工具版本 `85d114fc794af996`，30 项管理测试通过。应用镜像及标签身份不变。
+
+| 操作 | 任务 ID | 备份 ID | 状态 |
+|---|---|---|---|
+| 副本迁移演练 | `40cf4bc14c1d4eebb85843c85047fb04` | `f943948c885d46c7b5898c9c6dc9e09d` | succeeded |
+| 新增字段 apply | `b98f8f6a38f344cca33ae58a92eb3446` | `62205baa88f548f3b1ccca441c2a57f9` | succeeded |
+| prepare | `192f2b28c0a34883a00eccc1dc5eeeb6` | `9d86a4bd18784dcba40f1419ef71cabd` | succeeded |
+| upgrade | `bf528689fa3f498cb75dde487cfaa27e` | `2b926fb6ca764b33bcef4179e7cc6d08` | succeeded |
+
+只执行 244/245 的两个可空 JSONB 加列，旧迁移及校验值不变。副本验证恢复指纹一致、新旧程序可启动、新增字段不改变原有业务数据；成功操作的四份备份完整性校验通过，备份留在服务器。按用户已授权的即时方式切换，当时有 3 个在途请求；旧应用关闭耗时接近 120 秒退出上限，期间有连接中断/维护响应。普通脚本仍保留自然空闲/排空门禁。
+
+最终核验：首页、health、版本接口 HTTP 200，公共版本 `1.1.2`；未认证模型及媒体管理 API 为 401，Nginx 配置通过。应用挂载、网络及 `127.0.0.1:8081` 映射未变；PostgreSQL、Redis、定价覆盖服务、codebuddy 的容器 ID、启动时间、完整挂载和网络均未变。维护标记不存在，`draining:false`。新前端包含媒体平台及旧媒体地址跳转。媒体账号/分组/售价/成本配置均为 0，八个媒体表为空；没有在生产执行媒体生成或导入本地测试配置。
+
+两次初始迁移演练因 SQL 注释与严格事务格式门禁不一致而停止，均未修改生产数据库。修复忽略整行注释并生成固定的允许语句，保留原始文件 checksum，新增测试读取实际 244/245 文件验证事务往返；失败记录保留。提前执行的前端检查已在真实 v1.1.2 上重新验证，不采用旧版本页面作为发布证据。
+
+本地及发布 CI 验证见 [VALIDATION.md](VALIDATION.md)。真实渠道累计费用 **5.540890 USD**，见 [REAL_CHANNEL_VALIDATION.md](REAL_CHANNEL_VALIDATION.md)；当前测试 Key 无权调用 `00sd2.5`、`LLseadanco2.5`，不标为实测通过。
+
+脱敏证据：[production-v1.1.2-evidence.json](production-v1.1.2-evidence.json)。服务器原件为 `/root/sub2api-ops/state/releases/v1.1.2/production-rollout-evidence.json`，整体记录为 `/root/sub2api-ops/state/rollout-media-v1.1.2.json`。本次迁移和升级已完成，不重复执行 apply；后续使用 `/root/sub2api-manage status`。
+
+## 历史生产：v1.1.1
+
 生产已于北京时间 2026-10-12 23:06 切换到私有多模态版本 **v1.1.1**，23:11 完成独立验收。应用基线为官方 v0.2.15。
 
 ## 发布身份与验收
