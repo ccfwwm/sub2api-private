@@ -22,6 +22,8 @@
 
 两次初始迁移演练因 SQL 注释与严格事务格式门禁不一致而停止，均未修改生产数据库。修复忽略整行注释并生成固定的允许语句，保留原始文件 checksum，新增测试读取实际 244/245 文件验证事务往返；失败记录保留。提前执行的前端检查已在真实 v1.1.2 上重新验证，不采用旧版本页面作为发布证据。
 
+创建 Git 标签另外触发了 [重复发布运行](https://github.com/ccfwwm/sub2api-private/actions/runs/38288299157)：其测试与演练通过，最终因 Release 已存在而拒绝重复发布，但版本镜像标签被额外构建更新。生产一直使用正式清单中的 image ID/digest，没有再次切换。[标签修复运行](https://github.com/ccfwwm/sub2api-private/actions/runs/38292178093) 比较成功候选与正式发布清单，恢复 registry 的 `v1.1.2` 标签并核验其 digest 为 `fa60314…`。另增加源码测试结束、镜像打包开始前的发布存在性检查；已发布或 API 状态无法确定时拒绝覆盖版本标签。
+
 本地及发布 CI 验证见 [VALIDATION.md](VALIDATION.md)。真实渠道累计费用 **5.540890 USD**，见 [REAL_CHANNEL_VALIDATION.md](REAL_CHANNEL_VALIDATION.md)；当前测试 Key 无权调用 `00sd2.5`、`LLseadanco2.5`，不标为实测通过。
 
 脱敏证据：[production-v1.1.2-evidence.json](production-v1.1.2-evidence.json)。服务器原件为 `/root/sub2api-ops/state/releases/v1.1.2/production-rollout-evidence.json`，整体记录为 `/root/sub2api-ops/state/rollout-media-v1.1.2.json`。本次迁移和升级已完成，不重复执行 apply；后续使用 `/root/sub2api-manage status`。

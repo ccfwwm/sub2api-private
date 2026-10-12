@@ -104,5 +104,10 @@
   "migration_gate_failure_history_preserved": [
     "bd8266aca8cf4fa097fce805b9407a42",
     "00bca0fc8b924c7885bd091d315fa9e1"
-  ]
+  ],
+  "registry_version_tag_matches_published_digest": true,
+  "registry_tag_repair_run": "38292178093",
+  "duplicate_tag_push_run": "38288299157",
+  "duplicate_tag_push_failure": "ReleaseAlreadyExistsAfterSuccessfulTestsAndRehearsals",
+  "application_restarted_for_tag_repair": false
 }
