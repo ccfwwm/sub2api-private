@@ -65,15 +65,17 @@ rescue 不依赖当前应用健康，只允许最近一次已开始的切换任�
 - 后续版本须先发布、下载并验证镜像，把对应的 `deployment.json` 和 `image-inspect.json` 放在 `/root/sub2api-ops/state/releases/<版本>/`，再调用 upgrade。脚本拒绝未登记的版本，当前已备好的版本无需联网下载。
 
 
-## 私有多模态版本 v1.1.0 的新增迁移
+## 私有多模态版本 v1.1.1 的新增迁移
 
 普通 prepare 仍要求生产迁移清单和镜像一致，不允许隐式迁移。新增 `243_media_tasks_and_pricing.sql` 仅经专用流程执行：
 
+v1.1.1 已于 2026-10-12 完成生产迁移和切换，见 [生产发布记录](../../docs/multimodal/PRODUCTION_ROLLOUT.md)。以下为首次迁移流程参考，已迁移的生产不要重复执行 rehearse/apply。
+
 ```sh
-/root/sub2api-media-migrate rehearse v1.1.0 --confirm REHEARSE
-/root/sub2api-media-migrate apply v1.1.0 --confirm APPLY
-/root/sub2api-manage prepare v1.1.0 --confirm PREPARE
-/root/sub2api-manage upgrade v1.1.0 --confirm UPGRADE
+/root/sub2api-media-migrate rehearse v1.1.1 --confirm REHEARSE
+/root/sub2api-media-migrate apply v1.1.1 --confirm APPLY
+/root/sub2api-manage prepare v1.1.1 --confirm PREPARE
+/root/sub2api-manage upgrade v1.1.1 --confirm UPGRADE
 ```
 
 rehearse 做完整备份与隔离恢复，不改变生产 schema；必须验证核心业务数据指纹、新镜像和捕获的旧实际程序都可启动。apply 需要对应 sealed receipt、同一镜像/SQL/config/runtime，并做新的最终备份后短暂排空请求。243 仅增加媒体表、额度字段和索引，不覆盖余额/用户/Key/原价格。普通 prepare 完成后再 upgrade，仅替换应用容器。

@@ -17,7 +17,8 @@
 | [示例说明](multimodal/examples/README.md) | 环境变量、单次提交、持久化恢复及调用方式 |
 | [Python 示例](multimodal/examples/media_client.py) / [Node 示例](multimodal/examples/media_client.mjs) | 可执行的估价、同步请求、异步提交/查询/下载客户端 |
 | [验证脚本](multimodal/verify_spec.py) | 结构、覆盖、账务验收向量、两个客户端的故障 mock 检查 |
-| [本次验证记录](multimodal/VALIDATION.md) | 已执行检查与尚未实施的运行时/真实渠道验收边界 |
+| [本次验证记录](multimodal/VALIDATION.md) | 已执行的规范、运行时与真实渠道检查及验收边界 |
+| [生产发布记录](multimodal/PRODUCTION_ROLLOUT.md) | v1.1.1 镜像身份、生产切换、备份与最终验收证据 |
 | [规格生成器](multimodal/generate_spec.py) | 重建 YAML、Schema 与 JSON 模板，不访问生产 |
 
 统一进度标签：**源码已有基础、参考服务声明验证、待开发、待渠道验证、本项目实测通过**。另用 VALID / ADJUST / INVALID / UNVERIFIABLE 表示“引述是否符合来源”，两种标签不能互相替代。列表发现、Schema 合法、mock 成功均不能标记“本项目实测通过”。运行时已实现；真实生成仅限验收报告列出的模型与输入场景。

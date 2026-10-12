@@ -1,0 +1,54 @@
+{
+  "verified_at": "2026-10-12T15:11:29.562910+00:00",
+  "version": "1.1.1",
+  "commit": "b8f1ddf4f45670e7cf70ed906930c17ca91137e9",
+  "image_id": "sha256:2b9a70ec07e546709736ead444160d9a6bac285e171e52d42102330835bb72ec",
+  "digest": "sha256:85b53db49022fa76677f1f629c2084d4e88d26a4bf3a62b533b59327f5870193",
+  "application_id": "e7ffa496290fd217350e2d7062708676122cf753020bdc5d8b0d929a22178dab",
+  "application_changed": true,
+  "application_mounts_unchanged": true,
+  "application_networks_unchanged": true,
+  "neighbors": {
+    "sub2api-postgres": {
+      "id": "f3593bf6d71bbfa09c56e6fa6fde5e49c5dd0aa16f54a09e589fb336037fbd73",
+      "started_at": "2026-09-24T11:41:48.843414454Z",
+      "unchanged": true
+    },
+    "sub2api-redis": {
+      "id": "9860f0d8485675414aaebccf339e69f60dfb97209a50631680c176212869e2bb",
+      "started_at": "2026-09-24T11:41:48.842352295Z",
+      "unchanged": true
+    },
+    "sub2api-pricing-overlay": {
+      "id": "22371adcb0d14f33c00699c110bc96bd6ee92f23d9094475f6c6e05549a4aab5",
+      "started_at": "2026-09-24T11:41:48.841214701Z",
+      "unchanged": true
+    },
+    "codebuddy2api": {
+      "id": "c37fe0aebadd3ddb1b3de72852bddb4da76eb2a43fac204c29353bef43c59b4c",
+      "started_at": "2026-09-24T03:29:27.562002815Z",
+      "unchanged": true
+    }
+  },
+  "public_statuses": {
+    "/": 200,
+    "/health": 200,
+    "/api/v1/settings/public": 200,
+    "/v1/models": 401,
+    "/api/v1/admin/media/configs/capability": 401
+  },
+  "nginx_config_valid": true,
+  "media_tables_empty": {
+    "media_config_versions": 0,
+    "media_config_heads": 0,
+    "media_tasks": 0,
+    "media_quota_windows": 0,
+    "media_quota_holds": 0,
+    "media_ledger_entries": 0,
+    "media_artifacts": 0,
+    "media_cost_entries": 0
+  },
+  "migration_inventory_matches_release": true,
+  "maintenance_marker": false,
+  "new_media_configuration_enabled": false
+}
