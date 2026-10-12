@@ -234,20 +234,66 @@ class Manager:
             volumes.append(mount)
         return target
 
-    def drain(self):
-        self.marker.touch(mode=0o644)
-        os.chmod(self.marker, 0o644)
+    def deployment_status(self):
+        status = json.loads(run(['docker', 'exec', 'sub2api', 'wget', '-qO-',
+                                 'http://127.0.0.1:8080/internal/deployment/status'], timeout=10))
+        if (not isinstance(status, dict) or type(status.get('active')) is not int or
+                status['active'] < 0 or type(status.get('draining')) is not bool):
+            raise ValueError('invalid deployment status; operation cancelled')
+        return {key: status[key] for key in ('draining', 'active')}
+
+    def wait_for_idle(self, timeout=900):
+        if self.marker.exists():
+            raise ValueError('maintenance marker already exists; inspect before operating')
+        deadline = time.monotonic() + timeout
+        report_at = 0
+        last = {}
+        while time.monotonic() < deadline:
+            last = self.deployment_status()
+            if last['draining']:
+                raise ValueError('runtime is already draining; inspect before operating')
+            if last['active'] == 0:
+                return
+            if time.monotonic() >= report_at:
+                print('WAITING_FOR_IDLE=' + json.dumps(last), flush=True)
+                report_at = time.monotonic() + 30
+            time.sleep(2)
+        raise ValueError('no idle window; production remains open; last_status=' + json.dumps(last))
+
+    def drain(self, job=None):
         env = dict(x.split('=', 1) for x in self.c.inspect()['Config']['Env'])
         if env.get('IMAGE_DEPLOY_DRAIN_FILE') != '/run/sub2api-ops/drain':
+            self.marker.touch(mode=0o644)
+            os.chmod(self.marker, 0o644)
             print('First cutover: current official runtime cannot drain; existing requests may be interrupted.', flush=True)
             return
+        if job is not None:
+            self.save(job, 'waiting_for_idle')
+        # Observe a natural idle window while admission remains open. The
+        # subsequent maintenance gate still handles requests racing this probe.
+        self.wait_for_idle()
+        if job is not None:
+            self.save(job, 'draining')
+        self.marker.touch(mode=0o644)
+        os.chmod(self.marker, 0o644)
         deadline = time.monotonic() + 120
-        while time.monotonic() < deadline:
-            status = json.loads(run(['docker', 'exec', 'sub2api', 'wget', '-qO-', 'http://127.0.0.1:8080/internal/deployment/status']))
-            if status.get('draining') and status.get('active') == 0:
-                return
-            time.sleep(1)
-        raise ValueError('active requests did not drain; cutover cancelled')
+        report_at = 0
+        last = {}
+        try:
+            while time.monotonic() < deadline:
+                last = self.deployment_status()
+                if last['draining'] and last['active'] == 0:
+                    return
+                if time.monotonic() >= report_at:
+                    print('DRAIN_STATUS=' + json.dumps(last), flush=True)
+                    report_at = time.monotonic() + 15
+                time.sleep(1)
+            raise ValueError('active requests did not drain; cutover cancelled; last_status=' + json.dumps(last))
+        except BaseException:
+            # Failed probes and interrupted waits must immediately restore
+            # admission even when drain is called outside the cutover wrapper.
+            self.marker.unlink(missing_ok=True)
+            raise
 
     def switch(self, target):
         atomic_json(self.active_path, target)
@@ -265,7 +311,7 @@ class Manager:
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
                   for n in ['sub2api-postgres', 'sub2api-redis']}
         try:
-            self.drain()
+            self.drain(job)
             self.save(job, 'switching')
             switched = True
             self.switch(target)
@@ -425,7 +471,7 @@ def main():
                 continue
             job = read(p)
             if job.get('status') not in ('succeeded', 'failed_needs_inspection', 'failed_rolled_back'):
-                unit = subprocess.run(['systemctl', 'is-active', 'sub2api-ops-' + job['id']], capture_output=True, text=True)
+                unit = subprocess.run(['systemctl', 'is-active', job.get('worker_unit', 'sub2api-ops-' + job['id'])], capture_output=True, text=True)
                 job['worker_state'] = unit.stdout.strip()
                 if unit.returncode:
                     job['attention'] = 'worker is not running; inspect logs, do not assume completion'

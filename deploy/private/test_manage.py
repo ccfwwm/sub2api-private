@@ -75,6 +75,82 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertEqual(job['status'], 'succeeded')
         cutover.assert_not_called()
 
+    def test_failed_drain_probe_restores_admission(self):
+        with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
+                'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \
+             patch.object(self.manager, 'wait_for_idle'), \
+             patch('manage.run', side_effect=ValueError('probe failed')):
+            with self.assertRaisesRegex(ValueError, 'probe failed'):
+                self.manager.drain()
+        self.assertFalse(self.manager.marker.exists())
+
+    def test_drain_timeout_requires_zero_active_and_restores_admission(self):
+        with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
+                'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \
+             patch.object(self.manager, 'wait_for_idle'), \
+             patch('manage.run', return_value=b'{"active":1,"draining":true}'), \
+             patch('manage.time.monotonic', side_effect=[0, 1, 2, 3, 121]), \
+             patch('manage.time.sleep'):
+            with self.assertRaisesRegex(ValueError, 'active requests did not drain'):
+                self.manager.drain()
+        self.assertFalse(self.manager.marker.exists())
+
+    def test_successful_drain_retains_marker_until_caller_finishes(self):
+        with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
+                'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \
+             patch.object(self.manager, 'wait_for_idle'), \
+             patch('manage.run', return_value=b'{"active":0,"draining":true}'):
+            self.manager.drain()
+        self.assertTrue(self.manager.marker.exists())
+
+    def test_idle_wait_keeps_admission_open(self):
+        statuses = iter([{'active': 2, 'draining': False}, {'active': 0, 'draining': False}])
+        def probe():
+            self.assertFalse(self.manager.marker.exists())
+            return next(statuses)
+        with patch.object(self.manager, 'deployment_status', side_effect=probe), \
+             patch('manage.time.sleep'):
+            self.manager.wait_for_idle()
+        self.assertFalse(self.manager.marker.exists())
+
+    def test_busy_idle_wait_times_out_without_maintenance(self):
+        with patch.object(self.manager, 'deployment_status', return_value={'active': 1, 'draining': False}), \
+             patch('manage.time.monotonic', side_effect=[0, 1, 2, 3, 901]), \
+             patch('manage.time.sleep'):
+            with self.assertRaisesRegex(ValueError, 'production remains open'):
+                self.manager.wait_for_idle()
+        self.assertFalse(self.manager.marker.exists())
+
+    def test_malformed_deployment_status_cannot_authorize_cutover(self):
+        for status in (None, [], {}, {'active': -1, 'draining': False},
+                       {'active': False, 'draining': True}, {'active': 0, 'draining': 'false'},
+                       {'active': '0', 'draining': False}):
+            with self.subTest(status=status), patch('manage.run', return_value=json.dumps(status).encode()):
+                with self.assertRaisesRegex(ValueError, 'invalid deployment status'):
+                    self.manager.deployment_status()
+
+    def test_existing_maintenance_prevents_idle_wait(self):
+        self.manager.marker.touch()
+        with patch.object(self.manager, 'deployment_status') as probe:
+            with self.assertRaisesRegex(ValueError, 'maintenance marker already exists'):
+                self.manager.wait_for_idle()
+        probe.assert_not_called()
+        self.assertTrue(self.manager.marker.exists())
+
+    def test_existing_runtime_drain_cannot_be_treated_as_idle(self):
+        with patch.object(self.manager, 'deployment_status', return_value={'active': 0, 'draining': True}):
+            with self.assertRaisesRegex(ValueError, 'already draining'):
+                self.manager.wait_for_idle()
+        self.assertFalse(self.manager.marker.exists())
+
+    def test_idle_wait_failure_never_enters_maintenance(self):
+        with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
+                'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \
+             patch.object(self.manager, 'wait_for_idle', side_effect=ValueError('no idle window')):
+            with self.assertRaisesRegex(ValueError, 'no idle window'):
+                self.manager.drain()
+        self.assertFalse(self.manager.marker.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

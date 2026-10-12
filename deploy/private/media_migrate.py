@@ -6,6 +6,7 @@ receipt, fresh final backup, unchanged runtime/config and exact SQL checksum.
 Never rewrites old checksums, restores production data, or drops old tables.
 """
 import argparse
+import contextlib
 try:
     import fcntl
 except ImportError:  # Windows can run the pure gate tests, never deployment.
@@ -21,6 +22,29 @@ from controller import PROTECTED, atomic_json, file_hash, run
 from manage import Manager, STATE, read
 
 FILENAME = "243_media_tasks_and_pricing.sql"
+
+
+@contextlib.contextmanager
+def tracked_operation(manager, action, version):
+    job = {"id": uuid.uuid4().hex, "action": "media_migration_" +
+           ("rehearsal" if action == "rehearse" else "apply"), "target": version}
+    cgroup = Path('/proc/self/cgroup')
+    if cgroup.exists():
+        for line in cgroup.read_text().splitlines():
+            unit = line.rsplit('/', 1)[-1]
+            if unit.startswith('sub2api-') and unit.endswith('.service'):
+                job['worker_unit'] = unit
+                break
+    manager.save(job, "queued")
+    print("JOB_ID=" + job["id"], flush=True)
+    try:
+        yield job
+    except BaseException as error:
+        job["failed_phase"] = job.get("status", "queued")
+        job["error_type"] = type(error).__name__
+        # Save only structured diagnostics; exception text may include secrets.
+        manager.save(job, "failed_needs_inspection")
+        raise
 
 
 def reviewed_transaction(sql, checksum):
@@ -49,7 +73,7 @@ def execute(args):
         raise ValueError("root and explicit operation confirmation required")
     os.umask(0o077)
     m = Manager()
-    with (STATE / "operations.lock").open("a") as lock:
+    with tracked_operation(m, args.action, args.version) as job, (STATE / "operations.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         original = m.preflight()
         image, manifest = m.offline(args.version)
@@ -67,8 +91,8 @@ def execute(args):
         if args.action == "rehearse":
             if FILENAME in old:
                 raise ValueError("already migrated; use ordinary prepare")
-            job = {"id":uuid.uuid4().hex,"action":"media_migration_rehearsal","target":args.version}
             folder, meta = m.backup(job)
+            m.save(job, "restoring_and_testing")
             test = {"id":uuid.uuid4().hex,"image":image,"rollback_image":meta["runtime_image"],
                     "version":args.version,"manifest":{"migrations":old},
                     "reviewed_media_migration":{"filename":FILENAME,"transaction":transaction,"expected_migrations":target}}
@@ -90,12 +114,12 @@ def execute(args):
         if m.c.config_hashes()!=receipt["config_hashes"] or run(["docker","exec","sub2api","sha256sum","/app/sub2api"]).decode().split()[0]!=receipt["binary_sha256"]:
             raise ValueError("production changed since rehearsal")
         m.verified_backup(receipt["backup_id"])
-        job={"id":uuid.uuid4().hex,"action":"media_migration_apply","target":args.version}
         folder,meta=m.backup(job)
         if m.c.inspect()["Id"]!=original["Id"] or m.c.migrations()!=old:
             raise ValueError("production changed during final backup")
         try:
-            m.drain()
+            m.save(job,"draining")
+            m.drain(job)
             m.save(job,"applying_reviewed_additive_migration")
             m.c.apply_reviewed_media_migration(transaction)
             if m.c.migrations()!=target:

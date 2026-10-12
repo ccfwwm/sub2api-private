@@ -52,6 +52,8 @@ SSH 断开不会中断任务；服务器重启或进程被强制终止则可能�
 
 rescue 不依赖当前应用健康，只允许最近一次已开始的切换任务，恢复该任务保存的切换前镜像和应用配置，并解除维护标记。它不恢复覆盖数据库，也不自动继续中断任务。状态 `failed_needs_inspection` 表示需要查日志，不能视为上线成功。
 
+支持排空接口的当前程序先在线等待自然空闲，最多 15 分钟，期间不创建维护标记、不拒绝新请求。日志每 30 秒记录 `WAITING_FOR_IDLE`，任务状态为 `waiting_for_idle`。一直没有空闲则取消，生产继续开放。发现空闲后才进入维护，仍须通过在途数量归零门禁；此阶段最多等待 120 秒，每 15 秒记录 `DRAIN_STATUS`。日志仅含在途数量与维护状态。数量未归零、探测失败或中断会取消操作并立即解除本次维护，不强制断开业务连接。已有维护标记或程序已经排空时拒绝开始，需先检查原操作。专用媒体迁移也持久记录 `queued / backing_up / restoring_and_testing / waiting_for_idle / draining / applying_reviewed_additive_migration / succeeded`，并记录真实 systemd worker unit；失败记录 `failed_needs_inspection`、`failed_phase` 和异常类型。退出后仍显示旧的“备份中”不是成功证据，需结合后台 unit、日志与实际迁移清单检查，禁止直接重做 SQL 或恢复旧库。
+
 ## 维护边界
 
 应用数据归档排除持续写入的 `data/logs` 运行日志；这些不是业务恢复输入。其余配置、业务文件均保留。数据库仅排除已约定的 `ops_system_logs` 数据行。
