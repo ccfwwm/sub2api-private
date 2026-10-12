@@ -219,6 +219,27 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('creates an imagevideo API-key account with media hints and no Claude restriction', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'admin.groups.platforms.imagevideo')
+    await flushPromises()
+    const base = wrapper.get<HTMLInputElement>('input[placeholder="https://api.example.com"]')
+    expect(base.element.value).toBe('')
+    expect(wrapper.text()).toContain('admin.accounts.mediaApi.baseUrlHint')
+    expect(wrapper.text()).toContain('admin.accounts.mediaApi.apiKeyHint')
+    expect(wrapper.text()).not.toContain('admin.accounts.apiKeyHint')
+    expect(wrapper.findComponent(ModelWhitelistSelectorStub).props('modelValue')).toEqual([])
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('media account')
+    await base.setValue('https://media.example.com')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-media-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = createAccountMock.mock.calls[0]?.[0]
+    expect(payload).toMatchObject({ platform: 'imagevideo', type: 'apikey', credentials: { base_url: 'https://media.example.com' } })
+    expect(payload.credentials.model_mapping).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('sets month and year expiry presets without submitting the account form', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-01-31T12:34:00'))

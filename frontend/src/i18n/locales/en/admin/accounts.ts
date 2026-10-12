@@ -106,7 +106,7 @@ export default {
       },
       groupCountTotal: '{count} groups total',
       platforms: {
-      imagevideo: "Media (Image / Video / Audio)",
+      imagevideo: "imagevideo",
         anthropic: 'Anthropic',
         claude: 'Claude',
         openai: 'OpenAI',
@@ -618,6 +618,10 @@ export default {
       apiKeyRequired: 'API Key *',
       apiKeyPlaceholder: 'sk-ant-api03-...',
       apiKeyHint: 'Your Claude Console API Key',
+      mediaApi: {
+        baseUrlHint: 'Enter the media upstream service URL (required).',
+        apiKeyHint: 'Enter the inference API key for this media upstream service.',
+      },
       upstreamRequestIdHeader: 'Upstream ID',
       upstreamRequestIdHeaderPlaceholder: 'Leave empty to record nothing',
       upstreamRequestIdHeaderHelp: {

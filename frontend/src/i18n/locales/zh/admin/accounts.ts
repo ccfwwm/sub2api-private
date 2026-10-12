@@ -309,7 +309,7 @@ export default {
       deleteConfirm: "确定要删除账号 '{name}' 吗？此操作无法撤销。",
       failedToClearRateLimit: '清除速率限制失败',
       platforms: {
-      imagevideo: "媒体（图片 / 视频 / 音频）",
+      imagevideo: "imagevideo",
         claude: 'Claude',
         openai: 'OpenAI',
         anthropic: 'Anthropic',
@@ -736,6 +736,10 @@ export default {
       apiKeyRequired: 'API Key *',
       apiKeyPlaceholder: 'sk-ant-api03-...',
       apiKeyHint: '您的 Claude Console API Key',
+      mediaApi: {
+        baseUrlHint: '填写媒体上游服务地址（必填）。',
+        apiKeyHint: '填写该媒体上游服务的推理 API Key。',
+      },
       upstreamRequestIdHeader: '上游ID',
       upstreamRequestIdHeaderPlaceholder: '留空不记录',
       upstreamRequestIdHeaderHelp: {

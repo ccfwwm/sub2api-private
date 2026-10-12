@@ -23,7 +23,7 @@
     },
     {
       "id": "imagevideo",
-      "display_name": "Media",
+      "display_name": "imagevideo",
       "gateway": "media",
       "cn_provider": false
     },

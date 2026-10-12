@@ -8,6 +8,10 @@ import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatfo
 import { BUILTIN_PLATFORM_CATALOG, resetPlatformCatalog, setPlatformCatalog } from '@/constants/platformCatalog'
 
 describe('useModelWhitelist', () => {
+  it('does not restrict media accounts to Claude models or offer Claude mappings', () => {
+    expect(getModelsByPlatform('imagevideo')).toEqual([])
+    expect(getPresetMappingsByPlatform('imagevideo')).toEqual([])
+  })
   it('平台清单中没有内置模型列表的多协议供应商不预填白名单', () => {
     setPlatformCatalog({
       ...BUILTIN_PLATFORM_CATALOG,
