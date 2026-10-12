@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"sort"
@@ -88,6 +89,7 @@ type AccountStatsPricingRule struct {
 
 // ChannelModelPricing 渠道模型定价条目
 type ChannelModelPricing struct {
+	Media                      *MediaPricing       `json:"media,omitempty"`
 	ID                         int64               `json:"id,omitempty"`
 	ChannelID                  int64               `json:"channel_id,omitempty"`
 	Platform                   string              `json:"platform"` // 所属平台（anthropic/openai/gemini/...）
@@ -212,6 +214,11 @@ func (p *ChannelModelPricing) GetTierByLabel(label string) *PricingInterval {
 // Clone 返回 ChannelModelPricing 的拷贝（切片和映射独立，价格指针字段共享，调用方只读安全）
 func (p ChannelModelPricing) Clone() ChannelModelPricing {
 	cp := p
+	if p.Media != nil {
+		b, _ := json.Marshal(p.Media)
+		cp.Media = nil
+		_ = json.Unmarshal(b, &cp.Media)
+	}
 	cp.ReasoningEffortMultipliers = maps.Clone(p.ReasoningEffortMultipliers)
 	if p.Models != nil {
 		cp.Models = make([]string, len(p.Models))

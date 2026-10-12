@@ -1,3 +1,4 @@
+import type { MediaPricing } from '@/types/media'
 import type { BillingMode, ChannelTimePricing, PricingInterval } from '@/api/admin/channels'
 import { REASONING_EFFORT_LEVELS } from '@/constants/channel'
 
@@ -21,6 +22,7 @@ export interface IntervalFormEntry {
 }
 
 export interface PricingFormEntry {
+  media?: MediaPricing
   models: string[]
   billing_mode: BillingMode
   input_price: number | string | null
@@ -285,7 +287,8 @@ function patternsConflict(a: ModelPattern, b: ModelPattern): boolean {
 }
 
 /** 检测模型模式列表中的冲突，返回冲突的两个模式名；无冲突返回 null */
-export function findModelConflict(models: string[]): [string, string] | null {
+export function findModelConflict(models: string[], exact = false): [string, string] | null {
+  if (exact) { const seen = new Set<string>(); for (const model of models) { if (seen.has(model)) return [model, model]; seen.add(model) } return null }
   const patterns = models.map(toModelPattern)
   for (let i = 0; i < patterns.length; i++) {
     for (let j = i + 1; j < patterns.length; j++) {

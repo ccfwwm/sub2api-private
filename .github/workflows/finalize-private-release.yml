@@ -75,8 +75,10 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 tooling/deploy/private/rehearse_fixture.py --manifest deployment.json
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 tooling/deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           git -C tooling rev-parse HEAD > management-source.txt
-          tar -czf server-management.tar.gz -C tooling/deploy/private manage.py controller.py install-manager.sh SERVER-MANAGEMENT.md
+          tar -czf server-management.tar.gz -C tooling/deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md
           sha256sum deployment.json > checksums.txt
+          cp backend/migrations/24{3,4,5}_*.sql .
+          sha256sum 24{3,4,5}_*.sql >> checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json checksums.txt server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Production deployment remains a separate manual action."
+          gh release create "$VERSION" deployment.json checksums.txt 24{3,4,5}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Production deployment remains a separate manual action."
 

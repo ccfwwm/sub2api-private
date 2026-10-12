@@ -106,6 +106,7 @@ export default {
       },
       groupCountTotal: '{count} groups total',
       platforms: {
+      imagevideo: "Media (Image / Video / Audio)",
         anthropic: 'Anthropic',
         claude: 'Claude',
         openai: 'OpenAI',

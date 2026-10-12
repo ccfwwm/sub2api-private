@@ -71,6 +71,7 @@
       <div>
         <label class="input-label">{{ t('admin.accounts.platform') }}</label>
         <div class="mt-2 flex flex-wrap rounded-lg bg-gray-100 p-1 dark:bg-dark-700" data-tour="account-form-platform">
+          <button type="button" @click="form.platform = 'imagevideo'; accountCategory = 'apikey'" :class="['flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium', form.platform === 'imagevideo' ? 'bg-white text-violet-600 shadow-sm dark:bg-dark-600' : 'text-gray-600 dark:text-gray-400']">{{ t('admin.groups.platforms.imagevideo') }}</button>
           <button
             type="button"
             @click="form.platform = 'anthropic'"
@@ -1421,6 +1422,7 @@
         </div>
       </div>
 
+      <MediaAccountModelsEditor v-if="form.platform === 'imagevideo'" v-model="mediaModels" :base-url="apiKeyBaseUrl" :api-key="apiKeyValue" />
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
         <div v-if="!isMultiProtocolPlatform || apiProtocol !== 'adaptive'">
@@ -3954,6 +3956,8 @@
 </template>
 
 <script setup lang="ts">
+import MediaAccountModelsEditor from './MediaAccountModelsEditor.vue'
+import type { MediaCapability } from '@/types/media'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -4228,6 +4232,7 @@ interface TempUnschedRuleForm {
 // State
 const step = ref(1)
 const submitting = ref(false)
+const mediaModels = ref<MediaCapability[]>([])
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
@@ -4918,6 +4923,7 @@ watch(
 watch(
   [accountCategory, addMethod, antigravityAccountType, () => form.platform],
   ([category, method, agType]) => {
+    if (form.platform === "imagevideo") { form.type = "apikey"; return }
     // Antigravity upstream 类型（实际创建为 apikey）
     if (form.platform === 'antigravity' && agType === 'upstream') {
       form.type = 'apikey'
@@ -4959,6 +4965,7 @@ watch(
                 ? 'https://api.typesafe.ai'
               : 'https://api.anthropic.com'
     }
+    if (newPlatform === "imagevideo") { apiKeyBaseUrl.value = ""; accountCategory.value = "apikey" }
     // Clear model-related settings
     allowedModels.value = []
     upstreamModelsPreviewed.value = false
@@ -5412,6 +5419,7 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
 
 // Methods
 const resetForm = () => {
+  mediaModels.value = []
   step.value = 1
   form.name = ''
   form.notes = ''
@@ -5738,6 +5746,7 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 }
 
 const handleSubmit = async () => {
+  if (form.platform === "imagevideo" && !apiKeyBaseUrl.value.trim()) { appStore.showError("Base URL is required"); return }
   // For OAuth-based type, handle OAuth flow (goes to step 2)
   if (isOAuthFlow.value) {
     if (!isGrokSSOInputMethod.value && !form.name.trim()) {
@@ -5987,7 +5996,8 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
-  const extra = buildAnthropicExtra(buildOpenAIExtra())
+  const extra = buildAnthropicExtra(buildOpenAIExtra()) || {}
+  if (form.platform === "imagevideo") extra.media_models = mediaModels.value
 
   await doCreateAccount({
     ...form,

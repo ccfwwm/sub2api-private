@@ -218,6 +218,7 @@ export default {
         accountStatsPricingRules: 'Custom Account Stats Pricing Rules',
         addRule: 'Add Rule',
         noRulesConfigured: 'No custom rules configured. Channel model pricing above will be used.',
+        mediaCostNotConfigured: 'Media cost remains unknown until configured. Retail pricing is not used as cost.',
         ruleName: 'Rule name (optional)',
         ruleGroups: 'Groups',
         ruleAccounts: 'Accounts',

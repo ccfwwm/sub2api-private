@@ -1034,6 +1034,7 @@ export default {
       revertChanges: 'Revert',
       userInfo: 'User Info',
       platforms: {
+      imagevideo: "Media (Image / Video / Audio)",
         all: 'All Platforms',
         anthropic: 'Anthropic',
         openai: 'OpenAI',

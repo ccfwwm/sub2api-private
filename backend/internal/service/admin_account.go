@@ -411,6 +411,9 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if err := ValidateMediaAccount(input.Platform, input.Type, accountExtra); err != nil {
+		return nil, err
+	}
 	if input.Platform == PlatformTypeSafe && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
 	}
@@ -581,6 +584,17 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
+	}
+	kind := account.Type
+	if input.Type != "" {
+		kind = input.Type
+	}
+	mediaExtra := account.Extra
+	if input.Extra != nil {
+		mediaExtra = input.Extra
+	}
+	if err := ValidateMediaAccount(account.Platform, kind, mediaExtra); err != nil {
+		return nil, err
 	}
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
@@ -926,6 +940,15 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
+	if _, exists := updates["media_models"]; exists {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err = ValidateMediaAccount(account.Platform, account.Type, updates); err != nil {
+			return err
+		}
+	}
 	updates = sanitizedCodexFingerprintExtraUpdates(updates)
 	updates = stripOpenAIAutoResetCreditManagedExtra(updates, true)
 	delete(updates, UpstreamBillingProbeEnabledExtraKey)
@@ -1111,6 +1134,17 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		input.Credentials = SanitizeStoredCredentials("", input.Credentials)
 	}
 
+	if _, exists := input.Extra["media_models"]; exists {
+		for _, id := range input.AccountIDs {
+			account, err := s.accountRepo.GetByID(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if err = ValidateMediaAccount(account.Platform, account.Type, input.Extra); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// Prepare bulk updates for columns and JSONB fields.
 	repoUpdates := AccountBulkUpdate{
 		Credentials:                input.Credentials,

@@ -218,6 +218,7 @@ export default {
         accountStatsPricingRules: '自定义账号统计定价规则',
         addRule: '添加规则',
         noRulesConfigured: '未配置自定义规则，将使用上方的模型定价。',
+        mediaCostNotConfigured: '未配置媒体成本时显示未知，不使用用户售价替代。',
         ruleName: '规则名称（可选）',
         ruleGroups: '分组',
         ruleAccounts: '账号',

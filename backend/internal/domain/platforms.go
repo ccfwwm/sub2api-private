@@ -11,6 +11,7 @@ package domain
 type PlatformGateway string
 
 const (
+	PlatformGatewayMedia PlatformGateway = "media"
 	// PlatformGatewayAnthropic 由 GatewayService 处理（Claude Messages 协议，以及 TypeSafe 的 /v1/systemone）。
 	PlatformGatewayAnthropic PlatformGateway = "anthropic"
 	// PlatformGatewayOpenAI 由 OpenAIGatewayService 处理（OpenAI、Grok 与多协议 API Key 供应商）。
@@ -38,6 +39,7 @@ var platformList = []PlatformSpec{
 	{ID: PlatformAnthropic, DisplayName: "Anthropic", Gateway: PlatformGatewayAnthropic, LiteLLMProvider: "anthropic"},
 	{ID: PlatformOpenAI, DisplayName: "OpenAI", Gateway: PlatformGatewayOpenAI, LiteLLMProvider: "openai"},
 	{ID: PlatformGemini, DisplayName: "Gemini", Gateway: PlatformGatewayGemini, LiteLLMProvider: "gemini"},
+	{ID: PlatformImageVideo, DisplayName: "Media", Gateway: PlatformGatewayMedia},
 	{ID: PlatformAntigravity, DisplayName: "Antigravity", Gateway: PlatformGatewayAntigravity, LiteLLMProvider: "anthropic"},
 	{ID: PlatformGrok, DisplayName: "Grok", Gateway: PlatformGatewayOpenAI, LiteLLMProvider: "xai"},
 	{ID: PlatformKimi, DisplayName: "Kimi", Gateway: PlatformGatewayOpenAI, CNProvider: true, LiteLLMProvider: "moonshot"},

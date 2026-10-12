@@ -35,7 +35,7 @@ VERSION = re.compile(r"v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+\Z")
 JOB = re.compile(r"[0-9a-f]{32}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 PROTECTED = ("users", "accounts", "api_keys", "groups", "settings", "user_subscriptions",
-             "payment_orders", "channel_model_pricing", "security_secrets")
+             "payment_orders", "channel_model_pricing", "channel_account_stats_model_pricing", "security_secrets")
 COMMAND_ERROR_LOG = None
 
 
@@ -245,7 +245,9 @@ class Controller:
 
     def apply_reviewed_media_migration(self, transaction, container=None):
         # Kept separate from the read-only SQL helper and ordinary prepare.
-        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or "243_media_tasks_and_pricing.sql" not in transaction or not transaction.endswith("COMMIT;"):
+        from media_migrate import validate_unified_transaction
+        legacy = "243_media_tasks_and_pricing.sql" in transaction
+        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not (legacy or validate_unified_transaction(transaction)):
             raise ValueError("reviewed atomic media transaction required")
         container = container or self.config.get("database_container", "sub2api-postgres")
         run(["docker", "exec", "-i", container, "sh", "-c",
@@ -396,15 +398,22 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] != "243_media_tasks_and_pricing.sql":
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
                 quota_before = self.sql(quota_sql, pg)
+                # Compare the original column projection when adding nullable
+                # pricing fields; row_to_json(*) necessarily changes shape.
+                comparison = {t: self.fingerprint_sql(t) for t in PROTECTED}
+                if reviewed["filename"] == "unified-media-pricing":
+                    for table in ("channel_model_pricing", "channel_account_stats_model_pricing"):
+                        columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='" + table + "';", pg)
+                        comparison[table] = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT " + columns + " FROM " + table + ") t) fingerprint_rows;"
                 self.apply_reviewed_media_migration(reviewed["transaction"], pg)
                 if self.migrations(pg) != reviewed["expected_migrations"]:
                     raise ValueError("reviewed migration inventory mismatch")
-                if {t: self.sql(self.fingerprint_sql(t), pg) for t in PROTECTED} != restored or self.sql(quota_sql, pg) != quota_before:
+                if {t: self.sql(comparison[t], pg) for t in PROTECTED} != restored or self.sql(quota_sql, pg) != quota_before:
                     raise ValueError("reviewed additive migration changed existing business data")
                 job["additive_data_verified"] = True
             run(["docker", "run", "-d", "--name", redis, "--network", network, "--network-alias", "redis",

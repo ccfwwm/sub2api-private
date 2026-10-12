@@ -26,6 +26,7 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <MediaAccountModelsEditor v-if="account.platform === 'imagevideo'" v-model="mediaModels" :account-id="account.id" :base-url="editBaseUrl" />
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -3125,6 +3126,8 @@
 </template>
 
 <script setup lang="ts">
+import MediaAccountModelsEditor from './MediaAccountModelsEditor.vue'
+import type { MediaCapability } from '@/types/media'
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -4145,7 +4148,9 @@ const applyOpenAIModelMappingCredentials = (credentials: Record<string, unknown>
   }
 }
 
+const mediaModels = ref<MediaCapability[]>([])
 const syncFormFromAccount = (newAccount: Account | null) => {
+  mediaModels.value = JSON.parse(JSON.stringify(newAccount?.extra?.media_models || []))
   if (!newAccount) {
     return
   }
@@ -5140,6 +5145,7 @@ const persistGrokMediaEligibility = async (accountID: number, updatedAccount: Ac
 }
 
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
+  if (props.account?.platform === "imagevideo") updatePayload.extra = {...(props.account.extra || {}), ...(updatePayload.extra as Record<string, unknown> || {}), media_models: mediaModels.value}
   submitting.value = true
   try {
     let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
 	_ "golang.org/x/image/webp"
 	"image"
 	_ "image/jpeg"
@@ -23,6 +24,7 @@ import (
 
 type Engine struct {
 	PlatformActive atomic.Bool
+	Config         func(context.Context, int64) ([]Capability, []PriceCard, error)
 	Store          *Store
 	Blobs          *BlobStore
 	Adapter        *Adapter
@@ -66,22 +68,63 @@ func (e *Engine) Start() {
 	}
 }
 func (e *Engine) Stop() { e.cancel(); e.wg.Wait() }
+func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability, []PriceCard, error) {
+	if e.Config != nil {
+		caps, cards, err := e.Config(ctx, groupID)
+		for _, cap := range caps {
+			if cap.Enabled {
+				e.PlatformActive.Store(true)
+				break
+			}
+		}
+		return caps, cards, err
+	}
+	return e.Store.Published(ctx)
+}
 func (e *Engine) Capability(ctx context.Context, model, operation string, identity Identity) (*Capability, error) {
-	caps, _, err := e.Store.Published(ctx)
+	caps, _, err := e.configuration(ctx, identity.GroupID)
 	if err != nil {
 		return nil, err
 	}
 	var found *Capability
 	for _, c := range caps {
 		if c.Matches(model, operation, identity.GroupID) {
-			if found != nil {
+			if found != nil && e.Config == nil {
 				return nil, fail(409, "capability_conflict", "Multiple active profiles cover this request")
 			}
-			copy := c
-			found = &copy
+			if found == nil {
+				copy := c
+				found = &copy
+			}
 		}
 	}
 	return found, nil
+}
+
+// SelectCapability keeps each account's limits and protocol together. A request
+// may use a second account when the first profile does not support its parameters.
+func (e *Engine) SelectCapability(ctx context.Context, model, operation string, p map[string]any, uploads []Upload, identity Identity) (*Capability, error) {
+	if e.Config == nil {
+		return e.Capability(ctx, model, operation, identity)
+	}
+	caps, _, err := e.configuration(ctx, identity.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	var validation error
+	for _, cap := range caps {
+		if !cap.Matches(model, operation, identity.GroupID) {
+			continue
+		}
+		if _, err := NormalizeUploads(cap, operation, p, uploads); err != nil {
+			if validation == nil {
+				validation = err
+			}
+			continue
+		}
+		return &cap, nil
+	}
+	return nil, validation
 }
 
 // A published profile retains routing ownership after disablement. It must
@@ -92,7 +135,7 @@ func (e *Engine) ManagedModel(ctx context.Context, model, operation string, grou
 }
 
 func (e *Engine) ManagedModels(ctx context.Context, groupID int64, operation string) (map[string]bool, error) {
-	caps, _, err := e.Store.Published(ctx)
+	caps, _, err := e.configuration(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +155,7 @@ func (e *Engine) ManagedModels(ctx context.Context, groupID int64, operation str
 	return models, nil
 }
 func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, identity Identity) (Snapshot, int64, Calculation, error) {
-	_, cards, err := e.Store.Published(ctx)
+	_, cards, err := e.configuration(ctx, identity.GroupID)
 	if err != nil {
 		return Snapshot{}, 0, Calculation{}, err
 	}
@@ -131,6 +174,17 @@ func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, iden
 	sale, err := ResolvePrice(cards, cap, identity, req.Operation, false, account.ID, time.Now())
 	if err != nil {
 		return Snapshot{}, 0, Calculation{}, err
+	}
+	if sale.TimeMultiplier != "" {
+		a, er := decimal.NewFromString(identity.TimeMultiplier)
+		if er != nil {
+			return Snapshot{}, 0, Calculation{}, er
+		}
+		b, er := decimal.NewFromString(sale.TimeMultiplier)
+		if er != nil {
+			return Snapshot{}, 0, Calculation{}, er
+		}
+		identity.TimeMultiplier = a.Mul(b).String()
 	}
 	rule, err := MatchRule(sale, req.Conditions)
 	if err != nil {

@@ -58,9 +58,10 @@ type updateChannelRequest struct {
 }
 
 type channelModelPricingRequest struct {
+	Media                      *service.MediaPricing      `json:"media"`
 	Platform                   string                     `json:"platform" binding:"omitempty,max=50"`
 	Models                     []string                   `json:"models" binding:"required,min=1,max=100"`
-	BillingMode                string                     `json:"billing_mode" binding:"omitempty,oneof=token per_request image"`
+	BillingMode                string                     `json:"billing_mode" binding:"omitempty,oneof=token per_request image video"`
 	InputPrice                 *float64                   `json:"input_price" binding:"omitempty,min=0"`
 	OutputPrice                *float64                   `json:"output_price" binding:"omitempty,min=0"`
 	CacheWritePrice            *float64                   `json:"cache_write_price" binding:"omitempty,min=0"`
@@ -131,6 +132,7 @@ type channelResponse struct {
 }
 
 type channelModelPricingResponse struct {
+	Media                      *service.MediaPricing       `json:"media,omitempty"`
 	ID                         int64                       `json:"id"`
 	Platform                   string                      `json:"platform"`
 	Models                     []string                    `json:"models"`
@@ -261,6 +263,7 @@ func pricingToResponse(p *service.ChannelModelPricing) channelModelPricingRespon
 		intervals = append(intervals, intervalToResponse(iv))
 	}
 	return channelModelPricingResponse{
+		Media:                      p.Media,
 		ID:                         p.ID,
 		Platform:                   platform,
 		Models:                     models,
@@ -360,6 +363,7 @@ func pricingRequestToService(reqs []channelModelPricingRequest, allowChannelMult
 			flexMultiplier = r.FlexMultiplier
 		}
 		result = append(result, service.ChannelModelPricing{
+			Media:                      r.Media,
 			Platform:                   platform,
 			Models:                     r.Models,
 			BillingMode:                billingMode,

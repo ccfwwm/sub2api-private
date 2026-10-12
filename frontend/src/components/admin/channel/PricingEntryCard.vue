@@ -81,7 +81,7 @@
               class="mt-1"
             />
           </div>
-          <div class="w-40">
+          <div v-if="platform !== 'imagevideo'" class="w-40">
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400">
               {{ t('admin.channels.form.billingMode') }}
             </label>
@@ -100,7 +100,11 @@
         </div>
 
         <!-- Token mode -->
-        <div v-if="entry.billing_mode === 'token'">
+        <div v-if="platform === 'imagevideo'">
+          <MediaPricingEditor :model-value="entry.media" @update:model-value="emit('update', {...entry, media: $event, billing_mode: 'per_request'})" />
+          <TimePricingSection v-if="enableTimePricing" :model-value="entry.time_pricing" @update:model-value="emit('update', {...entry, time_pricing: $event})" />
+        </div>
+        <div v-else-if="entry.billing_mode === 'token'">
           <!-- Default prices (fallback when no interval matches) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('admin.channels.form.defaultPrices') }}
@@ -303,6 +307,8 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
+import MediaPricingEditor from './MediaPricingEditor.vue'
+import { unitNames } from '@/types/media'
 import IntervalRow from './IntervalRow.vue'
 import ModelTagInput from './ModelTagInput.vue'
 import TimePricingSection from './TimePricingSection.vue'
@@ -312,7 +318,7 @@ import { REASONING_EFFORT_LEVELS, type ReasoningEffortLevel } from '@/constants/
 import type { BillingMode } from '@/api/admin/channels'
 import channelsAPI from '@/api/admin/channels'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = withDefaults(defineProps<{
   entry: PricingFormEntry
@@ -342,6 +348,12 @@ const billingModeOptions = computed(() => [
 ])
 
 const billingModeLabel = computed(() => {
+  if (props.platform === 'imagevideo') {
+    const zh = (locale?.value ?? 'zh').startsWith('zh')
+    const rules = props.entry.media?.rules || []
+    if (rules.length > 1) return zh ? `${rules.length} 个价格档` : `${rules.length} price tiers`
+    return rules[0]?.charges.map(c => `$${c.unit_price ?? '—'}/${unitNames[c.unit]?.[zh ? 0 : 1] || c.unit}`).join(' + ') || (zh ? '待配置' : 'Unconfigured')
+  }
   const opt = billingModeOptions.value.find(o => o.value === props.entry.billing_mode)
   return opt ? opt.label : props.entry.billing_mode
 })
@@ -410,6 +422,7 @@ function removeInterval(idx: number) {
 async function onModelsUpdate(newModels: string[]) {
   const oldModels = props.entry.models
   emit('update', { ...props.entry, models: newModels })
+  if (props.platform === 'imagevideo') return
 
   // 仅在「空条目首次加入单个模型」时自动填充默认价：
   // 条目已有模型时（即使价格留空、按各模型的官方默认价回退）追加模型不应改写整条价格，

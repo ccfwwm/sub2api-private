@@ -236,7 +236,7 @@ function applyFeatureFlags(items: NavItem[]): NavItem[] {
   return out
 }
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -787,7 +787,6 @@ const adminNavItems = computed((): NavItem[] => {
       expandOnly: true,
       children: [
         { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: PriceTagIcon },
-        { path: '/admin/media', label: locale.value.startsWith('zh') ? '媒体模型与计费' : 'Media billing', icon: PriceTagIcon },
         { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
       ],
     },

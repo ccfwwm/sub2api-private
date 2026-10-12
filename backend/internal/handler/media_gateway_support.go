@@ -48,6 +48,9 @@ func (h *MediaHandler) MarkBillingDelegate(c *gin.Context) {
 		if key == nil || key.Group == nil {
 			return false
 		}
+		if h.Engine.Config != nil && key.Group.Platform != service.PlatformImageVideo && key.Group.Platform != service.PlatformComposite {
+			return false
+		}
 		cap, err := h.Engine.Capability(c.Request.Context(), model, operation, media.Identity{GroupID: key.Group.ID})
 		return err == nil && cap != nil
 	})
@@ -59,6 +62,10 @@ func (h *MediaHandler) Models(c *gin.Context, next gin.HandlerFunc) {
 	}
 	key, ok := middleware.GetAPIKeyFromContext(c)
 	if !ok || key.Group == nil {
+		next(c)
+		return
+	}
+	if h.Engine.Config != nil && key.Group.Platform != service.PlatformImageVideo && key.Group.Platform != service.PlatformComposite {
 		next(c)
 		return
 	}
@@ -77,6 +84,14 @@ func (h *MediaHandler) Models(c *gin.Context, next gin.HandlerFunc) {
 		if !key.Group.ModelAllowlistEnabled() || key.Group.ModelAllowlist.Allows(entry.Model) {
 			models = append(models, entry.Model)
 		}
+	}
+	if key.Group.Platform == service.PlatformImageVideo {
+		list := []gin.H{}
+		for _, model := range models {
+			list = append(list, gin.H{"id": model, "object": "model", "owned_by": "sub2api"})
+		}
+		c.JSON(200, gin.H{"object": "list", "data": list})
+		return
 	}
 	if len(models) == 0 && len(managed) == 0 {
 		next(c)

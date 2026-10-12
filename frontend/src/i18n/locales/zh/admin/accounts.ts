@@ -309,6 +309,7 @@ export default {
       deleteConfirm: "确定要删除账号 '{name}' 吗？此操作无法撤销。",
       failedToClearRateLimit: '清除速率限制失败',
       platforms: {
+      imagevideo: "媒体（图片 / 视频 / 音频）",
         claude: 'Claude',
         openai: 'OpenAI',
         anthropic: 'Anthropic',

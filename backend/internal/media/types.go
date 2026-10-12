@@ -108,19 +108,20 @@ type Rule struct {
 	Charges  []Charge       `json:"charges"`
 }
 type PriceCard struct {
-	ID          string                           `json:"price_id"`
-	Version     string                           `json:"version"`
-	Purpose     string                           `json:"purpose"`
-	Status      string                           `json:"status"`
-	TestOnly    bool                             `json:"test_only"`
-	Currency    string                           `json:"currency"`
-	MediaType   string                           `json:"media_type"`
-	Operation   string                           `json:"operation"`
-	ModelMatch  struct{ Kind, Value string }     `json:"model_match"`
-	Scope       struct{ Kind, Reference string } `json:"scope"`
-	EffectiveAt *time.Time                       `json:"effective_at"`
-	Rules       []Rule                           `json:"rules"`
-	Reservation struct {
+	TimeMultiplier string                           `json:"time_multiplier,omitempty"`
+	ID             string                           `json:"price_id"`
+	Version        string                           `json:"version"`
+	Purpose        string                           `json:"purpose"`
+	Status         string                           `json:"status"`
+	TestOnly       bool                             `json:"test_only"`
+	Currency       string                           `json:"currency"`
+	MediaType      string                           `json:"media_type"`
+	Operation      string                           `json:"operation"`
+	ModelMatch     struct{ Kind, Value string }     `json:"model_match"`
+	Scope          struct{ Kind, Reference string } `json:"scope"`
+	EffectiveAt    *time.Time                       `json:"effective_at"`
+	Rules          []Rule                           `json:"rules"`
+	Reservation    struct {
 		MaximumCharge *string           `json:"maximum_charge"`
 		MaxQuantities map[string]string `json:"max_quantities"`
 		Overrun       string            `json:"overrun"`

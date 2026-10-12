@@ -22,6 +22,35 @@ from controller import PROTECTED, atomic_json, file_hash, run
 from manage import Manager, STATE, read
 
 FILENAME = "243_media_tasks_and_pricing.sql"
+UNIFIED_FILES = {
+    "244_unified_media_model_pricing.sql": "channel_model_pricing",
+    "245_unified_media_account_cost.sql": "channel_account_stats_model_pricing",
+}
+
+
+def unified_transaction(files):
+    """Only the two reviewed nullable JSONB additions; no generic DDL path."""
+    import re
+    if set(files) != set(UNIFIED_FILES):
+        raise ValueError("unexpected unified pricing migration inventory")
+    statements = []
+    for filename, table in UNIFIED_FILES.items():
+        sql, checksum = files[filename]
+        expected = "ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS media JSONB;"
+        if " ".join(sql.split()) != expected or not re.fullmatch(r"[0-9a-f]{64}", checksum):
+            raise ValueError("outside reviewed unified pricing allowlist")
+        statements.append(sql + "\nINSERT INTO schema_migrations(filename,checksum) VALUES('" + filename + "','" + checksum + "');")
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + "\n".join(statements) + " COMMIT;")
+
+
+def validate_unified_transaction(transaction):
+    import re
+    checksums = dict(re.findall(r"INSERT INTO schema_migrations\(filename,checksum\) VALUES\('([^']+)','([0-9a-f]{64})'\);", transaction))
+    if set(checksums) != set(UNIFIED_FILES):
+        return False
+    files = {name: ("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS media JSONB;", checksums[name]) for name, table in UNIFIED_FILES.items()}
+    return transaction == unified_transaction(files)
 
 
 @contextlib.contextmanager
@@ -79,23 +108,29 @@ def execute(args):
         image, manifest = m.offline(args.version)
         old = m.c.migrations()
         target = manifest["migrations"]
-        path = STATE / "releases" / args.version / FILENAME
-        raw = path.read_bytes()
-        normalized = raw.decode("utf-8").replace("\r\n", "\n").strip()
-        # Match release_manifest.py and the Go migration runner's trimmed SQL.
-        digest = hashlib.sha256(normalized.encode()).hexdigest()
-        if target.get(FILENAME) != digest or {k:v for k,v in target.items() if k != FILENAME} != {k:v for k,v in old.items() if k != FILENAME}:
-            raise ValueError("only the exact reviewed additive migration is allowed")
-        transaction = reviewed_transaction(normalized, digest)
+        unified = getattr(args, "schema", "tasks") == "unified-pricing"
+        filenames = list(UNIFIED_FILES) if unified else [FILENAME]
+        files = {}
+        for filename in filenames:
+            raw = (STATE / "releases" / args.version / filename).read_bytes()
+            normalized = raw.decode("utf-8").replace("\r\n", "\n").strip()
+            checksum = hashlib.sha256(normalized.encode()).hexdigest()
+            if target.get(filename) != checksum:
+                raise ValueError("reviewed migration checksum differs")
+            files[filename] = normalized, checksum
+        if {k:v for k,v in target.items() if k not in filenames} != {k:v for k,v in old.items() if k not in filenames}:
+            raise ValueError("only exact reviewed additive migrations are allowed")
+        digest = hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest() if unified else files[FILENAME][1]
+        transaction = unified_transaction(files) if unified else reviewed_transaction(*files[FILENAME])
         receipt_path = STATE / "releases" / args.version / "media-migration-rehearsal.json"
         if args.action == "rehearse":
-            if FILENAME in old:
+            if any(filename in old for filename in filenames):
                 raise ValueError("already migrated; use ordinary prepare")
             folder, meta = m.backup(job)
             m.save(job, "restoring_and_testing")
             test = {"id":uuid.uuid4().hex,"image":image,"rollback_image":meta["runtime_image"],
                     "version":args.version,"manifest":{"migrations":old},
-                    "reviewed_media_migration":{"filename":FILENAME,"transaction":transaction,"expected_migrations":target}}
+                    "reviewed_media_migration":{"filename":"unified-media-pricing" if unified else FILENAME,"transaction":transaction,"expected_migrations":target}}
             m.c.rehearse(test,folder)
             (folder / "restored-fingerprints.json").unlink(missing_ok=True)
             if not all(test.get(k) for k in ("restore_verified","rollback_verified","additive_data_verified")):
@@ -135,6 +170,7 @@ def main():
     p.add_argument("action",choices=["rehearse","apply"])
     p.add_argument("version")
     p.add_argument("--confirm",required=True)
+    p.add_argument("--schema",choices=["tasks", "unified-pricing"],default="tasks")
     args=p.parse_args()
     try: execute(args)
     except Exception as error:

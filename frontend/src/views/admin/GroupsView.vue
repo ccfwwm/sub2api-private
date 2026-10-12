@@ -1491,7 +1491,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals :enable-time-pricing="createForm.platform === 'imagevideo'" @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -3141,7 +3141,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals :enable-time-pricing="editForm.platform === 'imagevideo'" @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -4265,6 +4265,7 @@
 </template>
 
 <script setup lang="ts">
+import { validateMediaPricing } from '@/types/media'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
@@ -4309,6 +4310,8 @@ import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
   apiIntervalsToForm,
   createDefaultTimePricingForm,
+  apiTimePricingToForm,
+  formTimePricingToAPI,
   formIntervalsToAPI,
   formReasoningEffortMultipliersToAPI,
   mTokToPerToken,
@@ -4406,6 +4409,7 @@ const groupPricingFromAPI = (
   (pricing || []).map((entry) => ({
     models: entry.models || [],
     billing_mode: entry.billing_mode || "token",
+    media: entry.media ? JSON.parse(JSON.stringify(entry.media)) : undefined,
     input_price: perTokenToMTok(entry.input_price),
     output_price: perTokenToMTok(entry.output_price),
     cache_write_price: perTokenToMTok(entry.cache_write_price),
@@ -4418,7 +4422,7 @@ const groupPricingFromAPI = (
     image_output_price: perTokenToMTok(entry.image_output_price),
     per_request_price: entry.per_request_price,
     intervals: apiIntervalsToForm(entry.intervals || []),
-    time_pricing: createDefaultTimePricingForm(),
+    time_pricing: apiTimePricingToForm(entry.time_pricing),
   }));
 
 const groupPricingToAPI = (
@@ -4431,6 +4435,7 @@ const groupPricingToAPI = (
       platform,
       models: entry.models,
       billing_mode: entry.billing_mode,
+      media: platform === "imagevideo" ? entry.media : undefined,
       input_price: mTokToPerToken(entry.input_price),
       output_price: mTokToPerToken(entry.output_price),
       cache_write_price: mTokToPerToken(entry.cache_write_price),
@@ -4446,7 +4451,7 @@ const groupPricingToAPI = (
         entry.billing_mode === "token"
           ? []
           : formIntervalsToAPI(entry.intervals || []),
-      time_pricing: null,
+      time_pricing: platform === "imagevideo" ? formTimePricingToAPI(entry.time_pricing) : null,
     }));
 
 const { t } = useI18n();
@@ -5868,6 +5873,7 @@ const validateProfitControlForm = (form: ProfitControlFormState): boolean => {
 };
 
 const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean => {
+  for (const entry of pricing) { if (entry.media) { const problem = validateMediaPricing(entry.media); if (problem) { appStore.showError(problem); return false } } }
   for (const entry of pricing) {
     const error = validateReasoningEffortMultipliers(entry.reasoning_effort_multipliers, t);
     if (error) {

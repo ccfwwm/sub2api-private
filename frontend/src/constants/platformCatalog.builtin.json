@@ -22,6 +22,12 @@
       "litellm_provider": "gemini"
     },
     {
+      "id": "imagevideo",
+      "display_name": "Media",
+      "gateway": "media",
+      "cn_provider": false
+    },
+    {
       "id": "antigravity",
       "display_name": "Antigravity",
       "gateway": "antigravity",
@@ -284,6 +290,7 @@
     "anthropic",
     "gemini",
     "openai",
+    "imagevideo",
     "antigravity",
     "grok",
     "kimi",

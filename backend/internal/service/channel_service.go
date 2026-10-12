@@ -724,7 +724,7 @@ func validatePricingTimePricing(pricing []ChannelModelPricing) error {
 			continue
 		}
 		mode := pricing[i].BillingMode
-		if mode != "" && mode != BillingModeToken {
+		if mode != "" && mode != BillingModeToken && pricing[i].Media == nil {
 			return infraerrors.BadRequest("TIME_PRICING_UNSUPPORTED_MODE", "time pricing only supports token billing mode")
 		}
 		if err := validateChannelTimePricing(config); err != nil {
@@ -767,6 +767,12 @@ func validatePricingBillingMode(pricing []ChannelModelPricing) error {
 }
 
 func checkBillingModeRequirements(p ChannelModelPricing) error {
+	if p.Media != nil {
+		return ValidateMediaPricing(p)
+	}
+	if p.Platform == PlatformImageVideo {
+		return infraerrors.BadRequest("MEDIA_PRICE_REQUIRED", "Configure media model pricing")
+	}
 	if p.BillingMode == BillingModePerRequest || p.BillingMode == BillingModeImage || p.BillingMode == BillingModeVideo {
 		if p.PerRequestPrice == nil && len(p.Intervals) == 0 {
 			return infraerrors.BadRequest(
@@ -1105,9 +1111,17 @@ func toPricingModelEntry(pattern string) modelEntry {
 // validateNoConflictingModels 检查定价列表中是否有冲突模型模式（同一平台下）。
 // 冲突包括：精确重复、通配符之间的前缀包含、通配符与精确名的前缀匹配。
 func validateNoConflictingModels(pricingList []ChannelModelPricing) error {
+	mediaSeen := map[string]bool{}
 	byPlatform := make(map[string][]modelEntry)
 	for _, p := range pricingList {
 		for _, model := range p.Models {
+			if p.Platform == PlatformImageVideo {
+				if mediaSeen[model] {
+					return infraerrors.BadRequest("MODEL_PATTERN_CONFLICT", "Duplicate media model: "+model)
+				}
+				mediaSeen[model] = true
+				continue
+			}
 			byPlatform[p.Platform] = append(byPlatform[p.Platform], toPricingModelEntry(model))
 		}
 	}

@@ -174,9 +174,15 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           sha256sum deployment.json > checksums.txt
           cp backend/migrations/243_media_tasks_and_pricing.sql ./243_media_tasks_and_pricing.sql
+          cp backend/migrations/244_unified_media_model_pricing.sql ./244_unified_media_model_pricing.sql
+          cp backend/migrations/245_unified_media_account_cost.sql ./245_unified_media_account_cost.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
+          sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql >> checksums.txt
+          git rev-parse HEAD > management-source.txt
+          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md
+          sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json checksums.txt 243_media_tasks_and_pricing.sql --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Multimodal task billing, configurable prices and provider adapters on upstream v0.2.15. Validated private image; production deployment is controlled separately. All new media capabilities remain disabled until configured and verified."
+            gh release create "$TAG" deployment.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated private image; production deployment is controlled separately. Models remain disabled until configured and verified."
           fi
       - uses: actions/upload-artifact@v7
         with:
@@ -185,4 +191,6 @@ jobs:
             deployment.json
             checksums.txt
             243_media_tasks_and_pricing.sql
+            244_unified_media_model_pricing.sql
+            245_unified_media_account_cost.sql
 

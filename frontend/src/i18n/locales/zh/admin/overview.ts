@@ -967,6 +967,7 @@ export default {
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
       platforms: {
+      imagevideo: "媒体（图片 / 视频 / 音频）",
         all: '全部平台',
         anthropic: 'Anthropic',
         openai: 'OpenAI',

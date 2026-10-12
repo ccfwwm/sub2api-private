@@ -209,6 +209,9 @@ func (s *AccountTestService) FetchUpstreamSupportedModels(ctx context.Context, a
 // untouched.
 func (s *AccountTestService) SyncUpstreamModelCatalog(ctx context.Context, account *Account) (*UpstreamModelCatalog, error) {
 	models, body, err := s.fetchUpstreamModelList(ctx, account)
+	if err == nil && account.Platform == PlatformImageVideo {
+		return &UpstreamModelCatalog{Models: models}, nil
+	}
 	liveListAvailable := err == nil
 	if err != nil {
 		configuredModels := configuredUpstreamModelsForCapabilitySync(account)
@@ -625,7 +628,7 @@ func upstreamModelRegistryBaseURL(account *Account) string {
 		return ""
 	}
 	switch {
-	case account.IsOpenAI() || account.IsMultiProtocolAPIKey():
+	case account.Platform == PlatformImageVideo || account.IsOpenAI() || account.IsMultiProtocolAPIKey():
 		return account.GetOpenAIFormatBaseURL()
 	case account.IsGrok():
 		return account.GetGrokBaseURL()
@@ -792,7 +795,7 @@ func (s *AccountTestService) buildUpstreamModelsRequest(ctx context.Context, acc
 		return s.buildAntigravityAPIKeyModelsRequest(ctx, account)
 	case account.IsGrok():
 		return s.buildGrokUpstreamModelsRequest(ctx, account)
-	case account.IsOpenAI() || account.IsMultiProtocolAPIKey():
+	case account.Platform == PlatformImageVideo || account.IsOpenAI() || account.IsMultiProtocolAPIKey():
 		// 多协议 API Key 供应商（国产厂商与聚合平台）复用 OpenAI /v1/models 探测。
 		return s.buildOpenAIUpstreamModelsRequest(ctx, account)
 	case account.IsGemini():
@@ -1015,6 +1018,9 @@ func buildOpenAIAPIKeyModelsRequest(ctx context.Context, account *Account, valid
 		)
 	}
 	apiKey := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
+	if account.Platform == PlatformImageVideo {
+		apiKey = strings.TrimSpace(account.GetCredential("api_key"))
+	}
 	if apiKey == "" {
 		return nil, newUpstreamModelSyncConfigError("No OpenAI API key is available", nil)
 	}
@@ -1022,6 +1028,12 @@ func buildOpenAIAPIKeyModelsRequest(ctx context.Context, account *Account, valid
 	// 协议感知：Anthropic 协议账号的凭证 base_url 指向 /anthropic 端点，模型
 	// 列表同步需使用 OpenAI 格式 base（供应商 × 模式默认）。
 	baseURL := account.GetOpenAIFormatBaseURL()
+	if account.Platform == PlatformImageVideo {
+		baseURL = strings.TrimSpace(account.GetCredential("base_url"))
+		if baseURL == "" {
+			return nil, newUpstreamModelSyncConfigError("Media base URL is required", nil)
+		}
+	}
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = "https://api.openai.com"
 	}

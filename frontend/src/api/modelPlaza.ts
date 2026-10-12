@@ -99,8 +99,9 @@ export interface PlazaMediaModel {
   operations: string[]
   resolutions: string[]
   duration: { mode: string; values: number[]; min: number | null; max: number | null; default: number | null }
+  duration_variants?: PlazaMediaModel['duration'][]
   music_multiplier?: string
-  prices: { operation: string; version: string; maximum_charge: string | null; rules: { priority: number; when: Record<string, unknown>; charges: PlazaMediaCharge[] }[] }[]
+  prices: { operation: string; version: string; time_multiplier?: string; maximum_charge: string | null; rules: { priority: number; when: Record<string, unknown>; charges: PlazaMediaCharge[] }[] }[]
 }
 
 export interface ModelPlazaResponse {

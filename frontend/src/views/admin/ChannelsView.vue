@@ -370,7 +370,7 @@
             </div>
 
             <!-- Model Mapping -->
-            <div>
+            <div v-if="section.platform !== 'imagevideo'">
               <div class="mb-1 flex items-center justify-between">
                 <label class="input-label text-xs mb-0">{{ t('admin.channels.form.modelMapping', 'Model Mapping') }}</label>
                 <button type="button" @click="addMappingEntry(sIdx)" class="text-xs text-primary-600 hover:text-primary-700">
@@ -423,7 +423,7 @@
                 <label class="input-label text-xs mb-0">{{ t('admin.channels.form.modelPricing', 'Model Pricing') }}</label>
                 <div class="flex items-center gap-2">
                   <button
-                    v-if="supportsPricingModelSync(section.platform)"
+                    v-if="supportsPricingModelSync(section.platform) || section.platform === 'imagevideo'"
                     type="button"
                     @click="syncLatestModels(sIdx)"
                     :disabled="!!syncingPlatform"
@@ -476,7 +476,7 @@
                 v-if="section.account_stats_pricing_rules.length === 0"
                 class="text-xs italic text-gray-400 dark:text-gray-500"
               >
-                {{ t('admin.channels.form.noRulesConfigured') }}
+                {{ t(section.platform === 'imagevideo' ? 'admin.channels.form.mediaCostNotConfigured' : 'admin.channels.form.noRulesConfigured') }}
               </p>
 
               <div
@@ -628,6 +628,7 @@
 </template>
 
 <script setup lang="ts">
+import { newMediaPricing, validateMediaPricing } from '@/types/media'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -879,9 +880,24 @@ function addPricingEntry(sectionIdx: number) {
 
 const syncingPlatform = ref<string | null>(null)
 
+function emptyMediaEntry(): PricingFormEntry { return {models:[],billing_mode:'per_request',input_price:null,output_price:null,cache_write_price:null,cache_read_price:null,image_input_price:null,image_output_price:null,per_request_price:null,intervals:[],time_pricing:createDefaultTimePricingForm()} }
 async function syncLatestModels(sectionIdx: number) {
   const section = form.platforms[sectionIdx]
-  if (!section || syncingPlatform.value || !supportsPricingModelSync(section.platform)) return
+  if (!section || syncingPlatform.value) return
+  if (section.platform === "imagevideo") {
+    syncingPlatform.value = section.platform
+    try {
+      const result = await adminAPI.accounts.list(1, 100, {platform:"imagevideo"})
+      const existing = new Set(section.model_pricing.flatMap(p => p.models))
+      for (const account of result.items.filter(a => a.group_ids?.some(g => section.group_ids.includes(g)))) {
+        for (const cap of (account.extra?.media_models || []) as {model:string;media_type:string}[]) {
+          if (!existing.has(cap.model)) { const p = newMediaPricing(); p.media_type = cap.media_type; section.model_pricing.push({...emptyMediaEntry(), models:[cap.model],billing_mode:"per_request",media:p}); existing.add(cap.model) }
+        }
+      }
+    } catch (e) { appStore.showError(String(e)) } finally { syncingPlatform.value = "" }
+    return
+  }
+  if (!supportsPricingModelSync(section.platform)) return
   const platform = section.platform
   syncingPlatform.value = platform
   try {
@@ -1088,6 +1104,7 @@ function accountStatsRulesToAPI(): AccountStatsPricingRule[] {
             platform: section.platform,
             models: p.models,
             billing_mode: p.billing_mode,
+        media: p.media ? JSON.parse(JSON.stringify(p.media)) : undefined,
             input_price: mTokToPerToken(p.input_price),
             output_price: mTokToPerToken(p.output_price),
             cache_write_price: mTokToPerToken(p.cache_write_price),
@@ -1132,6 +1149,7 @@ function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[
         platform: section.platform,
         models: entry.models,
         billing_mode: entry.billing_mode,
+        media: section.platform === "imagevideo" ? entry.media : undefined,
         input_price: mTokToPerToken(entry.input_price),
         output_price: mTokToPerToken(entry.output_price),
         cache_write_price: mTokToPerToken(entry.cache_write_price),
@@ -1235,6 +1253,7 @@ function apiToForm(channel: Channel): PlatformSection[] {
       .map(p => ({
         models: p.models || [],
         billing_mode: p.billing_mode,
+        media: p.media ? JSON.parse(JSON.stringify(p.media)) : undefined,
         input_price: perTokenToMTok(p.input_price),
         output_price: perTokenToMTok(p.output_price),
         cache_write_price: perTokenToMTok(p.cache_write_price),
@@ -1429,6 +1448,7 @@ function distributeRulesToPlatforms(apiRules: AccountStatsPricingRule[]) {
       pricing: (apiRule.pricing || []).map(p => ({
         models: [...(p.models || [])],
         billing_mode: p.billing_mode,
+        media: p.media ? JSON.parse(JSON.stringify(p.media)) : undefined,
         input_price: perTokenToMTok(p.input_price),
         output_price: perTokenToMTok(p.output_price),
         cache_write_price: perTokenToMTok(p.cache_write_price),
@@ -1439,7 +1459,7 @@ function distributeRulesToPlatforms(apiRules: AccountStatsPricingRule[]) {
         image_output_price: perTokenToMTok(p.image_output_price),
         per_request_price: p.per_request_price,
         intervals: apiIntervalsToForm(p.intervals || []),
-        time_pricing: createDefaultTimePricingForm()
+        time_pricing: apiTimePricingToForm(p.time_pricing)
       } as PricingFormEntry))
     }
     section.account_stats_pricing_rules.push(formRule)
@@ -1510,7 +1530,7 @@ async function handleSubmit() {
     for (const entry of section.model_pricing) {
       allModels.push(...entry.models)
     }
-    const pricingConflict = findModelConflict(allModels)
+    const pricingConflict = findModelConflict(allModels, section.platform === "imagevideo")
     if (pricingConflict) {
       appStore.showError(
         t('admin.channels.modelConflict',
@@ -1538,6 +1558,7 @@ async function handleSubmit() {
   for (const section of form.platforms.filter(s => s.enabled)) {
     for (const entry of section.model_pricing) {
       if (entry.models.length === 0) continue
+      if (section.platform === 'imagevideo') { const problem = validateMediaPricing(entry.media); if (problem) { appStore.showError(problem); activeTab.value = section.platform; return } continue }
       if ((entry.billing_mode === 'per_request' || entry.billing_mode === 'image') &&
           (entry.per_request_price == null || entry.per_request_price === '') &&
           (!entry.intervals || entry.intervals.length === 0)) {
@@ -1554,6 +1575,7 @@ async function handleSubmit() {
       ...section.account_stats_pricing_rules.flatMap(rule => rule.pricing),
     ]
     for (const entry of entries) {
+      if (section.platform === "imagevideo" && entry.models.length) { const problem = validateMediaPricing(entry.media); if (problem) { appStore.showError(problem); return } }
       const error = validateReasoningEffortMultipliers(entry.reasoning_effort_multipliers, t)
       if (!error) continue
       const platformLabel = t('admin.groups.platforms.' + section.platform, catalogPlatformLabel(section.platform))

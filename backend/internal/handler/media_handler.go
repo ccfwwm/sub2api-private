@@ -35,7 +35,7 @@ type MediaHandler struct {
 	cache   *service.BillingCacheService
 }
 
-func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler) (*MediaHandler, error) {
+func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler, groups service.GroupRepository, channels *service.ChannelService) (*MediaHandler, error) {
 	root := os.Getenv("SUB2API_MEDIA_DATA_DIR")
 	if root == "" {
 		root = filepath.Join("data", "media")
@@ -84,6 +84,14 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		return nil
 	}
 	engine := media.NewEngine(&media.Store{DB: db}, blobs, lookup, invalidate)
+	engine.Config = service.UnifiedMediaConfig(accounts, groups, channels)
+	var configured bool
+	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM accounts WHERE platform='imagevideo' AND deleted_at IS NULL)`).Scan(&configured); err != nil {
+		return nil, err
+	}
+	if configured {
+		engine.PlatformActive.Store(true)
+	}
 	engine.Store.LegacyBalanceHeld = func(ctx context.Context, user int64) (string, error) {
 		held, err := cache.MediaLegacyBalanceHeld(ctx, user)
 		return strconv.FormatFloat(held, 'f', -1, 64), err
@@ -311,15 +319,22 @@ func (h *MediaHandler) TrySubmit(c *gin.Context, operation string) bool {
 	if h == nil {
 		return false
 	}
-	p, files, err := mediaPayload(c, operation)
-	if err != nil {
-		return false
-	}
 	key, ok := middleware.GetAPIKeyFromContext(c)
 	if !ok || key.Group == nil {
 		return false
 	}
-	cap, err := h.Engine.Capability(c.Request.Context(), fmt.Sprint(p["model"]), operation, media.Identity{GroupID: key.Group.ID})
+	if h.Engine.Config != nil && key.Group.Platform != service.PlatformImageVideo && key.Group.Platform != service.PlatformComposite {
+		return false
+	}
+	p, files, err := mediaPayload(c, operation)
+	if err != nil {
+		if key.Group.Platform == service.PlatformImageVideo {
+			mediaError(c, &media.Error{Status: 400, Code: "invalid_media_request", Message: "Invalid media request body"})
+			return true
+		}
+		return false
+	}
+	cap, err := h.Engine.SelectCapability(c.Request.Context(), fmt.Sprint(p["model"]), operation, p, files, media.Identity{GroupID: key.Group.ID})
 	if err != nil {
 		mediaError(c, err)
 		return true
@@ -330,7 +345,7 @@ func (h *MediaHandler) TrySubmit(c *gin.Context, operation string) bool {
 			mediaError(c, err)
 			return true
 		}
-		if managed {
+		if managed || key.Group.Platform == service.PlatformImageVideo {
 			mediaError(c, &media.Error{Status: 422, Code: "media_disabled", Message: "Media model is disabled for new tasks"})
 			return true
 		}
@@ -621,7 +636,7 @@ func (h *MediaHandler) Estimate(c *gin.Context) {
 		mediaError(c, &media.Error{Status: 400, Code: "invalid_estimate", Message: "Operation and request required"})
 		return
 	}
-	cap, err := h.Engine.Capability(c.Request.Context(), fmt.Sprint(body.Request["model"]), body.Operation, identity)
+	cap, err := h.Engine.SelectCapability(c.Request.Context(), fmt.Sprint(body.Request["model"]), body.Operation, body.Request, nil, identity)
 	if err != nil {
 		mediaError(c, err)
 		return

@@ -1,9 +1,20 @@
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
-from media_migrate import reviewed_transaction, tracked_operation
+from media_migrate import reviewed_transaction, tracked_operation, unified_transaction, validate_unified_transaction, UNIFIED_FILES
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_unified_pricing_allows_only_exact_nullable_columns(self):
+        files={name:("ALTER TABLE "+table+" ADD COLUMN IF NOT EXISTS media JSONB;",'a'*64) for name,table in UNIFIED_FILES.items()}
+        transaction=unified_transaction(files)
+        self.assertTrue(transaction.startswith('BEGIN;'))
+        self.assertEqual(transaction.count('INSERT INTO schema_migrations'),2)
+        self.assertTrue(validate_unified_transaction(transaction))
+        self.assertFalse(validate_unified_transaction(transaction.replace(' COMMIT;', ' DROP TABLE users; COMMIT;')))
+        for suffix in ('DROP TABLE users;', 'UPDATE users SET balance=0;', 'ALTER TABLE users ADD COLUMN media JSONB;'):
+            invalid=dict(files)
+            name=next(iter(files)); invalid[name]=(files[name][0]+suffix,'a'*64)
+            with self.assertRaises(ValueError):unified_transaction(invalid)
     def test_exact_additive_schema_has_atomic_transaction(self):
         sql=(Path(__file__).resolve().parents[2]/'backend/migrations/243_media_tasks_and_pricing.sql').read_text()
         transaction=reviewed_transaction(sql,'a'*64)

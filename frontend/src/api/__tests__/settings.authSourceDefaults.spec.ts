@@ -12,7 +12,7 @@ import { listPlatformIds } from "@/constants/platformCatalog";
 
 /** 与后端 AllowedQuotaPlatforms 一致的全部具体平台（平台清单）。 */
 const quotaPlatforms = [
-  "anthropic", "openai", "gemini", "antigravity", "grok",
+  "anthropic", "openai", "gemini", "imagevideo", "antigravity", "grok",
   "kimi", "zhipu", "deepseek", "minimax", "opencode_go", "typesafe", "command_code", "cline",
 ];
 
@@ -288,6 +288,7 @@ describe("sanitizePlatformQuotasMap", () => {
 
   it("NaN/Infinity 清洗为 null", () => {
     const result = sanitizePlatformQuotasMap({
+      imagevideo: { daily: null, weekly: null, monthly: null },
       gemini: { daily: NaN, weekly: Infinity, monthly: null },
     });
     expect(result.gemini?.daily).toBe(null);

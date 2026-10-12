@@ -35,6 +35,10 @@ func (h *MediaHandler) AdminConfigs(c *gin.Context) {
 	response.Success(c, records)
 }
 func (h *MediaHandler) AdminSave(c *gin.Context) {
+	if h.Engine.Config != nil {
+		response.BadRequest(c, "Configure media capabilities in accounts and model prices in groups/channels")
+		return
+	}
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	if !ok {
 		c.Status(401)

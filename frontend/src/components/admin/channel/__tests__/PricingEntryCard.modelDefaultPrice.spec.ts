@@ -66,6 +66,14 @@ describe('PricingEntryCard default price auto-fill', () => {
     })
   })
 
+  it('keeps media pricing manual instead of importing default token prices', async () => {
+    const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(), platform: 'imagevideo' } })
+    wrapper.findComponent({ name: 'ModelTagInput' }).vm.$emit('update:models', ['gpt-image-2'])
+    await flushPromises()
+    expect(getModelDefaultPricing).not.toHaveBeenCalled()
+    expect(emittedEntries(wrapper).at(-1)).toMatchObject({ models: ['gpt-image-2'], input_price: null, output_price: null })
+  })
+
   it('does not overwrite prices when appending a model to an entry that already has one', async () => {
     const entry = createEntry(['claude-opus-4-7'])
     const wrapper = addModels(entry, ['claude-opus-4-7', 'claude-opus-4-8'])
