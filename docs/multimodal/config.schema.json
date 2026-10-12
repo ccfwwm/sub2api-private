@@ -1,0 +1,872 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://your-sub2api.example/spec/multimodal-config.json",
+  "$defs": {
+    "Duration": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "enum",
+            "range",
+            "fixed",
+            "hint",
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "min": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "default": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "mode",
+        "values",
+        "min",
+        "max",
+        "default",
+        "required",
+        "scenarios"
+      ],
+      "additionalProperties": false
+    },
+    "Material": {
+      "type": "object",
+      "properties": {
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "max_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_file_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_duration_seconds": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        }
+      },
+      "required": [
+        "formats",
+        "max_count",
+        "max_file_bytes",
+        "max_duration_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "Capability": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "upstream_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "yunfei",
+            "v6k"
+          ]
+        },
+        "adapter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "media_type": {
+          "type": "string",
+          "enum": [
+            "image",
+            "video",
+            "audio"
+          ]
+        },
+        "enabled": {
+          "const": false
+        },
+        "status": {
+          "const": "draft"
+        },
+        "validation_status": {
+          "const": "待渠道验证"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "duration": {
+          "$ref": "#/$defs/Duration"
+        },
+        "resolutions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "sizes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "aspect_ratios": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "qualities": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "resolution_policy": {
+          "type": "string",
+          "enum": [
+            "enum",
+            "omit",
+            "unknown",
+            "native"
+          ]
+        },
+        "materials": {
+          "type": "object",
+          "properties": {
+            "image": {
+              "$ref": "#/$defs/Material"
+            },
+            "video": {
+              "$ref": "#/$defs/Material"
+            },
+            "audio": {
+              "$ref": "#/$defs/Material"
+            }
+          },
+          "required": [
+            "image",
+            "video",
+            "audio"
+          ],
+          "additionalProperties": false
+        },
+        "field_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "delivery": {
+          "type": "object",
+          "properties": {
+            "poll_seconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "head": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "range": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "refresh": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "poll_seconds",
+            "head",
+            "range",
+            "refresh"
+          ],
+          "additionalProperties": false
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "max_request_bytes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "max_concurrent_tasks": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "observation_seconds": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "max_request_bytes",
+            "max_concurrent_tasks",
+            "observation_seconds"
+          ],
+          "additionalProperties": false
+        },
+        "account_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "group_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "channel_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "price_templates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "cost_templates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "music_rate_override": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+        },
+        "verification_evidence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_hosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "usage_fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(usage|usageMetadata|billing_usage)\\.[A-Za-z_][A-Za-z0-9_.]*$"
+          }
+        }
+      },
+      "required": [
+        "profile_id",
+        "version",
+        "model",
+        "upstream_model",
+        "provider",
+        "adapter",
+        "media_type",
+        "enabled",
+        "status",
+        "validation_status",
+        "source",
+        "scenarios",
+        "operations",
+        "formats",
+        "duration",
+        "resolutions",
+        "aspect_ratios",
+        "qualities",
+        "resolution_policy",
+        "materials",
+        "field_mapping",
+        "constraints",
+        "unverified",
+        "delivery",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "Rounding": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "ceil",
+            "floor",
+            "half_up"
+          ]
+        },
+        "step": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        "minimum": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "per_output",
+            "aggregate"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "step",
+        "minimum",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "Charge": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "request",
+            "output",
+            "second",
+            "minute",
+            "token",
+            "input_image",
+            "input_video_second",
+            "input_audio_second"
+          ]
+        },
+        "unit_price": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+        },
+        "quantity_source": {
+          "type": "string",
+          "enum": [
+            "task_count",
+            "successful_outputs",
+            "request_duration",
+            "fixed_duration",
+            "artifact_duration",
+            "provider_duration",
+            "provider_tokens",
+            "accepted_input_images",
+            "accepted_input_video_duration",
+            "accepted_input_audio_duration"
+          ]
+        },
+        "fallback_source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "task_count",
+            "successful_outputs",
+            "request_duration",
+            "fixed_duration",
+            "artifact_duration",
+            "provider_duration",
+            "provider_tokens",
+            "accepted_input_images",
+            "accepted_input_video_duration",
+            "accepted_input_audio_duration",
+            null
+          ]
+        },
+        "usage_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "success",
+            "accepted"
+          ]
+        },
+        "refundable": {
+          "type": "boolean"
+        },
+        "rounding": {
+          "$ref": "#/$defs/Rounding"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "linear",
+            "package",
+            "progressive"
+          ]
+        },
+        "package_quantity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "up_to": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+              },
+              "unit_price": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+              }
+            },
+            "required": [
+              "up_to",
+              "unit_price"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "unit",
+        "unit_price",
+        "quantity_source",
+        "fallback_source",
+        "usage_field",
+        "trigger",
+        "refundable",
+        "rounding",
+        "method",
+        "package_quantity",
+        "tiers"
+      ],
+      "additionalProperties": false
+    },
+    "PriceCard": {
+      "type": "object",
+      "properties": {
+        "price_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "sale",
+            "cost"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "enabled",
+            "disabled"
+          ]
+        },
+        "test_only": {
+          "type": "boolean"
+        },
+        "currency": {
+          "const": "USD"
+        },
+        "media_type": {
+          "type": "string",
+          "enum": [
+            "image",
+            "video",
+            "audio"
+          ]
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_match": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "alias",
+                "prefix"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "group",
+                "channel",
+                "linked_template",
+                "account",
+                "account_group",
+                "supplier_template"
+              ]
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        "effective_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "when": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "boolean"
+                  ]
+                }
+              },
+              "charges": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Charge"
+                }
+              }
+            },
+            "required": [
+              "priority",
+              "when",
+              "charges"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reservation": {
+          "type": "object",
+          "properties": {
+            "maximum_charge": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            "max_quantities": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+              }
+            },
+            "overrun": {
+              "const": "cap_and_alert"
+            }
+          },
+          "required": [
+            "maximum_charge",
+            "max_quantities",
+            "overrun"
+          ],
+          "additionalProperties": false
+        },
+        "success_policy": {
+          "type": "string",
+          "enum": [
+            "at_least_one",
+            "all_outputs_success"
+          ]
+        },
+        "multiplier_policy": {
+          "type": "string",
+          "enum": [
+            "effective_media_then_time",
+            "account_cost_once"
+          ]
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "price_id",
+        "version",
+        "purpose",
+        "status",
+        "test_only",
+        "currency",
+        "media_type",
+        "operation",
+        "model_match",
+        "scope",
+        "effective_at",
+        "rules",
+        "reservation",
+        "success_policy",
+        "multiplier_policy",
+        "notes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0-draft"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "capabilities",
+        "price_cards"
+      ]
+    },
+    "source_date": {
+      "const": "2026-10-12"
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "yunfei_scenarios": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PriceCard"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "source_date",
+    "note"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "kind": {
+          "const": "capabilities"
+        }
+      },
+      "required": [
+        "profiles",
+        "yunfei_scenarios"
+      ]
+    },
+    {
+      "properties": {
+        "kind": {
+          "const": "price_cards"
+        }
+      },
+      "required": [
+        "cards"
+      ]
+    }
+  ]
+}

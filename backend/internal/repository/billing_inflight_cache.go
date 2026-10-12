@@ -25,6 +25,23 @@ func billingInflightKeys(userID int64) (string, string) {
 		fmt.Sprintf("%s{%d}", billingInflightAmtKeyPrefix, userID)
 }
 
+func (c *billingCache) InflightBalanceHeld(ctx context.Context, userID int64) (float64, error) {
+	zkey, hkey := billingInflightKeys(userID)
+	// New reservations are serialized by the media DB admission lock. Releases
+	// can only reduce this conservative observation of currently live holds.
+	script := redis.NewScript(`
+		local ids = redis.call('ZRANGEBYSCORE', KEYS[1], '(' .. ARGV[1], '+inf')
+		local sum = 0
+		for _, id in ipairs(ids) do sum = sum + (tonumber(redis.call('HGET', KEYS[2], id)) or 0) end
+		return tostring(sum)
+	`)
+	value, err := script.Run(ctx, c.rdb, []string{zkey, hkey}, time.Now().UnixMilli()).Text()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(value, 64)
+}
+
 var (
 	// KEYS: [1]=zset [2]=hash
 	// ARGV: [1]=now_ms [2]=expire_at_ms [3]=member [4]=amount [5]=balance [6]=key_ttl_ms

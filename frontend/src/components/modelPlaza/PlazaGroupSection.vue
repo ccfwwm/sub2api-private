@@ -53,6 +53,7 @@
 
     <!-- 模型价格表:整行(含 hover 底色/分区底色)顶到卡片边缘,左右留白由表格首列/末列的 padding 提供 -->
     <div>
+      <PlazaMediaPricing v-if="group.media_models?.length" :models="group.media_models" :multiplier="group.user_rate_multiplier ?? group.rate_multiplier" :image-multiplier="group.image_rate_independent ? group.image_rate_multiplier : undefined" :video-multiplier="group.video_rate_independent ? group.video_rate_multiplier : undefined" />
       <PlazaModelPricingTable
         v-if="group.models.length > 0"
         :models="group.models"
@@ -66,7 +67,7 @@
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
       />
-      <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
+      <p v-else-if="!group.media_models?.length" class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
       </p>
     </div>
@@ -79,6 +80,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
+import PlazaMediaPricing from './PlazaMediaPricing.vue'
 import type { ModelPlazaGroup } from '@/api/modelPlaza'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBorderStrongClass } from '@/utils/platformColors'

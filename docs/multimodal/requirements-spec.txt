@@ -1,0 +1,4 @@
+# Only for document/schema/mock verification; runtime clients use stdlib/Node builtins.
+PyYAML==6.0.3
+jsonschema==4.26.0
+openapi-spec-validator==0.9.0

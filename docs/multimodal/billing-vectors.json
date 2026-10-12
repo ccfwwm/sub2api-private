@@ -1,0 +1,394 @@
+{
+  "version": "1.0.0-draft",
+  "test_only": true,
+  "note": "规范算术样本，非运行时账务验证",
+  "cases": [
+    {
+      "id": "sd25-request",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "1",
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "1.00000000",
+      "expected_error": null
+    },
+    {
+      "id": "sd25-second",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.04",
+          "quantity": "30"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "1.20000000",
+      "expected_error": null
+    },
+    {
+      "id": "grok-720",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.02",
+          "quantity": "6"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.12000000",
+      "expected_error": null
+    },
+    {
+      "id": "grok-1080",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.04",
+          "quantity": "6"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.24000000",
+      "expected_error": null
+    },
+    {
+      "id": "ceil-second",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.1",
+          "quantity": "6.2",
+          "mode": "ceil",
+          "step": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.70000000",
+      "expected_error": null
+    },
+    {
+      "id": "music-minute",
+      "lines": [
+        {
+          "unit": "minute",
+          "price": "0.6",
+          "quantity": "61",
+          "mode": "ceil",
+          "step": "60"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "1.20000000",
+      "expected_error": null
+    },
+    {
+      "id": "minute-unrounded",
+      "lines": [
+        {
+          "unit": "minute",
+          "price": "0.6",
+          "quantity": "61"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.61000000",
+      "expected_error": null
+    },
+    {
+      "id": "composite",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "0.2",
+          "quantity": "1"
+        },
+        {
+          "unit": "second",
+          "price": "0.03",
+          "quantity": "30"
+        },
+        {
+          "unit": "input_image",
+          "price": "0.05",
+          "quantity": "2"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "1.20000000",
+      "expected_error": null
+    },
+    {
+      "id": "free-tier",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "0",
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.00000000",
+      "expected_error": null
+    },
+    {
+      "id": "missing-tier",
+      "lines": [
+        {
+          "unit": "request",
+          "price": null,
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": null,
+      "expected_error": "price_not_configured"
+    },
+    {
+      "id": "supplier-cost",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.02",
+          "quantity": "30"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.60000000",
+      "expected_error": null
+    },
+    {
+      "id": "outputs",
+      "lines": [
+        {
+          "unit": "output",
+          "price": "0.1",
+          "quantity": "2"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.20000000",
+      "expected_error": null
+    },
+    {
+      "id": "tokens",
+      "lines": [
+        {
+          "unit": "token",
+          "price": "0.000001",
+          "quantity": "2000"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.00200000",
+      "expected_error": null
+    },
+    {
+      "id": "input-media",
+      "lines": [
+        {
+          "unit": "input_video_second",
+          "price": "0.01",
+          "quantity": "5"
+        },
+        {
+          "unit": "input_audio_second",
+          "price": "0.005",
+          "quantity": "6"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.08000000",
+      "expected_error": null
+    },
+    {
+      "id": "floor",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.1",
+          "quantity": "6.9",
+          "mode": "floor",
+          "step": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.60000000",
+      "expected_error": null
+    },
+    {
+      "id": "half-up",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.1",
+          "quantity": "6.5",
+          "mode": "half_up",
+          "step": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.70000000",
+      "expected_error": null
+    },
+    {
+      "id": "minimum",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0.1",
+          "quantity": "1.2",
+          "mode": "ceil",
+          "step": "1",
+          "minimum": "5"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.50000000",
+      "expected_error": null
+    },
+    {
+      "id": "round-once",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "0.000000004",
+          "quantity": "1"
+        },
+        {
+          "unit": "request",
+          "price": "0.000000004",
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.00000001",
+      "expected_error": null
+    },
+    {
+      "id": "package",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "1",
+          "quantity": "30",
+          "method": "package",
+          "package_quantity": "30"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "1.00000000",
+      "expected_error": null
+    },
+    {
+      "id": "progressive",
+      "lines": [
+        {
+          "unit": "second",
+          "price": "0",
+          "quantity": "30",
+          "method": "progressive",
+          "tiers": [
+            {
+              "up_to": "10",
+              "price": "0.04"
+            },
+            {
+              "up_to": null,
+              "price": "0.02"
+            }
+          ]
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "expected_total": "0.80000000",
+      "expected_error": null
+    },
+    {
+      "id": "media-multiplier-once",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "1.2",
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "2",
+      "time_multiplier": "1.5",
+      "expected_total": "3.60000000",
+      "expected_error": null
+    },
+    {
+      "id": "cap",
+      "lines": [
+        {
+          "unit": "request",
+          "price": "1.2",
+          "quantity": "1"
+        }
+      ],
+      "multiplier": "1",
+      "time_multiplier": "1",
+      "cap": "1",
+      "expected_total": "1.00000000",
+      "expected_error": null
+    }
+  ],
+  "ledger_scenarios": [
+    {
+      "id": "default_failure",
+      "reserved": "1",
+      "accepted": "0",
+      "final": "0",
+      "released": "1"
+    },
+    {
+      "id": "accepted_failure",
+      "reserved": "1",
+      "accepted": "0.2",
+      "final": "0",
+      "released": "0.8"
+    },
+    {
+      "id": "success",
+      "reserved": "2",
+      "accepted": "0.2",
+      "final": "1",
+      "released": "0.8"
+    }
+  ],
+  "runtime_required": [
+    "concurrent_reservation",
+    "20_idempotent_retries",
+    "lease_expiry_no_resubmit",
+    "redis_down_recovery",
+    "settlement_release_race",
+    "refund_dedup",
+    "snapshot_after_price_change",
+    "quota_window_capture",
+    "cost_retained_after_refund"
+  ]
+}

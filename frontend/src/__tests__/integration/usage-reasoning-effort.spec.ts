@@ -5,6 +5,8 @@ import { defineComponent } from 'vue'
 import UserUsageView from '@/views/user/UsageView.vue'
 import AdminUsageView from '@/views/admin/UsageView.vue'
 
+vi.mock('@/api/media', () => ({ mediaAPI: { tasks: vi.fn().mockResolvedValue([]) } }))
+
 const {
   userQuery,
   userGetStats,

@@ -55,6 +55,17 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    services:
+      media-postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: media-ci-isolated-only
+          POSTGRES_DB: media_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d media_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v6
         with:
@@ -74,7 +85,12 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: make test-frontend
       - run: make -C backend test-unit
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: make -C backend test-integration
+        env:
+          MEDIA_TEST_DATABASE_URL: postgres://postgres:media-ci-isolated-only@127.0.0.1:5432/media_ci?sslmode=disable
+      - run: python3 -m pip install -r docs/multimodal/requirements-spec.txt
+      - run: python3 docs/multimodal/verify_spec.py
       - run: python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -148,8 +164,10 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           sha256sum deployment.json > checksums.txt
+          cp backend/migrations/243_media_tasks_and_pricing.sql ./243_media_tasks_and_pricing.sql
+          sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
+            gh release create "$TAG" deployment.json checksums.txt 243_media_tasks_and_pricing.sql --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Multimodal task billing, configurable prices and provider adapters on upstream v0.2.15. Validated private image; production deployment is controlled separately. All new media capabilities remain disabled until configured and verified."
           fi
       - uses: actions/upload-artifact@v7
         with:
@@ -157,4 +175,5 @@ jobs:
           path: |
             deployment.json
             checksums.txt
+            243_media_tasks_and_pricing.sql
 

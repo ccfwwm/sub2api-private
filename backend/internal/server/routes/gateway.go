@@ -68,12 +68,23 @@ func RegisterGatewayRoutes(
 			codexModelsHandler(c)
 			return
 		}
+		if h.Media != nil {
+			h.Media.Models(c, h.Gateway.Models)
+			return
+		}
 		h.Gateway.Models(c)
 	}
 	isOpenAIOnlyEndpointGatewayPlatform := func(c *gin.Context) bool {
 		return getGroupPlatform(c) == service.PlatformOpenAI
 	}
 	imagesHandler := func(c *gin.Context) {
+		operation := "image"
+		if strings.HasSuffix(c.Request.URL.Path, "/edits") {
+			operation = "image_edit"
+		}
+		if h.Media != nil && h.Media.TrySubmit(c, operation) {
+			return
+		}
 		switch getGroupPlatform(c) {
 		case service.PlatformOpenAI:
 			h.OpenAIGateway.Images(c)
@@ -90,6 +101,9 @@ func RegisterGatewayRoutes(
 		}
 	}
 	videoGenerationHandler := func(c *gin.Context) {
+		if h.Media != nil && h.Media.TrySubmit(c, "video") {
+			return
+		}
 		// Video status/content lookups below already allow Composite groups; keep
 		// task creation aligned so composite keys that route to Grok accounts can
 		// submit video generation jobs.
@@ -106,6 +120,10 @@ func RegisterGatewayRoutes(
 		})
 	}
 	videoStatusHandler := func(c *gin.Context) {
+		if h.Media != nil && strings.HasPrefix(c.Param("request_id"), "mt_") {
+			h.Media.Get(c)
+			return
+		}
 		// Video status requests do not carry a model, so composite groups cannot
 		// be resolved by compositeTargetPlatformMiddleware. Route them through
 		// the Grok handler and let scheduler/account selection enforce capacity.
@@ -122,6 +140,10 @@ func RegisterGatewayRoutes(
 		})
 	}
 	videoContentHandler := func(c *gin.Context) {
+		if h.Media != nil && strings.HasPrefix(c.Param("request_id"), "mt_") {
+			h.Media.Content(c)
+			return
+		}
 		// Video content requests do not carry a model, so composite groups cannot
 		// be resolved by compositeTargetPlatformMiddleware. Route them through
 		// the Grok handler just like video status lookups.
@@ -182,6 +204,9 @@ func RegisterGatewayRoutes(
 	gateway.Use(clientRequestID)
 	gateway.Use(opsErrorLogger)
 	gateway.Use(endpointNorm)
+	if h.Media != nil {
+		gateway.Use(h.Media.MarkBillingDelegate)
+	}
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
 	gateway.Use(groupModelAllowlist)
@@ -231,6 +256,9 @@ func RegisterGatewayRoutes(
 		})
 		// OpenAI Chat Completions API: auto-route based on group platform
 		gateway.POST("/chat/completions", func(c *gin.Context) {
+			if h.Media != nil && h.Media.TrySubmit(c, "chat_music") {
+				return
+			}
 			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
 				h.OpenAIGateway.ChatCompletions(c)
 				return
@@ -279,6 +307,18 @@ func RegisterGatewayRoutes(
 		gateway.GET("/videos/extensions/:request_id", videoStatusHandler)
 		gateway.GET("/videos/:request_id", videoStatusHandler)
 		gateway.GET("/videos/:request_id/content", videoContentHandler)
+		if h.Media != nil {
+			gateway.HEAD("/videos/:request_id/content", videoContentHandler)
+			gateway.POST("/audio/generations", h.Media.SubmitAudio)
+			gateway.POST("/music/generations", h.Media.SubmitAudio)
+			gateway.GET("/audio/generations/:id", h.Media.Get)
+			gateway.GET("/audio/generations/:id/content", h.Media.Content)
+			gateway.HEAD("/audio/generations/:id/content", h.Media.Content)
+			gateway.GET("/tasks/:id/artifacts", h.Media.Artifacts)
+			gateway.GET("/tasks/:id/artifacts/:key/content", h.Media.Content)
+			gateway.HEAD("/tasks/:id/artifacts/:key/content", h.Media.Content)
+			gateway.POST("/sub2api/estimates", h.Media.Estimate)
+		}
 
 		// xAI Voice APIs (Grok platform only): HTTP TTS/STT + Realtime WS.
 		// Not part of the creation-center product surface — gateway relay only.
@@ -340,6 +380,9 @@ func RegisterGatewayRoutes(
 	gemini.Use(clientRequestID)
 	gemini.Use(opsErrorLogger)
 	gemini.Use(endpointNorm)
+	if h.Media != nil {
+		gemini.Use(h.Media.MarkBillingDelegate)
+	}
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
 	gemini.Use(groupModelAllowlist)
 	gemini.Use(compositeGeminiTarget)
@@ -348,7 +391,12 @@ func RegisterGatewayRoutes(
 		gemini.GET("/models", h.Gateway.GeminiV1BetaListModels)
 		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
 		// Gin treats ":" as a param marker, but Gemini uses "{model}:{action}" in the same segment.
-		gemini.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		gemini.POST("/models/*modelAction", func(c *gin.Context) {
+			if h.Media != nil && h.Media.TrySubmit(c, "gemini_image") {
+				return
+			}
+			h.Gateway.GeminiV1BetaModels(c)
+		})
 	}
 
 	// OpenAI Responses API（不带v1前缀的别名）— auto-route based on group platform
@@ -393,6 +441,9 @@ func RegisterGatewayRoutes(
 	}
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
 	rootRoute(http.MethodPost, "/chat/completions", bodyLimit, func(c *gin.Context) {
+		if h.Media != nil && h.Media.TrySubmit(c, "chat_music") {
+			return
+		}
 		if isOpenAIResponsesCompatibleGatewayPlatform(c) {
 			h.OpenAIGateway.ChatCompletions(c)
 			return

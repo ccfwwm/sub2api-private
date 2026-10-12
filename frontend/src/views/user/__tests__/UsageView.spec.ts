@@ -6,6 +6,8 @@ import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
 
+vi.mock('@/api/media', () => ({ mediaAPI: { tasks: vi.fn().mockResolvedValue([]) } }))
+
 const {
   query,
   getStats,

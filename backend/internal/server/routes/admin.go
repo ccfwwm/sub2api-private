@@ -31,6 +31,16 @@ func RegisterAdminRoutes(
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
+		if h.Media != nil {
+			admin.GET("/media/configs/:kind", h.Media.AdminConfigs)
+			admin.POST("/media/configs/:kind", gin.HandlerFunc(stepUpAuth), h.Media.AdminSave)
+			admin.POST("/media/configs/:kind/disable", gin.HandlerFunc(stepUpAuth), h.Media.AdminDisable)
+			admin.POST("/media/simulate", h.Media.AdminSimulate)
+			admin.GET("/media/tasks", h.Media.AdminTasks)
+			admin.POST("/media/tasks/:id/refund", gin.HandlerFunc(stepUpAuth), h.Media.AdminRefund)
+			admin.POST("/media/tasks/:id/cost", gin.HandlerFunc(stepUpAuth), h.Media.AdminCost)
+			admin.POST("/media/tasks/:id/reconcile", gin.HandlerFunc(stepUpAuth), h.Media.AdminReconcile)
+		}
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
 

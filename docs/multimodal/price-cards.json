@@ -1,0 +1,2786 @@
+{
+  "schema_version": "1.0.0-draft",
+  "kind": "price_cards",
+  "source_date": "2026-10-12",
+  "note": "未配置卡不可启用；test_only卡仅用于测试，不是正式报价；通过后台逐卡导入并填写正式价格。",
+  "cards": [
+    {
+      "price_id": "unconfigured:yunfei:gpt-image-2",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "image",
+      "operation": "image",
+      "model_match": {
+        "kind": "exact",
+        "value": "gpt-image-2"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:gemini-3-pro-image-preview",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "image",
+      "operation": "image",
+      "model_match": {
+        "kind": "exact",
+        "value": "gemini-3-pro-image-preview"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:gemini-3.1-flash-image-preview",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "image",
+      "operation": "image",
+      "model_match": {
+        "kind": "exact",
+        "value": "gemini-3.1-flash-image-preview"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:grok-imagine-video",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "grok-imagine-video"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:grok-imagine-video-1.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "grok-imagine-video-1.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:omni-flash",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "omni-flash"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-fast",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-fast"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-lite",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-lite"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-quality",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-quality"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-fast-generate-preview",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-fast-generate-preview"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-generate-preview",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-generate-preview"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:veo-3.1-generate-preview-ref",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "veo-3.1-generate-preview-ref"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:lyria-3.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "audio",
+      "operation": "audio",
+      "model_match": {
+        "kind": "exact",
+        "value": "lyria-3.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:yunfei:lyria-3-pro",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "audio",
+      "operation": "audio",
+      "model_match": {
+        "kind": "exact",
+        "value": "lyria-3-pro"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:00sd2.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:00sd2.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:XXsedanco2.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "XXsedanco2.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:XXsedanco2.0mini",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "XXsedanco2.0mini"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:XXsedanco2.0S",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "XXsedanco2.0S"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:XXsedanco2.5S",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "XXsedanco2.5S"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:wan3.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "wan3.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:seedance-mini",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "seedance-mini"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:seadanco-oplu-480",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "seadanco-oplu-480"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:seadanco-oplu-720",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "seadanco-oplu-720"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:sedanco-2.5-AM",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "sedanco-2.5-AM"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:dola2.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "dola2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:video-QY",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "video-QY"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:doubao-seedance-2-0-65Z",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "doubao-seedance-2-0-65Z"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:doubao-seedance-2-0-fast-65Z",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "doubao-seedance-2-0-fast-65Z"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:doubao-seedance-2-0-mini-65Z",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "doubao-seedance-2-0-mini-65Z"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:doubao-seedance-2-5/65Z",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "doubao-seedance-2-5/65Z"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:JSadanco2.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "JSadanco2.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:LLseadanco2.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "LLseadanco2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:F720seadanco2.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "F720seadanco2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:F480seadanco2.5",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "F480seadanco2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:FF720wan3.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "FF720wan3.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:FF1080wan3.0",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "FF1080wan3.0"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "unconfigured:v6k:MinimaxH3-2K",
+      "version": "draft-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": false,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "MinimaxH3-2K"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "unconfigured",
+              "unit": "request",
+              "unit_price": null,
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": null,
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "未配置价格占位，不可启用；来源渠道须由管理员明确绑定，不能当默认价。"
+    },
+    {
+      "price_id": "sd25-request",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "generation",
+              "unit": "request",
+              "unit_price": "1",
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "sd25-second",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "duration",
+              "unit": "second",
+              "unit_price": "0.04",
+              "quantity_source": "fixed_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "sd25-cost",
+      "version": "test-v1",
+      "purpose": "cost",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "supplier_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "supplier",
+              "unit": "second",
+              "unit_price": "0.02",
+              "quantity_source": "fixed_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "account_cost_once",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "ll25-package",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "LLseadanco2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {
+            "resolution": "720p"
+          },
+          "charges": [
+            {
+              "name": "package",
+              "unit": "second",
+              "unit_price": "1",
+              "quantity_source": "fixed_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "package",
+              "package_quantity": "30",
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "gpt-output",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "image",
+      "operation": "image",
+      "model_match": {
+        "kind": "exact",
+        "value": "gpt-image-2"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {
+            "size_tier": "1K",
+            "quality": "medium"
+          },
+          "charges": [
+            {
+              "name": "image",
+              "unit": "output",
+              "unit_price": "0.1",
+              "quantity_source": "successful_outputs",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "image-token",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "image",
+      "operation": "image",
+      "model_match": {
+        "kind": "exact",
+        "value": "gpt-image-2"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {
+            "usage_profile": "image_input_and_output_tokens"
+          },
+          "charges": [
+            {
+              "name": "input",
+              "unit": "token",
+              "unit_price": "0.000001",
+              "quantity_source": "provider_tokens",
+              "fallback_source": null,
+              "usage_field": "image_input_tokens",
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "output",
+              "unit": "token",
+              "unit_price": "0.000004",
+              "quantity_source": "provider_tokens",
+              "fallback_source": null,
+              "usage_field": "image_output_tokens",
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "music-minute",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "audio",
+      "operation": "audio",
+      "model_match": {
+        "kind": "exact",
+        "value": "lyria-3.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "audio",
+              "unit": "minute",
+              "unit_price": "0.6",
+              "quantity_source": "artifact_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "ceil",
+                "step": "60",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "composite",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "LLseadanco2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "base",
+              "unit": "request",
+              "unit_price": "0.2",
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "duration",
+              "unit": "second",
+              "unit_price": "0.03",
+              "quantity_source": "fixed_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "reference",
+              "unit": "input_image",
+              "unit_price": "0.05",
+              "quantity_source": "accepted_input_images",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "progressive",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "progressive_duration",
+              "unit": "second",
+              "unit_price": "0",
+              "quantity_source": "fixed_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "progressive",
+              "package_quantity": null,
+              "tiers": [
+                {
+                  "up_to": "10",
+                  "unit_price": "0.04"
+                },
+                {
+                  "up_to": null,
+                  "unit_price": "0.02"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "input-media",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "MinimaxH3-2K"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {
+            "resolution": "2K"
+          },
+          "charges": [
+            {
+              "name": "generation",
+              "unit": "second",
+              "unit_price": "0.04",
+              "quantity_source": "request_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "video_ref",
+              "unit": "input_video_second",
+              "unit_price": "0.01",
+              "quantity_source": "accepted_input_video_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "audio_ref",
+              "unit": "input_audio_second",
+              "unit_price": "0.005",
+              "quantity_source": "accepted_input_audio_duration",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    },
+    {
+      "price_id": "accepted-base",
+      "version": "test-v1",
+      "purpose": "sale",
+      "status": "draft",
+      "test_only": true,
+      "currency": "USD",
+      "media_type": "video",
+      "operation": "video",
+      "model_match": {
+        "kind": "exact",
+        "value": "00sd2.5"
+      },
+      "scope": {
+        "kind": "linked_template",
+        "reference": "REPLACE_WITH_EXPLICIT_BINDING"
+      },
+      "effective_at": null,
+      "rules": [
+        {
+          "priority": 0,
+          "when": {},
+          "charges": [
+            {
+              "name": "accepted_base",
+              "unit": "request",
+              "unit_price": "0.2",
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "accepted",
+              "refundable": false,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            },
+            {
+              "name": "generation",
+              "unit": "request",
+              "unit_price": "0.8",
+              "quantity_source": "task_count",
+              "fallback_source": null,
+              "usage_field": null,
+              "trigger": "success",
+              "refundable": true,
+              "rounding": {
+                "mode": "none",
+                "step": "1",
+                "minimum": "0",
+                "scope": "per_output"
+              },
+              "method": "linear",
+              "package_quantity": null,
+              "tiers": []
+            }
+          ]
+        }
+      ],
+      "reservation": {
+        "maximum_charge": "10",
+        "max_quantities": {},
+        "overrun": "cap_and_alert"
+      },
+      "success_policy": "at_least_one",
+      "multiplier_policy": "effective_media_then_time",
+      "notes": "测试价/开发模板，不可发布到生产；必须补真实价格、能力、绑定、预留和验收。"
+    }
+  ]
+}

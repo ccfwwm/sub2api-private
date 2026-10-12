@@ -214,6 +214,7 @@
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
       />
     </div>
+    <MediaTaskHistory />
   </AppLayout>
 
 </template>
@@ -225,6 +226,7 @@ import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import MediaTaskHistory from '@/components/media/MediaTaskHistory.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/media"
 	"log/slog"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -18,6 +19,7 @@ import (
 //   - 登录：非专属分组 + user_allowed_groups 授权或持有有效订阅的专属分组；
 //     若该用户开启了公开分组限制，则公开分组同样需要落在授权集合内。
 type ModelPlazaHandler struct {
+	media          *MediaHandler
 	plazaService   *service.ModelPlazaService
 	apiKeyService  *service.APIKeyService
 	settingService *service.SettingService
@@ -76,18 +78,19 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                 int64    `json:"id"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	Platform           string   `json:"platform"`
-	SubscriptionType   string   `json:"subscription_type"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
-	UserRateMultiplier *float64 `json:"user_rate_multiplier,omitempty"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	IsExclusive        bool     `json:"is_exclusive"`
+	MediaModels        []media.CatalogEntry `json:"media_models,omitempty"`
+	ID                 int64                `json:"id"`
+	Name               string               `json:"name"`
+	Description        string               `json:"description"`
+	Platform           string               `json:"platform"`
+	SubscriptionType   string               `json:"subscription_type"`
+	RateMultiplier     float64              `json:"rate_multiplier"`
+	UserRateMultiplier *float64             `json:"user_rate_multiplier,omitempty"`
+	PeakRateEnabled    bool                 `json:"peak_rate_enabled"`
+	PeakStart          string               `json:"peak_start"`
+	PeakEnd            string               `json:"peak_end"`
+	PeakRateMultiplier float64              `json:"peak_rate_multiplier"`
+	IsExclusive        bool                 `json:"is_exclusive"`
 	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
@@ -129,6 +132,25 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.media != nil {
+		// Merge legacy channel models onto all active groups. This preserves the
+		// old plaza catalog while allowing media-only groups to be displayed.
+		all, mergeErr := h.plazaService.ListActiveGroups(c.Request.Context())
+		if mergeErr != nil {
+			response.ErrorFrom(c, mergeErr)
+			return
+		}
+		legacy := make(map[int64][]service.PlazaModel, len(groups))
+		for _, group := range groups {
+			legacy[group.ID] = group.Models
+		}
+		for i := range all {
+			if models, ok := legacy[all[i].ID]; ok {
+				all[i].Models = models
+			}
+		}
+		groups = all
+	}
 
 	// allowedGroups == nil 表示匿名；登录用户恒为非 nil（可能为空集合）。
 	var allowedGroups map[int64]struct{}
@@ -153,7 +175,31 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
-		out = append(out, toModelPlazaGroupDTO(&visible[i], userRates))
+		dto := toModelPlazaGroupDTO(&visible[i], userRates)
+		if h.media != nil {
+			catalog, err := h.media.Engine.Catalog(c.Request.Context(), dto.ID)
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			dto.MediaModels = catalog
+			managed, err := h.media.Engine.ManagedModels(c.Request.Context(), dto.ID, "")
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			filtered := []modelPlazaModel{}
+			for _, model := range dto.Models {
+				if !managed[model.Name] {
+					filtered = append(filtered, model)
+				}
+			}
+			dto.Models = filtered
+		}
+		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {
+			continue
+		}
+		out = append(out, dto)
 	}
 	response.Success(c, modelPlazaResponse{
 		Description: rt.Description,

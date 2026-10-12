@@ -56,6 +56,7 @@ export interface PlazaModel {
 }
 
 export interface ModelPlazaGroup {
+  media_models?: PlazaMediaModel[]
   id: number
   name: string
   description: string
@@ -79,6 +80,27 @@ export interface ModelPlazaGroup {
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
   models: PlazaModel[]
+}
+
+export interface PlazaMediaCharge {
+  name: string
+  unit: string
+  unit_price: string | null
+  quantity_source: string
+  trigger: string
+  method: string
+  package_quantity: string | null
+  rounding: { mode: string; step: string; minimum: string; scope: string }
+  tiers: { up_to: string | null; unit_price: string | null }[]
+}
+export interface PlazaMediaModel {
+  model: string
+  media_type: string
+  operations: string[]
+  resolutions: string[]
+  duration: { mode: string; values: number[]; min: number | null; max: number | null; default: number | null }
+  music_multiplier?: string
+  prices: { operation: string; version: string; maximum_charge: string | null; rules: { priority: number; when: Record<string, unknown>; charges: PlazaMediaCharge[] }[] }[]
 }
 
 export interface ModelPlazaResponse {

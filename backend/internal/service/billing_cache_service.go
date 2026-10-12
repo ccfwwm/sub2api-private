@@ -104,6 +104,8 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	mediaAdmissionMu      sync.RWMutex
+	mediaAdmission        func(context.Context, *User, *APIKey, *Group, *UserSubscription, string) error
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -121,6 +123,7 @@ type BillingCacheService struct {
 	stopped            atomic.Bool
 	balanceLoadSF      singleflight.Group
 	quotaLoadSF        singleflight.Group
+	mediaBalanceGuard  func(context.Context, int64) (func(), *float64, error)
 	// 丢弃日志节流计数器（减少高负载下日志噪音）
 	cacheWriteDropFullCount     uint64
 	cacheWriteDropFullLastLog   int64
@@ -733,6 +736,14 @@ func (s *BillingCacheService) IncrementUserPlatformQuotaUsage(userID int64, plat
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
 // platform 为请求的目标平台（如 "anthropic"），传空串 "" 时跳过 user × platform quota 检查。
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string) error {
+	s.mediaAdmissionMu.RLock()
+	mediaCheck := s.mediaAdmission
+	s.mediaAdmissionMu.RUnlock()
+	if mediaCheck != nil {
+		if err := mediaCheck(ctx, user, apiKey, group, subscription, platform); err != nil {
+			return err
+		}
+	}
 	// 简易模式默认跳过所有计费检查. An explicit key-window opt-in keeps
 	// balance/subscription/platform checks bypassed while enforcing the three
 	// API-key monetary windows from the database source of truth.
@@ -779,6 +790,55 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 
 	return nil
+}
+
+// SetMediaAdmissionCheck attaches durable media quota checks without moving
+// media counters into the legacy Redis snapshot/flush path.
+func (s *BillingCacheService) SetMediaAdmissionCheck(check func(context.Context, *User, *APIKey, *Group, *UserSubscription, string) error) {
+	s.mediaAdmissionMu.Lock()
+	defer s.mediaAdmissionMu.Unlock()
+	s.mediaAdmission = check
+}
+func (s *BillingCacheService) MediaPlatformBaseline(ctx context.Context, userID int64, platform string) (map[string]float64, error) {
+	result := map[string]float64{"daily": 0, "weekly": 0, "monthly": 0}
+	if s.cache != nil {
+		entry, ok, err := s.cache.GetUserPlatformQuotaCache(ctx, userID, platform)
+		if err != nil {
+			return nil, err
+		}
+		if ok && entry != nil {
+			now := time.Now()
+			if !quotaWindowExpired(entry.DailyWindowStart, timezone.StartOfDay(now)) {
+				result["daily"] = entry.DailyUsageUSD
+			}
+			if !quotaWindowExpired(entry.WeeklyWindowStart, timezone.StartOfWeek(now)) {
+				result["weekly"] = entry.WeeklyUsageUSD
+			}
+			if !monthlyQuotaWindowExpired(entry.MonthlyWindowStart, now) {
+				result["monthly"] = entry.MonthlyUsageUSD
+			}
+			return result, nil
+		}
+	}
+	if s.userPlatformQuotaRepo != nil {
+		entry, err := s.userPlatformQuotaRepo.GetByUserPlatform(ctx, userID, platform)
+		if err != nil {
+			return nil, err
+		}
+		if entry != nil {
+			now := time.Now()
+			if !quotaWindowExpired(entry.DailyWindowStart, timezone.StartOfDay(now)) {
+				result["daily"] = entry.DailyUsageUSD
+			}
+			if !quotaWindowExpired(entry.WeeklyWindowStart, timezone.StartOfWeek(now)) {
+				result["weekly"] = entry.WeeklyUsageUSD
+			}
+			if !monthlyQuotaWindowExpired(entry.MonthlyWindowStart, now) {
+				result["monthly"] = entry.MonthlyUsageUSD
+			}
+		}
+	}
+	return result, nil
 }
 
 // checkSimpleModeAPIKeyRateLimits is deliberately DB-authoritative. Redis

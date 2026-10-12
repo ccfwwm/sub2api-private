@@ -1,0 +1,4324 @@
+openapi: 3.1.0
+info:
+  title: Sub2API 多模态 API 实施规格（非已部署承诺）
+  version: 1.0.0-draft
+  description: v0.2.15基础上的媒体运行时接口。模型受能力和发布价卡门控，模板默认关闭；实测范围见REAL_CHANNEL_VALIDATION.md。接口存在不表示所有模型验证通过。
+servers:
+- url: https://your-sub2api.example
+  description: 替换为自己的站点根；paths已包含/v1
+security:
+- DownstreamKey: []
+paths:
+  /v1/models:
+    get:
+      operationId: listModels
+      summary: 当前Key模型发现
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Models'
+  /v1/images/generations:
+    post:
+      operationId: createImage
+      summary: 同步图像生成
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageRequest'
+  /v1/images/edits:
+    post:
+      operationId: editImage
+      summary: 同步图像编辑
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageResponse'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                model: &id001
+                  type: string
+                  minLength: 1
+                prompt: *id001
+                size: *id001
+                quality: *id001
+                n:
+                  type: integer
+                  minimum: 1
+                response_format:
+                  type: string
+                  enum:
+                  - url
+                  - b64_json
+                image:
+                  type: string
+                  format: binary
+                image[]:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required:
+              - model
+              - prompt
+              additionalProperties: false
+              anyOf:
+              - required:
+                - image
+              - required:
+                - image[]
+  /v1beta/models/{model}:generateContent:
+    post:
+      operationId: geminiImage
+      summary: Gemini原生图像
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NativeResponse'
+      parameters:
+      - name: model
+        in: path
+        required: true
+        schema: &id003
+          type: string
+          minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      security:
+      - DownstreamKey: []
+      - GeminiKey: []
+  /v1/videos:
+    post:
+      operationId: createVideo
+      summary: 通用异步视频
+      description: 旧Grok路径保留；新通用任务202本地ID。未知受理结果进入unknown；同幂等键不同参数409；不自动重提。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '202':
+          description: 新通用任务已落库；保留本地ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '200':
+          description: 已有路径保留响应约定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '402':
+          description: 余额/额度不足，未生成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoRequest'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                model: &id002
+                  type: string
+                  minLength: 1
+                prompt:
+                  type: string
+                seconds:
+                  oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: string
+                    pattern: ^[1-9][0-9]*$
+                duration:
+                  oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: string
+                    pattern: ^[1-9][0-9]*$
+                ratio: *id002
+                aspect_ratio: *id002
+                resolution: *id002
+                size: *id002
+                image:
+                  type: string
+                  format: binary
+                image_url: *id002
+                image_urls:
+                  type: array
+                  items: *id002
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                videos:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reference'
+                audios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reference'
+                reference_image_urls:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reference'
+                reference_video_urls:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reference'
+                reference_audio_urls:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Reference'
+                input_reference:
+                  type: string
+                  format: binary
+                generate_audio:
+                  type: boolean
+                generateAudio:
+                  type: boolean
+                negative_prompt:
+                  type: string
+                negativePrompt:
+                  type: string
+                metadata:
+                  type: object
+                video:
+                  type: string
+                  format: binary
+                audio:
+                  type: string
+                  format: binary
+              required:
+              - model
+              additionalProperties: false
+            encoding:
+              metadata:
+                contentType: application/json
+            x-model-gated: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema: *id003
+        description: 建议必传；服务端以Key+规范化operation+请求hash约束。
+  /v1/videos/{id}:
+    get:
+      operationId: getVideo
+      summary: 查询视频（不收费）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/videos/{id}/content:
+    get:
+      operationId: downloadVideo
+      summary: 制品下载（不收费）
+      description: HEAD/Range/刷新按模型及渠道能力开放，不伪造206。不发送供应商Key给媒体域名，相对地址使用绑定账号base解析；下载不重新生成。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 完整媒体字节；HEAD无响应体
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: 支持Range时返回部分字节
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: 支持条件请求时未修改
+        '410':
+          description: 制品过期且不可刷新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '416':
+          description: 范围无效；Content-Range bytes */N
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: Range
+        in: header
+        schema: *id003
+      - name: If-None-Match
+        in: header
+        schema: *id003
+    head:
+      operationId: headVideo
+      summary: 读取制品头部
+      description: HEAD/Range/刷新按模型及渠道能力开放，不伪造206。不发送供应商Key给媒体域名，相对地址使用绑定账号base解析；下载不重新生成。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 完整媒体字节；HEAD无响应体
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+        '206':
+          description: 支持Range时返回部分字节
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+        '304':
+          description: 支持条件请求时未修改
+        '410':
+          description: 制品过期且不可刷新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '416':
+          description: 范围无效；Content-Range bytes */N
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: Range
+        in: header
+        schema: *id003
+      - name: If-None-Match
+        in: header
+        schema: *id003
+  /v1/tasks/{id}/artifacts:
+    get:
+      operationId: listArtifacts
+      summary: 列出任务制品
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifacts'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/tasks/{id}/artifacts/{key}/content:
+    get:
+      operationId: downloadArtifact
+      summary: 制品下载（不收费）
+      description: HEAD/Range/刷新按模型及渠道能力开放，不伪造206。不发送供应商Key给媒体域名，相对地址使用绑定账号base解析；下载不重新生成。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 完整媒体字节；HEAD无响应体
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: 支持Range时返回部分字节
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: 支持条件请求时未修改
+        '410':
+          description: 制品过期且不可刷新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '416':
+          description: 范围无效；Content-Range bytes */N
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: key
+        in: path
+        required: true
+        schema: *id003
+      - name: Range
+        in: header
+        schema: *id003
+      - name: If-None-Match
+        in: header
+        schema: *id003
+  /v1/chat/completions:
+    post:
+      operationId: chatOrMusic
+      summary: 聊天/已声明的音乐协议
+      description: 现有聊天保留。Lyria非流式保留choices与data；SSE待渠道验证且默认关闭；TEXT进度不等于实时音频。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NativeResponse'
+            text/event-stream:
+              schema:
+                type: string
+              x-status: implemented-completion-chunks-not-audio-stream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+  /v1/audio/generations:
+    post:
+      operationId: createMusic
+      summary: 音乐生成（来源专用路径未开放）
+      description: 两个入口规范化为同一operation进行幂等去重；来源404不能当作已可用。duration是提示不是输出上限。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '202':
+          description: async=true本地任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '200':
+          description: async=false同任务等待完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicRequest'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema: *id003
+  /v1/music/generations:
+    post:
+      operationId: createMusicAlias
+      summary: 音乐生成（来源专用路径未开放）
+      description: 两个入口规范化为同一operation进行幂等去重；来源404不能当作已可用。duration是提示不是输出上限。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '202':
+          description: async=true本地任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '200':
+          description: async=false同任务等待完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicRequest'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema: *id003
+  /v1/audio/generations/{id}:
+    get:
+      operationId: getMusic
+      summary: 音乐任务查询
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+  /v1/audio/generations/{id}/content:
+    get:
+      operationId: downloadMusic
+      summary: 制品下载（不收费）
+      description: HEAD/Range/刷新按模型及渠道能力开放，不伪造206。不发送供应商Key给媒体域名，相对地址使用绑定账号base解析；下载不重新生成。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 完整媒体字节；HEAD无响应体
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: 支持Range时返回部分字节
+          headers:
+            Content-Type:
+              schema: *id003
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema: *id003
+            Accept-Ranges:
+              schema: *id003
+            Content-Range:
+              schema: *id003
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: 支持条件请求时未修改
+        '410':
+          description: 制品过期且不可刷新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '416':
+          description: 范围无效；Content-Range bytes */N
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: Range
+        in: header
+        schema: *id003
+      - name: If-None-Match
+        in: header
+        schema: *id003
+  /v1/sub2api/estimates:
+    post:
+      operationId: estimateMedia
+      summary: 只估价（无上游/资金副作用）
+      description: 身份/分组来自Key；只返回自己的售价，不含供应商成本；不锁价，不冻结不扣费不提交供应商。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Estimate'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstimateRequest'
+  /api/v1/admin/media/configs/capability:
+    get:
+      operationId: listCapability
+      summary: 列表；id查询参数读取指定配置历史
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      parameters:
+      - name: id
+        in: query
+        schema: *id003
+    post:
+      operationId: saveCapability
+      summary: 保存草稿或发布版本（敏感操作认证）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: *id003
+                expected_version:
+                  type: integer
+                  minimum: 0
+                publish:
+                  type: boolean
+                config:
+                  $ref: '#/components/schemas/Capability'
+              required:
+              - id
+              - expected_version
+              - publish
+              - config
+              additionalProperties: false
+  /api/v1/admin/media/configs/capability/disable:
+    post:
+      operationId: disableCapability
+      summary: 停用并新增版本（敏感操作认证）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: *id003
+                expected_version:
+                  type: integer
+                  minimum: 1
+              required:
+              - id
+              - expected_version
+              additionalProperties: false
+  /api/v1/admin/media/configs/price:
+    get:
+      operationId: listPriceCard
+      summary: 列表；id查询参数读取指定配置历史
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      parameters:
+      - name: id
+        in: query
+        schema: *id003
+    post:
+      operationId: savePriceCard
+      summary: 保存草稿或发布版本（敏感操作认证）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: *id003
+                expected_version:
+                  type: integer
+                  minimum: 0
+                publish:
+                  type: boolean
+                config:
+                  $ref: '#/components/schemas/PriceCard'
+              required:
+              - id
+              - expected_version
+              - publish
+              - config
+              additionalProperties: false
+  /api/v1/admin/media/configs/price/disable:
+    post:
+      operationId: disablePriceCard
+      summary: 停用并新增版本（敏感操作认证）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    $ref: '#/components/schemas/ConfigRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: *id003
+                expected_version:
+                  type: integer
+                  minimum: 1
+              required:
+              - id
+              - expected_version
+              additionalProperties: false
+  /api/v1/admin/media/simulate:
+    post:
+      operationId: simulateMedia
+      summary: 管理员计费模拟（无副作用）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    $ref: '#/components/schemas/Simulation'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRequest'
+      security:
+      - AdminSession: []
+  /api/v1/admin/media/tasks:
+    get:
+      operationId: listMediaTasks
+      summary: 任务核对队列（分页）
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+      parameters:
+      - name: before
+        in: query
+        schema: *id003
+      - name: user_id
+        in: query
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+  /api/v1/admin/media/tasks/{id}/reconcile:
+    post:
+      operationId: reconcileMediaTask
+      summary: 带证据核对任务，禁止盲目重提
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+                    required:
+                    - ok
+                    additionalProperties: false
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileRequest'
+      security:
+      - AdminSession: []
+  /api/v1/admin/media/tasks/{id}/refund:
+    post:
+      operationId: refundMediaTask
+      summary: 追加幂等退款，不覆写原账单
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+                    required:
+                    - ok
+                    additionalProperties: false
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      security:
+      - AdminSession: []
+  /api/v1/admin/media/tasks/{id}/cost:
+    post:
+      operationId: verifyMediaCost
+      summary: 核对供应商成本账单；不改用户扣款
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+                    required:
+                    - ok
+                    additionalProperties: false
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id003
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: *id003
+      security:
+      - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: &id004
+                  type: string
+                  pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+                evidence: *id003
+                expected_version:
+                  type: integer
+              required:
+              - amount
+              - evidence
+              - expected_version
+              additionalProperties: false
+  /api/v1/media/tasks:
+    get:
+      operationId: listOwnMediaTasks
+      summary: 当前用户任务和收费记录
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Admin
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id003
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskRecord'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - AdminSession: []
+components:
+  securitySchemes:
+    DownstreamKey:
+      type: http
+      scheme: bearer
+    GeminiKey:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+    AdminSession:
+      type: http
+      scheme: bearer
+      description: 现有管理员认证token，非下游API Key；沿用权限及敏感操作验证。
+  schemas:
+    Duration:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - enum
+          - range
+          - fixed
+          - hint
+          - unknown
+          - not_applicable
+        values:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        min:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        max:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        default:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        required:
+          type: boolean
+        scenarios:
+          type: array
+          items:
+            type: object
+      required:
+      - mode
+      - values
+      - min
+      - max
+      - default
+      - required
+      - scenarios
+      additionalProperties: false
+    Material:
+      type: object
+      properties:
+        formats:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        max_count:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        max_file_bytes:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        max_duration_seconds:
+          type:
+          - string
+          - 'null'
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+      required:
+      - formats
+      - max_count
+      - max_file_bytes
+      - max_duration_seconds
+      additionalProperties: false
+    Capability:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          minLength: 1
+        version:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        upstream_model:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+          enum:
+          - yunfei
+          - v6k
+        adapter:
+          type: string
+          minLength: 1
+        media_type:
+          type: string
+          enum:
+          - image
+          - video
+          - audio
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum:
+          - draft
+          - enabled
+          - disabled
+        validation_status:
+          type: string
+          enum:
+          - 源码已有基础
+          - 参考服务声明验证
+          - 待开发
+          - 待渠道验证
+          - 本项目实测通过
+        source:
+          type: string
+          minLength: 1
+        scenarios:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        operations:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        formats:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        duration:
+          $ref: '#/components/schemas/Duration'
+        resolutions:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+        sizes:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+        aspect_ratios:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+        qualities:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+        resolution_policy:
+          type: string
+          enum:
+          - enum
+          - omit
+          - unknown
+          - native
+        materials:
+          type: object
+          properties:
+            image:
+              $ref: '#/components/schemas/Material'
+            video:
+              $ref: '#/components/schemas/Material'
+            audio:
+              $ref: '#/components/schemas/Material'
+          required:
+          - image
+          - video
+          - audio
+          additionalProperties: false
+        field_mapping:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+        constraints:
+          type: array
+          items:
+            type: object
+        unverified:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        delivery:
+          type: object
+          properties:
+            poll_seconds:
+              type: integer
+              minimum: 1
+            head:
+              type:
+              - boolean
+              - 'null'
+            range:
+              type:
+              - boolean
+              - 'null'
+            refresh:
+              type:
+              - boolean
+              - 'null'
+          required:
+          - poll_seconds
+          - head
+          - range
+          - refresh
+          additionalProperties: false
+        limits:
+          type: object
+          properties:
+            max_request_bytes:
+              type:
+              - integer
+              - 'null'
+              minimum: 0
+            max_concurrent_tasks:
+              type:
+              - integer
+              - 'null'
+              minimum: 0
+            observation_seconds:
+              type:
+              - integer
+              - 'null'
+              minimum: 0
+          required:
+          - max_request_bytes
+          - max_concurrent_tasks
+          - observation_seconds
+          additionalProperties: false
+        account_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        group_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        channel_id:
+          type: integer
+          minimum: 1
+        price_templates:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        cost_templates:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        music_rate_override:
+          type:
+          - string
+          - 'null'
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]{1,12})?$
+        verification_evidence:
+          type: string
+          minLength: 1
+        artifact_hosts:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        usage_fields:
+          type: object
+          additionalProperties:
+            type: string
+            pattern: ^(usage|usageMetadata|billing_usage)\.[A-Za-z_][A-Za-z0-9_.]*$
+      required:
+      - profile_id
+      - version
+      - model
+      - upstream_model
+      - provider
+      - adapter
+      - media_type
+      - enabled
+      - status
+      - validation_status
+      - source
+      - scenarios
+      - operations
+      - formats
+      - duration
+      - resolutions
+      - aspect_ratios
+      - qualities
+      - resolution_policy
+      - materials
+      - field_mapping
+      - constraints
+      - unverified
+      - delivery
+      - limits
+      additionalProperties: false
+    Rounding:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - none
+          - ceil
+          - floor
+          - half_up
+        step:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+        minimum:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+        scope:
+          type: string
+          enum:
+          - per_output
+          - aggregate
+      required:
+      - mode
+      - step
+      - minimum
+      - scope
+      additionalProperties: false
+    Charge:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        unit:
+          type: string
+          enum:
+          - request
+          - output
+          - second
+          - minute
+          - token
+          - input_image
+          - input_video_second
+          - input_audio_second
+        unit_price:
+          type:
+          - string
+          - 'null'
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]{1,12})?$
+        quantity_source:
+          type: string
+          enum:
+          - task_count
+          - successful_outputs
+          - request_duration
+          - fixed_duration
+          - artifact_duration
+          - provider_duration
+          - provider_tokens
+          - accepted_input_images
+          - accepted_input_video_duration
+          - accepted_input_audio_duration
+        fallback_source:
+          type:
+          - string
+          - 'null'
+          enum:
+          - task_count
+          - successful_outputs
+          - request_duration
+          - fixed_duration
+          - artifact_duration
+          - provider_duration
+          - provider_tokens
+          - accepted_input_images
+          - accepted_input_video_duration
+          - accepted_input_audio_duration
+          - null
+        usage_field:
+          type:
+          - string
+          - 'null'
+        trigger:
+          type: string
+          enum:
+          - success
+          - accepted
+        refundable:
+          type: boolean
+        rounding:
+          $ref: '#/components/schemas/Rounding'
+        method:
+          type: string
+          enum:
+          - linear
+          - package
+          - progressive
+        package_quantity:
+          type:
+          - string
+          - 'null'
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+        tiers:
+          type: array
+          items:
+            type: object
+            properties:
+              up_to:
+                type:
+                - string
+                - 'null'
+                pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+              unit_price:
+                type:
+                - string
+                - 'null'
+                pattern: ^(0|[1-9][0-9]*)(\.[0-9]{1,12})?$
+            required:
+            - up_to
+            - unit_price
+            additionalProperties: false
+      required:
+      - name
+      - unit
+      - unit_price
+      - quantity_source
+      - fallback_source
+      - usage_field
+      - trigger
+      - refundable
+      - rounding
+      - method
+      - package_quantity
+      - tiers
+      additionalProperties: false
+    PriceCard:
+      type: object
+      properties:
+        price_id:
+          type: string
+          minLength: 1
+        version:
+          type: string
+          minLength: 1
+        purpose:
+          type: string
+          enum:
+          - sale
+          - cost
+        status:
+          type: string
+          enum:
+          - draft
+          - enabled
+          - disabled
+        test_only:
+          type: boolean
+        currency:
+          const: USD
+        media_type:
+          type: string
+          enum:
+          - image
+          - video
+          - audio
+        operation:
+          type: string
+          minLength: 1
+        model_match:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+              - exact
+              - alias
+              - prefix
+            value:
+              type: string
+              minLength: 1
+          required:
+          - kind
+          - value
+          additionalProperties: false
+        scope:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+              - group
+              - channel
+              - linked_template
+              - account
+              - account_group
+              - supplier_template
+            reference:
+              type: string
+              minLength: 1
+          required:
+          - kind
+          - reference
+          additionalProperties: false
+        effective_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              priority:
+                type: integer
+                minimum: 0
+              when:
+                type: object
+                additionalProperties:
+                  type:
+                  - string
+                  - boolean
+              charges:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Charge'
+            required:
+            - priority
+            - when
+            - charges
+            additionalProperties: false
+        reservation:
+          type: object
+          properties:
+            maximum_charge:
+              type:
+              - string
+              - 'null'
+              pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+            max_quantities:
+              type: object
+              additionalProperties:
+                type: string
+                pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+            overrun:
+              const: cap_and_alert
+          required:
+          - maximum_charge
+          - max_quantities
+          - overrun
+          additionalProperties: false
+        success_policy:
+          type: string
+          enum:
+          - at_least_one
+          - all_outputs_success
+        multiplier_policy:
+          type: string
+          enum:
+          - effective_media_then_time
+          - account_cost_once
+        notes:
+          type: string
+          minLength: 1
+      required:
+      - price_id
+      - version
+      - purpose
+      - status
+      - test_only
+      - currency
+      - media_type
+      - operation
+      - model_match
+      - scope
+      - effective_at
+      - rules
+      - reservation
+      - success_policy
+      - multiplier_policy
+      - notes
+      additionalProperties: false
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: *id003
+            message: *id003
+            type: *id003
+            param:
+              type:
+              - string
+              - 'null'
+          required:
+          - type
+          - message
+          additionalProperties: false
+        request_id: *id003
+        task_id: *id003
+      required:
+      - error
+      additionalProperties: false
+    AdminError:
+      type: object
+      properties:
+        code:
+          type: integer
+        message: *id003
+        reason:
+          type: string
+        metadata:
+          type: object
+      required:
+      - code
+      - message
+      additionalProperties: false
+    ConfigRecord:
+      type: object
+      properties:
+        id: *id003
+        version:
+          type: integer
+        published_version:
+          type:
+          - integer
+          - 'null'
+        status: *id003
+        config:
+          type: object
+      required:
+      - id
+      - version
+      - published_version
+      - status
+      - config
+      additionalProperties: false
+    TaskRecord:
+      type: object
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        user_id:
+          type: integer
+        account_id:
+          type: integer
+        cost_status:
+          type: string
+          enum:
+          - unknown
+          - estimated
+          - verified
+        cost_amount:
+          type:
+          - string
+          - 'null'
+        margin_amount:
+          type:
+          - string
+          - 'null'
+      required:
+      - task
+      additionalProperties: false
+    Calculation:
+      type: object
+      properties:
+        currency:
+          const: USD
+        items:
+          type: array
+          items:
+            type: object
+        total: *id004
+        uncapped: *id004
+        missing_usage:
+          type: array
+          items: *id003
+      required:
+      - currency
+      - items
+      - total
+      - uncapped
+      additionalProperties: false
+    Billing:
+      type: object
+      properties:
+        currency:
+          const: USD
+        reserved: *id004
+        maximum_charge: *id004
+        settled: *id004
+        refunded: *id004
+        accepted: *id004
+        released: *id004
+        price_version: *id003
+        multiplier: *id004
+        time_multiplier: *id004
+        version:
+          type: integer
+        quantities:
+          type: object
+          additionalProperties:
+            type: array
+            items: *id004
+        calculation:
+          $ref: '#/components/schemas/Calculation'
+        state:
+          type: string
+          enum:
+          - held
+          - pending_usage
+          - settled
+          - released
+          - manual_review
+      required:
+      - currency
+      - price_version
+      - maximum_charge
+      - state
+      additionalProperties: false
+    Artifact:
+      type: object
+      properties:
+        key: *id003
+        type:
+          type: string
+          enum:
+          - image
+          - video
+          - audio
+        mime_type: *id003
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        duration_seconds:
+          type:
+          - string
+          - 'null'
+          pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+        content_url: *id003
+        available:
+          type: boolean
+      required:
+      - key
+      - type
+      - mime_type
+      - content_url
+      - available
+      additionalProperties: false
+    Task:
+      type: object
+      properties:
+        id: *id003
+        object:
+          type: string
+          enum:
+          - video
+          - audio.generation
+          - image.generation
+        model: *id003
+        status:
+          type: string
+          enum:
+          - queued
+          - in_progress
+          - completed
+          - failed
+          - unknown
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        created_at:
+          type: integer
+        completed_at:
+          type:
+          - integer
+          - 'null'
+        seconds:
+          type:
+          - string
+          - 'null'
+        billing:
+          $ref: '#/components/schemas/Billing'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/Error'
+          - type: 'null'
+        diagnostic: *id003
+      required:
+      - id
+      - object
+      - model
+      - status
+      additionalProperties: false
+    Reference:
+      oneOf:
+      - *id003
+      - type: object
+        properties:
+          url: *id003
+          duration_seconds: *id004
+        required:
+        - url
+        additionalProperties: false
+    VideoRequest:
+      type: object
+      properties:
+        model: *id003
+        prompt:
+          type: string
+        seconds:
+          oneOf:
+          - type: integer
+            minimum: 1
+          - type: string
+            pattern: ^[1-9][0-9]*$
+        duration:
+          oneOf:
+          - type: integer
+            minimum: 1
+          - type: string
+            pattern: ^[1-9][0-9]*$
+        ratio: *id003
+        aspect_ratio: *id003
+        resolution: *id003
+        size: *id003
+        image:
+          $ref: '#/components/schemas/Reference'
+        image_url: *id003
+        image_urls:
+          type: array
+          items: *id003
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        videos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        audios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        reference_image_urls:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        reference_video_urls:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        reference_audio_urls:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        input_reference: *id003
+        generate_audio:
+          type: boolean
+        generateAudio:
+          type: boolean
+        negative_prompt:
+          type: string
+        negativePrompt:
+          type: string
+        metadata:
+          type: object
+      required:
+      - model
+      additionalProperties: false
+    ImageRequest:
+      type: object
+      properties:
+        model: *id003
+        prompt: *id003
+        size: *id003
+        quality: *id003
+        n:
+          type: integer
+          minimum: 1
+        response_format:
+          type: string
+          enum:
+          - url
+          - b64_json
+      required:
+      - model
+      - prompt
+      additionalProperties: false
+    ImageResponse:
+      type: object
+      properties:
+        created:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              url: *id003
+              b64_json: *id003
+    GeminiRequest:
+      type: object
+      properties:
+        contents:
+          type: array
+          items:
+            type: object
+        generationConfig:
+          type: object
+      required:
+      - contents
+      additionalProperties: false
+    NativeResponse:
+      type: object
+      additionalProperties: true
+    ChatRequest:
+      type: object
+      required:
+      - model
+      - messages
+      properties:
+        model: *id003
+        messages:
+          type: array
+          minItems: 1
+          items:
+            type: object
+        stream:
+          type: boolean
+      additionalProperties: true
+    MusicRequest:
+      type: object
+      properties:
+        model: *id003
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        title:
+          type: string
+          maxLength: 160
+        instrumental:
+          type: boolean
+          default: false
+        lyrics:
+          type: string
+          maxLength: 20000
+        duration:
+          type: integer
+          minimum: 5
+          maximum: 300
+        bpm:
+          type: integer
+          minimum: 30
+          maximum: 300
+        seed:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+        n:
+          type: integer
+          const: 1
+        async:
+          type: boolean
+          default: true
+        audio_format:
+          type: string
+          enum:
+          - mp3
+          - wav
+          - m4a
+        response_format:
+          type: string
+          enum:
+          - url
+          - b64_json
+      required:
+      - model
+      - prompt
+      additionalProperties: false
+    EstimateRequest:
+      type: object
+      properties:
+        operation:
+          type: string
+          enum:
+          - video
+          - audio
+          - music
+          - image
+          - image_edit
+          - gemini_image
+          - chat_music
+        request:
+          type: object
+      required:
+      - operation
+      - request
+      additionalProperties: false
+    Estimate:
+      type: object
+      properties:
+        currency:
+          const: USD
+        price_version: *id003
+        maximum_charge: *id004
+        calculation:
+          $ref: '#/components/schemas/Calculation'
+        locks_price:
+          const: false
+      required:
+      - currency
+      - price_version
+      - maximum_charge
+      - calculation
+      - locks_price
+      additionalProperties: false
+    Models:
+      type: object
+      properties:
+        object:
+          const: list
+        data:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            properties:
+              id: *id003
+              object:
+                const: model
+              capabilities:
+                type: object
+      required:
+      - object
+      - data
+      additionalProperties: false
+    Artifacts:
+      type: object
+      properties:
+        task_id: *id003
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+      required:
+      - task_id
+      - artifacts
+      additionalProperties: false
+    VersionRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+        reason: *id003
+      required:
+      - expected_version
+      - reason
+      additionalProperties: false
+    SimulationRequest:
+      type: object
+      properties:
+        operation: *id003
+        request:
+          type: object
+        capability:
+          $ref: '#/components/schemas/Capability'
+        price:
+          $ref: '#/components/schemas/PriceCard'
+        cost:
+          $ref: '#/components/schemas/PriceCard'
+        identity:
+          type: object
+        cost_multiplier: *id004
+        observed_quantities:
+          type: object
+          additionalProperties:
+            type: array
+            items: *id004
+      required:
+      - operation
+      - request
+      - capability
+      - price
+      additionalProperties: false
+    Simulation:
+      type: object
+      properties:
+        quote:
+          $ref: '#/components/schemas/Calculation'
+        maximum_charge: *id004
+        matched_rule:
+          type: object
+        conditions:
+          type: object
+        settlement:
+          $ref: '#/components/schemas/Calculation'
+        estimated_cost:
+          $ref: '#/components/schemas/Calculation'
+        estimated_margin:
+          type: string
+      additionalProperties: true
+    ReconcileRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+        decision:
+          type: string
+          enum:
+          - query
+          - failed
+        evidence: *id003
+        upstream_id: *id003
+      required:
+      - expected_version
+      - decision
+      - evidence
+      additionalProperties: false
+    RefundRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+        amount: *id004
+        reason: *id003
+      required:
+      - expected_version
+      - amount
+      - reason
+      additionalProperties: false

@@ -225,6 +225,37 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	return out, nil
 }
 
+// ListActiveGroups returns active group metadata even when the legacy channel
+// catalog is empty. Media-only profiles use this path so the model plaza can
+// render a group that has no legacy text-model channel attached.
+func (s *ModelPlazaService) ListActiveGroups(ctx context.Context) ([]PlazaGroup, error) {
+	groups, err := s.groupRepo.ListActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active groups: %w", err)
+	}
+	out := make([]PlazaGroup, 0, len(groups))
+	for i := range groups {
+		g := &groups[i]
+		out = append(out, PlazaGroup{
+			ID: g.ID, Name: g.Name, Description: g.Description, Platform: g.Platform,
+			SubscriptionType: g.SubscriptionType, RateMultiplier: g.RateMultiplier,
+			PeakRateEnabled: g.PeakRateEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd,
+			PeakRateMultiplier: g.PeakRateMultiplier, IsExclusive: g.IsExclusive,
+			ImageRateIndependent: g.ImageRateIndependent, ImageRateMultiplier: g.ImageRateMultiplier,
+			VideoRateIndependent: g.VideoRateIndependent, VideoRateMultiplier: g.VideoRateMultiplier,
+			LongContextPricingEnabled: g.LongContextPricingEnabled,
+			Models:                    []PlazaModel{},
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].RateMultiplier != out[j].RateMultiplier {
+			return out[i].RateMultiplier < out[j].RateMultiplier
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
 // fillDisplayPricing 把模型的展示定价换成实收口径：
 // token 模型取计费阶梯表（单价与档位均由真实计费函数得出），
 // 图片/按次模型（或阶梯表不可用时）沿用渠道定价与分组图片档位价。

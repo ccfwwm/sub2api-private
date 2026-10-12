@@ -1,0 +1,1408 @@
+{
+  "retrieved_at": "2026-10-12",
+  "note": "无凭证网页正文核验；不是供应商生成实测。hash覆盖本文件中的UTF-8证据文本/规范JSON，不代表HTTP原始响应hash。",
+  "sources": [
+    {
+      "id": "yunfei",
+      "url": "https://doc.yunfei.best/#top",
+      "method": "HTML article sections; tags removed",
+      "sections": [
+        {
+          "section": "gpt-text",
+          "text": "id=\"gpt-text\"> 01 文生图 仅使用文字提示词生成图片，请求体为 JSON。 POST /v1/images/generations 请求参数 参数 必填 说明 model 是 固定为 gpt-image-2 prompt 是 文字提示词，中英文皆可 size 否 1K 分组最高支持 1K；4K 分组支持 1K / 2K / 4K；默认 auto quality 否 high 分组支持 high；其他分组默认 medium n 是 请固定传 1 response_format 否 url（默认）或 b64_json 请求 命令行 复制 curl {{base_url}}/v1/images/generations \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"gpt-image-2\", \"prompt\": \"湖蓝色调的山谷,清晨薄雾,极简插画风\", \"size\": \"1024x1536\", \"n\": 1 }' 响应 网址格式 复制 { \"created\": 1781837823, \"data\": [{ \"url\": \"https://xxx.png\" }] } 图片编码格式 复制 { \"created\": 1781837823, \"data\": [{ \"b64_json\": \"<BASE64>\" }] } 网址默认保存 15 分钟，建议尽快下载。传 response_format=b64_json 时，图片编码位于 data[0].b64_json 。 "
+        },
+        {
+          "section": "gpt-edit",
+          "text": "id=\"gpt-edit\"> 02 图生图 上传一张或多张参考图进行编辑，请求体为表单。 POST /v1/images/edits 请求参数 参数 必填 说明 model 是 固定为 gpt-image-2 image / image[] 是 PNG / JPEG / WebP 文件，可重复传入 prompt 是 编辑要求；多图可用“第一张 / 第二张”指代 size 否 不传则沿用参考图尺寸；1K 分组最高支持 1K；4K 分组支持 1K / 2K / 4K quality 否 high 分组支持 high；其他分组默认 medium n 是 请固定传 1 response_format 否 url（默认）或 b64_json 请求 单张参考图 复制 curl {{base_url}}/v1/images/edits \\ -H \"Authorization: Bearer <API_KEY>\" \\ -F \"model=gpt-image-2\" -F \" [email&#160;protected] \" -F \"n=1\" \\ -F \"prompt=给这只海獭戴上一顶贝雷帽\" 多张参考图 复制 curl {{base_url}}/v1/images/edits \\ -H \"Authorization: Bearer <API_KEY>\" \\ -F \"model=gpt-image-2\" -F \"image[] [email&#160;protected] \" -F \"image[] [email&#160;protected] \" -F \"n=1\" \\ -F \"prompt=把第二张图的小鸭子放在第一张图的茶壶旁边\" 响应 网址格式 复制 { \"created\": 1781837823, \"data\": [{ \"url\": \"https://xxx.png\" }] } 图片编码格式 复制 { \"created\": 1781837823, \"data\": [{ \"b64_json\": \"<BASE64>\" }] } 网址默认保存 15 分钟，建议尽快下载。传 response_format=b64_json 时，图片编码位于 data[0].b64_json 。 "
+        },
+        {
+          "section": "banana-text",
+          "text": "id=\"banana-text\"> 03 文生图 在网址中选择模型，在 contents 的文字 part 中填写提示词。 POST /v1beta/models/gemini-3-pro-image-preview:generateContent 请求头 鉴权与格式 复制 x-goog-api-key: <API_KEY> # 也兼容 Authorization: Bearer <API_KEY> Content-Type: application/json 请求参数 参数 必填 说明 contents[].role 是 固定填写 user contents[].parts[].text 是 文字提示词 generationConfig.responseModalities 否 [\"IMAGE\"] 返回图片编码（默认）；[\"TEXT\"] 返回网址；[\"IMAGE\",\"TEXT\"] 两者都返回 generationConfig.imageConfig.aspectRatio 否 输出比例；需要自动比例时省略，不要传 auto generationConfig.imageConfig.imageSize 否 1K / 2K / 4K，K 必须大写 请求 文生图 复制 curl -X POST \"{{base_url}}/v1beta/models/gemini-3-pro-image-preview:generateContent\" \\ -H \"x-goog-api-key: <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"contents\": [ { \"role\": \"user\", \"parts\": [ { \"text\": \"木桌上的红苹果,棚拍光线,极简背景\" } ] } ], \"generationConfig\": { \"responseModalities\": [\"IMAGE\"], \"imageConfig\": { \"aspectRatio\": \"1:1\", \"imageSize\": \"1K\" } } }' 响应 responseModalities 响应字段 [\"IMAGE\"] candidates[0].content.parts[0].inline_data.data [\"TEXT\"] candidates[0].content.parts[1].file_data.file_uri [\"IMAGE\",\"TEXT\"] 以上两个字段都返回 同时返回图片编码和网址 复制 { \"candidates\": [{ \"content\": {\"parts\": [ {\"inline_data\": {\"mime_type\": \"image/png\", \"data\": \"<BASE64>\"}}, {\"file_data\": {\"file_uri\": \"https://xxx.png\"}} ]} }] } "
+        },
+        {
+          "section": "banana-edit",
+          "text": "id=\"banana-edit\"> 04 图生图 在文字部件外加入图片部件，支持图片编码、网址或混合输入。 POST /v1beta/models/gemini-3-pro-image-preview:generateContent 请求头 鉴权与格式 复制 x-goog-api-key: <API_KEY> # 也兼容 Authorization: Bearer <API_KEY> Content-Type: application/json 请求参数 参数 必填 说明 contents[].role 是 固定填写 user contents[].parts[].text 是 编辑要求 contents[].parts[].inline_data 二选一 包含 mime_type 和 data，输入图片编码 contents[].parts[].file_data 二选一 包含 mime_type 和 file_uri，输入公网图片网址 generationConfig.responseModalities 否 [\"IMAGE\"]、[\"TEXT\"] 或 [\"IMAGE\",\"TEXT\"] generationConfig.imageConfig.aspectRatio 否 省略时根据参考图自动决定，不要传 auto generationConfig.imageConfig.imageSize 否 1K / 2K / 4K 多个 inline_data / file_data 可以混用，并按它们在 contents[].parts 中的顺序处理。 请求 输入图片编码 复制 curl -X POST \"{{base_url}}/v1beta/models/gemini-3-pro-image-preview:generateContent\" \\ -H \"x-goog-api-key: <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"contents\": [ { \"role\": \"user\", \"parts\": [ { \"text\": \"改成日系水彩风,保留主体和构图\" }, { \"inline_data\": { \"mime_type\": \"image/png\", \"data\": \"<BASE64>\" } } ] } ], \"generationConfig\": { \"responseModalities\": [\"IMAGE\"], \"imageConfig\": { \"imageSize\": \"2K\" } } }' 输入图片网址时替换为 复制 \"file_data\": {\"mime_type\":\"image/png\",\"file_uri\":\"https://example.com/input.png\"} 响应 responseModalities 响应字段 [\"IMAGE\"] candidates[0].content.parts[0].inline_data.data [\"TEXT\"] candidates[0].content.parts[1].file_data.file_uri [\"IMAGE\",\"TEXT\"] 以上两个字段都返回 同时返回图片编码和网址 复制 { \"candidates\": [{ \"content\": {\"parts\": [ {\"inline_data\": {\"mime_type\": \"image/png\", \"data\": \"<BASE64>\"}}, {\"file_data\": {\"file_uri\": \"https://xxx.png\"}} ]} }] } 只传 imageSize 并省略 aspectRatio 时，输出自动跟随参考图比例；两者都省略时，比例和输出档位都交给上游决定。 "
+        },
+        {
+          "section": "grok-video-submit",
+          "text": "id=\"grok-video-submit\"> 05 文生视频 支持 JSON 与 multipart/form-data 两种提交方式，两种都已验证；表单由 curl 自动设置 Content-Type 和 boundary。 POST /v1/videos 请求参数 参数 必填 说明 model 是 grok-imagine-video 或 grok-imagine-video-1.5 ；密钥需有对应模型及分组权限 prompt 是 描述视频主体、动作、场景和镜头 duration 否 1～15 秒，默认 8；兼容 seconds resolution 否 480p（默认）或 720p； grok-imagine-video-1.5 额外支持 1080p；兼容 size aspect_ratio 否 1:1、16:9、9:16、4:3、3:4、3:2、2:3，默认 16:9 generate_audio 否 是否生成音频，默认 true 实测输出 — 16:9 时 480p 为 848×480、720p 为 1280×720、1080p 为 1920×1088（1080p 仅 1.5） 请求 JSON 提交 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"grok-imagine-video-1.5\", \"prompt\": \"一只柯基在秋天的落叶上奔跑，低角度跟拍，电影感\", \"duration\": 6, \"resolution\": \"1080p\", \"aspect_ratio\": \"16:9\" }' 表单提交 复制 curl \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ --form-string \"model=grok-imagine-video\" \\ --form-string \"prompt=一只橘猫在阳光下的花园中缓慢行走，自然光，镜头稳定\" \\ --form-string \"seconds=6\" \\ --form-string \"size=1280x720\" 提交响应示例 保存 id 复制 { \"id\": \"task_example\", \"object\": \"video\", \"model\": \"grok-imagine-video\", \"status\": \"queued\", \"progress\": 0 } 密钥需能够访问 grok视频 等包含该模型的授权分组。若返回 403 无权访问 grok视频 分组 ，先检查账号和令牌分组权限。任务 ID 和响应中的示例地址均为占位值，请替换为实际返回内容。 "
+        },
+        {
+          "section": "grok-video-image",
+          "text": "id=\"grok-video-image\"> 06 图生视频 上传一张图作为首帧，由提示词驱动画面动起来；输出比例跟随图片，不传 prompt 也能出片。 POST /v1/videos 请求参数 参数 必填 说明 model 是 grok-imagine-video 或 grok-imagine-video-1.5 image 是 JSON 里写 {\"url\": ...} ，支持公网直链、dataURL（ data:image/png;base64,... ）或裸 base64；表单上传时改传文件字段 input_reference prompt 否 运动与镜头描述；不传则仅让画面自然动起来 duration 否 1～15 秒，默认 8；兼容 seconds resolution 否 480p（默认）或 720p； grok-imagine-video-1.5 额外支持 1080p generate_audio 否 是否生成音频，默认 true 实测输出 — 跟随图片比例：近方形图 480p 为 544×544、720p 为 944×960、1080p 为 1440×1440（1080p 仅 1.5） 传图时 aspect_ratio 不生效，输出比例由图片决定（实测传 9:16 仍按图输出方形）。图片不支持 {\"data\":\"...\",\"mime_type\":\"...\"} 对象格式。 参数名写错不会报错：不认识的字段会被忽略，任务按纯文生视频出片并照常计费。 请求 JSON · 图片直链或 dataURL 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"grok-imagine-video-1.5\", \"prompt\": \"给画面中的人物戴上红色安全帽，保持面部特征与背景不变，镜头保持静止\", \"image\": { \"url\": \"https://example.com/first-frame.png\" }, \"duration\": 6, \"resolution\": \"1080p\" }' 表单 · 直接上传图片文件 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -F \"model=grok-imagine-video-1.5\" \\ -F \"prompt=给画面中的人物戴上红色安全帽，保持背景不变\" \\ -F \"duration=6\" -F \"resolution=480p\" \\ -F \" [email&#160;protected] \" 把 image.url 换成 data:image/png;base64,<BASE64> 即可直接内嵌本地图片，无需图床；视频编辑与延长（ /v1/videos/edits 、 /v1/videos/extensions ）当前未开放，调用返回 503。 提交响应与取片 保存 id 复制 { \"id\": \"task_example\", \"object\": \"video\", \"model\": \"grok-imagine-video-1.5\", \"status\": \"queued\", \"progress\": 0 } 拿到 id 后按下方「查询与取片」轮询并下载： GET /v1/videos/{id} → GET /v1/videos/{id}/content 。 "
+        },
+        {
+          "section": "grok-video-result",
+          "text": "id=\"grok-video-result\"> 07 查询与取片 GET /v1/videos/{id} 使用提交响应的 id，每 5～10 秒查询一次。queued 表示排队，in_progress 表示生成中，completed 表示任务完成，failed 表示失败；进入最终状态后停止轮询。 查询任务 复制 curl \"{{base_url}}/v1/videos/<TASK_ID>\" \\ -H \"Authorization: Bearer <API_KEY>\" 完成响应示例 任务完成 复制 { \"id\": \"task_example\", \"object\": \"video\", \"model\": \"grok-imagine-video\", \"status\": \"completed\", \"progress\": 100, \"seconds\": \"6\" } 标准内容接口 GET /v1/videos/{id}/content 下载视频 复制 curl --fail \"{{base_url}}/v1/videos/<TASK_ID>/content\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ --output grok-video.mp4 视频制品接口 GET /v1/tasks/{id}/artifacts 列出视频制品 复制 curl \"{{base_url}}/v1/tasks/<TASK_ID>/artifacts\" \\ -H \"Authorization: Bearer <API_KEY>\" 制品列表响应示例 复制 { \"task_id\": \"task_example\", \"artifacts\": [{ \"key\": \"video\", \"type\": \"video\", \"mime_type\": \"video/mp4\", \"content_url\": \"https://img.yunfei.best/v1/tasks/task_example/artifacts/video/content?access=...\" }] } 使用列表实际返回的 key 访问下方内容接口，或直接读取返回的 content_url；带 access 参数的链接应按凭证保管。 GET /v1/tasks/{id}/artifacts/{key}/content 读取制品 复制 curl --fail \"{{base_url}}/v1/tasks/<TASK_ID>/artifacts/<ARTIFACT_KEY>/content\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ --output grok-video.mp4 与 veo 不同：grok 的轮询响应里 没有 url 字段，成片统一从 /v1/videos/{id}/content 取，返回 mp4 字节流。若该接口出现 artifact_gone 或 artifact_plugin_error ，说明上游把成片放在自己的相对地址上（服务方需按渠道 base URL 取回），请保存任务 ID、HTTP 状态码和错误响应；当前 CPA 上游正常，返回 200。 "
+        },
+        {
+          "section": "omni-video-submit",
+          "text": "id=\"omni-video-submit\"> 08 文生视频 请求体为 JSON。使用有 Gemini视频 分组权限的密钥，并通过 Authorization: Bearer <API_KEY> 认证。 POST /v1/videos 请求参数 参数 本示例 说明 model omni-flash omni-flash、veo-3.1-fast、veo-3.1-lite 或 veo-3.1-quality prompt 文字提示词 描述主体、运动、场景和镜头 duration 8 单位秒，数字或字符串均可；omni-flash 支持 4 / 6 / 8 / 10（默认 10），veo-3.1-* 只支持 8；别名 seconds 必须写成字符串，如 \"8\" 不生效字段 — resolution、aspect_ratio、negative_prompt 等字段不会被识别：实测传 resolution=2160p 、 aspect_ratio=21:9 均被忽略，输出仍是 1280×720、16:9 请求 JSON 提交 复制 curl \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"omni-flash\", \"prompt\": \"一只纸船在雨后水洼中缓慢漂流，电影感自然光，镜头稳定\", \"duration\": 8 }' 时长写错时上游会返回明确原因，例如 omni-flash 只支持 4、6、8、10 秒 、 veo-3.1-fast 只支持 8 秒 。包体里还存在一个未文档化的 mode 字段（实测传任意字符串都被接受、含义不明），不建议使用。 提交响应示例 保存 id 或 task_id 复制 { \"id\": \"task_example\", \"task_id\": \"task_example\", \"model\": \"omni-flash\", \"status\": \"queued\" } "
+        },
+        {
+          "section": "omni-video-image",
+          "text": "id=\"omni-video-image\"> 09 图生视频 用一张参考图作为首帧驱动视频，四个模型都支持；图片与提示词一起决定画面。 POST /v1/videos 请求参数 参数 本示例 说明 model omni-flash omni-flash、veo-3.1-fast、veo-3.1-lite 或 veo-3.1-quality prompt 文字提示词 描述画面运动、镜头与保持要求 image data URL 参考图，字符串：公网直链、dataURL（ data:image/png;base64,... ）或裸 base64；别名 input_reference images — 参考图数组（ []string ）；实测传两张图，输出把两张参考图一起合成进画面 duration 4 同文生视频：omni-flash 支持 4 / 6 / 8 / 10（默认 10），veo-3.1-* 只支持 8；别名 seconds 需写成字符串 不生效字段 — resolution、aspect_ratio 等同样被忽略，输出固定 1280×720、16:9 必须是 image （或 images / input_reference ）这个字段名：写成 image_url 不会被识别，会被静默忽略、退化成纯文生视频（照常计费）。 请求 dataURL 内嵌本地图片 复制 curl \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"omni-flash\", \"prompt\": \"画面中的彩色测试条纹缓慢旋转，颜色保持鲜艳，镜头稳定\", \"image\": \"data:image/png;base64,<BASE64>\", \"duration\": 4 }' 公网直链 复制 curl \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"veo-3.1-lite\", \"prompt\": \"给画面中的人物戴上红色安全帽，保持面部特征与背景不变，镜头保持静止\", \"image\": \"https://example.com/first-frame.png\", \"duration\": 8 }' 提交失败时的响应 图片或时长不合规时，上游会在提交阶段直接拒绝，网关用 fail_to_fetch_task 包住原始错误，此时不返回任务 ID、也不会产生任务。 失败示例 复制 { \"code\": \"fail_to_fetch_task\", \"message\": \"{\\\"error\\\":{\\\"code\\\":\\\"invalid_input\\\",\\\"type\\\":\\\"invalid_request_error\\\",\\\"message\\\":\\\"Reference image download failed\\\"}}\", \"data\": null } 实测见过的上游报错： Reference image download failed （图片地址取不到）、 Invalid image base64 （base64 损坏）、 omni-flash 只支持 4、6、8、10 秒 （时长不支持）。 "
+        },
+        {
+          "section": "omni-video-result",
+          "text": "id=\"omni-video-result\"> 10 查询与下载 GET /v1/videos/{id} 使用提交响应的 id 或 task_id，每 5～10 秒轮询一次。轮询路径使用本次提交返回的任务 ID。 查询任务 复制 curl \"{{base_url}}/v1/videos/<TASK_ID>\" \\ -H \"Authorization: Bearer <API_KEY>\" 任务状态 status state 示例 处理方式 queued submitting 等待上游调度，继续轮询；实测可能长时间停在 20% in_progress running 正在生成，继续轮询；progress 为接口进度，不能换算为剩余时间 completed succeeded 停止轮询，读取视频 URL 并下载文件 failed 以实际响应为准 停止轮询，保留任务 ID 和错误详情 完成响应示例 提取 url 复制 { \"id\": \"task_example\", \"model\": \"omni-flash\", \"status\": \"completed\", \"state\": \"succeeded\", \"progress\": 100, \"seconds\": \"8\", \"url\": \"https://example.com/video.mp4\", \"download_url\": \"https://example.com/video.mp4\", \"video_url\": \"https://example.com/video.mp4\", \"videos\": [\"https://example.com/video.mp4\"], \"data\": [{\"mime_type\": \"video/mp4\", \"url\": \"https://example.com/video.mp4\"}] } 下载视频 优先使用完成响应的 url；download_url、video_url、videos[0]、data[0].url 都是同一个地址。下面的 VIDEO_URL 替换为实际返回的视频地址。 保存 MP4 复制 curl --fail --location \"<VIDEO_URL>\" --output omni-flash.mp4 通过网关取片 GET /v1/videos/{id}/content 保存 MP4 复制 curl --fail \"{{base_url}}/v1/videos/<TASK_ID>/content\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ --output omni-flash.mp4 视频直链使用其返回地址下载，无需把网关 API Key 发送给视频文件域名；不想暴露直链时也可走上面的 /content 接口（实测 200 video/mp4）。排队或客户端查询超时不等于生成失败，应保留任务 ID 继续查询，避免重复提交。音频开关与负向提示词实测无对应字段，无法调节。 "
+        },
+        {
+          "section": "veo-text",
+          "text": "id=\"veo-text\"> 11 文生视频 不传参考图，仅根据提示词生成视频。 POST /v1/videos 请求参数 参数 必填 说明 model 是 veo-3.1-fast-generate-preview、veo-3.1-generate-preview 或 veo-3.1-generate-preview-ref prompt 是 提示词，不要写比例和时长 duration 是 4 / 6 / 8 秒，兼容 seconds aspect_ratio 否 16:9 或 9:16，默认 16:9 generate_audio 否 是否生成音频，默认 true；兼容 generateAudio negative_prompt 否 负向提示词；兼容 negativePrompt 输出分辨率 — 720p veo-3.1-generate-preview-ref 不传图片时等同普通文生视频。 请求 文生视频 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{\"model\":\"veo-3.1-fast-generate-preview\",\"prompt\":\"a paper boat sailing down a rain puddle, cinematic\",\"duration\":4,\"aspect_ratio\":\"16:9\"}' 响应与轮询 提交响应 复制 { \"id\": \"xxxx\", \"status\": \"queued\" } 轮询请求 复制 curl \"{{base_url}}/v1/videos/{id}\" -H \"Authorization: Bearer <API_KEY>\" 生成完成响应 复制 { \"id\": \"xxxx\", \"status\": \"completed\", \"url\": \"https://xxx.mp4\" } 建议每 5～10 秒轮询一次。当 status 为 completed 时，从 url 获取视频地址； failed 表示失败，失败不扣费。 queued 已排队 in_progress 生成中 completed 可取片 failed 失败 "
+        },
+        {
+          "section": "veo-image",
+          "text": "id=\"veo-image\"> 12 单图生视频 上传一张首帧图片驱动视频，适用于快速和标准模型。 POST /v1/videos 请求参数 参数 必填 说明 model 是 veo-3.1-fast-generate-preview 或 veo-3.1-generate-preview prompt 是 运动和镜头要求，不要写比例与时长 image_url 是 公网直链、dataURL 或裸 base64 duration 是 4 / 6 / 8 秒，兼容 seconds aspect_ratio 否 16:9 或 9:16，默认 16:9 generate_audio 否 音频开关，默认 true；兼容 generateAudio negative_prompt 否 负向提示词；兼容 negativePrompt 输出分辨率 — 720p 图片不支持 {\"data\":\"...\",\"mime_type\":\"...\"} 对象格式。 请求 单图生视频 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{\"model\":\"veo-3.1-fast-generate-preview\",\"prompt\":\"镜头缓缓推进,人物转头微笑\",\"duration\":4,\"aspect_ratio\":\"16:9\",\"image_url\":\"https://example.com/first-frame.jpg\"}' 响应与轮询 提交响应 复制 { \"id\": \"xxxx\", \"status\": \"queued\" } 轮询请求 复制 curl \"{{base_url}}/v1/videos/{id}\" -H \"Authorization: Bearer <API_KEY>\" 生成完成响应 复制 { \"id\": \"xxxx\", \"status\": \"completed\", \"url\": \"https://xxx.mp4\" } 建议每 5～10 秒轮询一次。 completed 后从 url 获取视频地址； failed 表示失败，失败不扣费。 "
+        },
+        {
+          "section": "veo-frames",
+          "text": "id=\"veo-frames\"> 13 首尾帧视频 传两张图片生成中间过渡，第 1 张为首帧，第 2 张为尾帧。 POST /v1/videos 请求参数 参数 必填 说明 model 是 veo-3.1-fast-generate-preview 或 veo-3.1-generate-preview prompt 是 过渡和镜头要求，不要写比例与时长 image_urls 是 第 1 张为首帧，第 2 张为尾帧；支持公网直链、dataURL 或裸 base64 duration 是 4 / 6 / 8 秒，兼容 seconds aspect_ratio 否 16:9 或 9:16，默认 16:9 generate_audio 否 音频开关，默认 true；兼容 generateAudio negative_prompt 否 负向提示词；兼容 negativePrompt 输出分辨率 — 720p 图片不支持 {\"data\":\"...\",\"mime_type\":\"...\"} 对象格式。 请求 首尾帧视频 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\":\"veo-3.1-generate-preview\",\"prompt\":\"生成自然连续的电影感过渡\",\"duration\":8,\"aspect_ratio\":\"16:9\", \"image_urls\":[\"https://example.com/first.jpg\",\"https://example.com/last.jpg\"] }' 响应与轮询 提交响应 复制 { \"id\": \"xxxx\", \"status\": \"queued\" } 轮询请求 复制 curl \"{{base_url}}/v1/videos/{id}\" -H \"Authorization: Bearer <API_KEY>\" 生成完成响应 复制 { \"id\": \"xxxx\", \"status\": \"completed\", \"url\": \"https://xxx.mp4\" } 建议每 5～10 秒轮询一次。 completed 后从 url 获取视频地址； failed 表示失败，失败不扣费。 "
+        },
+        {
+          "section": "veo-ref",
+          "text": "id=\"veo-ref\"> 14 多参考图视频 使用多张参考图保持主体与场景一致，仅适用于参考模型。 POST /v1/videos 请求参数 参数 必填 说明 model 是 固定为 veo-3.1-generate-preview-ref prompt 是 视频内容和运动要求，不要写比例与时长 image_urls 是 参考图数组；支持公网直链、dataURL 或裸 base64 duration 是 带图时固定为 8 秒，兼容 seconds aspect_ratio 是 带图时固定为 16:9 generate_audio 否 音频开关，默认 true；兼容 generateAudio negative_prompt 否 负向提示词；兼容 negativePrompt 输出分辨率 — 720p 图片不支持 {\"data\":\"...\",\"mime_type\":\"...\"} 对象格式。传 4 / 6 秒或 9:16 会生成失败，失败不扣费。 请求 三图多参考 复制 curl -X POST \"{{base_url}}/v1/videos\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\":\"veo-3.1-generate-preview-ref\",\"prompt\":\"保持主体和场景一致,生成电影感动态镜头\",\"duration\":8,\"aspect_ratio\":\"16:9\", \"image_urls\":[\"https://example.com/1.jpg\",\"https://example.com/2.jpg\",\"https://example.com/3.jpg\"] }' 响应与轮询 提交响应 复制 { \"id\": \"xxxx\", \"status\": \"queued\" } 轮询请求 复制 curl \"{{base_url}}/v1/videos/{id}\" -H \"Authorization: Bearer <API_KEY>\" 生成完成响应 复制 { \"id\": \"xxxx\", \"status\": \"completed\", \"url\": \"https://xxx.mp4\" } 建议每 5～10 秒轮询一次。 completed 后从 url 获取视频地址； failed 表示失败，失败不扣费。 "
+        },
+        {
+          "section": "audio-chat",
+          "text": "id=\"audio-chat\"> 15 Chat Completions 通过云飞 Chat Completions 接口生成纯音乐，lyria-3.5 和 lyria-3-pro 均已测试成功。请求体为 JSON。 POST /v1/chat/completions 请求参数 参数 必填 说明 model 是 lyria-3.5 或 lyria-3-pro messages[].role 是 固定填写 user messages[].content 是 描述曲风、乐器和情绪，并注明“纯音乐，不要人声” stream 是 本示例填写 false，等待生成完成后返回 JSON 请求 生成纯音乐 复制 curl \"{{base_url}}/v1/chat/completions\" \\ -H \"Authorization: Bearer <API_KEY>\" -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"lyria-3.5\", \"messages\": [{ \"role\": \"user\", \"content\": \"温暖的 lo-fi 爵士纯音乐，电钢琴与轻柔鼓点，不要人声\" }], \"stream\": false }' 响应 生成完成（精简示例） 复制 { \"id\": \"gen_example\", \"object\": \"chat.completion\", \"model\": \"lyria-3.5\", \"choices\": [{ \"message\": { \"role\": \"assistant\", \"content\": \"[Untitled](https://example.com/song.mp3)\" }, \"finish_reason\": \"stop\" }], \"data\": [{ \"title\": \"Untitled\", \"duration\": 62.15, \"url\": \"https://example.com/song.mp3\", \"download_url\": \"https://example.com/song.mp3\", \"url_expires_at\": 1791355369 }] } 本调用等待生成完成后直接返回，无需查询任务。使用 data[].url 或 data[].download_url 的完整链接下载音频。提示词中的时长不保证精确执行，实际长度以返回音频为准。 以上最小格式已通过云飞验证。以下 SSE 示例及 instrumental / lyrics 等扩展参数来自提供的接口规范，云飞透传行为尚未验证。 流式请求（待验证） SSE 调用 复制 curl -N \"{{base_url}}/v1/chat/completions\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"lyria-3.5\", \"messages\": [ { \"role\": \"user\", \"content\": \"创作一首温暖的爵士纯音乐\" } ], \"instrumental\": true, \"stream\": true }' SSE 响应读取（待验证） 流式响应从 choices[0].delta.content 读取提交提示和最终音频链接，以 data: [DONE] 结束；失败事件包含 error。非流式响应从 choices[0].message.content 读取链接，data 包含音频结果。 SSE 返回文字消息，不是边生成边播放的音频流。不保留跨请求对话上下文，system 消息不作为上游生成指令。 "
+        },
+        {
+          "section": "audio-submit",
+          "text": "id=\"audio-submit\"> 16 提交音乐生成任务 待接入：本章节的专用音频接口当前未在云飞开放（404）。以下为接口接入后的调用规范。 支持纯音乐与歌词歌曲：纯音乐设置 instrumental: true；歌词歌曲在 prompt 描述曲风和人声，在 lyrics 填写歌词。以下以歌词歌曲为例。 POST /v1/audio/generations 场景参数 参数 必填 说明 prompt 是 曲风、语言、人声和情绪；传入歌词时也必填 lyrics 是 本场景填写完整歌词，最长 20000 字符；支持 [Verse]、[Chorus] 等分段提示 instrumental 是 本场景填写 false；true 会忽略歌词 其他参数 否 参见“模型与调用配置”的完整参数表 请求 指定歌词 复制 curl \"{{base_url}}/v1/audio/generations\" \\ -H \"Authorization: Bearer <API_KEY>\" \\ -H \"Content-Type: application/json\" \\ -d '{ \"model\": \"lyria-3.5\", \"prompt\": \"中文流行，温柔女声，钢琴与弦乐，舒缓抒情\", \"title\": \"晚风\", \"instrumental\": false, \"lyrics\": \"[Verse]\\n晚风轻轻穿过街道\\n你的笑容我还记得\\n\\n[Chorus]\\n让时间慢一点\\n让你留在我身边\", \"audio_format\": \"mp3\", \"async\": true }' JSON 字符串内的换行写成 \\n 。歌词分段、演唱内容和 BPM 都是生成提示，不保证严格遵循。 响应 提交响应 · HTTP 202（精简示例） 复制 { \"id\": \"gen_example\", \"object\": \"audio.generation\", \"status\": \"queued\", \"model\": \"lyria-3.5\", \"data\": [], \"error\": null } 以上为接入后的预期提交响应：202 仅表示已接收任务，不表示生成完成。当前路径返回 404，尚不可用。 "
+        },
+        {
+          "section": "audio-compat",
+          "text": "id=\"audio-compat\"> 17 兼容提交路径 待接入：当前返回 404，尚不可用。 音乐生成的兼容提交路径。接入后的请求参数与 POST /v1/audio/generations 相同，将请求地址替换为下方路径即可。 POST /v1/music/generations "
+        },
+        {
+          "section": "audio-models",
+          "text": "id=\"audio-models\"> 18 模型与调用配置 两个模型均支持纯音乐与歌词歌曲；实际可用性取决于密钥权限、余额和服务状态。 model 名称 输入 lyria-3.5 Lyria 3.5 纯音乐、歌词歌曲 lyria-3-pro Lyria 3 Pro 纯音乐、歌词歌曲 计费与并发额度以云飞分组配置为准；上游会员套餐、模型别名和积分换算不能直接当作云飞的计费或并发承诺。 提交参数（专用接口待接入） 参数 必填 说明 model 否 lyria-3.5（默认）或 lyria-3-pro；可用性取决于账号权限 prompt 是 1–10000 字符，描述曲风、乐器、人声和情绪，不能全为空白 title 否 作品名称，最长 160 字符；默认 Untitled instrumental 否 默认 false；true 生成纯音乐，并忽略传入歌词 lyrics 否 最长 20000 字符；指定歌词时配合 instrumental: false duration 否 5–300 的整数，单位秒；目标时长提示，不保证精确长度 bpm 否 30–300 的整数，作为节奏提示 seed 否 0–2147483647 的整数；省略时随机 n 否 默认 1，目前仅支持 1；上游仍可能返回多个音频版本 async 否 默认 true，异步提交；false 等待生成结束 audio_format 否 mp3（默认）、wav 或 m4a response_format 否 url（默认）或 b64_json；Base64 单文件上限 30 MB 参数范围与时长 下表是专用音频接口的完整参数规范，不能据此推断所有字段都可通过 Chat Completions 透传。title 最长 160 字符，prompt 为 1–10000 字符，lyrics 最长 20000 字符。seed 不保证重复生成完全相同的音频。 duration 的 5–300 秒是输入校验范围，不是精确时长保证，也不是输出长度限制。它作为生成提示提交；不需要时请省略，不要传 0。接口不会自动裁切、补静音或变速，固定长度需生成后处理。上游没有提供有效时长时，data[].duration 可能为 null。 "
+        },
+        {
+          "section": "audio-endpoints",
+          "text": "id=\"audio-endpoints\"> 19 接口一览 统一使用云飞地址；未开放的路径需要网关先完成接入。 方法 路径 用途 / 当前状态 POST /v1/chat/completions 非流式音乐生成已验证；SSE / 扩展参数待验证 POST /v1/audio/generations 提交任务，待接入（404） POST /v1/music/generations 兼容提交路径，待接入（404） "
+        }
+      ],
+      "evidence_sha256": "d673c140372d7a5c40765c39b55e20315ecff35e2b0915e5707b1bf5840ea9f5",
+      "overview": "。传 response_format=b64_json 时，图片编码位于 data[0].b64_json 。 香蕉&香蕉2 复制为 Markdown 香蕉图像生成 使用 Gemini 原生 generateContent 接口，模型名填写在请求网址中，不属于 JSON 请求体。 网址中的模型 外号 模型名 取向 香蕉 Pro gemini-3-pro-image-preview 画质档，适合成品 香蕉2 gemini-3.1-flash-image-preview 速度档；额外支持 8:1、4:1、1:4、1:8 比例与像素 比例 1K 2K 4K 1:1 1024×1024 2048×2048 4096×4096 16:9 1376×768 2752×1536 5504×3072 9:16 768×1376 1536×2752 3072×5504 4:3 1200×896 2400×1792 4800×3584 3:4 896×1200 1792×2400 3584×4800 3:2 1264×848 2528×1696 5056×3392 2:3 848×1264 1696×2528 3392×5056 5:4 1152×928 2304×1856 4608×3712 4:5 928×1152 1856×2304 3712×4608 21:9 1584×672 3168×1344 6336×2688 仅香蕉2支持超宽长条：1K 下 8:1 = 2928×352、4:1 = 2064×512、1:4 = 512×2064、1:8 = 352×2928；2K / 4K 分别按 ×2 / ×4。 03 文生图 在网址中选择模型，在 contents 的文字 part 中填写提示词。 POST /v1beta/models/gemini-3-pro-image-preview:generateContent 请求头 鉴权与格式 复制 x-goog-api-key: &lt;API_KEY&gt; # 也兼容 Authorization: Bearer &lt;API_KEY&gt; Content-Type: application/json 请求参数 参数 必填 说明 contents[].role 是 固定填写 user contents[].parts[].text 是 文字提示词 generationConfig.responseModalities 否 [\"IMAGE\"] 返回图片编码（默认）；[\"TEXT\"] 返回网址；[\"IMAGE\",\"TEXT\"] 两者都返回 generationConfig.imageConfig.aspectRatio 否 输出比例；需要自动比例时省略，不要传 auto generationConfig.imageConfig.imageSize 否 1K / 2K / 4K，K 必须大写 请求 文生图 复制</but"
+    },
+    {
+      "id": "v6k-docs",
+      "url": "https://www.v6k.top/docs#video",
+      "method": "browser document.body.innerText",
+      "text": "New API\n主页\n控制台\n创作工作台\n剧本创作\n导演台\n模型广场\n文档\n更改语言\n切换主题\n登录\nAPI 对接文档\n\n统一使用本站地址和本站签发的 API 密钥，根据所需操作选择对应接口。\n\nPOST https://www.v6k.top/v1/videos\n\n所有视频适配器共用同一套提交、查询和下载接口。填写本站公开模型 ID，上游协议由网关处理。\n\n身份验证\n视频生成\n错误处理\n完整代码示例\n下载 OpenAPI 接口文件\n鉴权与模型选择\n配置\t值\n\n站点域名\n\t\nhttps://www.v6k.top\n\n\n客户端自动追加 /videos 时填写的 API Base URL\n\t\nhttps://www.v6k.top/v1\n\n\n视频提交完整地址\n\t\nhttps://www.v6k.top/v1/videos\n\n接口表中的路径从站点域名开始拼接，/v1 只添加一次。如果客户端要求填写完整提交地址，使用上方完整地址。不要填写文档页面地址或上游供应商地址。\n\n在“令牌”页面创建你的下游 API Key，并通过 Authorization: Bearer YOUR_DOWNSTREAM_KEY 请求头发送。\n\n请将密钥保存在自己的服务端。运行示例前，请替换示例密钥和参考图片地址。\n\n从 GET /v1/models 复制精确的本站模型 ID。公开模型名由本站配置，可能与上游不同。出现在列表中表示有访问权限，不等于已通过实际生成测试。\n\n可用模型与价格取决于您的账户分组、已启用渠道及当前模型定价。 打开模型广场\n\n请求方法\t端点\t用途\n\nGET\n\t\n/v1/models\n\t\n查询当前令牌可用模型\n\n\nPOST\n\t\n/v1/videos\n\t\n创建异步视频任务\n\n\nGET\n\t\n/v1/videos/{id}\n\t\n查询当前账户的视频任务\n\n\nGET / HEAD\n\t\n/v1/videos/{id}/content\n\t\n下载已完成视频或读取响应头\n查询可用模型\ncurl 'https://www.v6k.top/v1/models' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY'\n视频生成\n模型\t视频时长\t参考素材\n\n00sd2.0\n\t\n5、10、15 秒；默认 5 秒\n\t\nimages：公网 URL 对象数组，最多 10 张\n\n\n00sd2.5\n\t\n固定 30 秒；默认 30 秒\n\t\nimages：公网 URL 对象数组，最多 10 张\n\n\nXXsedanco2.0 / XXsedanco2.0mini / XXsedanco2.0S / XXsedanco2.5S / wan3.0\n\t\nseconds 必填；具体可选时长按模型选择\n\t\nimages / videos / audios：公网 URL 字符串或对象；素材类型与上限按模型选择\n\n\nseedance-mini / seadanco-oplu-480 / seadanco-oplu-720 / sedanco-2.5-AM / dola2.5\n\t\nseconds 必填；具体可选时长按模型选择\n\t\nimages / videos / audios：公网 URL 字符串或对象；分辨率需与模型匹配\n\n\nvideo-QY\n\t\n视频编辑：需要提供参考视频\n\t\nvideos：公网 URL；按视频编辑模型选择参数\n\n\ndoubao-seedance-2-0-65Z / doubao-seedance-2-0-fast-65Z / doubao-seedance-2-0-mini-65Z / doubao-seedance-2-5/65Z\n\t\nseconds、ratio、resolution 转换后提交到该模型\n\t\nimages / videos / audios：公网 URL 字符串或对象；metadata.content 可传原生素材结构\n\n\nJSadanco2.0\n\t\nseconds 可选；具体可选时长按模型选择\n\t\nimages：公网 URL、URL 对象或图片 Data URL，最多 9 张\n\n\nLLseadanco2.5\n\t\n固定 30 秒；分辨率 720p\n\t\nimages：公网 URL、URL 对象、Base64 或图片 Data URL，最多30张；也支持 multipart 图片上传\n\n\nF720seadanco2.5 / F480seadanco2.5 / FF720wan3.0 / FF1080wan3.0\n\t\n时长、分辨率按模型选择；仅调用 /v1/models 返回的 ID\n\t\nimages / videos / audios：公网 URL 字符串或对象；兼容 reference_*_urls 字段；仅接受 JSON\n\n\nMinimaxH3-2K\n\t\n4–15 秒，默认 15 秒；分辨率 2K 或 768p\n\t\nimages 最多 9 张、videos 最多 3 条、audios 最多 3 条；公网 URL 字符串或对象；支持 JSON 和 multipart\n\n所有视频模型共用相同的提交、查询和下载接口，使用本站发放的 API Key。先从 /v1/models 选择模型 ID，再按模型表填写支持的时长、分辨率和参考素材。\n\n参数\t类型\t必需\t说明信息\n\nmodel\n\t\nstring\n\t\n是\n\t\nGET /v1/models 返回的精确公开模型 ID\n\n\nprompt\n\t\nstring\n\t\n是\n\t\n非空视频提示词。素材引用标记按模型选择，只使用该模型支持的标记和素材。\n\n\nseconds\n\t\ninteger / string\n\t\n按模型要求\n\t\n整数秒数，也接受数字字符串；必须选择模型支持的时长。正整数并不代表该模型一定支持。\n\n\nratio\n\t\nstring\n\t\n否\n\t\n画面比例，如 16:9 或 9:16；可选比例与默认值按模型选择。\n\n\nimages\n\t\narray\n\t\n否\n\t\n参考图片数组。老李特价模型也支持公网 URL 对象，由网关自动转换图片。数量限制按模型选择。\n\n\nresolution\n\t\nstring\n\t\n按模型要求\n\t\n输出分辨率，如 720p；使用模型支持的档位。00sd2.0 和 00sd2.5 请省略。\n\n\nvideos / audios\n\t\narray\n\t\n否\n\t\n公网 URL 字符串或对象数组，仅在模型支持时使用；老李特价模型不接受视频或音频参考。\n\n通过 model 选择模式，无需额外传 mode，也无需自行配置模型映射。每次请求创建一个视频任务。\n\n创建视频\ncurl 'https://www.v6k.top/v1/videos' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"model\": \"00sd2.0\",\n    \"prompt\": \"A cat running through a garden\",\n    \"ratio\": \"16:9\",\n    \"seconds\": 5,\n    \"images\": []\n  }'\n使用参考图创建视频\ncurl 'https://www.v6k.top/v1/videos' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"model\": \"00sd2.5\",\n    \"prompt\": \"The person in @图1 walks towards the camera\",\n    \"ratio\": \"9:16\",\n    \"seconds\": 30,\n    \"images\": [{\"url\": \"https://example.com/your-reference.jpg\"}]\n  }'\n老李特价模型参考图片示例\ncurl 'https://www.v6k.top/v1/videos' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"LLseadanco2.5\",\"prompt\":\"参考图片中的主体缓慢转身\",\"seconds\":30,\"ratio\":\"16:9\",\"resolution\":\"720p\",\"images\":[{\"url\":\"https://example.com/reference.png\"}]}'\n\n将示例 URL 替换为可公开读取的 PNG、JPEG 或 WebP 图片，单张不超过30 MiB。也支持 Base64 和图片 Data URL。multipart 上传使用 image、images 或 input_reference 字段，Content-Type 与 boundary 由 HTTP 客户端生成。\n\n提交成功会返回任务对象，表示任务已受理；请等待 completed 后下载。下面的响应仅用于展示格式，不是真实生成结果。\n\n创建任务响应示例\n{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"00sd2.0\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1790467200\n}\n查询视频任务\ncurl 'https://www.v6k.top/v1/videos/VIDEO_ID' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY'\n状态\t含义\t下一步\n\nqueued\n\t\n排队等待处理\n\t\n等待后再次查询\n\n\nin_progress\n\t\n正在生成\n\t\n等待后再次查询\n\n\ncompleted\n\t\n生成成功\n\t\n停止轮询并下载视频\n\n\nfailed\n\t\n生成失败、超时或被上游取消\n\t\n停止轮询，查看 error 信息\n\n先保存非空字符串 id，再开始轮询。建议每 20 秒查询一次；遇到 429 或暂时服务错误则延长间隔。completed 或 failed 时停止。本地超时不会取消任务，也不应因此重新创建。\n\n完成响应示例\n{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"00sd2.0\",\n  \"status\": \"completed\",\n  \"progress\": 100,\n  \"created_at\": 1790467200,\n  \"completed_at\": 1790467800\n}\n失败任务响应示例\n{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"00sd2.0\",\n  \"status\": \"failed\",\n  \"progress\": 100,\n  \"created_at\": 1790467200,\n  \"error\": {\n    \"code\": \"video_generation_failed\",\n    \"message\": \"Video generation failed\"\n  }\n}\n\n任务查询成功时，即使任务已失败也可能返回 HTTP 200。请同时检查 HTTP 状态码和任务的 status。\n\n响应字段\t类型\t说明信息\n\nid\n\t\nstring\n\t\n本站任务 ID，后续查询和下载均使用此值\n\n\nobject\n\t\nstring\n\t\nvideo\n\n\nmodel\n\t\nstring\n\t\n本次使用的本站公开模型 ID\n\n\nstatus\n\t\nstring\n\t\nqueued / in_progress / completed / failed\n\n\nprogress\n\t\nnumber\n\t\n0–100 的进度标记，不代表准确的剩余时间\n\n\ncreated_at\n\t\ninteger\n\t\n创建时间，Unix 秒级时间戳\n\n\ncompleted_at\n\t\ninteger\n\t\n完成时间，Unix 秒级时间戳；成功时返回\n\n\nerror\n\t\nobject\n\t\n失败详情，包含 code 和 message\n下载视频\ncurl 'https://www.v6k.top/v1/videos/VIDEO_ID/content' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  --fail-with-body -o video.mp4\n\n成品接口返回视频二进制。completed 后使用本站 Key 下载。HEAD 和 Range 支持情况取决于上游，以实际 HTTP 响应为准。\n\n下载时网关会获取可用的视频地址。早期任务若无法刷新地址，可能无法再次下载；建议完成后及时保存到自己的存储。\n\n聊天与图片接口\n\n模型与接口类型必须匹配。视频模型不能用于聊天或图片接口。通过 /v1/models 和模型广场确认访问权限、类型和价格。\n\n请求方法\t端点\t用途\n\nPOST\n\t\n/v1/chat/completions\n\t\n聊天：填写 model 和非空 messages 数组；首次对接建议 stream=false\n\n\nPOST\n\t\n/v1/images/generations\n\t\n图片：填写 model、prompt 和 n；当前 j8 模型的 n 支持 1–4\n\n\nPOST\n\t\n/v1/images/edits\n\t\n图片编辑：支持的模型接受 multipart 图片上传，boundary 由客户端自动生成\n聊天请求示例\ncurl 'https://www.v6k.top/v1/chat/completions' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"GPT-6-luna\",\"messages\":[{\"role\":\"user\",\"content\":\"回复 OK\"}],\"stream\":false,\"max_tokens\":16}'\n图片请求示例\ncurl 'https://www.v6k.top/v1/images/generations' \\\n  -H 'Authorization: Bearer YOUR_DOWNSTREAM_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"gpt-image-2\",\"prompt\":\"A simple blue circle on white background\",\"n\":1}'\n\n聊天和图片生成在当前 HTTP 响应中返回结果，无需套用视频的任务 ID 与轮询流程。必须检查 HTTP 状态和该接口的结果字段。\n\n错误处理\n\n即使 HTTP 为 200，HTML 网页也不是视频提交结果。请检查完整请求地址和代理转发路径，记录为提交结果待确认；没有任务 ID 时停止查询，不要自动重新提交。\n\nHTTP\t可能原因\t操作\n\n400\n\t\n参数不正确、模型配置问题、额度不足或视频尚未完成\n\t\n阅读错误信息并修正请求或账户配置\n\n\n401 / 403\n\t\nKey 无效、权限不足，或上游账户拒绝（包括上游余额不足）\n\t\n检查本站令牌、账户和分组\n\n\n404\n\t\n任务或接口不存在，或当前账户无权查看\n\t\n检查完整任务 ID，并使用创建任务的账户\n\n\n410\n\t\n视频下载地址已不可用\n\t\n保留已下载文件，携带任务 ID 联系支持\n\n\n429 / 503\n\t\n触发限流或上游繁忙\n\t\n延长重试间隔；如有 Retry-After，按其提示等待\n\n\n502 / 504\n\t\n上游异常或请求超时\n\t\n保留已有任务 ID，稍后继续查询\n情况\t下游处理方式\n\n提交明确被 HTTP 4xx 拒绝\n\t\n将自己的记录更新为提交失败并保存错误。不能继续显示生成中，也不能在没有有效 ID 时轮询。\n\n\n提交返回任务对象和有效 ID\n\t\n保存 ID，立即检查 status；queued 或 in_progress 时再轮询。\n\n\nHTTP 200，但 status=failed\n\t\n将自己的记录更新为生成失败，停止轮询。\n\n\n提交超时、断网或无法确认受理结果的 HTTP 5xx\n\t\n标记为提交结果待确认，核对本站日志；不要自动重提。\n\n\n已保存 ID，但查询暂时失败\n\t\n保留 ID。查询错误本身不等于生成失败；暂时错误可以退避重查，权限错误需要先解决。\nHTTP 错误响应示例\n{\n  \"error\": {\n    \"code\": \"bad_response_status_code\",\n    \"type\": \"new_api_error\",\n    \"message\": \"Upstream rejected submission\"\n  },\n  \"code\": \"bad_response_status_code\",\n  \"message\": \"Upstream rejected submission\",\n  \"data\": null\n}\n\n先检查 HTTP 状态，再读取任务。错误优先读取 error.message，并兼容顶层 message；保留请求 ID。不能只靠是否存在 error 对象判断失败。\n\n创建请求遇到网络超时时，不要自动重复提交：第一次请求可能已经创建了计费任务。查询和下载不会新建生成任务。\n\n任务按本站定价计费。进入失败终态的任务按网关流程退款；最终扣费请查看使用日志。\n\n完整代码示例\n\n以下服务端示例演示单次提交、保存任务 ID、查询结果并下载视频。生产环境还应对临时错误增加退避处理。\n\nJavaScript / Node.js\n// Node.js: set SITE_API_KEY, MODEL_ID and VIDEO_SECONDS from the model table.\nimport { writeFile } from 'node:fs/promises';\nconst base = 'https://www.v6k.top';\nconst model = process.env.MODEL_ID;\nconst seconds = Number(process.env.VIDEO_SECONDS);\nif (!process.env.SITE_API_KEY || !model || !Number.isSafeInteger(seconds) || seconds <= 0) throw new Error('Set SITE_API_KEY, MODEL_ID and a supported VIDEO_SECONDS');\nconst headers = { Authorization: 'Bearer ' + process.env.SITE_API_KEY, 'Content-Type': 'application/json' };\nlet taskId;\nlet stage = 'submit';\nasync function saveState(status, extra = {}) {\n  // Update your own database record here, including failed states.\n  await writeFile('video-task.json', JSON.stringify({ model, id: taskId, status, ...extra }, null, 2));\n}\nasync function json(path, options = {}) {\n  const response = await fetch(base + path, { ...options, headers, redirect: 'error' });\n  const text = await response.text();\n  let body;\n  try { body = JSON.parse(text); } catch {\n    const error = new Error('Expected JSON from ' + path + '; check the API base URL and proxy routing (HTTP ' + response.status + ')');\n    error.httpStatus = response.status;\n    throw error;\n  }\n  if (!body || typeof body !== 'object' || Array.isArray(body)) {\n    const error = new Error('Invalid API response object from ' + path);\n    error.httpStatus = response.status;\n    throw error;\n  }\n  if (!response.ok) {\n    const error = new Error(body?.error?.message || body?.message || 'HTTP ' + response.status);\n    error.httpStatus = response.status;\n    throw error;\n  }\n  return body;\n}\ntry {\n  const created = await json('/v1/videos', { method: 'POST', body: JSON.stringify({ model, prompt: 'A cat in a garden', seconds, ratio: '16:9' }) });\nPython\n# pip install requests\n# Set SITE_API_KEY, MODEL_ID and a supported VIDEO_SECONDS on your server.\nimport json\nimport os\nimport time\nimport requests\nfrom urllib.parse import quote\n\n\nbase = \"https://www.v6k.top\"\nheaders = {\"Authorization\": \"Bearer \" + os.environ[\"SITE_API_KEY\"]}\ntask_id = None\n\n\ndef save_state(status, **extra):\n    # Replace with an update to your own database record.\n    with open(\"video-task.json\", \"w\", encoding=\"utf-8\") as f:\n        json.dump({\"id\": task_id, \"status\": status, **extra}, f, ensure_ascii=False)\n\n\ndef api_json(method, path, **kwargs):\n    response = requests.request(method, base + path, headers=headers,\n                                timeout=120, allow_redirects=False, **kwargs)\n    if not 200 <= response.status_code < 300:\n        raise requests.HTTPError(\"API HTTP \" + str(response.status_code) + \": \" + response.text[:1000], response=response)\n    try:\n        body = response.json()\n    except ValueError as error:\n        raise ValueError(\"Expected JSON; check the API base URL and proxy routing\") from error\n    if not isinstance(body, dict):\n        raise ValueError(\"Invalid API response object\")\n    return body\n\n\ntry:\n    task = api_json(\"POST\", \"/v1/videos\", json={\n        \"model\": os.environ[\"MODEL_ID\"],\n        \"prompt\": \"A cat running through a garden\",\n        \"ratio\": \"16:9\",\n        \"seconds\": int(os.environ[\"VIDEO_SECONDS\"])",
+      "evidence_sha256": "39814b68ba8d6cfab23bb6d374816811433d4b02311b87e335c93d9ae933d083"
+    },
+    {
+      "id": "v6k-openapi",
+      "url": "https://www.v6k.top/docs/openapi.json",
+      "method": "public JSON",
+      "document": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "本站统一 API 接入文档",
+          "version": "1.1.2",
+          "description": "本站统一下游接口。模型 ID 由本站配置，使用 GET /v1/models 查询当前 Key 可用的精确 ID。视频统一创建、查询、下载；时长、分辨率、素材格式和上传能力按模型选择。 所有适配器使用相同的公开入口，切换上游不需要更换下游协议。servers 为站点域名，paths 已包含 /v1，请勿重复拼接。"
+        },
+        "servers": [
+          {
+            "url": "https://www.v6k.top",
+            "description": "本站域名，不含 /v1；下列 paths 已包含 /v1。自部署时替换域名。"
+          }
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "tags": [
+          {
+            "name": "Models",
+            "description": "可用模型"
+          },
+          {
+            "name": "Videos",
+            "description": "视频生成、查询与下载"
+          }
+        ],
+        "paths": {
+          "/v1/models": {
+            "get": {
+              "tags": [
+                "Models"
+              ],
+              "operationId": "listModels",
+              "summary": "查询当前令牌可用模型",
+              "responses": {
+                "200": {
+                  "description": "模型列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "object": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "object": {
+                                  "type": "string"
+                                },
+                                "owned_by": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "400": {
+                  "description": "参数错误、配置问题、额度不足或任务未完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "401": {
+                  "description": "密钥无效",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "402": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "403": {
+                  "description": "无权限",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "任务或路由不存在",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "429": {
+                  "description": "请求限流",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "500": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "上游异常",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "服务繁忙",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "504": {
+                  "description": "请求超时",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/v1/videos": {
+            "post": {
+              "tags": [
+                "Videos"
+              ],
+              "operationId": "createVideo",
+              "summary": "创建视频任务",
+              "description": "JSON为通用格式；HHH和老李特价模型还支持multipart文件上传。成功受理返回非空字符串id；明确提交失败返回非2xx错误。提交超时或不明确5xx需要核对记录，禁止盲目重复提交。 完整地址为 https://www.v6k.top/v1/videos。不要发送到文档页面。成功响应必须为 JSON 任务对象且 id 非空；收到 HTML、重定向或缺少 ID 时停止轮询并核对请求路径，不自动重提。",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/VideoRequest"
+                    },
+                    "examples": {
+                      "text20": {
+                        "summary": "00sd2.0 文生视频",
+                        "value": {
+                          "model": "00sd2.0",
+                          "prompt": "A cat in a garden",
+                          "seconds": 5,
+                          "ratio": "16:9",
+                          "images": []
+                        }
+                      },
+                      "image25": {
+                        "summary": "00sd2.5 参考图生视频；替换示例图片地址",
+                        "value": {
+                          "model": "00sd2.5",
+                          "prompt": "The person in @图1 walks forward",
+                          "seconds": 30,
+                          "ratio": "9:16",
+                          "images": [
+                            {
+                              "url": "https://example.com/reference.jpg"
+                            }
+                          ]
+                        }
+                      },
+                      "doubao20": {
+                        "summary": "Doubao Seedance 2.0 文生视频；720p",
+                        "value": {
+                          "model": "doubao-seedance-2-0-65Z",
+                          "prompt": "A cat in a sunny garden",
+                          "seconds": 6,
+                          "resolution": "720p",
+                          "ratio": "16:9"
+                        }
+                      },
+                      "doubao25": {
+                        "summary": "Doubao Seedance 2.5 文生视频；720p",
+                        "value": {
+                          "model": "doubao-seedance-2-5/65Z",
+                          "prompt": "A cat in a sunny garden",
+                          "seconds": 6,
+                          "resolution": "720p",
+                          "ratio": "16:9"
+                        }
+                      },
+                      "laoli": {
+                        "summary": "老李特价2.5；支持URL、URL对象、Base64或Data URL参考图",
+                        "value": {
+                          "model": "LLseadanco2.5",
+                          "prompt": "一只猫走过花园",
+                          "seconds": 30,
+                          "resolution": "720p",
+                          "ratio": "16:9"
+                        }
+                      },
+                      "hhh": {
+                        "summary": "HHH；须当前Key可访问该公开模型",
+                        "value": {
+                          "model": "MinimaxH3-2K",
+                          "prompt": "一只猫走过花园",
+                          "seconds": 5,
+                          "resolution": "2K",
+                          "ratio": "16:9"
+                        }
+                      },
+                      "qs": {
+                        "summary": "QS按秒模型示例；时长与分辨率按该模型选择",
+                        "value": {
+                          "model": "F720seadanco2.5",
+                          "prompt": "一只猫走过花园",
+                          "seconds": 5,
+                          "resolution": "720p",
+                          "ratio": "16:9"
+                        }
+                      }
+                    }
+                  },
+                  "multipart/form-data": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "model",
+                        "prompt"
+                      ],
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "prompt": {
+                          "type": "string"
+                        },
+                        "seconds": {
+                          "type": "integer"
+                        },
+                        "ratio": {
+                          "type": "string"
+                        },
+                        "resolution": {
+                          "type": "string"
+                        },
+                        "image": {
+                          "type": "string",
+                          "format": "binary"
+                        },
+                        "video": {
+                          "type": "string",
+                          "format": "binary"
+                        },
+                        "audio": {
+                          "type": "string",
+                          "format": "binary"
+                        }
+                      }
+                    },
+                    "description": "仅支持上传的模型；老李特价模型只接受图片，支持image、images、input_reference及各自[]形式，重复字段上传多图；HHH支持图片/视频/音频。Content-Type与boundary由客户端自动生成。"
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "任务已受理，不代表已完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Video"
+                      },
+                      "example": {
+                        "id": "task_example",
+                        "object": "video",
+                        "model": "00sd2.0",
+                        "status": "queued",
+                        "progress": 0,
+                        "created_at": 1790467200
+                      }
+                    }
+                  }
+                },
+                "400": {
+                  "description": "参数错误、配置问题、额度不足或任务未完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "401": {
+                  "description": "密钥无效",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "402": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "403": {
+                  "description": "无权限",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "任务或路由不存在",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "429": {
+                  "description": "请求限流",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "500": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "上游异常",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "服务繁忙",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "504": {
+                  "description": "请求超时",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/v1/videos/{id}": {
+            "get": {
+              "tags": [
+                "Videos"
+              ],
+              "operationId": "retrieveVideo",
+              "summary": "查询当前账户的视频任务",
+              "description": "使用创建响应的本站id。建议每20秒查询，限流或暂时错误时退避。HTTP200也可能status=failed，必须检查status。",
+              "parameters": [
+                {
+                  "name": "id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "创建接口返回的本站任务 ID"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "任务状态",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Video"
+                      },
+                      "example": {
+                        "id": "task_example",
+                        "object": "video",
+                        "model": "00sd2.0",
+                        "status": "completed",
+                        "progress": 100,
+                        "created_at": 1790467200,
+                        "completed_at": 1790467800
+                      }
+                    }
+                  }
+                },
+                "400": {
+                  "description": "参数错误、配置问题、额度不足或任务未完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "401": {
+                  "description": "密钥无效",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "402": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "403": {
+                  "description": "无权限",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "任务或路由不存在",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "429": {
+                  "description": "请求限流",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "500": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "上游异常",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "服务繁忙",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "504": {
+                  "description": "请求超时",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/v1/videos/{id}/content": {
+            "get": {
+              "tags": [
+                "Videos"
+              ],
+              "operationId": "downloadVideo",
+              "summary": "下载已完成的视频",
+              "description": "需任务 completed。本站自动获取可用产物地址并代理视频，不返回上游 Key。老任务无法刷新地址时返回 410。",
+              "parameters": [
+                {
+                  "name": "id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "创建接口返回的本站任务 ID"
+                },
+                {
+                  "name": "Range",
+                  "in": "header",
+                  "schema": {
+                    "type": "string"
+                  },
+                  "example": "bytes=0-1023",
+                  "description": "可选的字节范围；最终支持情况取决于媒体服务"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "视频二进制",
+                  "content": {
+                    "video/mp4": {
+                      "schema": {
+                        "type": "string",
+                        "format": "binary"
+                      }
+                    }
+                  }
+                },
+                "206": {
+                  "description": "部分视频内容，参见 Content-Range"
+                },
+                "304": {
+                  "description": "条件请求内容未修改"
+                },
+                "400": {
+                  "description": "参数错误、配置问题、额度不足或任务未完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "401": {
+                  "description": "密钥无效",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "402": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "403": {
+                  "description": "无权限",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "任务或路由不存在",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "410": {
+                  "description": "视频地址已不可用且无法刷新",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "416": {
+                  "description": "字节范围不满足"
+                },
+                "429": {
+                  "description": "请求限流",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "500": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "上游异常",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "服务繁忙",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "504": {
+                  "description": "请求超时",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "head": {
+              "tags": [
+                "Videos"
+              ],
+              "operationId": "headVideo",
+              "summary": "查询视频响应头",
+              "description": "需任务 completed。本站自动获取可用产物地址并代理视频，不返回上游 Key。老任务无法刷新地址时返回 410。",
+              "parameters": [
+                {
+                  "name": "id",
+                  "in": "path",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "创建接口返回的本站任务 ID"
+                },
+                {
+                  "name": "Range",
+                  "in": "header",
+                  "schema": {
+                    "type": "string"
+                  },
+                  "example": "bytes=0-1023",
+                  "description": "可选的字节范围；最终支持情况取决于媒体服务"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "视频响应头",
+                  "content": {
+                    "video/mp4": {
+                      "schema": {
+                        "type": "string",
+                        "format": "binary"
+                      }
+                    }
+                  }
+                },
+                "206": {
+                  "description": "部分视频内容，参见 Content-Range"
+                },
+                "304": {
+                  "description": "条件请求内容未修改"
+                },
+                "400": {
+                  "description": "参数错误、配置问题、额度不足或任务未完成",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "401": {
+                  "description": "密钥无效",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "402": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "403": {
+                  "description": "无权限",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "任务或路由不存在",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "410": {
+                  "description": "视频地址已不可用且无法刷新",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "416": {
+                  "description": "字节范围不满足"
+                },
+                "429": {
+                  "description": "请求限流",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "500": {
+                  "description": "请求错误，检查HTTP状态与错误体",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "上游异常",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "服务繁忙",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                },
+                "504": {
+                  "description": "请求超时",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Error"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/v1/chat/completions": {
+            "post": {
+              "summary": "聊天接口",
+              "description": "使用对应类型的本站公开模型。结果在当前响应返回，不使用视频任务轮询。",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "model",
+                        "messages"
+                      ],
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "messages": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "role",
+                              "content"
+                            ],
+                            "properties": {
+                              "role": {
+                                "type": "string"
+                              },
+                              "content": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "stream": {
+                          "type": "boolean"
+                        },
+                        "max_tokens": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "对应接口结果；检查响应字段"
+                },
+                "400": {
+                  "description": "参数错误"
+                },
+                "401": {
+                  "description": "鉴权失败"
+                },
+                "403": {
+                  "description": "权限、额度或上游拒绝"
+                },
+                "502": {
+                  "description": "上游处理失败"
+                }
+              }
+            }
+          },
+          "/v1/images/generations": {
+            "post": {
+              "summary": "图片生成接口",
+              "description": "使用对应类型的本站公开模型。结果在当前响应返回，不使用视频任务轮询。",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "model",
+                        "prompt"
+                      ],
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "prompt": {
+                          "type": "string"
+                        },
+                        "n": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "对应接口结果；检查响应字段"
+                },
+                "400": {
+                  "description": "参数错误"
+                },
+                "401": {
+                  "description": "鉴权失败"
+                },
+                "403": {
+                  "description": "权限、额度或上游拒绝"
+                },
+                "502": {
+                  "description": "上游处理失败"
+                }
+              }
+            }
+          }
+        },
+        "components": {
+          "securitySchemes": {
+            "BearerAuth": {
+              "type": "http",
+              "scheme": "bearer",
+              "description": "填写本站签发的 API 令牌"
+            }
+          },
+          "schemas": {
+            "VideoRequest": {
+              "type": "object",
+              "required": [
+                "model",
+                "prompt"
+              ],
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "原样填写 GET /v1/models 返回的本站公开模型 ID，不要填写上游名或计费模板。"
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "非空视频描述；参考素材标记由所选模型决定，不支持的模型请勿使用 @图1 等专用标记。"
+                },
+                "seconds": {
+                  "oneOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3600
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]{0,3}$"
+                    }
+                  ],
+                  "description": "正整数秒数；字符串转换后也不得超过3600。此上限是网关校验范围，实际支持时长按模型选择。00sd2.0为5/10/15，00sd2.5与LLseadanco2.5为30，HHH为4–15。部分模型必填。"
+                },
+                "ratio": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]{0,3}:[1-9][0-9]{0,3}$",
+                  "description": "画幅比例，例如16:9；可选值和默认值按模型选择。"
+                },
+                "images": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "url"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "duration_seconds": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "description": "一般使用公开HTTP(S) URL字符串或{url}对象。老李特价模型也支持这两种格式，由网关读取PNG/JPEG/WebP并原样转为Data URL；单张下载不超过30 MiB，受站点文件总大小限制，转换超时60秒。也兼容Base64和图片Data URL字符串。数量上限按模型选择。"
+                },
+                "resolution": {
+                  "type": "string",
+                  "description": "输出分辨率按模型选择；00sd2.0/00sd2.5省略，LLseadanco2.5为720p，MinimaxH3-2K为2K或768p。"
+                },
+                "videos": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "url"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "duration_seconds": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "description": "仅目标模型支持时使用公开URL。老李全参模型的每条视频还需duration_seconds。特价模型和00sd系列不支持。"
+                },
+                "audios": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "url"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "duration_seconds": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3600
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "description": "仅目标模型支持时使用公开URL。老李全参模型的每条音频还需duration_seconds。特价模型和00sd系列不支持。"
+                },
+                "metadata": {
+                  "type": "object",
+                  "description": "仅支持此字段的模型使用；Doubao可通过metadata.content传原生素材结构。不要用此字段覆盖计费时长或模型名。"
+                }
+              }
+            },
+            "Video": {
+              "type": "object",
+              "required": [
+                "id",
+                "object",
+                "model",
+                "status",
+                "progress",
+                "created_at"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "本站任务 ID，保持字符串，不要转换为数字。"
+                },
+                "object": {
+                  "type": "string",
+                  "const": "video"
+                },
+                "model": {
+                  "type": "string",
+                  "description": "本站公开模型 ID"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "in_progress",
+                    "completed",
+                    "failed",
+                    "unknown"
+                  ]
+                },
+                "progress": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "created_at": {
+                  "type": "integer",
+                  "description": "Unix 秒级时间戳"
+                },
+                "completed_at": {
+                  "type": "integer",
+                  "description": "仅成功时返回"
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "url": {
+                  "type": "string",
+                  "description": "可选的本站成品地址。也可使用固定的 /v1/videos/{id}/content 下载。"
+                }
+              }
+            },
+            "Error": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "data": {
+                  "description": "兼容旧版任务错误响应的可选数据"
+                }
+              },
+              "description": "优先检查HTTP状态。读取error.message并兼容顶层message。提交错误不保证有任务ID；明确拒绝时必须更新下游记录为提交失败。网络中断或不明确5xx标记提交结果待确认，避免重复创建。"
+            }
+          }
+        }
+      },
+      "evidence_sha256": "61932698e9d79c2231d99441f4db8684bb7cf4854ba640741e168ff5f6809bad"
+    }
+  ]
+}

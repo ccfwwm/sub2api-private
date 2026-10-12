@@ -32,6 +32,7 @@ type InflightBalanceReservationRenewer interface {
 }
 
 const (
+	// Optional production integration is installed before request admission.
 	defaultInflightReservationTTL      = 15 * time.Minute
 	defaultInflightDefaultMaxTokens    = 8192
 	inflightReservationReleaseTimeout  = 2 * time.Second
@@ -40,6 +41,26 @@ const (
 	inflightInputBytesPerTokenEstimate = 4
 	inflightUnpricedLogInterval        = time.Minute
 )
+
+type InflightBalanceReader interface {
+	InflightBalanceHeld(context.Context, int64) (float64, error)
+}
+
+// Serializes fresh DB balance reads and Redis holds with media transactions.
+func (s *BillingCacheService) SetMediaBalanceGuard(guard func(context.Context, int64) (func(), *float64, error)) {
+	s.mediaBalanceGuard = guard
+}
+
+func (s *BillingCacheService) MediaLegacyBalanceHeld(ctx context.Context, userID int64) (float64, error) {
+	if !s.InflightReservationEnabled() {
+		return 0, nil
+	}
+	reader, ok := s.cache.(InflightBalanceReader)
+	if !ok {
+		return 0, ErrBillingServiceUnavailable
+	}
+	return reader.InflightBalanceHeld(ctx, userID)
+}
 
 // InflightReservation 一次请求的在途预留句柄。
 //
@@ -254,7 +275,22 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		return nil, nil
 	}
 
+	var guardedBalance *float64
+	if s.mediaBalanceGuard != nil {
+		unlock, fresh, err := s.mediaBalanceGuard(ctx, user.ID)
+		if err != nil {
+			return nil, ErrBillingServiceUnavailable
+		}
+		defer unlock()
+		guardedBalance = fresh
+	}
 	balance, err := s.GetUserBalance(ctx, user.ID)
+	if guardedBalance != nil {
+		balance, err = *guardedBalance, nil
+		if balance < estimate {
+			return nil, ErrInsufficientBalance
+		}
+	}
 	if err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation balance read failed for user %d (fail-open): %v", user.ID, err)
 		return nil, nil
@@ -270,6 +306,9 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 	cancel()
 	if err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation failed for user %d (fail-open): %v", user.ID, err)
+		if guardedBalance != nil {
+			return nil, ErrBillingServiceUnavailable
+		}
 		return nil, nil
 	}
 	if !allowed {

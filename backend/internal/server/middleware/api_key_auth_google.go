@@ -146,23 +146,26 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
-		switch apiKey.Status {
-		case service.StatusAPIKeyQuotaExhausted:
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
-		case service.StatusAPIKeyExpired:
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
+		delegateMedia := delegatedMediaBilling(c, apiKey)
+		if !delegateMedia {
+			switch apiKey.Status {
+			case service.StatusAPIKeyQuotaExhausted:
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			case service.StatusAPIKeyExpired:
+				abortWithGoogleError(c, 403, "API key 已过期")
+				return
+			}
 
-		// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
-		if apiKey.IsExpired() {
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
-		if apiKey.IsQuotaExhausted() {
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
+			// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
+			if apiKey.IsExpired() {
+				abortWithGoogleError(c, 403, "API key 已过期")
+				return
+			}
+			if apiKey.IsQuotaExhausted() {
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			}
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -177,30 +180,34 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				return
 			}
 
-			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			if needsMaintenance {
-				refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
-				if maintenanceErr != nil {
-					abortWithGoogleError(c, 500, "Failed to maintain subscription usage windows")
+			if !delegateMedia {
+				needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				if needsMaintenance {
+					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
+					if maintenanceErr != nil {
+						abortWithGoogleError(c, 500, "Failed to maintain subscription usage windows")
+						return
+					}
+					subscription = refreshed
+					_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				}
+				if err != nil {
+					status := 403
+					if errors.Is(err, service.ErrDailyLimitExceeded) ||
+						errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+						errors.Is(err, service.ErrMonthlyLimitExceeded) {
+						status = 429
+					}
+					abortWithGoogleError(c, status, err.Error())
 					return
 				}
-				subscription = refreshed
-				_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			}
-			if err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
-				}
-				abortWithGoogleError(c, status, err.Error())
-				return
-			}
 
-			c.Set(string(ContextKeySubscription), subscription)
+				c.Set(string(ContextKeySubscription), subscription)
+			} else {
+				c.Set(string(ContextKeySubscription), subscription)
+			}
 		} else {
-			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+			if !delegateMedia && apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
 			}

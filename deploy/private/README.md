@@ -1,7 +1,7 @@
 # Sub2API 私有版本发布与生产交接
 
 源码仓库：`ccfwwm/sub2api-private`（私有）。生产镜像：`ghcr.io/ccfwwm/sub2api-private`（私有）。
-从 `v0.2.15` 起，私有版本号与上游同步；旧 `v1.0.0`–`v1.0.6` 仍可用于恢复。上游基线记录在 `deploy/private-release.json`。
+上游同步版本 `v0.2.15` 保持已有发布；本次私有多模态功能版本为 `v1.1.0`，上游基线仍为 `v0.2.15`。旧 `v1.0.0`–`v1.0.6` 保留历史恢复用途。上游基线及私有版本说明记录在 `deploy/private-release.json`。
 
 ## 发布不等于部署
 

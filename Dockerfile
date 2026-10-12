@@ -115,6 +115,7 @@ LABEL org.opencontainers.image.source="https://github.com/ccfwwm/sub2api-private
 # Install runtime dependencies
 RUN apk add --no-cache \
     ca-certificates \
+    ffmpeg \
     tzdata \
     su-exec \
     libpq \

@@ -243,6 +243,15 @@ class Controller:
         rows = self.sql("SELECT filename || '|' || checksum FROM schema_migrations ORDER BY filename;", container)
         return dict(line.split("|") for line in rows.splitlines())
 
+    def apply_reviewed_media_migration(self, transaction, container=None):
+        # Kept separate from the read-only SQL helper and ordinary prepare.
+        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or "243_media_tasks_and_pricing.sql" not in transaction or not transaction.endswith("COMMIT;"):
+            raise ValueError("reviewed atomic media transaction required")
+        container = container or self.config.get("database_container", "sub2api-postgres")
+        run(["docker", "exec", "-i", container, "sh", "-c",
+             'PGOPTIONS="-c default_transaction_read_only=off -c statement_timeout=60000 -c timezone=UTC" '
+             'psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'], stdin=transaction.encode())
+
     def assert_migrations(self, manifest):
         # Deliberately reject even additive migrations in the ordinary update path.
         # A separate reviewed migration procedure is needed when this changes.
@@ -383,6 +392,21 @@ class Controller:
             if restored != expected:
                 raise ValueError("restored protected-table fingerprints do not match backup snapshot")
             atomic_json(backup / "restored-fingerprints.json", restored)
+            # Only the separately reviewed media migration rehearsal supplies
+            # this field. Ordinary prepare continues to require exact schemas.
+            reviewed = job.get("reviewed_media_migration")
+            if reviewed:
+                if reviewed["filename"] != "243_media_tasks_and_pricing.sql":
+                    raise ValueError("unreviewed migration")
+                before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
+                quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
+                quota_before = self.sql(quota_sql, pg)
+                self.apply_reviewed_media_migration(reviewed["transaction"], pg)
+                if self.migrations(pg) != reviewed["expected_migrations"]:
+                    raise ValueError("reviewed migration inventory mismatch")
+                if {t: self.sql(self.fingerprint_sql(t), pg) for t in PROTECTED} != restored or self.sql(quota_sql, pg) != quota_before:
+                    raise ValueError("reviewed additive migration changed existing business data")
+                job["additive_data_verified"] = True
             run(["docker", "run", "-d", "--name", redis, "--network", network, "--network-alias", "redis",
                  "--cpus=0.5", "--memory=512m", "redis:8-alpine"])
             original_env = dict(v.split("=", 1) for v in self.inspect()["Config"]["Env"] if "=" in v)

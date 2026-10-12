@@ -143,8 +143,8 @@ const filteredGroups = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
     groups = groups
-      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
-      .filter((g) => g.models.length > 0)
+      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)), media_models: g.media_models?.filter((m) => m.model.toLowerCase().includes(q)) }))
+      .filter((g) => g.models.length > 0 || (g.media_models?.length ?? 0) > 0)
   }
   // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。
   return [...groups].sort(
