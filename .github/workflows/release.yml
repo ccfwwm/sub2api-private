@@ -74,6 +74,11 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      - name: Check reachable Go vulnerabilities before packaging
+        working-directory: backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
       - uses: pnpm/action-setup@v6
         with:
           version: 9
@@ -83,6 +88,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm --dir frontend install --frozen-lockfile
+      - name: Check production frontend dependencies before packaging
+        run: |
+          pnpm --dir frontend audit --prod --audit-level=high --json > frontend/audit.json || true
+          python3 tools/check_pnpm_audit_exceptions.py --audit frontend/audit.json --exceptions .github/audit-exceptions.yml
       - run: make test-frontend
       - run: make -C backend test-unit
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg

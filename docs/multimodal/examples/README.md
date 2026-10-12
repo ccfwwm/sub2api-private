@@ -1,6 +1,6 @@
 # 调用示例
 
-Python 3.10+（仅标准库）或 Node.js 20+（内置fetch/FormData）。新增路由待开发，真实调用前需能力与价卡发布并完成渠道验证；示例不会自动申请供应商权限。不要将测试模板或示例价格写到生产。
+Python 3.10+（仅标准库）或 Node.js 20+（内置fetch/FormData）。新增路由已实现，真实调用前需能力与价卡发布并完成渠道验证；实际验证范围见 [真实渠道验收](../REAL_CHANNEL_VALIDATION.md)。示例不会自动申请供应商权限。不要将测试模板或示例价格写到生产。
 
 PowerShell 设置 `SUB2API_BASE_URL` 为自己的HTTPS**站点根地址**，不带`/v1`、签名参数或凭证；`SUB2API_API_KEY` 使用自己平台的下游Key。仅localhost允许HTTP用于mock。不要提交环境变量内容。下面使用Python；Node将命令前缀换为`node docs/multimodal/examples/media_client.mjs`，参数一致。
 
