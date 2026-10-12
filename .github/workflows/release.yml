@@ -149,7 +149,7 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           sha256sum deployment.json > checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json checksums.txt --verify-tag --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
+            gh release create "$TAG" deployment.json checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Validated private image. Production deployment is manual; no production service was changed by this release."
           fi
       - uses: actions/upload-artifact@v7
         with:
