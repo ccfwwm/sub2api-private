@@ -1,9 +1,22 @@
+import hashlib
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
 from media_migrate import reviewed_transaction, tracked_operation, unified_transaction, validate_unified_transaction, UNIFIED_FILES
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_unified_pricing_real_migrations_roundtrip_with_comments(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        files = {}
+        for name in UNIFIED_FILES:
+            sql = (root / name).read_text().replace('\r\n', '\n').strip()
+            files[name] = (sql, hashlib.sha256(sql.encode()).hexdigest())
+        transaction = unified_transaction(files)
+        self.assertTrue(validate_unified_transaction(transaction))
+        self.assertNotIn('--', transaction)
+        for name, (_, checksum) in files.items():
+            self.assertIn("VALUES('" + name + "','" + checksum + "')", transaction)
+
     def test_unified_pricing_allows_only_exact_nullable_columns(self):
         files={name:("ALTER TABLE "+table+" ADD COLUMN IF NOT EXISTS media JSONB;",'a'*64) for name,table in UNIFIED_FILES.items()}
         transaction=unified_transaction(files)

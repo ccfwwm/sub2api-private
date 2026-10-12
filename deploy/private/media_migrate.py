@@ -37,9 +37,10 @@ def unified_transaction(files):
     for filename, table in UNIFIED_FILES.items():
         sql, checksum = files[filename]
         expected = "ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS media JSONB;"
-        if " ".join(sql.split()) != expected or not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        normalized = " ".join(" ".join(line.split()) for line in sql.splitlines() if not line.lstrip().startswith("--"))
+        if normalized != expected or not re.fullmatch(r"[0-9a-f]{64}", checksum):
             raise ValueError("outside reviewed unified pricing allowlist")
-        statements.append(sql + "\nINSERT INTO schema_migrations(filename,checksum) VALUES('" + filename + "','" + checksum + "');")
+        statements.append(expected + "\nINSERT INTO schema_migrations(filename,checksum) VALUES('" + filename + "','" + checksum + "');")
     return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
             "SELECT pg_advisory_xact_lock(694208311321144027);\n" + "\n".join(statements) + " COMMIT;")
 
