@@ -1,0 +1,66 @@
+name: Repair Published Private Image Tag
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published immutable private release
+        required: true
+        type: string
+      build_run:
+        description: Successful Private Release candidate whose artifact matches this release
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+  packages: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore the version tag to the exact published and tested digest
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD_RUN: ${{ inputs.build_run }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
+          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
+          mkdir published candidate
+          gh release download "$VERSION" --repo ccfwwm/sub2api-private --pattern deployment.json --pattern checksums.txt --pattern '*.sql' --dir published
+          (cd published && sha256sum -c checksums.txt)
+          gh run download "$BUILD_RUN" --repo ccfwwm/sub2api-private --name validated-deployment --dir candidate
+          cmp published/deployment.json candidate/deployment.json
+          gh api "repos/ccfwwm/sub2api-private/actions/runs/$BUILD_RUN" > build-run.json
+          python3 - "$VERSION" <<'PY'
+          import json,sys
+          sys.path.insert(0,'deploy/private')
+          from controller import validate_manifest
+          m=json.load(open('published/deployment.json'))
+          r=json.load(open('build-run.json'))
+          validate_manifest(m,sys.argv[1])
+          assert r['name']=='Private Release' and r['status']=='completed' and r['conclusion']=='success'
+          assert r['head_sha']==m['commit']
+          PY
+          IMAGE=ghcr.io/ccfwwm/sub2api-private
+          DIGEST=$(python3 -c 'import json; print(json.load(open("published/deployment.json"))["digest"])')
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$IMAGE:$VERSION" > registry-tag.txt
+          python3 - <<'PY'
+          import json,re
+          m=json.load(open('published/deployment.json'))
+          digest=re.search(r'^Digest:\s+(sha256:[0-9a-f]{64})$',open('registry-tag.txt').read(),re.M)
+          assert digest and digest[1]==m['digest']
+          print('PASS: registry version tag equals the exact validated published digest')
+          PY
