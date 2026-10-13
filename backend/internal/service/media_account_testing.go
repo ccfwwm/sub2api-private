@@ -654,6 +654,21 @@ func (s *AccountTestService) testConnectionOnly(c *gin.Context, account *Account
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Model-list response is not JSON")
 	}
+	validList := false
+	switch payload := data.(type) {
+	case []any:
+		validList = true
+	case map[string]any:
+		if payload["error"] == nil {
+			_, validList = payload["data"].([]any)
+			if !validList {
+				_, validList = payload["models"].([]any)
+			}
+		}
+	}
+	if !validList {
+		return s.sendErrorAndEnd(c, "Upstream did not return a model list; generation was not attempted")
+	}
 	s.sendEvent(c, TestEvent{Type: "status", Text: "Connection check passed; no real generation performed"})
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil

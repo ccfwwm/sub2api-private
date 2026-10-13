@@ -19,7 +19,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/media"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -180,6 +182,28 @@ func TestMediaAccountCapabilityAndLegacyMappingUpdatesPreserveCredentials(t *tes
 			require.NoError(t, err)
 			require.Equal(t, before, testFingerprint(updated, stored))
 			require.Equal(t, map[string]any{"test_id": "existing-real-test"}, updated.Extra["media_last_test"])
+		})
+	}
+}
+
+func TestMediaConnectionRejectsHTTP200ErrorEnvelope(t *testing.T) {
+	for _, body := range []string{`{"error":{"message":"denied"}}`, `{"message":"login required"}`, `null`} {
+		t.Run(body, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, "GET", r.Method)
+				require.Equal(t, "/v1/models", r.URL.Path)
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			cfg := &config.Config{}
+			cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+			cfg.Security.URLAllowlist.AllowPrivateHosts = true
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/test", nil)
+			svc := &AccountTestService{cfg: cfg}
+			err := svc.testConnectionOnly(c, &Account{Type: AccountTypeAPIKey, Credentials: map[string]any{"base_url": server.URL, "api_key": "unit-secret"}})
+			require.Error(t, err)
+			require.False(t, c.GetBool("account_test_completed_success"))
 		})
 	}
 }
