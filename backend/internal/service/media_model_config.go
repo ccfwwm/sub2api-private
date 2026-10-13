@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"time"
@@ -16,6 +18,29 @@ import (
 func mediaVersion(value any) string {
 	b, _ := json.Marshal(value)
 	return fmt.Sprintf("%x", sha256.Sum256(b))
+}
+
+// mediaValuesEqual compares the JSON meaning of values rather than their Go
+// representation. Account extras are loaded as typed capabilities from the
+// database, while an edit form sends the same data back as generic maps.
+func mediaValuesEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	decode := func(data []byte) (any, error) {
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		return value, nil
+	}
+	leftValue, leftErr := decode(leftJSON)
+	rightValue, rightErr := decode(rightJSON)
+	return leftErr == nil && rightErr == nil && reflect.DeepEqual(leftValue, rightValue)
 }
 
 func mediaCardForType(p ChannelModelPricing, model, operation, scope, reference, purpose, mediaType string) media.PriceCard {
@@ -162,6 +187,31 @@ func ValidateMediaAccount(platform, kind string, extra map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// validateMediaAccountUpdate keeps the account PUT path separate from a media
+// capability publish. The edit form sends the complete Extra object back even
+// when only concurrency, priority, proxy, or status changed. Re-validating an
+// unchanged enabled capability as a publish in that case makes an unrelated
+// account edit depend on a verification record. A changed media_models value
+// still goes through the full validation, including the real-channel gate.
+func validateMediaAccountUpdate(platform, kind string, currentExtra, requestedExtra map[string]any) error {
+	// Always enforce the account-level platform/type invariant.
+	if err := ValidateMediaAccount(platform, kind, nil); err != nil {
+		return err
+	}
+	if requestedExtra == nil {
+		return nil
+	}
+	requested, present := requestedExtra["media_models"]
+	if !present {
+		return nil
+	}
+	current, hadCurrent := currentExtra["media_models"]
+	if hadCurrent && mediaValuesEqual(current, requested) {
+		return nil
+	}
+	return ValidateMediaAccount(platform, kind, map[string]any{"media_models": requested})
 }
 
 func exactMediaPricing(entries []ChannelModelPricing, model string) *ChannelModelPricing {

@@ -589,11 +589,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.Type != "" {
 		kind = input.Type
 	}
-	mediaExtra := account.Extra
-	if input.Extra != nil {
-		mediaExtra = input.Extra
-	}
-	if err := ValidateMediaAccount(account.Platform, kind, mediaExtra); err != nil {
+	if err := validateMediaAccountUpdate(account.Platform, kind, account.Extra, input.Extra); err != nil {
 		return nil, err
 	}
 	var normalizedExtra map[string]any

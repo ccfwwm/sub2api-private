@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -115,6 +116,39 @@ func TestMediaExactIDsAndValidation(t *testing.T) {
 	require.NoError(t, ValidateMediaAccount(PlatformImageVideo, AccountTypeAPIKey, map[string]any{"media_models": []media.Capability{cap}}))
 	require.Error(t, ValidateMediaAccount(PlatformOpenAI, AccountTypeAPIKey, map[string]any{"media_models": []media.Capability{cap}}))
 	require.Error(t, ValidateMediaAccount(PlatformImageVideo, AccountTypeOAuth, nil))
+}
+
+func TestMediaAccountUnchangedModelsDoNotRequireRepublishVerification(t *testing.T) {
+	cap := mediaTestCapability()
+	cap.ValidationStatus = "待渠道验证"
+	cap.VerificationEvidence = ""
+	cap.Enabled = true
+	current := map[string]any{"media_models": []media.Capability{cap}}
+	// The edit form serializes the complete Extra object before sending it back.
+	currentJSON, err := json.Marshal(current)
+	require.NoError(t, err)
+	var persisted map[string]any
+	require.NoError(t, json.Unmarshal(currentJSON, &persisted))
+	requested := map[string]any{"media_models": persisted["media_models"], "custom_note": "unchanged"}
+	require.NoError(t, validateMediaAccountUpdate(PlatformImageVideo, AccountTypeAPIKey, current, requested))
+}
+
+func TestMediaAccountChangedModelsStillRequireRepublishVerification(t *testing.T) {
+	currentCap := mediaTestCapability()
+	currentCap.ValidationStatus = "待渠道验证"
+	currentCap.VerificationEvidence = ""
+	currentCap.Enabled = false
+	requestedCap := currentCap
+	requestedCap.Enabled = true
+	require.ErrorContains(t,
+		validateMediaAccountUpdate(
+			PlatformImageVideo,
+			AccountTypeAPIKey,
+			map[string]any{"media_models": []media.Capability{currentCap}},
+			map[string]any{"media_models": []media.Capability{requestedCap}},
+		),
+		"channel_verification_required",
+	)
 }
 
 func TestStandardMediaPricingProjectsExistingEntries(t *testing.T) {
