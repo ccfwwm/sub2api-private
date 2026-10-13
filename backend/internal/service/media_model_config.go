@@ -18,10 +18,6 @@ func mediaVersion(value any) string {
 	return fmt.Sprintf("%x", sha256.Sum256(b))
 }
 
-func mediaCard(p ChannelModelPricing, model, operation, scope, reference, purpose string) media.PriceCard {
-	return mediaCardForType(p, model, operation, scope, reference, purpose, mediaTypeForOperation(operation))
-}
-
 func mediaCardForType(p ChannelModelPricing, model, operation, scope, reference, purpose, mediaType string) media.PriceCard {
 	if mediaType == "" {
 		mediaType = mediaTypeForOperation(operation)

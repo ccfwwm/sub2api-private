@@ -226,7 +226,7 @@ func TestMediaCatalogIncludesAllAccountVariants(t *testing.T) {
 	a.Duration.Values = []int{5}
 	b := a
 	b.AccountIDs, b.Resolutions, b.Duration.Values = []int64{2}, []string{"1080p"}, []int{30}
-	p := mediaCard(mediaTestPrice(a.Model, "second", "request_duration", "0.04"), a.Model, "video", "group", "1", "sale")
+	p := mediaCardForType(mediaTestPrice(a.Model, "second", "request_duration", "0.04"), a.Model, "video", "group", "1", "sale", "video")
 	e := &media.Engine{Config: func(context.Context, int64) ([]media.Capability, []media.PriceCard, error) {
 		return []media.Capability{a, b}, []media.PriceCard{p}, nil
 	}}
