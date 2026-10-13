@@ -64,7 +64,8 @@ class ManagementSafetyTests(unittest.TestCase):
     def test_prepare_never_enters_cutover(self):
         job = {'id': 'a' * 32, 'action': 'prepare', 'target': 'v1.0.1'}
         with patch.object(self.manager, 'preflight', return_value={'Id': 'old'}), \
-             patch.object(self.manager, 'offline', return_value=('image', {})), \
+             patch.object(self.manager, 'offline', return_value=('image', {'migrations': {}})), \
+             patch.object(self.manager.c, 'migrations', return_value={}), \
              patch.object(self.manager.c, 'assert_migrations'), \
              patch.object(self.manager, 'backup', return_value=(self.root, {'runtime_image': 'old'})), \
              patch('manage.inspect', return_value={'Id': 'old'}), \

@@ -13,6 +13,7 @@
 import { useI18n } from 'vue-i18n'
 import type { CheckMode, MonitorStatus, Provider } from '@/api/admin/channelMonitor'
 import {
+  PROVIDER_IMAGEVIDEO,
   PROVIDER_OPENAI,
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
@@ -57,6 +58,8 @@ export function useChannelMonitorFormat() {
     switch (s) {
       case STATUS_OPERATIONAL:
         return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+      case 'pending':
+        return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case STATUS_DEGRADED:
         return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
       case STATUS_FAILED:
@@ -102,6 +105,7 @@ export function useChannelMonitorFormat() {
         return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
       case PROVIDER_ANTHROPIC:
         return 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'
+      case PROVIDER_IMAGEVIDEO:
       case PROVIDER_GEMINI:
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case PROVIDER_GROK:
@@ -156,6 +160,7 @@ export function useChannelMonitorFormat() {
         return active
           ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-400'
           : 'border-gray-200 bg-white text-gray-600 hover:border-orange-300 hover:text-orange-700 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-orange-500/50'
+      case PROVIDER_IMAGEVIDEO:
       case PROVIDER_GEMINI:
         return active
           ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400'

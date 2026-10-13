@@ -14,6 +14,7 @@ import (
 //
 //nolint:gochecknoglobals // 静态查表，初始化后不变。
 var monitorProviders = map[string]struct{}{
+	MonitorProviderImageVideo:  {},
 	MonitorProviderOpenAI:      {},
 	MonitorProviderAnthropic:   {},
 	MonitorProviderGemini:      {},
@@ -30,14 +31,15 @@ var monitorProviders = map[string]struct{}{
 //
 //nolint:gochecknoglobals // 静态查表，初始化后不变。
 var probeCapableProviders = map[string]struct{}{
-	MonitorProviderOpenAI:    {},
-	MonitorProviderAnthropic: {},
-	MonitorProviderGemini:    {},
-	MonitorProviderGrok:      {},
-	MonitorProviderKimi:      {},
-	MonitorProviderZhipu:     {},
-	MonitorProviderDeepseek:  {},
-	MonitorProviderMiniMax:   {},
+	MonitorProviderImageVideo: {},
+	MonitorProviderOpenAI:     {},
+	MonitorProviderAnthropic:  {},
+	MonitorProviderGemini:     {},
+	MonitorProviderGrok:       {},
+	MonitorProviderKimi:       {},
+	MonitorProviderZhipu:      {},
+	MonitorProviderDeepseek:   {},
+	MonitorProviderMiniMax:    {},
 }
 
 // validateProvider 校验 provider 字符串。
@@ -75,6 +77,9 @@ func monitorCheckModeUsesQuota(checkMode string) bool {
 //	antigravity（无 adapter）|  N    |  Y    |  N
 func validateCheckMode(provider, checkMode string) error {
 	checkMode = defaultCheckMode(checkMode)
+	if provider == MonitorProviderImageVideo && checkMode != MonitorCheckModeProbe {
+		return ErrChannelMonitorInvalidCheckMode
+	}
 	switch checkMode {
 	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe:
 	default:

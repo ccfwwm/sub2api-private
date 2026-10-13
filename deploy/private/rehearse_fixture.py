@@ -108,6 +108,18 @@ def main():
                 assert manager.active()['x-ops']['postgres'] == 'sub2api-postgres'
                 for n, started in dependencies.items():
                     assert json.loads(run(['docker', 'inspect', n]))[0]['State']['StartedAt'] == started
+                # Exercise the production enum-expansion gate against this
+                # disposable restored database, including captured-runtime rescue.
+                from media_migrate import MONITOR_FILE
+                if MONITOR_FILE in manifest['migrations']:
+                    import shutil
+                    shutil.copyfile(Path(__file__).resolve().parents[2] / 'backend/migrations' / MONITOR_FILE, release / MONITOR_FILE)
+                    run(['docker', 'exec', '-i', 'sub2api-postgres', 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'sub2api', '-d', 'sub2api'],
+                        stdin=("DELETE FROM schema_migrations WHERE filename='" + MONITOR_FILE + "';").encode())
+                    expanded = operation('upgrade', manifest['version'])
+                    assert expanded['monitor_migration']['data_unchanged']
+                    assert manager.c.migrations() == manifest['migrations']
+                    operation('rescue', expanded['id'])
                 print('PASS OPS: offline upgrade, runtime rollback, isolated restore, recovered-database backup, emergency rescue; original DB/Redis unchanged')
                 return
             job = {'id': uuid.uuid4().hex, 'version': manifest['version']}

@@ -77,10 +77,10 @@ jobs:
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum deployment.json > checksums.txt
-          cp backend/migrations/24{3,4,5}_*.sql .
-          sha256sum 24{3,4,5}_*.sql >> checksums.txt
+          cp backend/migrations/24{3,4,5,6}_*.sql .
+          sha256sum 24{3,4,5,6}_*.sql >> checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json checksums.txt 24{3,4,5}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
+          gh release create "$VERSION" deployment.json checksums.txt 24{3,4,5,6}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
 
 
   deploy:

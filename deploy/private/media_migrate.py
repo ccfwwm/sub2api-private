@@ -27,6 +27,63 @@ UNIFIED_FILES = {
     "245_unified_media_account_cost.sql": "channel_account_stats_model_pricing",
 }
 
+MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
+MONITOR_PROVIDERS = "'openai', 'anthropic', 'gemini', 'grok', 'antigravity', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'imagevideo'"
+
+
+def monitor_statements():
+    statements = []
+    for table in ('channel_monitors', 'channel_monitor_request_templates'):
+        statements += [f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_provider_check;',
+                       f'ALTER TABLE {table} ADD CONSTRAINT {table}_provider_check CHECK (provider IN ({MONITOR_PROVIDERS}));']
+    table = 'channel_monitor_histories'
+    statements += [f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_status_check;',
+                   f"ALTER TABLE {table} ADD CONSTRAINT {table}_status_check CHECK (status IN ('operational', 'degraded', 'failed', 'error', 'pending'));"]
+    return '\n'.join(statements)
+
+
+def monitor_transaction(sql, checksum):
+    """Exact enum expansion only. No table drops, row writes or generic DDL."""
+    import re
+    normalized = ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+    if normalized != ' '.join(monitor_statements().split()) or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+        raise ValueError('outside reviewed media monitor enum expansion')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + monitor_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{MONITOR_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_monitor_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('246_channel_monitor_imagevideo.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == monitor_transaction(monitor_statements(), match[1]))
+
+
+def reviewed_monitor_upgrade(before, target, folder):
+    if before == target:
+        return None
+    if MONITOR_FILE in before or set(target) - set(before) != {MONITOR_FILE} or {k: v for k, v in target.items() if k != MONITOR_FILE} != before:
+        raise ValueError('migration inventory differs outside reviewed monitor expansion')
+    folder = Path(folder)
+    source = folder / MONITOR_FILE
+    # A previous release's deployment worker installs the new manager but did
+    # not stage this new asset. Reuse only its already downloaded immutable
+    # release inventory; SQL still must match the target checksum and exact DDL.
+    if not source.exists():
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / MONITOR_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / MONITOR_FILE
+                break
+    sql = source.read_text().replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if target[MONITOR_FILE] != checksum:
+        raise ValueError('monitor migration checksum differs')
+    return {'filename': MONITOR_FILE, 'transaction': monitor_transaction(sql, checksum), 'expected_migrations': target}
+
 
 def unified_transaction(files):
     """Only the two reviewed nullable JSONB additions; no generic DDL path."""

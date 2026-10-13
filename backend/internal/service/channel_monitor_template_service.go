@@ -212,6 +212,13 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 
 // validateBodyModeForProtocol 校验 body_override_mode 与 provider/api_mode 的协议特定要求。
 func validateBodyModeForProtocol(provider, apiMode, mode string, body map[string]any) error {
+	if provider == MonitorProviderImageVideo {
+		if err := validateBodyModeParams(mode, body); err != nil {
+			return err
+		}
+		_, err := monitorMediaConfig(body)
+		return err
+	}
 	if err := validateBodyModeParams(mode, body); err != nil {
 		return err
 	}

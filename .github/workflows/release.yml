@@ -195,8 +195,9 @@ jobs:
           cp backend/migrations/243_media_tasks_and_pricing.sql ./243_media_tasks_and_pricing.sql
           cp backend/migrations/244_unified_media_model_pricing.sql ./244_unified_media_model_pricing.sql
           cp backend/migrations/245_unified_media_account_cost.sql ./245_unified_media_account_cost.sql
+          cp backend/migrations/246_channel_monitor_imagevideo.sql ./246_channel_monitor_imagevideo.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
-          sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql >> checksums.txt
+          sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
@@ -212,6 +213,7 @@ jobs:
             243_media_tasks_and_pricing.sql
             244_unified_media_model_pricing.sql
             245_unified_media_account_cost.sql
+            246_channel_monitor_imagevideo.sql
 
 
   deploy:

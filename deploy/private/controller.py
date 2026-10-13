@@ -245,9 +245,9 @@ class Controller:
 
     def apply_reviewed_media_migration(self, transaction, container=None):
         # Kept separate from the read-only SQL helper and ordinary prepare.
-        from media_migrate import validate_unified_transaction
+        from media_migrate import validate_unified_transaction, validate_monitor_transaction
         legacy = "243_media_tasks_and_pricing.sql" in transaction
-        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not (legacy or validate_unified_transaction(transaction)):
+        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not (legacy or validate_unified_transaction(transaction) or validate_monitor_transaction(transaction)):
             raise ValueError("reviewed atomic media transaction required")
         container = container or self.config.get("database_container", "sub2api-postgres")
         run(["docker", "exec", "-i", container, "sh", "-c",
@@ -398,7 +398,7 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing"):
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
@@ -406,6 +406,11 @@ class Controller:
                 # Compare the original column projection when adding nullable
                 # pricing fields; row_to_json(*) necessarily changes shape.
                 comparison = {t: self.fingerprint_sql(t) for t in PROTECTED}
+                monitor_before = {}
+                if reviewed['filename'] == '246_channel_monitor_imagevideo.sql':
+                    for table in ('channel_monitors', 'channel_monitor_request_templates', 'channel_monitor_histories'):
+                        query = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM " + table + " t;"
+                        monitor_before[query] = self.sql(query, pg)
                 if reviewed["filename"] == "unified-media-pricing":
                     for table in ("channel_model_pricing", "channel_account_stats_model_pricing"):
                         columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='" + table + "';", pg)
@@ -415,6 +420,8 @@ class Controller:
                     raise ValueError("reviewed migration inventory mismatch")
                 if {t: self.sql(comparison[t], pg) for t in PROTECTED} != restored or self.sql(quota_sql, pg) != quota_before:
                     raise ValueError("reviewed additive migration changed existing business data")
+                if any(self.sql(query, pg) != value for query, value in monitor_before.items()):
+                    raise ValueError('monitor enum expansion changed existing monitor data')
                 job["additive_data_verified"] = True
             run(["docker", "run", "-d", "--name", redis, "--network", network, "--network-alias", "redis",
                  "--cpus=0.5", "--memory=512m", "redis:8-alpine"])

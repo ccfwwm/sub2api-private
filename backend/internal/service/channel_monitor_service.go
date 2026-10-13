@@ -70,8 +70,9 @@ type channelMonitorRuntimeReader interface {
 
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
-	repo      ChannelMonitorRepository
-	encryptor SecretEncryptor
+	mediaMonitorLocks sync.Map
+	repo              ChannelMonitorRepository
+	encryptor         SecretEncryptor
 	// settings is optional; when nil, RunCheck fails closed for active probes
 	// (mode defaults to v2 / retired) so tests without settings never hit upstream.
 	settings channelMonitorRuntimeReader
@@ -146,6 +147,9 @@ func (s *ChannelMonitorService) Get(ctx context.Context, id int64) (*ChannelMoni
 
 // Create 创建监控（内部加密 api_key）。
 func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCreateParams) (*ChannelMonitor, error) {
+	if err := validateMonitorMediaModels(p.Provider, strings.TrimSpace(p.PrimaryModel), normalizeModels(p.ExtraModels), p.BodyOverride); err != nil {
+		return nil, err
+	}
 	if err := validateCreateParams(p); err != nil {
 		return nil, err
 	}
@@ -435,6 +439,9 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err := applyMonitorUpdate(existing, p); err != nil {
 		return nil, err
 	}
+	if err := validateMonitorMediaModels(existing.Provider, existing.PrimaryModel, existing.ExtraModels, existing.BodyOverride); err != nil {
+		return nil, err
+	}
 
 	newPlainAPIKey, apiKeyUpdated, err := s.applyAPIKeyUpdate(existing, p.APIKey)
 	if err != nil {
@@ -620,6 +627,11 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	}
 
 	var results []*CheckResult
+	if m.Provider == MonitorProviderImageVideo {
+		results = s.runMediaMonitor(ctx, m)
+		s.persistCheckResults(ctx, m, results)
+		return results, nil
+	}
 	switch checkMode {
 	case MonitorCheckModeQuota:
 		results = s.runQuotaOnlyCheck(ctx, m)

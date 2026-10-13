@@ -173,7 +173,11 @@
         />
       </div>
 
-      <MonitorAdvancedRequestConfig
+      <template v-if="form.provider === 'imagevideo'">
+        <label class="input-label">{{ t('admin.channelMonitor.form.extraModels') }}<input v-model="mediaModels" class="input" placeholder="omni-flash, veo-3.1-lite" /></label>
+        <MonitorMediaConfig :models="mediaModels.split(',')" v-model="form.body_override" />
+      </template>
+      <MonitorAdvancedRequestConfig v-else
         :provider="form.provider"
         :api-mode="form.api_mode"
         :extra-headers="form.extra_headers"
@@ -242,6 +246,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import MonitorAdvancedRequestConfig from '@/components/admin/monitor/MonitorAdvancedRequestConfig.vue'
+import MonitorMediaConfig from '@/components/admin/monitor/MonitorMediaConfig.vue'
 import MonitorTemplateApplyPickerDialog from '@/components/admin/monitor/MonitorTemplateApplyPickerDialog.vue'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import {
@@ -315,6 +320,7 @@ interface TemplateForm {
 const editing = ref<null | 'new' | number>(null) // null = list view; 'new' = create; <id> = edit
 const submitting = ref(false)
 const form = reactive<TemplateForm>(emptyForm(PROVIDER_ANTHROPIC))
+const mediaModels = ref('')
 
 function emptyForm(provider: Provider): TemplateForm {
   return {
@@ -338,9 +344,11 @@ function loadForm(tpl: ChannelMonitorTemplate) {
   form.extra_headers = { ...(tpl.extra_headers || {}) }
   form.body_override_mode = tpl.body_override_mode
   form.body_override = tpl.body_override ? { ...tpl.body_override } : null
+  mediaModels.value = Object.keys((tpl.body_override?.media_monitor as { models?: Record<string, unknown> })?.models || {}).join(', ')
 }
 
 function openCreateForm() {
+  mediaModels.value = ''
   Object.assign(form, emptyForm(activeProvider.value))
   editing.value = 'new'
 }
@@ -400,7 +408,7 @@ async function handleSubmit() {
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),
         extra_headers: form.extra_headers,
-        body_override_mode: form.body_override_mode,
+        body_override_mode: form.provider === 'imagevideo' ? (form.body_override ? 'merge' : 'off') : form.body_override_mode,
         body_override: form.body_override,
       })
       appStore.showSuccess(t('admin.channelMonitor.template.createSuccess'))
@@ -410,7 +418,7 @@ async function handleSubmit() {
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),
         extra_headers: form.extra_headers,
-        body_override_mode: form.body_override_mode,
+        body_override_mode: form.provider === 'imagevideo' ? (form.body_override ? 'merge' : 'off') : form.body_override_mode,
         body_override: form.body_override,
       })
       appStore.showSuccess(t('admin.channelMonitor.template.updateSuccess'))

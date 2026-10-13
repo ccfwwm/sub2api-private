@@ -1,10 +1,50 @@
 import hashlib
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
 from media_migrate import reviewed_transaction, tracked_operation, unified_transaction, validate_unified_transaction, UNIFIED_FILES
+from media_migrate import monitor_transaction, validate_monitor_transaction, reviewed_monitor_upgrade, MONITOR_FILE
+import tempfile
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_previous_worker_assets_are_accepted_only_for_matching_release_and_exact_sql(self):
+        sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / MONITOR_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, MONITOR_FILE: checksum}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release = state / 'releases/v1.2.2'
+            release.mkdir(parents=True)
+            assets = state / 'automatic/receipt-assets'
+            assets.mkdir(parents=True)
+            (assets / MONITOR_FILE).write_text(sql)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.2.2', 'migrations': target}))
+            self.assertTrue(validate_monitor_transaction(reviewed_monitor_upgrade(before, target, release)['transaction']))
+            (assets / MONITOR_FILE).write_text(sql + ' DROP TABLE users;')
+            with self.assertRaises(ValueError): reviewed_monitor_upgrade(before, target, release)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.2.1', 'migrations': target}))
+            with self.assertRaises(FileNotFoundError): reviewed_monitor_upgrade(before, target, release)
+
+    def test_monitor_expansion_requires_exact_sql_inventory_and_checksum(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        sql = (root / MONITOR_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        transaction = monitor_transaction(sql, checksum)
+        self.assertTrue(validate_monitor_transaction(transaction))
+        self.assertFalse(validate_monitor_transaction(transaction.replace(' COMMIT;', ' DROP TABLE accounts; COMMIT;')))
+        for bad in (sql + ' UPDATE accounts SET status=\'disabled\';', sql.replace("'pending'", "'unknown'"), sql.replace('DROP CONSTRAINT', 'DROP TABLE')):
+            with self.assertRaises(ValueError): monitor_transaction(bad, checksum)
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, MONITOR_FILE).write_text(sql)
+            before = {'old.sql': 'b' * 64}
+            target = {**before, MONITOR_FILE: checksum}
+            self.assertEqual(reviewed_monitor_upgrade(before, target, folder)['transaction'], transaction)
+            self.assertIsNone(reviewed_monitor_upgrade(target, target, folder))
+            for bad in ({**target, 'unexpected.sql': 'a' * 64}, {**target, 'old.sql': 'a' * 64}, {**target, MONITOR_FILE: 'a' * 64}):
+                with self.assertRaises(ValueError): reviewed_monitor_upgrade(before, bad, folder)
+
     def test_unified_pricing_real_migrations_roundtrip_with_comments(self):
         root = Path(__file__).resolve().parents[2] / 'backend/migrations'
         files = {}

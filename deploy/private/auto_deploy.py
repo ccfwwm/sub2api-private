@@ -117,6 +117,12 @@ def worker(job):
                 raise ValueError('immutable version digest changed')
             run(['docker', 'tag', image, IMAGE + ':' + job['version']])
             atomic_json(staged / 'deployment.json', manifest); atomic_json(staged / 'image-inspect.json', [identity])
+            # Stage the checksum-verified, exact reviewed monitor migration for
+            # the manager's restore-rehearsal gate. Other schema changes still fail.
+            monitor_sql = '246_channel_monitor_imagevideo.sql'
+            if (folder / monitor_sql).exists():
+                import shutil
+                shutil.copyfile(folder / monitor_sql, staged / monitor_sql)
             # Install checksum-verified release management sources without executing
             # archive paths or commands supplied through the SSH request.
             import tarfile

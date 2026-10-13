@@ -16,7 +16,8 @@ export type Provider =
   | 'deepseek'
   | 'minimax'
   | 'opencode_go'
-export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
+  | 'imagevideo'
+export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error' | 'pending'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses'
 /**

@@ -496,7 +496,10 @@ export default {
 
   // Shared keys for channel monitor (admin + user views)
   monitorCommon: {
+    mediaConnection: 'Connection check',
+    mediaGeneration: 'Generation probe',
     status: {
+      pending: 'In progress',
       operational: 'Operational',
       degraded: 'Degraded',
       failed: 'Failed',
@@ -504,6 +507,7 @@ export default {
       unknown: '-'
     },
     providers: {
+      imagevideo: 'Image / Video / Audio',
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',

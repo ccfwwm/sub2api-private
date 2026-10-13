@@ -70,6 +70,7 @@ const (
 	MonitorProviderZhipu       = "zhipu"
 	MonitorProviderDeepseek    = "deepseek"
 	MonitorProviderMiniMax     = "minimax"
+	MonitorProviderImageVideo  = "imagevideo"
 
 	// MonitorCheckMode 检测模式（channel_monitors.check_mode）。
 	//   probe       - LLM 探活（默认，原有行为）
@@ -104,6 +105,7 @@ const (
 	MonitorStatusDegraded    = "degraded"
 	MonitorStatusFailed      = "failed"
 	MonitorStatusError       = "error"
+	MonitorStatusPending     = "pending"
 
 	// monitorAvailability7Days / 15 / 30 用于聚合查询窗口。
 	monitorAvailability7Days  = 7

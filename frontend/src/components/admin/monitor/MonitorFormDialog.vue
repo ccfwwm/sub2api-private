@@ -148,6 +148,8 @@
         />
       </div>
 
+      <MonitorMediaConfig v-if="form.provider === PROVIDER_IMAGEVIDEO" v-model="form.body_override" :models="[form.primary_model, ...form.extra_models]" />
+
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.groupName') }}</label>
         <input v-model="form.group_name" type="text" class="input" :placeholder="t('admin.channelMonitor.form.groupNamePlaceholder')" />
@@ -189,6 +191,7 @@
           </div>
 
           <MonitorAdvancedRequestConfig
+            v-if="form.provider !== PROVIDER_IMAGEVIDEO"
             :provider="form.provider"
             :api-mode="form.api_mode"
             :extra-headers="form.extra_headers"
@@ -257,10 +260,12 @@ import Select from '@/components/common/Select.vue'
 import ModelTagInput from '@/components/admin/channel/ModelTagInput.vue'
 import { getPlatformTextClass } from '@/components/admin/channel/types'
 import MonitorKeyPickerDialog from '@/components/admin/monitor/MonitorKeyPickerDialog.vue'
+import MonitorMediaConfig from '@/components/admin/monitor/MonitorMediaConfig.vue'
 import MonitorAdvancedRequestConfig from '@/components/admin/monitor/MonitorAdvancedRequestConfig.vue'
 import ProviderIcon from '@/components/user/monitor/ProviderIcon.vue'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import {
+  PROVIDER_IMAGEVIDEO,
   PROVIDER_OPENAI,
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
@@ -469,6 +474,7 @@ interface ProviderOption {
 }
 
 const providerOptions = computed<ProviderOption[]>(() => [
+  { value: PROVIDER_IMAGEVIDEO, label: t('monitorCommon.providers.imagevideo') },
   { value: PROVIDER_ANTHROPIC, label: t('monitorCommon.providers.anthropic') },
   { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
   { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
@@ -509,14 +515,14 @@ const checkModeOptions = computed<CheckModeOption[]>(() => [
     value: CHECK_MODE_QUOTA,
     label: t('admin.channelMonitor.form.checkModeQuota'),
     hint: t('admin.channelMonitor.form.checkModeQuotaHint'),
-    disabled: false,
+    disabled: form.provider === PROVIDER_IMAGEVIDEO,
   },
   {
     value: CHECK_MODE_QUOTA_PROBE,
     label: t('admin.channelMonitor.form.checkModeQuotaProbe'),
     hint: t('admin.channelMonitor.form.checkModeQuotaProbeHint'),
     // antigravity 无探活 adapter，只支持配额模式。
-    disabled: form.provider === PROVIDER_ANTIGRAVITY,
+    disabled: form.provider === PROVIDER_ANTIGRAVITY || form.provider === PROVIDER_IMAGEVIDEO,
   },
 ])
 
@@ -675,6 +681,7 @@ function selectProvider(provider: Provider) {
   const clearPrevDefaultEndpoint =
     !!PROVIDER_DEFAULT_ENDPOINTS[previousProvider] && form.endpoint === PROVIDER_DEFAULT_ENDPOINTS[previousProvider]
   form.provider = provider
+  if (provider === PROVIDER_IMAGEVIDEO) form.check_mode = CHECK_MODE_PROBE
   // 关联账号与平台绑定：切换 provider 时显式清空（这是唯一主动清空的入口）。
   form.account_id = null
   pinnedAccount.value = null
@@ -832,7 +839,7 @@ function buildPayload(): CreateParams {
     jitter_seconds: form.jitter_seconds || 0,
     template_id: usesProbePart.value ? form.template_id : null,
     extra_headers: form.extra_headers,
-    body_override_mode: form.body_override_mode,
+    body_override_mode: form.provider === PROVIDER_IMAGEVIDEO ? (form.body_override ? 'merge' : 'off') : form.body_override_mode,
     body_override: form.body_override,
   }
 }

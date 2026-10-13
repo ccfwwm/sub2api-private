@@ -203,13 +203,20 @@ class Manager:
             raise ValueError('backup runtime mismatch')
         return image
 
-    def rehearse(self, job, folder, meta, image, version=''):
+    def rehearse(self, job, folder, meta, image, version='', reviewed=None):
         self.save(job, 'restoring_and_testing')
         # Base controller verifies a real pg_restore plus protected-table hashes.
         test = {'id': uuid.uuid4().hex, 'image': image, 'rollback_image': meta['runtime_image'],
                 'version': version or 'v' + self.image_version(image),
                 'manifest': {'migrations': meta['migrations']}}
+        if reviewed:
+            test['reviewed_media_migration'] = reviewed
         self.c.rehearse(test, folder)
+        if reviewed:
+            if not all(test.get(k) for k in ('restore_verified', 'rollback_verified', 'additive_data_verified')):
+                raise ValueError('incomplete monitor migration rehearsal')
+            job['monitor_migration'] = {'filename': reviewed['filename'], 'restore_verified': True,
+                                        'rollback_verified': True, 'data_unchanged': True}
         # The controller adds an evidence file; retain the original backup seal.
         (folder / 'restored-fingerprints.json').unlink(missing_ok=True)
 
@@ -431,9 +438,11 @@ class Manager:
             self.save(job, 'succeeded')
             return
         original = self.preflight()
+        reviewed = None
         if action in ('prepare', 'upgrade'):
             image, manifest = self.offline(arg)
-            self.c.assert_migrations(manifest)
+            from media_migrate import reviewed_monitor_upgrade
+            reviewed = reviewed_monitor_upgrade(self.c.migrations(), manifest['migrations'], self.state / 'releases' / arg)
         else:
             source, old = self.verified_backup(arg)
             image = self.load_runtime(source, old)
@@ -443,7 +452,7 @@ class Manager:
         rescue = self.target(inspect(meta['runtime_image'])['Id'])
         atomic_json(self.state / 'jobs' / (job['id'] + '-rescue.json'), rescue)
         if action in ('prepare', 'upgrade'):
-            self.rehearse(job, folder, meta, image, arg)
+            self.rehearse(job, folder, meta, image, arg, reviewed=reviewed)
             if action == 'prepare':
                 job['prepared_only'] = True
                 self.save(job, 'succeeded')
@@ -461,6 +470,10 @@ class Manager:
         if run(['docker', 'exec', 'sub2api', 'sha256sum', '/app/sub2api']).decode().split()[0] != meta['binary_sha256']:
             raise ValueError('production runtime changed during preparation')
         self.c.assert_migrations({'migrations': meta['migrations']})
+        if reviewed:
+            self.save(job, 'applying_reviewed_monitor_enum_expansion')
+            self.c.apply_reviewed_media_migration(reviewed['transaction'])
+            self.c.assert_migrations(manifest)
         self.cutover(job, target, rescue, arg if action == 'upgrade' else '')
 
 

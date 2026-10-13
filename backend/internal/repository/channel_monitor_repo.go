@@ -366,10 +366,10 @@ func (r *channelMonitorRepository) ComputeAvailability(ctx context.Context, moni
 	}
 	const q = `
 		SELECT model,
-		       COUNT(*)                                                             AS total,
+		       COUNT(*) FILTER (WHERE status <> 'pending')                         AS total,
 		       COUNT(*) FILTER (WHERE status IN ('operational','degraded'))         AS ok,
-		       CASE WHEN COUNT(latency_ms) > 0
-		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 / COUNT(latency_ms)
+		       CASE WHEN COUNT(latency_ms) FILTER (WHERE status <> 'pending') > 0
+		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL AND status <> 'pending')::float8 / COUNT(latency_ms) FILTER (WHERE status <> 'pending')
 		            ELSE NULL END                                                   AS avg_latency_ms
 		FROM channel_monitor_histories
 		WHERE monitor_id = $1
@@ -570,10 +570,10 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Co
 	const q = `
 		SELECT monitor_id,
 		       model,
-		       COUNT(*)                                                             AS total,
+		       COUNT(*) FILTER (WHERE status <> 'pending')                         AS total,
 		       COUNT(*) FILTER (WHERE status IN ('operational','degraded'))         AS ok,
-		       CASE WHEN COUNT(latency_ms) > 0
-		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 / COUNT(latency_ms)
+		       CASE WHEN COUNT(latency_ms) FILTER (WHERE status <> 'pending') > 0
+		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL AND status <> 'pending')::float8 / COUNT(latency_ms) FILTER (WHERE status <> 'pending')
 		            ELSE NULL END                                                   AS avg_latency_ms
 		FROM channel_monitor_histories
 		WHERE monitor_id = ANY($1)
@@ -625,16 +625,16 @@ func (r *channelMonitorRepository) UpsertDailyRollupsFor(ctx context.Context, ta
 		    monitor_id,
 		    model,
 		    $1::date AS bucket_date,
-		    COUNT(*)                                                         AS total_checks,
+		    COUNT(*) FILTER (WHERE status <> 'pending')                     AS total_checks,
 		    COUNT(*) FILTER (WHERE status IN ('operational','degraded'))     AS ok_count,
 		    COUNT(*) FILTER (WHERE status = 'operational')                   AS operational_count,
 		    COUNT(*) FILTER (WHERE status = 'degraded')                      AS degraded_count,
 		    COUNT(*) FILTER (WHERE status = 'failed')                        AS failed_count,
 		    COUNT(*) FILTER (WHERE status = 'error')                         AS error_count,
-		    COALESCE(SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL), 0)             AS sum_latency_ms,
-		    COUNT(latency_ms)                                                AS count_latency,
-		    COALESCE(SUM(ping_latency_ms) FILTER (WHERE ping_latency_ms IS NOT NULL), 0)   AS sum_ping_latency_ms,
-		    COUNT(ping_latency_ms)                                           AS count_ping_latency,
+		    COALESCE(SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL AND status <> 'pending'), 0)             AS sum_latency_ms,
+		    COUNT(latency_ms) FILTER (WHERE status <> 'pending')             AS count_latency,
+		    COALESCE(SUM(ping_latency_ms) FILTER (WHERE ping_latency_ms IS NOT NULL AND status <> 'pending'), 0)   AS sum_ping_latency_ms,
+		    COUNT(ping_latency_ms) FILTER (WHERE status <> 'pending')        AS count_ping_latency,
 		    NOW()
 		FROM channel_monitor_histories
 		WHERE checked_at >= $1::date

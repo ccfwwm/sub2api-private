@@ -501,7 +501,10 @@ export default {
 
   // Shared keys for channel monitor (admin + user views)
   monitorCommon: {
+    mediaConnection: '连接检查',
+    mediaGeneration: '生成检测',
     status: {
+      pending: '进行中',
       operational: '正常',
       degraded: '降级',
       failed: '失败',
@@ -509,6 +512,7 @@ export default {
       unknown: '-'
     },
     providers: {
+      imagevideo: '图片 / 视频 / 音频',
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
