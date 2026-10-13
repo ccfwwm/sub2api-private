@@ -309,6 +309,30 @@ func TestNonceTemplate(t *testing.T) {
 }
 
 func TestEnhanceCSPPolicy(t *testing.T) {
+	t.Run("allows_account_audio_and_video_previews_in_existing_policies", func(t *testing.T) {
+		for _, policy := range []string{
+			"default-src 'self'; script-src 'self'",
+			"default-src 'self'; media-src 'self' https://media.example.com",
+			config.DefaultCSPPolicy,
+		} {
+			cfg := config.CSPConfig{Enabled: true, Policy: policy}
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/admin/accounts", nil)
+			SecurityHeaders(cfg, nil)(c)
+			csp := w.Header().Get("Content-Security-Policy")
+			for _, source := range []string{"'self'", "blob:", "data:", "https:"} {
+				assert.Equal(t, 1, countDirectiveValue(csp, "media-src", source))
+			}
+			assert.Equal(t, 0, countDirectiveValue(csp, "script-src", "blob:"))
+			assert.Equal(t, 0, countDirectiveValue(csp, "media-src", "http:"))
+			assert.Equal(t, 1, countDirectiveValue(csp, "default-src", "'self'"))
+			if strings.Contains(policy, "https://media.example.com") {
+				assert.Equal(t, 1, countDirectiveValue(csp, "media-src", "https://media.example.com"))
+			}
+		}
+	})
+
 	t.Run("adds_nonce_placeholder_if_missing", func(t *testing.T) {
 		policy := "default-src 'self'; script-src 'self'"
 		enhanced := enhanceCSPPolicy(policy)

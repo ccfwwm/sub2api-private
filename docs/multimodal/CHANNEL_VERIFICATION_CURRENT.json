@@ -1,110 +1,135 @@
 {
-  "version": "v1.2.0",
+  "version": "v1.2.1",
   "status": "recorded",
-  "verified_at": "2026-10-13T14:06:22.526727+00:00",
-  "environment": "isolated v1.2.0 application on production host, independent PostgreSQL/Redis",
-  "policy": "One representative per adapter; no generation, no price investigation, no billable retries per user instruction.",
+  "verified_at": "2026-10-13T15:18:39.965477+00:00",
+  "environment": "production, existing user-generated artifacts; authenticated preview retrieval",
+  "policy": "Reuse existing real video/audio outputs. No price changes or new billable generation requests.",
   "cases": [
     {
-      "production_account_id": 2092,
-      "isolated_account_id": 1,
+      "account_id": 2092,
+      "model": "veo-3.1-lite",
+      "test_id": "mt_1cc1494562d74c4e8a8601bf2f269e18",
+      "upstream_task_id": "task_dWPBotQpLM6cfM8v8BdEtc6wJe3R2BZL",
+      "status": "completed",
+      "mime_type": "video/mp4",
+      "bytes": 931678,
+      "sha256": "2129273bb123fc5520e72aae2165235dca3af09a4440ff7d2eb065186dcea1f7",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "8.000000"
+        }
+      },
+      "verification": "real_generation",
+      "generation_submitted_by_this_run": false,
+      "checked_path": "/api/v1/admin/accounts/2092/tests/mt_1cc1494562d74c4e8a8601bf2f269e18/artifacts/video1",
+      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
+      "verified_at": "2026-10-13T15:12:01.350494+00:00"
+    },
+    {
+      "account_id": 2092,
       "model": "omni-flash",
-      "adapter": "yunfei_omni",
-      "media_type": "video",
-      "generation_interface": "/v1/videos",
-      "verification": "real_connection",
-      "method": "GET",
-      "checked_path": "/v1/models",
+      "test_id": "mt_84ec4f8924f646e089b2a427084930a5",
+      "upstream_task_id": "task_nmw1Ca3538m9xdjimfM18k7LfLxuHWkc",
       "status": "completed",
-      "test_id": "mt_956bb5c3e7594593a216b8df6e16db64",
-      "verified_at": "2026-10-13T13:20:11.612039413Z",
-      "elapsed_seconds": 1.833,
-      "record_query_status": 200,
-      "unauthenticated_query_status": 401,
-      "generation_attempted": false,
-      "scope": "Authenticated provider model-list connectivity; generation endpoint and artifacts not exercised.",
-      "model_list_validated": true,
-      "discovered_models": 4,
-      "model_list_rechecked_at": "2026-10-13T14:06:20.030598+00:00"
+      "mime_type": "video/mp4",
+      "bytes": 511265,
+      "sha256": "1de33e9b91591e09082cd096ff14b8a4bdd9b55f24ef6bfcc41c17346f2a8ab9",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "4.010000"
+        }
+      },
+      "verification": "real_generation",
+      "generation_submitted_by_this_run": false,
+      "checked_path": "/api/v1/admin/accounts/2092/tests/mt_84ec4f8924f646e089b2a427084930a5/artifacts/video1",
+      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
+      "verified_at": "2026-10-13T15:12:01.350494+00:00"
     },
     {
-      "production_account_id": 2093,
-      "isolated_account_id": 2,
-      "model": "gemini-3.1-flash-image-preview",
-      "adapter": "yunfei_gemini_native",
-      "media_type": "image",
-      "generation_interface": "/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
-      "verification": "real_connection",
-      "method": "GET",
-      "checked_path": "/v1/models",
+      "account_id": 2094,
+      "model": "lyria-3-pro",
+      "test_id": "mt_df9e96fefd9a4a998abe6333288d41f6",
+      "upstream_task_id": "gen_74920ea4-524e-4380-8f69-6f86d218fdf0",
       "status": "completed",
-      "test_id": "mt_58774e6f475743028991597b3bde75dc",
-      "verified_at": "2026-10-13T13:20:12.387941568Z",
-      "elapsed_seconds": 0.746,
-      "record_query_status": 200,
-      "unauthenticated_query_status": 401,
-      "generation_attempted": false,
-      "scope": "Authenticated provider model-list connectivity; generation endpoint and artifacts not exercised.",
-      "model_list_validated": true,
-      "discovered_models": 2,
-      "model_list_rechecked_at": "2026-10-13T14:06:20.862069+00:00"
-    },
-    {
-      "production_account_id": 2094,
-      "isolated_account_id": 3,
-      "model": "lyria-3.5",
-      "adapter": "yunfei_lyria",
-      "media_type": "audio",
-      "generation_interface": "/v1/chat/completions",
-      "verification": "real_connection",
-      "method": "GET",
-      "checked_path": "/v1/models",
-      "status": "completed",
-      "test_id": "mt_7a71d2ab19a84c2b988896f46194810c",
-      "verified_at": "2026-10-13T13:20:13.172452695Z",
-      "elapsed_seconds": 0.774,
-      "record_query_status": 200,
-      "unauthenticated_query_status": 401,
-      "generation_attempted": false,
-      "scope": "Authenticated provider model-list connectivity; generation endpoint and artifacts not exercised.",
-      "model_list_validated": true,
-      "discovered_models": 2,
-      "model_list_rechecked_at": "2026-10-13T14:06:21.702846+00:00"
-    },
-    {
-      "production_account_id": 2095,
-      "isolated_account_id": 4,
-      "model": "gpt-image-2",
-      "adapter": "yunfei_gpt_images",
-      "media_type": "image",
-      "generation_interface": "/v1/images/generations",
-      "verification": "real_connection",
-      "method": "GET",
-      "checked_path": "/v1/models",
-      "status": "completed",
-      "test_id": "mt_a92d9979a63942b6b12667c5881a4eae",
-      "verified_at": "2026-10-13T13:20:13.945612403Z",
-      "elapsed_seconds": 0.759,
-      "record_query_status": 200,
-      "unauthenticated_query_status": 401,
-      "generation_attempted": false,
-      "scope": "Authenticated provider model-list connectivity; generation endpoint and artifacts not exercised.",
-      "model_list_validated": true,
-      "discovered_models": 1,
-      "model_list_rechecked_at": "2026-10-13T14:06:22.526660+00:00"
+      "mime_type": "audio/mp4",
+      "bytes": 836539,
+      "sha256": "bf74a6692fb1992e3e51898264e6ec828a1a9eb03c8328a8e8d8f678b97041c0",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "58.688000"
+        }
+      },
+      "verification": "real_generation",
+      "generation_submitted_by_this_run": false,
+      "checked_path": "/api/v1/admin/accounts/2094/tests/mt_df9e96fefd9a4a998abe6333288d41f6/artifacts/audio1",
+      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
+      "verified_at": "2026-10-13T15:12:01.350494+00:00"
     }
   ],
-  "generation_verification": {
-    "status": "not_performed",
-    "reason": "User requested connectivity only and exclusion of expensive generation tests."
+  "browser_preview": {
+    "before": {
+      "video_error": 4,
+      "audio_error": 4,
+      "reason": "CSP has no media-src; default-src self blocks blob URLs"
+    },
+    "after_test_response_header_override": {
+      "video": {
+        "duration_seconds": 4.01,
+        "current_time_seconds": 0.48008,
+        "ready_state": 4,
+        "play_error": null
+      },
+      "audio": {
+        "duration_seconds": 58.688,
+        "current_time_seconds": 0.624992,
+        "ready_state": 4,
+        "play_error": null
+      }
+    },
+    "scope": "Production bytes in Chromium. Only test-browser document response header was overridden to reproduce the candidate media-src fix; production headers are verified after deployment.",
+    "production_domains": [
+      "https://code.aicodeme.cn",
+      "https://code.aicodeme.xyz",
+      "https://hkcode.aicodeme.xyz"
+    ]
   },
+  "new_generation_requests": 0,
   "application_checks": {
-    "records_available_after_restart": true,
-    "enable_without_generation_or_price": true,
-    "enabled_toggle_preserves_verification": true,
-    "capability_change_marks_old_record": true,
-    "atomic_mapping_roundtrip": true,
-    "isolated_generation_tasks": 0,
-    "isolated_user_usage_logs": 0
+    "csp_middleware_tests_passed": true,
+    "account_test_ui_tests_passed": 10,
+    "typecheck_lint_build_passed": true
   }
 }

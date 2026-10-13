@@ -281,8 +281,10 @@
           :key="`audio-${index}`"
           class="rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-500 dark:bg-dark-700"
         >
-          <audio :src="audio.url" controls class="w-full" :type="audio.mimeType" />
+          <audio :src="audio.url" controls preload="metadata" class="w-full" @error="previewErrors[audio.url] = true" @loadedmetadata="delete previewErrors[audio.url]" />
           <div class="mt-1 text-xs text-gray-500 dark:text-gray-300">{{ audio.mimeType || 'audio/*' }}</div>
+          <p v-if="previewErrors[audio.url]" role="alert" class="mt-2 text-xs text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
+          <a v-if="previewErrors[audio.url]" :href="audio.url" :download="`test-audio-${index + 1}`" class="text-xs text-primary-500">{{ tr('下载音频', 'Download audio') }}</a>
         </div>
       </div>
 
@@ -295,9 +297,11 @@
           :key="`video-${index}`"
           class="overflow-hidden rounded-xl border border-gray-200 bg-black dark:border-dark-500"
         >
-          <video :src="video.url" controls class="max-h-[360px] w-full" :type="video.mimeType" />
+          <video :src="video.url" controls preload="metadata" class="max-h-[360px] w-full" @error="previewErrors[video.url] = true" @loadedmetadata="delete previewErrors[video.url]" />
           <div class="border-t border-gray-100 bg-white px-3 py-1.5 text-xs text-gray-500 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-300">
             {{ video.mimeType || 'video/*' }}
+            <p v-if="previewErrors[video.url]" role="alert" class="mt-2 text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
+            <a v-if="previewErrors[video.url]" :href="video.url" :download="`test-video-${index + 1}`" class="text-primary-500">{{ tr('下载视频', 'Download video') }}</a>
           </div>
         </div>
       </div>
@@ -450,11 +454,12 @@ const resetPrompt = () => { testPrompt.value = defaultPrompt.value }
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 const previewURLs = new Set<string>()
 const previewSources = new Set<string>()
-const clearPreviews = () => { for (const url of previewURLs) URL.revokeObjectURL(url); previewURLs.clear(); previewSources.clear() }
+const previewErrors = ref<Record<string, boolean>>({})
+const previewErrorHint = computed(() => tr('产物已生成，但浏览器无法播放。请刷新页面后重新查看记录，或下载文件播放；不会重新生成。', 'The artifact was generated, but this browser cannot play it. Refresh and reopen the record, or download the file; no new generation is submitted.'))
+const clearPreviews = () => { for (const url of previewURLs) URL.revokeObjectURL(url); previewURLs.clear(); previewSources.clear(); previewErrors.value = {} }
 const stopPolling = () => { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined }
 async function addPreview(type: string, url: string, mimeType?: string) {
   if (previewSources.has(url)) return
-  previewSources.add(url)
   let preview = url
   if (url.startsWith('/api/v1/admin/accounts/')) {
     const response = await fetch(buildApiUrl(url.replace('/api/v1', '')), { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}`, [ADMIN_UI_REQUEST_HEADER]: '1' } })
@@ -462,6 +467,7 @@ async function addPreview(type: string, url: string, mimeType?: string) {
     preview = URL.createObjectURL(await response.blob()); previewURLs.add(preview)
   }
   const target = type === 'image' ? generatedImages : type === 'video' ? generatedVideos : generatedAudios
+  previewSources.add(url)
   target.value.push({url:preview, mimeType})
 }
 async function applySavedTest(result: SavedTest) {
@@ -719,6 +725,8 @@ const promptInputHint = computed(() => {
 })
 
 const testModeSummary = computed(() => {
+  if (testKind.value === 'connection') return tr('连接检查', 'Connection check')
+  if (isMediaAccount.value) return `${tr('提示词', 'Prompt')}: ${testPrompt.value || defaultPrompt.value}`
   if (isGrokAccount.value) {
     switch (grokTestMode.value) {
       case 'video':
@@ -1014,7 +1022,11 @@ const handleEvent = async (event: {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
       }
       addLine(
-        isGrokAccount.value
+        testKind.value === 'connection'
+          ? tr('检查接口连接', 'Checking API connectivity')
+          : isMediaAccount.value
+            ? `${tr('发送生成请求，提示词', 'Sending generation request, prompt')}: ${testPrompt.value || defaultPrompt.value}`
+            : isGrokAccount.value
           ? grokTestMode.value === 'video'
             ? t('admin.accounts.sendingVideoRequest')
             : grokTestMode.value === 'image'

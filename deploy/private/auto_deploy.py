@@ -52,7 +52,7 @@ except Exception:
     return read(path)
 
 def verify_online(version, image_id):
-    for base in ['http://127.0.0.1:8081', 'https://code.aicodeme.xyz']:
+    for base in ['http://127.0.0.1:8081', 'https://code.aicodeme.cn', 'https://code.aicodeme.xyz', 'https://hkcode.aicodeme.xyz']:
         run(['curl','-fsS','--max-time','15',base + '/health'])
         settings = json.loads(run(['curl','-fsS','--max-time','15',base + '/api/v1/settings/public']))
         if settings['data']['version'].lstrip('v') != version.lstrip('v'):

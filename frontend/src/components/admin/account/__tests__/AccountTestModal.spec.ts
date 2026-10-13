@@ -118,6 +118,7 @@ describe('AccountTestModal', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('gemini 图片模型测试会携带提示词并渲染图片预览', async () => {
@@ -268,6 +269,43 @@ describe('AccountTestModal', () => {
     const calls=(global.fetch as any).mock.calls.length
     await (wrapper.vm as any).startTest();expect((global.fetch as any).mock.calls.length).toBe(calls)
     wrapper.unmount()
+  })
+
+  it.each([
+    { type: 'video', model: 'omni-flash', mime: 'video/mp4' },
+    { type: 'audio', model: 'lyria-3-pro', mime: 'audio/mp4' }
+  ])('$type 持久产物经过认证加载，播放错误明确提示且不会重新生成', async ({ type, model, mime }) => {
+    const cap = newMediaCapability(model)
+    const source = '/api/v1/admin/accounts/42/tests/mt_saved/artifacts/media1'
+    getAvailableModels.mockResolvedValue([{ id: model, display_name: model }])
+    const objectURL = `blob:saved-${type}`
+    const createObjectURL = vi.fn(() => objectURL)
+    const revokeObjectURL = vi.fn()
+    const OriginalURL = globalThis.URL
+    vi.stubGlobal('URL', Object.assign(class extends OriginalURL {}, { createObjectURL, revokeObjectURL }))
+    const result = {
+      test_id: 'mt_saved', model, status: 'completed', test_kind: 'minimal', operation: type,
+      started_at: new Date().toISOString(), config_changed: false, request: {},
+      artifacts: [{ type, content_url: source, mime_type: mime, available: true }]
+    }
+    global.fetch = vi.fn().mockImplementation((url) => Promise.resolve(url.includes('/artifacts/')
+      ? { ok: true, blob: async () => new Blob(['saved media'], { type: mime }) }
+      : { ok: true, status: 200, json: async () => ({ data: result }) })) as any
+    const wrapper = mountModal({ id: 42, name: 'Media', platform: 'imagevideo', type: 'apikey', status: 'active', extra: { media_models: [cap] } })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    const player = wrapper.find(type)
+    expect(player.attributes('src')).toBe(objectURL)
+    const artifactCall = (global.fetch as any).mock.calls.find((call: any[]) => call[0].includes('/artifacts/'))
+    expect(artifactCall[1].headers.Authorization).toBe('Bearer test-token')
+    await player.trigger('error')
+    expect(wrapper.find('[role="alert"]').text()).toContain('浏览器无法播放')
+    expect(wrapper.find('a[download]').attributes('href')).toBe(objectURL)
+    expect((global.fetch as any).mock.calls.every((call: any[]) => !call[1]?.method)).toBe(true)
+    await player.trigger('loadedmetadata')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+    expect(revokeObjectURL).toHaveBeenCalledWith(objectURL)
   })
 
 })

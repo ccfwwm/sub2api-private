@@ -56,6 +56,12 @@ var requiredCSPDirectiveValues = []struct {
 	// 插件配置 UI 使用同源 iframe；目标响应仍必须显式放开 X-Frame-Options，
 	// 因此这里只允许 'self' 不会使其他默认 DENY 的管理/API 页面可被嵌入。
 	{"frame-src", "'self'"},
+	// Authenticated media previews use local blobs; older tests also return
+	// inline data and HTTPS provider URLs. Upgrade existing CSP configurations.
+	{"media-src", "'self'"},
+	{"media-src", "blob:"},
+	{"media-src", "data:"},
+	{"media-src", "https:"},
 	{"script-src", CloudflareInsightsDomain},
 	{"script-src", TencentCaptchaDomain},
 	{"frame-src", TencentCaptchaDomain},

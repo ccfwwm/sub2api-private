@@ -11,6 +11,13 @@ from auto_deploy import check_order, dispatch
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
+ def test_online_verification_requires_all_production_domains(self):
+  with patch('auto_deploy.run',return_value=b'{"data":{"version":"1.2.1"}}') as run,patch('auto_deploy.inspect',return_value={'Image':'fixed-image'}):
+   auto_deploy.verify_online('v1.2.1','fixed-image')
+  checked=[call.args[0][-1] for call in run.call_args_list]
+  for base in ['http://127.0.0.1:8081','https://code.aicodeme.cn','https://code.aicodeme.xyz','https://hkcode.aicodeme.xyz']:
+   self.assertIn(base+'/health',checked)
+   self.assertIn(base+'/api/v1/settings/public',checked)
  def test_older_release_rejected(self):
   with self.assertRaisesRegex(ValueError,'older'):check_order('v1.1.7','v1.2.0')
   check_order('v1.2.0','v1.2.0');check_order('v1.3.0','v1.2.0')
