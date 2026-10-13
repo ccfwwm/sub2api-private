@@ -104,7 +104,7 @@ func TestMediaExactIDsAndValidation(t *testing.T) {
 	require.NoError(t, validatePricingBillingMode([]ChannelModelPricing{p}))
 	require.Nil(t, exactMediaPricing([]ChannelModelPricing{p}, "doubao-seedance-2-5/65z"))
 	clone := p.Clone()
-	*clone.PerRequestPrice = 2
+	clone.PerRequestPrice = float64Ptr(2)
 	require.Equal(t, 0.0, *p.PerRequestPrice)
 	require.NotEqual(t, mediaVersion(p), mediaVersion(clone))
 	p.PerRequestPrice = nil

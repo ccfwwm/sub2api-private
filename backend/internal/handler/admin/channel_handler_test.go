@@ -268,7 +268,7 @@ func TestChannelToResponse_MultipleEntries(t *testing.T) {
 	require.Equal(t, int64(3), resp.ModelPricing[2].ID)
 	require.Equal(t, "gemini", resp.ModelPricing[2].Platform)
 	require.Equal(t, []string{"gemini-2.5-pro"}, resp.ModelPricing[2].Models)
-	require.Equal(t, "image", resp.ModelPricing[2].BillingMode)
+	require.Equal(t, "per_request", resp.ModelPricing[2].BillingMode)
 	require.Equal(t, float64Ptr(0.05), resp.ModelPricing[2].ImageOutputPrice)
 }
 
