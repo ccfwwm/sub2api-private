@@ -676,6 +676,7 @@ export default {
     },
     detail: {
       noModels: '该分组暂未配置模型',
+      mediaCapabilities: '媒体能力',
       noPricing: '未配置定价',
       peakNote: '高峰时段 {window} 计费倍率 ×{multiplier}',
       longContextDisabledNote: '该分组未启用长上下文阶梯计费，超阈值请求仍按基础档计费，官方阶梯仅供参考'

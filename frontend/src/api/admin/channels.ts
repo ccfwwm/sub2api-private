@@ -3,7 +3,6 @@
  * Handles channel management for administrators
  */
 
-import type { MediaPricing } from '@/types/media'
 import { apiClient } from '../client'
 import type { BillingMode, ChannelStatus, BillingModelSource } from '@/constants/channel'
 
@@ -40,7 +39,6 @@ export interface ChannelTimePricing {
 }
 
 export interface ChannelModelPricing {
-  media?: MediaPricing
   id?: number
   platform: string
   models: string[]

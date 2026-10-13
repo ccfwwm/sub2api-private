@@ -53,7 +53,6 @@
 
     <!-- 模型价格表:整行(含 hover 底色/分区底色)顶到卡片边缘,左右留白由表格首列/末列的 padding 提供 -->
     <div>
-      <PlazaMediaPricing v-if="group.media_models?.length" :models="group.media_models" :multiplier="group.user_rate_multiplier ?? group.rate_multiplier" :image-multiplier="group.image_rate_independent ? group.image_rate_multiplier : undefined" :video-multiplier="group.video_rate_independent ? group.video_rate_multiplier : undefined" />
       <PlazaModelPricingTable
         v-if="group.models.length > 0"
         :models="group.models"
@@ -67,7 +66,22 @@
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
       />
-      <p v-else-if="!group.media_models?.length" class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
+      <div v-if="group.media_models?.length" class="border-t border-gray-100 px-5 py-3 dark:border-dark-700/60">
+        <div class="mb-2 text-xs font-medium text-gray-500 dark:text-dark-400">
+          {{ t('modelPlaza.detail.mediaCapabilities') }}
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span
+            v-for="model in group.media_models"
+            :key="`${model.media_type}:${model.model}`"
+            class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-dark-300"
+          >
+            <span class="font-medium">{{ model.model }}</span>
+            <span class="text-gray-400">{{ model.media_type }}</span>
+          </span>
+        </div>
+      </div>
+      <p v-else-if="!group.models.length" class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
       </p>
     </div>
@@ -80,7 +94,6 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
-import PlazaMediaPricing from './PlazaMediaPricing.vue'
 import type { ModelPlazaGroup } from '@/api/modelPlaza'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBorderStrongClass } from '@/utils/platformColors'

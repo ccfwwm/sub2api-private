@@ -183,18 +183,6 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 				return
 			}
 			dto.MediaModels = catalog
-			managed, err := h.media.Engine.ManagedModels(c.Request.Context(), dto.ID, "")
-			if err != nil {
-				response.ErrorFrom(c, err)
-				return
-			}
-			filtered := []modelPlazaModel{}
-			for _, model := range dto.Models {
-				if !managed[model.Name] {
-					filtered = append(filtered, model)
-				}
-			}
-			dto.Models = filtered
 		}
 		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {
 			continue

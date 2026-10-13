@@ -245,7 +245,7 @@ func TestChannelToResponse_MultipleEntries(t *testing.T) {
 				ID:               3,
 				Platform:         "gemini",
 				Models:           []string{"gemini-2.5-pro"},
-				BillingMode:      service.BillingModeImage,
+				BillingMode:      service.BillingModePerRequest,
 				ImageOutputPrice: float64Ptr(0.05),
 				PerRequestPrice:  float64Ptr(0.2),
 			},

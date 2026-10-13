@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,8 +29,26 @@ type unifiedMediaGroups struct {
 func (s unifiedMediaGroups) GetByID(context.Context, int64) (*Group, error) { return s.group, nil }
 
 func mediaTestPrice(model, unit, source, value string) ChannelModelPricing {
-	p := ChannelModelPricing{Platform: PlatformImageVideo, Models: []string{model}, BillingMode: BillingModePerRequest, Media: &MediaPricing{MediaType: "video", SuccessPolicy: "any_output"}}
-	p.Media.Rules = []media.Rule{{Priority: 0, When: map[string]any{}, Charges: []media.Charge{{Name: "generation", Unit: unit, Price: &value, QuantitySource: source, Trigger: "success", Refundable: true, Method: "linear", Rounding: media.Rounding{Mode: "none", Step: "1", Minimum: "0", Scope: "aggregate"}}}}}
+	price := 0.0
+	if _, err := fmt.Sscanf(value, "%f", &price); err != nil {
+		panic(err)
+	}
+	mode := BillingModePerRequest
+	if unit == "second" {
+		mode = BillingModeVideo
+	}
+	if unit == "token" {
+		mode = BillingModeToken
+	}
+	p := ChannelModelPricing{Platform: PlatformImageVideo, Models: []string{model}, BillingMode: mode}
+	switch mode {
+	case BillingModeToken:
+		p.OutputPrice = &price
+	case BillingModeVideo:
+		p.PerRequestPrice = &price
+	default:
+		p.PerRequestPrice = &price
+	}
 	return p
 }
 func mediaTestCapability() media.Capability {
@@ -82,14 +101,14 @@ func TestUnifiedMediaPricingAndSnapshot(t *testing.T) {
 }
 func TestMediaExactIDsAndValidation(t *testing.T) {
 	p := mediaTestPrice("doubao-seedance-2-5/65Z", "request", "task_count", "0")
-	require.NoError(t, ValidateMediaPricing(p))
+	require.NoError(t, validatePricingBillingMode([]ChannelModelPricing{p}))
 	require.Nil(t, exactMediaPricing([]ChannelModelPricing{p}, "doubao-seedance-2-5/65z"))
 	clone := p.Clone()
-	*clone.Media.Rules[0].Charges[0].Price = "2"
-	require.Equal(t, "0", *p.Media.Rules[0].Charges[0].Price)
+	*clone.PerRequestPrice = 2
+	require.Equal(t, 0.0, *p.PerRequestPrice)
 	require.NotEqual(t, mediaVersion(p), mediaVersion(clone))
-	p.Media.Rules[0].Charges[0].Price = nil
-	require.Error(t, ValidateMediaPricing(p))
+	p.PerRequestPrice = nil
+	require.Error(t, validatePricingBillingMode([]ChannelModelPricing{p}))
 	cap := mediaTestCapability()
 	cap.ID = ""
 	cap.Version = ""
@@ -97,6 +116,90 @@ func TestMediaExactIDsAndValidation(t *testing.T) {
 	require.Error(t, ValidateMediaAccount(PlatformOpenAI, AccountTypeAPIKey, map[string]any{"media_models": []media.Capability{cap}}))
 	require.Error(t, ValidateMediaAccount(PlatformImageVideo, AccountTypeOAuth, nil))
 }
+
+func TestStandardMediaPricingProjectsExistingEntries(t *testing.T) {
+	model := "00sd2.5"
+	perRequest := 1.25
+	imageCard := standardMediaCard(ChannelModelPricing{
+		Platform:        PlatformImageVideo,
+		BillingMode:     BillingModePerRequest,
+		PerRequestPrice: &perRequest,
+	}, model, "image", "group", "1", "sale", "image")
+	require.NoError(t, media.ValidatePriceCard(imageCard, true))
+	require.Equal(t, "image", imageCard.MediaType)
+	require.Len(t, imageCard.Rules, 1)
+	require.Equal(t, "request", imageCard.Rules[0].Charges[0].Unit)
+	require.Equal(t, "task_count", imageCard.Rules[0].Charges[0].QuantitySource)
+
+	videoPrice := 0.04
+	videoTier := 0.08
+	videoCard := standardMediaCard(ChannelModelPricing{
+		Platform:        PlatformImageVideo,
+		BillingMode:     BillingModeVideo,
+		PerRequestPrice: &videoPrice,
+		Intervals:       []PricingInterval{{TierLabel: "720p", PerRequestPrice: &videoTier}},
+	}, model, "video", "group", "1", "sale", "video")
+	require.NoError(t, media.ValidatePriceCard(videoCard, true))
+	require.Len(t, videoCard.Rules, 2)
+	require.Equal(t, "720p", videoCard.Rules[0].When["resolution"])
+	require.Equal(t, "second", videoCard.Rules[0].Charges[0].Unit)
+	require.Equal(t, "request_duration", videoCard.Rules[0].Charges[0].QuantitySource)
+
+	tierRule, err := media.MatchRule(videoCard, map[string]any{"resolution": "720p"})
+	require.NoError(t, err)
+	tierQuote, err := media.Calculate(tierRule, map[string][]string{"request_duration": {"30"}}, "1", "1", "success", nil)
+	require.NoError(t, err)
+	require.Equal(t, "2.40000000", tierQuote.Total)
+
+	defaultRule, err := media.MatchRule(videoCard, map[string]any{"resolution": "1080p"})
+	require.NoError(t, err)
+	defaultQuote, err := media.Calculate(defaultRule, map[string][]string{"request_duration": {"30"}}, "1", "1", "success", nil)
+	require.NoError(t, err)
+	require.Equal(t, "1.20000000", defaultQuote.Total)
+}
+
+func TestUnifiedMediaConfigUsesOrdinaryPricingWithoutMediaJSON(t *testing.T) {
+	ctx := context.Background()
+	cap := mediaTestCapability()
+	price, free := 0.04, 0.0
+	sale := ChannelModelPricing{Platform: PlatformImageVideo, Models: []string{cap.Model}, BillingMode: BillingModeVideo, PerRequestPrice: &price}
+	groupPrice := ChannelModelPricing{Platform: PlatformImageVideo, Models: []string{cap.Model}, BillingMode: BillingModeVideo, PerRequestPrice: &free}
+	group := &Group{ID: 1, Platform: PlatformImageVideo, ModelPricing: []ChannelModelPricing{groupPrice}}
+	account := &Account{ID: 2, Platform: PlatformImageVideo, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Extra: map[string]any{"media_models": []media.Capability{cap}}}
+	channel := Channel{ID: 3, Status: StatusActive, GroupIDs: []int64{1}, ModelPricing: []ChannelModelPricing{sale}}
+	repo := makeStandardRepo(channel, map[int64]string{1: PlatformImageVideo})
+	channels := NewChannelService(repo, nil, nil, nil, nil)
+	e := &media.Engine{Config: UnifiedMediaConfig(unifiedMediaAccounts{list: []Account{*account}}, unifiedMediaGroups{group: group}, channels), Lookup: func(id, group int64) (media.Account, error) { return media.Account{ID: id, Allowed: true}, nil }}
+
+	selected, err := e.Capability(ctx, cap.Model, "video", media.Identity{GroupID: 1})
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	req, err := media.Normalize(*selected, "video", map[string]any{"model": cap.Model, "prompt": "test"})
+	require.NoError(t, err)
+	_, _, quote, err := e.Snapshot(ctx, *selected, req, media.Identity{GroupID: 1, Multiplier: "1", TimeMultiplier: "1"})
+	require.NoError(t, err)
+	require.Equal(t, "0.00000000", quote.Total)
+}
+
+func TestStandardMediaTokenPricingRequiresProviderUsage(t *testing.T) {
+	input, output := 0.000001, 0.000002
+	card := standardMediaCard(ChannelModelPricing{
+		Platform:    PlatformImageVideo,
+		BillingMode: BillingModeToken,
+		InputPrice:  &input,
+		OutputPrice: &output,
+	}, "image-model", "image", "group", "1", "sale", "image")
+	require.NoError(t, media.ValidatePriceCard(card, true))
+	require.Len(t, card.Rules[0].Charges, 2)
+	require.Equal(t, "input_tokens", *card.Rules[0].Charges[0].UsageField)
+	require.Equal(t, "output_tokens", *card.Rules[0].Charges[1].UsageField)
+
+	calculation, err := media.Calculate(card.Rules[0], map[string][]string{"task_count": {"1"}}, "1", "1", "success", nil)
+	require.NoError(t, err)
+	require.Contains(t, calculation.Missing, "provider_tokens.input_tokens")
+	require.Contains(t, calculation.Missing, "provider_tokens.output_tokens")
+}
+
 func TestMediaMultiAccountRequestSelection(t *testing.T) {
 	a := mediaTestCapability()
 	a.AccountIDs = []int64{1}

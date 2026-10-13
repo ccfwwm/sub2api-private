@@ -410,7 +410,7 @@ func TestResolve_WithChannelOverride_Image(t *testing.T) {
 	r := newResolverWithChannel(t, []ChannelModelPricing{{
 		Platform:        "anthropic",
 		Models:          []string{"claude-sonnet-4"},
-		BillingMode:     BillingModeImage,
+		BillingMode:     BillingModePerRequest,
 		PerRequestPrice: testPtrFloat64(0.08),
 		Intervals: []PricingInterval{
 			{TierLabel: "1K", PerRequestPrice: testPtrFloat64(0.04)},
@@ -425,7 +425,7 @@ func TestResolve_WithChannelOverride_Image(t *testing.T) {
 	})
 
 	require.NotNil(t, resolved)
-	require.Equal(t, BillingModeImage, resolved.Mode)
+	require.Equal(t, BillingModePerRequest, resolved.Mode)
 	require.Equal(t, "channel", resolved.Source)
 	require.InDelta(t, 0.08, resolved.DefaultPerRequestPrice, 1e-12)
 	require.Len(t, resolved.RequestTiers, 3)
@@ -435,7 +435,7 @@ func TestResolve_WithChannelOverride_ImageTierLabels(t *testing.T) {
 	r := newResolverWithChannel(t, []ChannelModelPricing{{
 		Platform:    "anthropic",
 		Models:      []string{"claude-sonnet-4"},
-		BillingMode: BillingModeImage,
+		BillingMode: BillingModePerRequest,
 		Intervals: []PricingInterval{
 			{TierLabel: "1K", PerRequestPrice: testPtrFloat64(0.04)},
 			{TierLabel: "2K", PerRequestPrice: testPtrFloat64(0.08)},

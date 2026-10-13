@@ -2481,7 +2481,7 @@ func TestValidatePricingBillingMode(t *testing.T) {
 		},
 		{
 			name:    "image no price no intervals - invalid",
-			pricing: []ChannelModelPricing{{BillingMode: BillingModeImage}},
+			pricing: []ChannelModelPricing{{BillingMode: BillingModePerRequest}},
 			wantErr: true,
 			errMsg:  "per-request price or intervals required",
 		},
@@ -2536,8 +2536,8 @@ func TestValidatePricingTimePricing(t *testing.T) {
 	implicitToken := []ChannelModelPricing{{TimePricing: validTimePricingForTest()}}
 	require.NoError(t, validatePricingTimePricing(implicitToken))
 
-	image := []ChannelModelPricing{{BillingMode: BillingModeImage, TimePricing: validTimePricingForTest()}}
-	modeErr := infraerrors.FromError(validatePricingTimePricing(image))
+	unsupported := []ChannelModelPricing{{BillingMode: BillingMode("unsupported"), TimePricing: validTimePricingForTest()}}
+	modeErr := infraerrors.FromError(validatePricingTimePricing(unsupported))
 	require.Equal(t, int32(http.StatusBadRequest), modeErr.Code)
 	require.Equal(t, "TIME_PRICING_UNSUPPORTED_MODE", modeErr.Reason)
 

@@ -81,7 +81,7 @@
               class="mt-1"
             />
           </div>
-          <div v-if="platform !== 'imagevideo'" class="w-40">
+          <div class="w-40">
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400">
               {{ t('admin.channels.form.billingMode') }}
             </label>
@@ -100,11 +100,7 @@
         </div>
 
         <!-- Token mode -->
-        <div v-if="platform === 'imagevideo'">
-          <MediaPricingEditor :model-value="entry.media" @update:model-value="emit('update', {...entry, media: $event, billing_mode: 'per_request'})" />
-          <TimePricingSection v-if="enableTimePricing" :model-value="entry.time_pricing" @update:model-value="emit('update', {...entry, time_pricing: $event})" />
-        </div>
-        <div v-else-if="entry.billing_mode === 'token'">
+        <div v-if="entry.billing_mode === 'token'">
           <!-- Default prices (fallback when no interval matches) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('admin.channels.form.defaultPrices') }}
@@ -228,12 +224,12 @@
           </div>
         </div>
 
-        <!-- Image/video mode -->
-        <div v-else-if="entry.billing_mode === 'image' || entry.billing_mode === 'video'">
-          <!-- Default image price (per-request, same as per_request mode) -->
+        <!-- Video mode -->
+        <div v-else-if="entry.billing_mode === 'video'">
+          <!-- Video prices use the existing per-request field, with seconds as the quantity. -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
-            {{ entry.billing_mode === 'video' ? t('admin.channels.form.defaultVideoPrice') : t('admin.channels.form.defaultImagePrice') }}
-            <span class="ml-1 font-normal text-gray-400">$</span>
+            {{ t('admin.channels.form.defaultVideoPrice') }}
+            <span class="ml-1 font-normal text-gray-400">$/秒</span>
           </label>
           <div class="mt-1 w-48">
             <input :value="entry.per_request_price" @input="emitField('per_request_price', ($event.target as HTMLInputElement).value)"
@@ -243,7 +239,7 @@
           <!-- Image tiers -->
           <div class="mt-3 flex items-center justify-between">
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {{ entry.billing_mode === 'video' ? t('admin.channels.form.videoTiers') : t('admin.channels.form.imageTiers') }}
+              {{ t('admin.channels.form.videoTiers') }}
             </label>
             <button type="button" @click="addMediaTier" class="text-xs text-primary-600 hover:text-primary-700">
               + {{ t('admin.channels.form.addTier') }}
@@ -307,8 +303,6 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
-import MediaPricingEditor from './MediaPricingEditor.vue'
-import { unitNames } from '@/types/media'
 import IntervalRow from './IntervalRow.vue'
 import ModelTagInput from './ModelTagInput.vue'
 import TimePricingSection from './TimePricingSection.vue'
@@ -318,7 +312,7 @@ import { REASONING_EFFORT_LEVELS, type ReasoningEffortLevel } from '@/constants/
 import type { BillingMode } from '@/api/admin/channels'
 import channelsAPI from '@/api/admin/channels'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   entry: PricingFormEntry
@@ -341,19 +335,12 @@ const emit = defineEmits<{
 const collapsed = ref(props.entry.models.length > 0)
 
 const billingModeOptions = computed(() => [
-  { value: 'token', label: t('admin.channels.billingMode.token') },
-  { value: 'per_request', label: t('admin.channels.billingMode.perRequest') },
-  { value: 'image', label: t('admin.channels.billingMode.image') },
-  { value: 'video', label: t('admin.channels.billingMode.video') }
+    { value: 'token', label: t('admin.channels.billingMode.token') },
+    { value: 'per_request', label: t('admin.channels.billingMode.perRequest') },
+    { value: 'video', label: t('admin.channels.billingMode.video') },
 ])
 
 const billingModeLabel = computed(() => {
-  if (props.platform === 'imagevideo') {
-    const zh = (locale?.value ?? 'zh').startsWith('zh')
-    const rules = props.entry.media?.rules || []
-    if (rules.length > 1) return zh ? `${rules.length} 个价格档` : `${rules.length} price tiers`
-    return rules[0]?.charges.map(c => `$${c.unit_price ?? '—'}/${unitNames[c.unit]?.[zh ? 0 : 1] || c.unit}`).join(' + ') || (zh ? '待配置' : 'Unconfigured')
-  }
   const opt = billingModeOptions.value.find(o => o.value === props.entry.billing_mode)
   return opt ? opt.label : props.entry.billing_mode
 })
@@ -422,8 +409,6 @@ function removeInterval(idx: number) {
 async function onModelsUpdate(newModels: string[]) {
   const oldModels = props.entry.models
   emit('update', { ...props.entry, models: newModels })
-  if (props.platform === 'imagevideo') return
-
   // 仅在「空条目首次加入单个模型」时自动填充默认价：
   // 条目已有模型时（即使价格留空、按各模型的官方默认价回退）追加模型不应改写整条价格，
   // 一次加入多个模型也不应把第一个模型的价格套用到整条，否则条目内所有模型都会被静默改价。
@@ -432,6 +417,10 @@ async function onModelsUpdate(newModels: string[]) {
 
   // 检查是否所有价格字段都为空
   const e = props.entry
+  // Media entries use the existing per-request/video fields. Do not copy a
+  // token default price into those entries when a model is added.
+  if (props.entry.billing_mode !== 'token') return
+
   const hasPrice = e.input_price != null || e.output_price != null ||
                    e.cache_write_price != null || e.cache_write_1h_price != null || e.cache_read_price != null
   if (hasPrice) return

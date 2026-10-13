@@ -277,7 +277,7 @@ func TestListPlazaGroups_GroupImagePriceOverridesChannelPricing(t *testing.T) {
 		ModelPricing: []ChannelModelPricing{{
 			Platform:        "openai",
 			Models:          []string{"gpt-image-2"},
-			BillingMode:     BillingModeImage,
+			BillingMode:     BillingModePerRequest,
 			PerRequestPrice: &perReq,
 			Intervals:       []PricingInterval{{TierLabel: "4K", PerRequestPrice: &tier4K}},
 		}},
@@ -471,7 +471,7 @@ func TestListGroups_ImageModelKeepsTierSynthesisWithBilling(t *testing.T) {
 	channels := []Channel{{
 		ID: 1, Name: "ch", Status: StatusActive, GroupIDs: []int64{10},
 		ModelPricing: []ChannelModelPricing{{
-			Platform: PlatformOpenAI, Models: []string{"gpt-image-2"}, BillingMode: BillingModeImage,
+			Platform: PlatformOpenAI, Models: []string{"gpt-image-2"}, BillingMode: BillingModePerRequest,
 			PerRequestPrice: testPtrFloat64(0.04),
 		}},
 	}}
@@ -483,7 +483,7 @@ func TestListGroups_ImageModelKeepsTierSynthesisWithBilling(t *testing.T) {
 	out, err := svc.ListGroups(context.Background())
 	require.NoError(t, err)
 	m := out[0].Models[0]
-	require.Equal(t, BillingModeImage, m.Pricing.BillingMode)
+	require.Equal(t, BillingModePerRequest, m.Pricing.BillingMode)
 	require.Empty(t, m.LongContextBasis)
 	require.Len(t, m.Pricing.Intervals, 3)
 	require.InDelta(t, 0.02, *m.Pricing.Intervals[0].PerRequestPrice, 1e-12)

@@ -724,8 +724,8 @@ func validatePricingTimePricing(pricing []ChannelModelPricing) error {
 			continue
 		}
 		mode := pricing[i].BillingMode
-		if mode != "" && mode != BillingModeToken && pricing[i].Media == nil {
-			return infraerrors.BadRequest("TIME_PRICING_UNSUPPORTED_MODE", "time pricing only supports token billing mode")
+		if mode != "" && mode != BillingModeToken && mode != BillingModePerRequest && mode != BillingModeVideo {
+			return infraerrors.BadRequest("TIME_PRICING_UNSUPPORTED_MODE", "time pricing requires token, per_request, or video billing mode")
 		}
 		if err := validateChannelTimePricing(config); err != nil {
 			return infraerrors.BadRequest("INVALID_TIME_PRICING", fmt.Sprintf(
@@ -767,17 +767,11 @@ func validatePricingBillingMode(pricing []ChannelModelPricing) error {
 }
 
 func checkBillingModeRequirements(p ChannelModelPricing) error {
-	if p.Media != nil {
-		return ValidateMediaPricing(p)
-	}
-	if p.Platform == PlatformImageVideo {
-		return infraerrors.BadRequest("MEDIA_PRICE_REQUIRED", "Configure media model pricing")
-	}
-	if p.BillingMode == BillingModePerRequest || p.BillingMode == BillingModeImage || p.BillingMode == BillingModeVideo {
+	if p.BillingMode == BillingModePerRequest || p.BillingMode == BillingModeVideo {
 		if p.PerRequestPrice == nil && len(p.Intervals) == 0 {
 			return infraerrors.BadRequest(
 				"BILLING_MODE_MISSING_PRICE",
-				"per-request price or intervals required for per_request/image billing mode",
+				"per-request price or intervals required for per_request/video billing mode",
 			)
 		}
 	}

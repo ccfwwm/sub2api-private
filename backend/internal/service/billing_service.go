@@ -1514,7 +1514,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 	var breakdown *CostBreakdown
 	var err error
 	switch resolved.Mode {
-	case BillingModePerRequest, BillingModeImage, BillingModeVideo:
+	case BillingModePerRequest, BillingModeVideo:
 		breakdown, err = s.calculatePerRequestCost(resolved, input)
 		if err == nil && resolved.channelPricing != nil {
 			applyCostBreakdownMultiplier(breakdown, reasoningEffortBillingMultiplier(input.ReasoningEffort, resolved.channelPricing.ReasoningEffortMultipliers))
@@ -2201,7 +2201,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	return &CostBreakdown{
 		TotalCost:   totalCost,
 		ActualCost:  actualCost,
-		BillingMode: string(BillingModeImage),
+		BillingMode: string(BillingModePerRequest),
 	}
 }
 

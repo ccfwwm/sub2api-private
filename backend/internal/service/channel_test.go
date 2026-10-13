@@ -240,7 +240,7 @@ func TestBillingModeIsValid(t *testing.T) {
 	}{
 		{"token", BillingModeToken, true},
 		{"per_request", BillingModePerRequest, true},
-		{"image", BillingModeImage, true},
+		{"image", BillingModePerRequest, true},
 		{"empty", BillingMode(""), true},
 		{"unknown", BillingMode("unknown"), false},
 		{"random", BillingMode("xyz"), false},
@@ -462,7 +462,7 @@ func TestValidateIntervals_ImageModeAllowsMultipleUnboundedTiers(t *testing.T) {
 		{MinTokens: 0, MaxTokens: nil, TierLabel: "2K", PerRequestPrice: testPtrFloat64(0.06)},
 		{MinTokens: 0, MaxTokens: nil, TierLabel: "4K", PerRequestPrice: testPtrFloat64(0.08)},
 	}
-	require.NoError(t, ValidateIntervals(intervals, BillingModeImage))
+	require.NoError(t, ValidateIntervals(intervals, BillingModePerRequest))
 	require.NoError(t, ValidateIntervals(intervals, BillingModePerRequest))
 }
 
@@ -471,7 +471,7 @@ func TestValidateIntervals_ImageModeStillRejectsNegativePrice(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 0, MaxTokens: nil, TierLabel: "1K", PerRequestPrice: testPtrFloat64(-1)},
 	}
-	err := ValidateIntervals(intervals, BillingModeImage)
+	err := ValidateIntervals(intervals, BillingModePerRequest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must be >= 0")
 }
@@ -481,7 +481,7 @@ func TestValidateIntervals_ImageModeStillRejectsBadMaxTokens(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 100, MaxTokens: testPtrInt(50), TierLabel: "1K", PerRequestPrice: testPtrFloat64(0.04)},
 	}
-	err := ValidateIntervals(intervals, BillingModeImage)
+	err := ValidateIntervals(intervals, BillingModePerRequest)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must be > min_tokens")
 }

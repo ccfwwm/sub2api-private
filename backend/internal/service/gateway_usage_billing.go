@@ -1263,7 +1263,7 @@ func resolveBillingMode(result *ForwardResult, cost *CostBreakdown) *string {
 	case cost != nil && cost.BillingMode != "":
 		mode = cost.BillingMode
 	case result.ImageCount > 0:
-		mode = string(BillingModeImage)
+		mode = string(BillingModePerRequest)
 	default:
 		mode = string(BillingModeToken)
 	}

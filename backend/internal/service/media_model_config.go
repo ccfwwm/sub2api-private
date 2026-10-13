@@ -6,25 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
-
-// MediaPricing extends an ordinary model pricing entry. No supplier templates,
-// secrets or separately editable retail price cards are stored here.
-type MediaPricing struct {
-	MediaType   string       `json:"media_type"`
-	Rules       []media.Rule `json:"rules"`
-	Reservation struct {
-		MaximumCharge *string           `json:"maximum_charge"`
-		MaxQuantities map[string]string `json:"max_quantities"`
-		Overrun       string            `json:"overrun"`
-	} `json:"reservation"`
-	SuccessPolicy string `json:"success_policy"`
-}
 
 func mediaVersion(value any) string {
 	b, _ := json.Marshal(value)
@@ -32,39 +19,110 @@ func mediaVersion(value any) string {
 }
 
 func mediaCard(p ChannelModelPricing, model, operation, scope, reference, purpose string) media.PriceCard {
-	c := media.PriceCard{ID: scope + ":" + reference + ":" + p.Platform + ":" + model + ":" + operation, Version: mediaVersion(p), Purpose: purpose, Status: "enabled", Currency: "USD", Operation: operation, MediaType: p.Media.MediaType, Rules: p.Media.Rules, SuccessPolicy: p.Media.SuccessPolicy, MultiplierPolicy: "effective_media_then_time"}
+	return mediaCardForType(p, model, operation, scope, reference, purpose, mediaTypeForOperation(operation))
+}
+
+func mediaCardForType(p ChannelModelPricing, model, operation, scope, reference, purpose, mediaType string) media.PriceCard {
+	if mediaType == "" {
+		mediaType = mediaTypeForOperation(operation)
+	}
+	return standardMediaCard(p, model, operation, scope, reference, purpose, mediaType)
+}
+
+func mediaTypeForOperation(operation string) string {
+	switch operation {
+	case "image", "image_edit", "gemini_image":
+		return "image"
+	case "audio", "chat_music":
+		return "audio"
+	default:
+		return "video"
+	}
+}
+
+func floatPrice(v *float64) *string {
+	if v == nil {
+		return nil
+	}
+	s := strconv.FormatFloat(*v, 'f', -1, 64)
+	return &s
+}
+
+func mediaCharge(name, unit, source string, value *float64) (media.Charge, bool) {
+	price := floatPrice(value)
+	if price == nil {
+		return media.Charge{}, false
+	}
+	return media.Charge{Name: name, Unit: unit, Price: price, QuantitySource: source, Trigger: "success", Refundable: true, Method: "linear", Rounding: media.Rounding{Mode: "none", Step: "1", Minimum: "0", Scope: "aggregate"}}, true
+}
+
+// standardMediaCard projects the existing Sub2API pricing fields into the
+// asynchronous media engine. Administrators edit the ordinary pricing entry;
+// this card is only a runtime snapshot and is never persisted separately.
+func standardMediaCard(p ChannelModelPricing, model, operation, scope, reference, purpose, mediaType string) media.PriceCard {
+	if mediaType == "" {
+		mediaType = mediaTypeForOperation(operation)
+	}
+	c := media.PriceCard{ID: scope + ":" + reference + ":" + p.Platform + ":" + model + ":" + operation, Version: mediaVersion(p), Purpose: purpose, Status: "enabled", Currency: "USD", Operation: operation, MediaType: mediaType, MultiplierPolicy: "effective_media_then_time", SuccessPolicy: "any_output"}
 	if purpose == "cost" {
 		c.MultiplierPolicy = "account_cost_once"
 	}
 	c.ModelMatch.Kind, c.ModelMatch.Value = "exact", model
 	c.Scope.Kind, c.Scope.Reference = scope, reference
-	c.Reservation = p.Media.Reservation
-	if c.SuccessPolicy == "" {
-		c.SuccessPolicy = "any_output"
-	}
-	return c
-}
-
-func ValidateMediaPricing(p ChannelModelPricing) error {
-	if p.Media == nil {
-		return nil
-	}
-	if p.Platform != PlatformImageVideo {
-		return infraerrors.BadRequest("MEDIA_PLATFORM_REQUIRED", "Media pricing requires the imagevideo platform")
-	}
-	if len(p.Models) == 0 {
-		return infraerrors.BadRequest("MEDIA_MODEL_REQUIRED", "Exact model IDs are required")
-	}
-	for _, model := range p.Models {
-		if strings.TrimSpace(model) != model || model == "" || strings.Contains(model, "*") {
-			return infraerrors.BadRequest("INVALID_MEDIA_MODEL", "Media model IDs must be exact")
+	charges := []media.Charge{}
+	tokenMode := p.BillingMode == BillingModeToken || p.BillingMode == ""
+	switch p.BillingMode {
+	case BillingModeVideo:
+		if ch, ok := mediaCharge("generation", "second", "request_duration", p.PerRequestPrice); ok {
+			charges = append(charges, ch)
+		}
+	case BillingModeToken, "":
+		if ch, ok := mediaCharge("input_tokens", "token", "provider_tokens", p.InputPrice); ok {
+			field := "input_tokens"
+			ch.UsageField = &field
+			charges = append(charges, ch)
+		}
+		if ch, ok := mediaCharge("output_tokens", "token", "provider_tokens", p.OutputPrice); ok {
+			field := "output_tokens"
+			ch.UsageField = &field
+			charges = append(charges, ch)
+		}
+	default:
+		if ch, ok := mediaCharge("generation", "request", "task_count", p.PerRequestPrice); ok {
+			charges = append(charges, ch)
 		}
 	}
-	op := p.Media.MediaType
-	if err := media.ValidatePriceCard(mediaCard(p, p.Models[0], op, "group", "1", "sale"), true); err != nil {
-		return infraerrors.BadRequest("INVALID_MEDIA_PRICE", err.Error())
+	if len(charges) == 0 && len(p.Intervals) == 0 {
+		return c
 	}
-	return nil
+	priority := 0
+	for _, iv := range p.Intervals {
+		if tokenMode {
+			continue
+		}
+		if iv.PerRequestPrice == nil || iv.TierLabel == "" {
+			continue
+		}
+		unit, source := "request", "task_count"
+		if p.BillingMode == BillingModeVideo {
+			unit, source = "second", "request_duration"
+		}
+		ch, ok := mediaCharge("generation", unit, source, iv.PerRequestPrice)
+		if !ok {
+			continue
+		}
+		condition := "size_tier"
+		if p.BillingMode == BillingModeVideo {
+			condition = "resolution"
+		}
+		c.Rules = append(c.Rules, media.Rule{Priority: priority, When: map[string]any{condition: iv.TierLabel}, Charges: []media.Charge{ch}})
+		priority++
+	}
+	if len(charges) > 0 {
+		// The ordinary/default price is a fallback. Tier rules must be checked first.
+		c.Rules = append(c.Rules, media.Rule{Priority: priority, When: map[string]any{}, Charges: charges})
+	}
+	return c
 }
 
 func accountMediaModels(extra map[string]any) ([]media.Capability, error) {
@@ -112,7 +170,7 @@ func ValidateMediaAccount(platform, kind string, extra map[string]any) error {
 
 func exactMediaPricing(entries []ChannelModelPricing, model string) *ChannelModelPricing {
 	for _, p := range entries {
-		if p.Platform != PlatformImageVideo || p.Media == nil {
+		if p.Platform != PlatformImageVideo {
 			continue
 		}
 		for _, m := range p.Models {
@@ -180,10 +238,13 @@ func UnifiedMediaConfig(accounts AccountRepository, groups GroupRepository, chan
 				caps = append(caps, cap)
 				for _, op := range cap.Operations {
 					add := func(p *ChannelModelPricing, scope, ref, purpose string) {
-						if p == nil || p.Media.MediaType != cap.MediaType {
+						if p == nil {
 							return
 						}
-						card := mediaCard(*p, cap.Model, op, scope, ref, purpose)
+						card := mediaCardForType(*p, cap.Model, op, scope, ref, purpose, cap.MediaType)
+						if card.MediaType != cap.MediaType || len(card.Rules) == 0 {
+							return
+						}
 						if purpose == "sale" && p.TimePricing != nil {
 							card.TimeMultiplier = fmt.Sprint(p.TimePricing.MultiplierAt(time.Now()))
 						}

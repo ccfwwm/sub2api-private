@@ -891,7 +891,7 @@
 
         <!-- 图片生成计费配置 -->
         <div
-          v-if="supportsImagePricingPlatform(createForm.platform)"
+          v-if="false"
           class="border-t pt-4"
         >
           <label
@@ -1043,7 +1043,7 @@
 
         <!-- 视频生成计费配置（仅 Grok 平台） -->
         <div
-          v-if="supportsVideoPricingPlatform(createForm.platform)"
+          v-if="false"
           class="border-t pt-4"
         >
           <label
@@ -2531,7 +2531,7 @@
 
         <!-- 图片生成计费配置 -->
         <div
-          v-if="supportsImagePricingPlatform(editForm.platform)"
+          v-if="false"
           class="border-t pt-4"
         >
           <label
@@ -2683,7 +2683,7 @@
 
         <!-- 视频生成计费配置（仅 Grok 平台） -->
         <div
-          v-if="supportsVideoPricingPlatform(editForm.platform)"
+          v-if="false"
           class="border-t pt-4"
         >
           <label
@@ -4265,7 +4265,6 @@
 </template>
 
 <script setup lang="ts">
-import { validateMediaPricing } from '@/types/media'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
@@ -4370,8 +4369,6 @@ import {
   getImagePricePlaceholder,
   getVideoPricePlaceholder,
   imagePricingI18nKey,
-  supportsImagePricingPlatform,
-  supportsVideoPricingPlatform,
   videoPricingI18nKey,
 } from "./groupsImagePricing";
 import {
@@ -4409,7 +4406,6 @@ const groupPricingFromAPI = (
   (pricing || []).map((entry) => ({
     models: entry.models || [],
     billing_mode: entry.billing_mode || "token",
-    media: entry.media ? JSON.parse(JSON.stringify(entry.media)) : undefined,
     input_price: perTokenToMTok(entry.input_price),
     output_price: perTokenToMTok(entry.output_price),
     cache_write_price: perTokenToMTok(entry.cache_write_price),
@@ -4435,7 +4431,6 @@ const groupPricingToAPI = (
       platform,
       models: entry.models,
       billing_mode: entry.billing_mode,
-      media: platform === "imagevideo" ? entry.media : undefined,
       input_price: mTokToPerToken(entry.input_price),
       output_price: mTokToPerToken(entry.output_price),
       cache_write_price: mTokToPerToken(entry.cache_write_price),
@@ -5873,7 +5868,6 @@ const validateProfitControlForm = (form: ProfitControlFormState): boolean => {
 };
 
 const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean => {
-  for (const entry of pricing) { if (entry.media) { const problem = validateMediaPricing(entry.media); if (problem) { appStore.showError(problem); return false } } }
   for (const entry of pricing) {
     const error = validateReasoningEffortMultipliers(entry.reasoning_effort_multipliers, t);
     if (error) {

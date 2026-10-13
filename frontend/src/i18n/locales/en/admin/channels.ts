@@ -108,8 +108,8 @@ export default {
       billingMode: {
         token: 'Token',
         perRequest: 'Per Request',
-        image: 'Image (Per Request)',
-        video: 'Video (Per Second)'
+        image: 'Per Request',
+        video: 'Per Second'
       },
       form: {
         name: 'Name',
@@ -171,13 +171,13 @@ export default {
         inclusive: '(inclusive)',
         addInterval: 'Add Interval',
         requestTiers: 'Request Tiers',
-        imageTiers: 'Image Tiers (Per Request)',
+        imageTiers: 'Per-request Tiers',
         videoTiers: 'Video Resolution Tiers (Per Second)',
         addTier: 'Add Tier',
-        noTiersYet: 'No tiers yet. Click add to configure per-request pricing.',
+        noTiersYet: 'No tiers yet. Click add to configure pricing.',
         noPricingRules: 'No pricing rules yet. Click "Add" to create one.',
         perRequestPrice: 'Price per Request',
-        perRequestPriceRequired: 'Per-request price or billing tiers required for per-request/image billing mode',
+        perRequestPriceRequired: 'Default price or billing tiers required for per-request/per-second billing',
         tierLabel: 'Tier',
         resolution: 'Resolution',
         modelMapping: 'Model Mapping',
@@ -197,7 +197,7 @@ export default {
         restrictModels: 'Restrict Models',
         restrictModelsHint: 'When enabled, only models in the pricing list are allowed. Others will be rejected.',
         defaultPerRequestPrice: 'Default per-request price (fallback when no tier matches)',
-        defaultImagePrice: 'Default image price (fallback when no tier matches)',
+        defaultImagePrice: 'Default per-request price (fallback when no tier matches)',
         defaultVideoPrice: 'Default video price per second (fallback when no tier matches)',
         platformConfig: 'Platform Configuration',
         webSearchEmulation: 'Web Search Emulation',

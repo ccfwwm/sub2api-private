@@ -329,9 +329,9 @@ func TestAppendUsageLogBillingModeWhereCondition(t *testing.T) {
 		wantCondition string
 	}{
 		{
-			name:          "image includes explicit image and legacy image rows",
-			billingMode:   string(service.BillingModeImage),
-			wantCondition: "(billing_mode = $1 OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) > 0))",
+			name:          "per request remains exact",
+			billingMode:   string(service.BillingModePerRequest),
+			wantCondition: "billing_mode = $1",
 		},
 		{
 			name:          "video remains exact",
@@ -339,13 +339,8 @@ func TestAppendUsageLogBillingModeWhereCondition(t *testing.T) {
 			wantCondition: "billing_mode = $1",
 		},
 		{
-			name:          "token includes legacy non-image rows",
+			name:          "token remains exact",
 			billingMode:   string(service.BillingModeToken),
-			wantCondition: "(billing_mode = $1 OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) <= 0))",
-		},
-		{
-			name:          "per request remains exact",
-			billingMode:   string(service.BillingModePerRequest),
 			wantCondition: "billing_mode = $1",
 		},
 	}
@@ -360,16 +355,16 @@ func TestAppendUsageLogBillingModeWhereCondition(t *testing.T) {
 }
 
 func TestAppendUsageLogBillingModeWhereConditionWithAlias(t *testing.T) {
-	conditions, args := appendUsageLogBillingModeWhereConditionWithAlias(nil, nil, string(service.BillingModeImage), "ul")
+	conditions, args := appendUsageLogBillingModeWhereConditionWithAlias(nil, nil, string(service.BillingModePerRequest), "ul")
 
-	require.Equal(t, []string{"(ul.billing_mode = $1 OR ((ul.billing_mode IS NULL OR ul.billing_mode = '') AND COALESCE(ul.image_count, 0) > 0))"}, conditions)
-	require.Equal(t, []any{string(service.BillingModeImage)}, args)
+	require.Equal(t, []string{"ul.billing_mode = $1"}, conditions)
+	require.Equal(t, []any{string(service.BillingModePerRequest)}, args)
 }
 
 func TestAppendUsageLogBillingModeQueryFilter(t *testing.T) {
 	query, args := appendUsageLogBillingModeQueryFilter("SELECT * FROM usage_logs WHERE user_id = $1", []any{int64(42)}, string(service.BillingModeToken), "")
 
-	require.Equal(t, "SELECT * FROM usage_logs WHERE user_id = $1 AND (billing_mode = $2 OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) <= 0))", query)
+	require.Equal(t, "SELECT * FROM usage_logs WHERE user_id = $1 AND billing_mode = $2", query)
 	require.Equal(t, []any{int64(42), string(service.BillingModeToken)}, args)
 }
 

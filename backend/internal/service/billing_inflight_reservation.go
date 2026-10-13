@@ -548,7 +548,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	}
 
 	var cost float64
-	perRequestMode := resolved != nil && (resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage || resolved.Mode == BillingModeVideo)
+	perRequestMode := resolved != nil && (resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeVideo)
 	switch req.Kind {
 	case InflightEstimateImage:
 		if perRequestMode {
@@ -590,7 +590,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	default:
 		if perRequestMode {
 			rate := textRate
-			if resolved.Mode == BillingModeImage {
+			if resolved.Mode == BillingModePerRequest {
 				rate = imageRate
 			}
 			cost = maxPerRequestPrice(resolved) * float64(units) * rate

@@ -107,7 +107,7 @@ func TestReasoningEffortBillingStacksWithContextTierServiceTierAndTimePricing(t 
 }
 
 func TestReasoningEffortBillingGroupOverrideAndUnitBilling(t *testing.T) {
-	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModeImage, BillingModeVideo} {
+	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModePerRequest, BillingModeVideo} {
 		t.Run(string(mode), func(t *testing.T) {
 			bs, resolver := newTokenCostTestEnv(t, PlatformOpenAI, []ChannelModelPricing{{
 				Platform: PlatformOpenAI, Models: []string{"custom-model"}, BillingMode: mode,
@@ -139,7 +139,7 @@ func TestReasoningEffortBillingGroupOverrideAndUnitBilling(t *testing.T) {
 }
 
 func TestAccountStatsCustomRulesUseOwnReasoningEffortMultipliers(t *testing.T) {
-	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModeImage, BillingModeVideo} {
+	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModePerRequest, BillingModeVideo} {
 		t.Run(string(mode), func(t *testing.T) {
 			channel := &Channel{AccountStatsPricingRules: []AccountStatsPricingRule{{
 				AccountIDs: []int64{1}, Pricing: []ChannelModelPricing{{
@@ -163,7 +163,7 @@ func TestAccountStatsCustomRulesUseOwnReasoningEffortMultipliers(t *testing.T) {
 
 func TestDisplayPricingPreservesConfiguredReasoningEffortMultipliers(t *testing.T) {
 	raw := &ChannelModelPricing{ReasoningEffortMultipliers: map[string]float64{"high": 1.5, "max": 3}}
-	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModeImage} {
+	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest, BillingModePerRequest} {
 		raw.BillingMode = mode
 		display := synthesizePricingFromLiteLLM(&LiteLLMModelPricing{InputCostPerToken: 1e-6, OutputCostPerImage: 0.1}, raw)
 		require.Equal(t, raw.ReasoningEffortMultipliers, display.ReasoningEffortMultipliers)

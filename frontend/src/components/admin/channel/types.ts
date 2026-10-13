@@ -1,4 +1,3 @@
-import type { MediaPricing } from '@/types/media'
 import type { BillingMode, ChannelTimePricing, PricingInterval } from '@/api/admin/channels'
 import { REASONING_EFFORT_LEVELS } from '@/constants/channel'
 
@@ -22,7 +21,6 @@ export interface IntervalFormEntry {
 }
 
 export interface PricingFormEntry {
-  media?: MediaPricing
   models: string[]
   billing_mode: BillingMode
   input_price: number | string | null

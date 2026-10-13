@@ -323,7 +323,7 @@ func scheduleScenarios() []scheduleScenario {
 			name: "图片模式返回 nil", model: "gpt-image-2", platform: PlatformOpenAI, groupPlatform: PlatformOpenAI,
 			group: enabledGroup(PlatformOpenAI),
 			channel: []ChannelModelPricing{{
-				Platform: PlatformOpenAI, Models: []string{"gpt-image-2"}, BillingMode: BillingModeImage, PerRequestPrice: p(0.04),
+				Platform: PlatformOpenAI, Models: []string{"gpt-image-2"}, BillingMode: BillingModePerRequest, PerRequestPrice: p(0.04),
 			}},
 			wantNil: true,
 		},

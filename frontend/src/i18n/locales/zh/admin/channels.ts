@@ -108,8 +108,8 @@ export default {
       billingMode: {
         token: 'Token',
         perRequest: '按次',
-        image: '图片（按次）',
-        video: '视频（按秒）'
+        image: '按次',
+        video: '按秒'
       },
       form: {
         name: '名称',
@@ -171,13 +171,13 @@ export default {
         inclusive: '（含）',
         addInterval: '添加区间',
         requestTiers: '按次计费层级',
-        imageTiers: '图片计费层级（按次）',
+        imageTiers: '按次计费层级',
         videoTiers: '视频分辨率层级（按秒）',
         addTier: '添加层级',
-        noTiersYet: '暂无层级，点击添加配置按次计费价格',
+        noTiersYet: '暂无层级，点击添加配置价格',
         noPricingRules: '暂无定价规则，点击"添加"创建',
         perRequestPrice: '单次价格',
-        perRequestPriceRequired: '按次/图片计费模式必须设置默认价格或至少一个计费层级',
+        perRequestPriceRequired: '按次/按秒模式必须设置默认价格或至少一个计费层级',
         tierLabel: '层级',
         resolution: '分辨率',
         modelMapping: '模型映射',
@@ -197,7 +197,7 @@ export default {
         restrictModels: '限制模型',
         restrictModelsHint: '开启后，仅允许模型定价列表中的模型。不在列表中的模型请求将被拒绝。',
         defaultPerRequestPrice: '默认单次价格（未命中层级时使用）',
-        defaultImagePrice: '默认图片价格（未命中层级时使用）',
+        defaultImagePrice: '默认按次价格（未命中层级时使用）',
         defaultVideoPrice: '默认视频每秒价格（未命中层级时使用）',
         platformConfig: '平台配置',
         webSearchEmulation: 'Web Search 模拟',

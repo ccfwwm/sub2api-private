@@ -129,7 +129,7 @@ func TestCalculateCostUnified_ImageMode(t *testing.T) {
 	cs := newTestChannelServiceWithCache(t, &channelCache{
 		pricingByGroupModel: map[channelModelKey]*ChannelModelPricing{
 			{groupID: 2, model: "gemini-image"}: {
-				BillingMode:     BillingModeImage,
+				BillingMode:     BillingModePerRequest,
 				PerRequestPrice: testPtrFloat64(0.10),
 			},
 		},
@@ -166,7 +166,7 @@ func TestCalculateCostUnified_ImageMode(t *testing.T) {
 	// 2 * $0.10 = $0.20
 	require.InDelta(t, 0.20, cost.TotalCost, 1e-10)
 	require.InDelta(t, 0.20, cost.ActualCost, 1e-10)
-	require.Equal(t, string(BillingModeImage), cost.BillingMode)
+	require.Equal(t, string(BillingModePerRequest), cost.BillingMode)
 }
 
 func channelTimeResolvedForTest(base *ModelPricing, intervals []PricingInterval) *ResolvedPricing {

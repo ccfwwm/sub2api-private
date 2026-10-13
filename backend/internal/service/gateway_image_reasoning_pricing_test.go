@@ -14,7 +14,7 @@ import (
 func TestRecordUsage_ImageReasoningPricing(t *testing.T) {
 	for _, platform := range []string{PlatformAnthropic, PlatformOpenAI} {
 		for _, source := range []string{PricingSourceChannel, PricingSourceGroup} {
-			for _, mode := range []BillingMode{BillingModeImage, BillingModePerRequest} {
+			for _, mode := range []BillingMode{BillingModePerRequest, BillingModePerRequest} {
 				for _, independent := range []bool{false, true} {
 					for _, effort := range []string{"high", "low", ""} {
 						name := fmt.Sprintf("%s/%s/%s/independent=%t/effort=%s", platform, source, mode, independent, effort)

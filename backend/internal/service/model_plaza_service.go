@@ -326,7 +326,7 @@ func plazaIntervalsFromTiers(tiers []ContextPricingTier) []PricingInterval {
 // 分组未配任何图片价、或定价非图片模式时原样返回。返回克隆，不修改入参
 // （渠道定价指针指向缓存共享数据）。
 func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group) *ChannelModelPricing {
-	if p == nil || g == nil || p.BillingMode != BillingModeImage {
+	if p == nil || g == nil || p.BillingMode != BillingModePerRequest {
 		return p
 	}
 	if g.ImagePrice1K == nil && g.ImagePrice2K == nil && g.ImagePrice4K == nil {

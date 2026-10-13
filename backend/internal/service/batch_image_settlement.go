@@ -39,7 +39,7 @@ func (r *BatchImageModelPricingResolver) BatchImageUnitPrice(ctx context.Context
 		return 0, ErrBatchImageSettlementPricingMissing
 	}
 	switch resolved.Mode {
-	case BillingModeImage, BillingModePerRequest:
+	case BillingModePerRequest:
 		if resolved.DefaultPerRequestPrice > 0 {
 			return resolved.DefaultPerRequestPrice, nil
 		}
@@ -253,7 +253,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 	if s == nil || s.UsageLogRepo == nil || job == nil || job.APIKeyID == nil || job.AccountID == nil {
 		return
 	}
-	billingMode := string(BillingModeImage)
+	billingMode := string(BillingModePerRequest)
 	accountRateMultiplier := job.AccountRateMultiplier
 	inboundEndpoint := "/v1/images/batches"
 	upstreamEndpoint := "vertex:batchPredictionJobs"

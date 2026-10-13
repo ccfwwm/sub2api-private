@@ -185,7 +185,7 @@ func TestPricingNeedsFallback(t *testing.T) {
 		{"nil", nil, true},
 		{"empty struct", &ChannelModelPricing{BillingMode: BillingModeToken}, true},
 		{"all-empty intervals", &ChannelModelPricing{
-			BillingMode: BillingModeImage,
+			BillingMode: BillingModePerRequest,
 			Intervals:   []PricingInterval{{TierLabel: "1K"}, {TierLabel: "2K"}},
 		}, true},
 		{"flat input set", &ChannelModelPricing{InputPrice: testPtrFloat64(3e-6)}, false},
@@ -225,7 +225,7 @@ func TestSynthesizePricingFromLiteLLM_ImageGenerationMode(t *testing.T) {
 	}
 	got := synthesizePricingFromLiteLLM(lp, nil)
 	require.NotNil(t, got)
-	require.Equal(t, BillingModeImage, got.BillingMode)
+	require.Equal(t, BillingModePerRequest, got.BillingMode)
 	require.Nil(t, got.PerRequestPrice)
 	require.NotNil(t, got.ImageOutputPrice)
 }
@@ -276,14 +276,14 @@ func TestFillGlobalPricingFallback_EmptyPricingFillsFromLiteLLM(t *testing.T) {
 			Name:     "gpt-image-1",
 			Platform: "openai",
 			Pricing: &ChannelModelPricing{
-				BillingMode: BillingModeImage,
+				BillingMode: BillingModePerRequest,
 				Intervals:   []PricingInterval{{TierLabel: "1K"}, {TierLabel: "2K"}},
 			},
 		},
 	}
 	fillGlobalPricingFallback(svc.pricingService, models)
 	require.NotNil(t, models[0].Pricing)
-	require.Equal(t, BillingModeImage, models[0].Pricing.BillingMode)
+	require.Equal(t, BillingModePerRequest, models[0].Pricing.BillingMode)
 	require.NotNil(t, models[0].Pricing.ImageOutputPrice)
 	require.InDelta(t, 4e-5, *models[0].Pricing.ImageOutputPrice, 1e-12)
 }

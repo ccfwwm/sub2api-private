@@ -66,12 +66,26 @@ describe('PricingEntryCard default price auto-fill', () => {
     })
   })
 
-  it('keeps media pricing manual instead of importing default token prices', async () => {
+  it('uses the existing default pricing rule for imagevideo entries', async () => {
     const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(), platform: 'imagevideo' } })
     wrapper.findComponent({ name: 'ModelTagInput' }).vm.$emit('update:models', ['gpt-image-2'])
     await flushPromises()
-    expect(getModelDefaultPricing).not.toHaveBeenCalled()
-    expect(emittedEntries(wrapper).at(-1)).toMatchObject({ models: ['gpt-image-2'], input_price: null, output_price: null })
+    expect(getModelDefaultPricing).toHaveBeenCalledWith('gpt-image-2')
+    expect(emittedEntries(wrapper).at(-1)).toMatchObject({
+      models: ['gpt-image-2'],
+      input_price: 3,
+      output_price: 15,
+    })
+  })
+
+  it('keeps the shared billing modes available for imagevideo entries', () => {
+    const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(), platform: 'imagevideo' } })
+    const select = wrapper.findComponent({ name: 'Select' })
+    expect(select.props('options')).toEqual([
+      { value: 'token', label: 'admin.channels.billingMode.token' },
+      { value: 'per_request', label: 'admin.channels.billingMode.perRequest' },
+      { value: 'video', label: 'admin.channels.billingMode.video' },
+    ])
   })
 
   it('does not overwrite prices when appending a model to an entry that already has one', async () => {

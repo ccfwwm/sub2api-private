@@ -326,7 +326,7 @@ func TestCalculateStatsCost_PerRequestBilling_PriceZero(t *testing.T) {
 
 func TestCalculateStatsCost_ImageBilling(t *testing.T) {
 	pricing := &ChannelModelPricing{
-		BillingMode:     BillingModeImage,
+		BillingMode:     BillingModePerRequest,
 		PerRequestPrice: testPtrFloat64(0.10),
 	}
 	result := calculateStatsCost(pricing, UsageTokens{}, 2)
@@ -337,7 +337,7 @@ func TestCalculateStatsCost_ImageBilling(t *testing.T) {
 
 func TestCalculateStatsCost_ImageBilling_PriceNil(t *testing.T) {
 	pricing := &ChannelModelPricing{
-		BillingMode: BillingModeImage,
+		BillingMode: BillingModePerRequest,
 		// PerRequestPrice is nil
 	}
 	result := calculateStatsCost(pricing, UsageTokens{}, 1)
