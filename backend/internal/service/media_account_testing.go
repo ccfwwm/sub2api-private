@@ -116,7 +116,7 @@ func accountTestCapability(account *Account, model string) (media.Capability, er
 			return cap, nil
 		}
 	}
-	return media.Capability{}, fmt.Errorf("Model %s is not configured on this account", model)
+	return media.Capability{}, fmt.Errorf("model %s is not configured on this account", model)
 }
 func DefaultAccountTestPrompt(kind string) string {
 	switch kind {
@@ -294,7 +294,7 @@ func (s *AccountTestService) finishBasicTest(c *gin.Context) {
 }
 func (s *AccountTestService) MediaTestResult(ctx context.Context, accountID int64, id string) (*MediaTestResult, error) {
 	if s.mediaTests == nil {
-		return nil, fmt.Errorf("Test storage unavailable")
+		return nil, fmt.Errorf("test storage unavailable")
 	}
 	if id == "latest" {
 		entries, _ := os.ReadDir(s.mediaTests.blobs.Root)
@@ -309,13 +309,13 @@ func (s *AccountTestService) MediaTestResult(ctx context.Context, accountID int6
 			}
 		}
 		if latest == nil {
-			return nil, fmt.Errorf("Test not found")
+			return nil, fmt.Errorf("test not found")
 		}
 		id = latest.Result.ID
 	}
 	r, err := s.mediaTests.read(id)
 	if err != nil || r.Result.AccountID != accountID {
-		return nil, fmt.Errorf("Test not found")
+		return nil, fmt.Errorf("test not found")
 	}
 	account, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil {
@@ -489,12 +489,12 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 	}
 	account, err := t.service.accountRepo.GetByID(ctx, r.Result.AccountID)
 	if err != nil {
-		finish("failed", fmt.Errorf("Account unavailable"))
+		finish("failed", fmt.Errorf("account unavailable"))
 		return
 	}
 	cap, err := accountTestCapability(account, r.Result.Model)
 	if err != nil || testFingerprint(account, cap) != r.Fingerprint {
-		finish("unknown", fmt.Errorf("Account configuration changed; test not resubmitted"))
+		finish("unknown", fmt.Errorf("account configuration changed; test not resubmitted"))
 		return
 	}
 	a := media.Account{ID: account.ID, BaseURL: account.GetCredential("base_url"), Key: account.GetCredential("api_key")}
@@ -521,7 +521,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 		r.Result.UpstreamID, r.Result.UpstreamStatus = result.ID, result.Status
 		if err = t.save(r); err != nil {
 			slog.Error("media_test_persist", "test_id", r.Result.ID)
-			finish("unknown", fmt.Errorf("Unable to persist accepted task; inspect storage; do not resubmit"))
+			finish("unknown", fmt.Errorf("unable to persist accepted task; inspect storage; do not resubmit"))
 			return
 		}
 	} else {
@@ -536,7 +536,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 			for _, artifact := range result.Artifacts {
 				captured, path, _, e := t.blobs.CaptureTestArtifact(ctx, t.adapter.Client, r.Result.ID, r.Capability, artifact, a)
 				if e != nil {
-					finish("failed", fmt.Errorf("Artifact validation failed: %s", e))
+					finish("failed", fmt.Errorf("artifact validation failed: %s", e))
 					return
 				}
 				captured.ContentURL = fmt.Sprintf("/api/v1/admin/accounts/%d/tests/%s/artifacts/%s", account.ID, r.Result.ID, captured.Key)
@@ -551,7 +551,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 			return
 		}
 		if r.UpstreamID == "" {
-			finish("unknown", fmt.Errorf("No usable artifact or task ID; acceptance uncertain; do not resubmit"))
+			finish("unknown", fmt.Errorf("no usable artifact or task ID; acceptance uncertain; do not resubmit"))
 			return
 		}
 		interval := r.Capability.Delivery.PollSeconds
@@ -560,18 +560,18 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 		}
 		select {
 		case <-ctx.Done():
-			finish("unknown", fmt.Errorf("Observation deadline reached; upstream may still be running"))
+			finish("unknown", fmt.Errorf("observation deadline reached; upstream may still be running"))
 			return
 		case <-time.After(time.Duration(interval) * time.Second):
 		}
 		current, currentErr := t.service.accountRepo.GetByID(ctx, r.Result.AccountID)
 		if currentErr != nil {
-			finish("unknown", fmt.Errorf("Account unavailable; task not resubmitted"))
+			finish("unknown", fmt.Errorf("account unavailable; task not resubmitted"))
 			return
 		}
 		currentCap, currentErr := accountTestCapability(current, r.Result.Model)
 		if currentErr != nil || testFingerprint(current, currentCap) != r.Fingerprint {
-			finish("unknown", fmt.Errorf("Account configuration changed; task not resubmitted"))
+			finish("unknown", fmt.Errorf("account configuration changed; task not resubmitted"))
 			return
 		}
 		result, err = t.adapter.Poll(ctx, media.StoredTask{ID: r.Result.ID, UpstreamID: r.UpstreamID, Snapshot: media.Snapshot{Capability: r.Capability}}, a)
@@ -589,7 +589,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 		}
 		if err = t.save(r); err != nil {
 			slog.Error("media_test_persist", "test_id", r.Result.ID)
-			finish("unknown", fmt.Errorf("Unable to persist accepted task; inspect storage; do not resubmit"))
+			finish("unknown", fmt.Errorf("unable to persist accepted task; inspect storage; do not resubmit"))
 			return
 		}
 	}

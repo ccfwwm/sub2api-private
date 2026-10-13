@@ -117,7 +117,7 @@ func TestMediaTestResumeStoredSourceAndRejectInvalidArtifact(t *testing.T) {
 	r.Result.Artifacts = []media.Artifact{{Key: "output_0", Type: "image", Source: "data:image/png;base64,QUJD"}}
 	tester.work(r, false)
 	require.Equal(t, "failed", r.Result.State)
-	require.Contains(t, r.Result.Error, "Artifact validation")
+	require.Contains(t, r.Result.Error, "invalid image artifact")
 }
 func TestMediaUnifiedMappingRoundtripAndRemoval(t *testing.T) {
 	cap, _ := media.ModelPreset("omni-flash")
