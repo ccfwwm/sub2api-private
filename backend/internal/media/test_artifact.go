@@ -1,0 +1,44 @@
+package media
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+)
+
+// CaptureTestArtifact uses the same origin checks and content validation as
+// billable tasks, without creating a user ledger entry.
+func (b *BlobStore) CaptureTestArtifact(ctx context.Context, client *http.Client, id string, cap Capability, artifact Artifact, account Account) (Artifact, string, string, error) {
+	if artifact.Type != cap.MediaType {
+		return artifact, "", "", fmt.Errorf("artifact type does not match model capability")
+	}
+	t := StoredTask{ID: id, Snapshot: Snapshot{Capability: cap}}
+	var path, hash string
+	var err error
+	if len(artifact.Source) > 5 && artifact.Source[:5] == "data:" {
+		var raw []byte
+		raw, artifact.MIME, err = decodeArtifact(artifact.Source)
+		if err == nil && (len(raw) == 0 || len(raw) > 256<<20) {
+			err = fmt.Errorf("invalid inline artifact size")
+		}
+		if err == nil {
+			path, err = b.Path(id, artifact.Key)
+		}
+		if err == nil {
+			err = atomicWrite(path, raw)
+			size := int64(len(raw))
+			artifact.Size = &size
+			sum := sha256.Sum256(raw)
+			hash = hex.EncodeToString(sum[:])
+		}
+	} else {
+		artifact, path, hash, err = b.Download(ctx, client, t, artifact, account, 256<<20)
+	}
+	if err == nil {
+		err = validateArtifact(ctx, path, &artifact)
+	}
+	artifact.Available = err == nil
+	return artifact, path, hash, err
+}

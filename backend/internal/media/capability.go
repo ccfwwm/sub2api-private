@@ -52,9 +52,8 @@ func ValidateCapability(c Capability, publish bool) error {
 		if len(c.AccountIDs) == 0 || len(c.GroupIDs) == 0 || len(c.Operations) == 0 {
 			return fail(400, "missing_binding", "Group, account and operation bindings required")
 		}
-		if c.ValidationStatus != "本项目实测通过" || c.VerificationEvidence == "" {
-			return fail(422, "channel_verification_required", "Record real-channel verification before publishing")
-		}
+		// Verification is informational. Enabling still validates executable
+		// capabilities; pricing is resolved separately at request submission.
 		if c.Limits.MaxRequestBytes == nil || *c.Limits.MaxRequestBytes <= 0 || *c.Limits.MaxRequestBytes > 256<<20 || c.Limits.MaxConcurrentTasks == nil || *c.Limits.MaxConcurrentTasks <= 0 || c.Limits.ObservationSeconds == nil || *c.Limits.ObservationSeconds <= 0 {
 			return fail(400, "invalid_limits", "Finite request, concurrency and observation limits required")
 		}

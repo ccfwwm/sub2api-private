@@ -133,22 +133,20 @@ func TestMediaAccountUnchangedModelsDoNotRequireRepublishVerification(t *testing
 	require.NoError(t, validateMediaAccountUpdate(PlatformImageVideo, AccountTypeAPIKey, current, requested))
 }
 
-func TestMediaAccountChangedModelsStillRequireRepublishVerification(t *testing.T) {
+func TestMediaAccountEnableWithoutVerification(t *testing.T) {
 	currentCap := mediaTestCapability()
 	currentCap.ValidationStatus = "待渠道验证"
 	currentCap.VerificationEvidence = ""
 	currentCap.Enabled = false
 	requestedCap := currentCap
 	requestedCap.Enabled = true
-	require.ErrorContains(t,
-		validateMediaAccountUpdate(
-			PlatformImageVideo,
-			AccountTypeAPIKey,
-			map[string]any{"media_models": []media.Capability{currentCap}},
-			map[string]any{"media_models": []media.Capability{requestedCap}},
-		),
-		"channel_verification_required",
-	)
+	require.NoError(t, validateMediaAccountUpdate(
+		PlatformImageVideo, AccountTypeAPIKey,
+		map[string]any{"media_models": []media.Capability{currentCap}},
+		map[string]any{"media_models": []media.Capability{requestedCap}},
+	))
+	requestedCap.Adapter = "unknown"
+	require.Error(t, ValidateMediaAccount(PlatformImageVideo, AccountTypeAPIKey, map[string]any{"media_models": []media.Capability{requestedCap}}))
 }
 
 func TestStandardMediaPricingProjectsExistingEntries(t *testing.T) {

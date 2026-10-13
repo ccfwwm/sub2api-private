@@ -303,15 +303,23 @@ class Manager:
             raise ValueError('running image differs from requested image')
 
     def cutover(self, job, target, rescue, version=''):
-        self.save(job, 'draining')
+        self.save(job, 'preparing_cutover')
         # Record the rescue target before setting a persistent drain marker, so
         # a host failure during drain can also be recovered from the CLI.
         atomic_json(self.state / 'latest-cutover.json', {'id': job['id']})
         switched = False
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
-                  for n in ['sub2api-postgres', 'sub2api-redis']}
+                  for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
         try:
-            self.drain(job)
+            if job.get('immediate'):
+                if self.marker.exists():
+                    raise ValueError('maintenance marker exists; inspect before immediate cutover')
+                job['cutover_mode'] = 'immediate'
+                # The operator authorized interruption of in-flight requests.
+                target['services']['sub2api']['stop_grace_period'] = '1s'
+                target['services']['sub2api']['environment']['SERVER_SHUTDOWN_TIMEOUT_SECONDS'] = '1'
+            else:
+                self.drain(job)
             self.save(job, 'switching')
             switched = True
             self.switch(target)
@@ -323,6 +331,8 @@ class Manager:
             for n, state in before.items():
                 if state != (inspect(n)['Id'], inspect(n)['State']['StartedAt']):
                     raise ValueError('database/Redis container changed unexpectedly')
+            job['protected_containers'] = {n: {'id': state[0], 'started_at': state[1]} for n, state in before.items()}
+            job['active_image'] = self.c.inspect()['Image']
             self.save(job, 'succeeded')
         except Exception:
             if switched:
@@ -458,6 +468,7 @@ def main():
     parser = argparse.ArgumentParser(description='Sub2API 离线生产管理。任务由 systemd 后台执行，SSH 断开不影响。')
     parser.add_argument('action', choices=['status', 'logs', 'list', 'backup', 'verify', 'prepare', 'upgrade', 'rollback', 'restore', 'rescue', '_worker'])
     parser.add_argument('target', nargs='?', default='')
+    parser.add_argument('--immediate', action='store_true', help='Upgrade application immediately without waiting for idle or draining')
     parser.add_argument('--confirm', default='', help='写操作须与动作同名大写：BACKUP / VERIFY / UPGRADE / ROLLBACK / RESTORE')
     args = parser.parse_args()
     if os.geteuid() != 0:
@@ -505,7 +516,9 @@ def main():
             raise SystemExit('upgrade requires vMAJOR.MINOR.PATCH')
     elif args.action != 'backup':
         ident(args.target)
-    job = {'id': uuid.uuid4().hex, 'action': args.action, 'target': args.target}
+    if args.immediate and args.action != 'upgrade':
+        raise SystemExit('--immediate is only valid with upgrade')
+    job = {'id': uuid.uuid4().hex, 'action': args.action, 'target': args.target, 'immediate': args.immediate}
     (STATE / 'logs').mkdir(exist_ok=True, mode=0o700)
     log = STATE / 'logs' / (job['id'] + '.log')
     log.touch(mode=0o600)
@@ -513,6 +526,7 @@ def main():
     atomic_json(STATE / 'latest.json', {'id': job['id']})
     subprocess.run(['systemd-run', '--unit=sub2api-ops-' + job['id'], '--collect',
                     '--property=Type=exec', '--property=UMask=0077', '--property=Nice=10',
+                    '--setenv=HOME=/root', '--setenv=XDG_CONFIG_HOME=/root/.config',
                     '--property=StandardOutput=append:' + str(log), '--property=StandardError=append:' + str(log),
                     sys.executable, str(Path(__file__).resolve()), '_worker', job['id']], check=True)
     print('JOB_ID=' + job['id'] + '\n查看：/root/sub2api-manage status\n日志：/root/sub2api-manage logs ' + job['id'])

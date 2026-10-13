@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing stable private tag, e.g. v0.2.15 (does not deploy production)'
+        description: 'Existing stable private tag, e.g. v0.2.15 (formal releases deploy after verification)'
         required: true
         type: string
       candidate:
@@ -198,10 +198,10 @@ jobs:
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
-          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md
+          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated private image; production deployment is controlled separately. Models remain disabled until configured and verified."
+            gh release create "$TAG" deployment.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated private image; production deployment uses the restricted host manager. Models support direct enablement; real-channel testing is recorded separately. Formal releases deploy automatically after backup and isolated restore verification."
           fi
       - uses: actions/upload-artifact@v7
         with:
@@ -213,3 +213,11 @@ jobs:
             244_unified_media_model_pricing.sql
             245_unified_media_account_cost.sql
 
+
+  deploy:
+    needs: [validate, image]
+    if: ${{ inputs.candidate != true }}
+    uses: ./.github/workflows/deploy-production.yml
+    with:
+      version: ${{ needs.validate.outputs.tag }}
+    secrets: inherit

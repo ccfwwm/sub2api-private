@@ -411,6 +411,11 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	var mediaErr error
+	input.Credentials, accountExtra, mediaErr = NormalizeMediaAccountConfig(input.Platform, input.Credentials, accountExtra, false)
+	if mediaErr != nil {
+		return nil, mediaErr
+	}
 	if err := ValidateMediaAccount(input.Platform, input.Type, accountExtra); err != nil {
 		return nil, err
 	}
@@ -588,6 +593,33 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	kind := account.Type
 	if input.Type != "" {
 		kind = input.Type
+	}
+	if input.Extra != nil {
+		input.Extra = cloneAnyMap(input.Extra)
+		for _, key := range []string{"media_last_test", "media_test_results", "account_last_test"} {
+			delete(input.Extra, key)
+			if current, exists := account.Extra[key]; exists {
+				input.Extra[key] = current
+			}
+		}
+	}
+	if account.Platform == PlatformImageVideo {
+		_, mediaPresent := input.Extra["media_models"]
+		_, mappingPresent := input.Credentials["model_mapping"]
+		if mediaPresent || mappingPresent {
+			credentials := cloneAnyMap(account.Credentials)
+			for key, value := range input.Credentials {
+				credentials[key] = value
+			}
+			extra := cloneAnyMap(account.Extra)
+			for key, value := range input.Extra {
+				extra[key] = value
+			}
+			input.Credentials, input.Extra, err = NormalizeMediaAccountConfig(account.Platform, credentials, extra, mappingPresent && !mediaPresent)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := validateMediaAccountUpdate(account.Platform, kind, account.Extra, input.Extra); err != nil {
 		return nil, err
@@ -937,13 +969,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
 	if _, exists := updates["media_models"]; exists {
-		account, err := s.accountRepo.GetByID(ctx, id)
-		if err != nil {
-			return err
-		}
-		if err = ValidateMediaAccount(account.Platform, account.Type, updates); err != nil {
-			return err
-		}
+		_, err := s.UpdateAccount(ctx, id, &UpdateAccountInput{Extra: updates})
+		return err
 	}
 	updates = sanitizedCodexFingerprintExtraUpdates(updates)
 	updates = stripOpenAIAutoResetCreditManagedExtra(updates, true)
@@ -1130,7 +1157,23 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		input.Credentials = SanitizeStoredCredentials("", input.Credentials)
 	}
 
+	if _, mappingPresent := input.Credentials["model_mapping"]; mappingPresent {
+		if _, mediaPresent := input.Extra["media_models"]; !mediaPresent {
+			for _, account := range cachedTargets {
+				if account != nil && account.Platform == PlatformImageVideo {
+					return nil, infraerrors.Newf(http.StatusBadRequest, "MEDIA_BULK_MAPPING_REQUIRES_CAPABILITIES", "media bulk mapping updates require media_models; use individual account updates to preserve per-account overrides")
+				}
+			}
+		}
+	}
 	if _, exists := input.Extra["media_models"]; exists {
+		// Keep legacy clients coherent with the unified capability table. The
+		// repository still stores model_mapping for older callers, but capabilities
+		// remain authoritative at runtime.
+		input.Credentials, input.Extra, err = NormalizeMediaAccountConfig(PlatformImageVideo, input.Credentials, input.Extra, false)
+		if err != nil {
+			return nil, err
+		}
 		for _, id := range input.AccountIDs {
 			account, err := s.accountRepo.GetByID(ctx, id)
 			if err != nil {

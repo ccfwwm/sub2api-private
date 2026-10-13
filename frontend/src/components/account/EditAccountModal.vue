@@ -26,7 +26,7 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
-      <MediaAccountModelsEditor v-if="account.platform === 'imagevideo'" v-model="mediaModels" :account-id="account.id" :base-url="editBaseUrl" />
+      <MediaAccountModelsEditor v-if="account.platform === 'imagevideo'" v-model="mediaModels" :account-id="account.id" :base-url="editBaseUrl" :api-key="editApiKey" :account="account" />
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -256,7 +256,7 @@
         </div>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
-        <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div v-if="account.platform !== 'antigravity' && account.platform !== 'imagevideo'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -3131,7 +3131,7 @@
 
 <script setup lang="ts">
 import MediaAccountModelsEditor from './MediaAccountModelsEditor.vue'
-import type { MediaCapability } from '@/types/media'
+import { accountMediaCapabilities, type MediaCapability } from '@/types/media'
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -4155,7 +4155,7 @@ const applyOpenAIModelMappingCredentials = (credentials: Record<string, unknown>
 
 const mediaModels = ref<MediaCapability[]>([])
 const syncFormFromAccount = (newAccount: Account | null) => {
-  mediaModels.value = JSON.parse(JSON.stringify(newAccount?.extra?.media_models || []))
+  mediaModels.value = accountMediaCapabilities(newAccount?.extra, newAccount?.credentials)
   if (!newAccount) {
     return
   }
@@ -5464,6 +5464,7 @@ const handleSubmit = async () => {
         return
       }
 
+      if (props.account.platform === 'imagevideo') newCredentials.model_mapping = Object.fromEntries(mediaModels.value.map(c => [c.model, c.upstream_model]))
       updatePayload.credentials = newCredentials
     } else {
       // For oauth/setup-token types, only update intercept_warmup_requests if changed

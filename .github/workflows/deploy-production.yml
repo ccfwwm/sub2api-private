@@ -1,17 +1,20 @@
-name: Manual Production Deployment
+name: Formal Release Production Deployment
 on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_SSH_KEY:
+        required: true
+      DEPLOY_KNOWN_HOSTS:
+        required: true
   workflow_dispatch:
     inputs:
-      action:
-        description: 'prepare reads production data; deploy/rollback interrupt application service'
+      version:
+        description: 'Existing formal release vMAJOR.MINOR.PATCH (immediate application cutover)'
         required: true
-        type: choice
-        options: [status, prepare, deploy, rollback]
-      target:
-        description: 'prepare: v1.0.0; deploy/rollback: preparation job ID; status: empty'
-        type: string
-      confirmation:
-        description: 'For changes enter CONFIRM. No action runs on push or release.'
         type: string
 permissions:
   contents: read
@@ -19,16 +22,16 @@ concurrency:
   group: sub2api-production
   cancel-in-progress: false
 jobs:
-  request:
+  deploy:
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 180
     steps:
-      - name: Submit to the restricted host controller
+      - name: Validate formal Release, submit restricted host job and wait for online verification
         env:
-          ACTION: ${{ inputs.action }}
-          TARGET: ${{ inputs.target }}
-          CONFIRMATION: ${{ inputs.confirmation }}
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ccfwwm/sub2api-private
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
@@ -37,24 +40,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GH_REPO/releases/tags/$VERSION" > "$RUNNER_TEMP/release.json"
+          python3 - "$RUNNER_TEMP/release.json" "$VERSION" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1])); assert not r['draft'] and not r['prerelease'] and r['tag_name']==sys.argv[2]
+          PY
           test -n "$DEPLOY_KEY" && test -n "$KNOWN_HOSTS"
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
           [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
-          if [ "$ACTION" = status ]; then
-            COMMAND=status
-          else
-            test "$CONFIRMATION" = CONFIRM
-            case "$ACTION" in
-              prepare) [[ "$TARGET" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]] ;;
-              deploy|rollback) [[ "$TARGET" =~ ^[0-9a-f]{32}$ ]] ;;
-              *) exit 1 ;;
-            esac
-            COMMAND="$ACTION $TARGET CONFIRM"
-          fi
           umask 077
           mkdir -p "$RUNNER_TEMP/sub2api-ssh"
           printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/sub2api-ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/sub2api-ssh/known_hosts"
           trap 'rm -rf "$RUNNER_TEMP/sub2api-ssh"' EXIT
-          ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST" "$COMMAND"
+          SSH=(ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST")
+          "${SSH[@]}" "deploy $VERSION" > "$RUNNER_TEMP/deploy.json"
+          JOB=$(python3 -c 'import json,sys,re; j=json.load(open(sys.argv[1])); assert re.fullmatch("[0-9a-f]{32}",j["id"]); print(j["id"])' "$RUNNER_TEMP/deploy.json")
+          for attempt in $(seq 1 1000); do
+            "${SSH[@]}" "status $JOB" > "$RUNNER_TEMP/deploy.json"
+            STATUS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/deploy.json")
+            cat "$RUNNER_TEMP/deploy.json"
+            if [ "$STATUS" = succeeded ]; then
+              cat "$RUNNER_TEMP/deploy.json" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            case "$STATUS" in failed|failed_rolled_back|failed_needs_inspection|rejected) exit 1 ;; esac
+            sleep 10
+          done
+          echo 'Deployment still running on host; inspect its durable job. No success was recorded.' >&2
+          exit 1

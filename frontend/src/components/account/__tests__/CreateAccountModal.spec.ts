@@ -228,7 +228,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(wrapper.text()).toContain('admin.accounts.mediaApi.baseUrlHint')
     expect(wrapper.text()).toContain('admin.accounts.mediaApi.apiKeyHint')
     expect(wrapper.text()).not.toContain('admin.accounts.apiKeyHint')
-    expect(wrapper.findComponent(ModelWhitelistSelectorStub).props('modelValue')).toEqual([])
+    expect(wrapper.findComponent(ModelWhitelistSelectorStub).exists()).toBe(false)
     await wrapper.get('form#create-account-form input[type="text"]').setValue('media account')
     await base.setValue('https://media.example.com')
     await wrapper.get('form#create-account-form input[type="password"]').setValue('test-media-key')
@@ -236,7 +236,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await flushPromises()
     const payload = createAccountMock.mock.calls[0]?.[0]
     expect(payload).toMatchObject({ platform: 'imagevideo', type: 'apikey', credentials: { base_url: 'https://media.example.com' } })
-    expect(payload.credentials.model_mapping).toBeUndefined()
+    expect(payload.credentials.model_mapping).toEqual({})
     wrapper.unmount()
   })
 

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
@@ -158,7 +159,72 @@ func accountMediaModels(extra map[string]any) ([]media.Capability, error) {
 	if err = json.Unmarshal(b, &caps); err != nil {
 		return nil, err
 	}
+	for i := range caps {
+		caps[i] = media.CapabilityDefaults(caps[i])
+	}
 	return caps, nil
+}
+
+// NormalizeMediaAccountConfig maintains one model list while retaining the
+// standard Sub2API mapping field for older admin clients.
+func NormalizeMediaAccountConfig(platform string, credentials, extra map[string]any, mappingOnly bool) (map[string]any, map[string]any, error) {
+	if platform != PlatformImageVideo {
+		return credentials, extra, nil
+	}
+	credentials = cloneAnyMap(credentials)
+	extra = cloneAnyMap(extra)
+	caps, err := accountMediaModels(extra)
+	if err != nil {
+		return nil, nil, err
+	}
+	mapping := (&Account{Credentials: credentials}).GetModelMapping()
+	_, mediaPresent := extra["media_models"]
+	if mappingOnly || !mediaPresent {
+		byModel := map[string]media.Capability{}
+		for _, cap := range caps {
+			byModel[cap.Model] = cap
+		}
+		keys := make([]string, 0, len(mapping))
+		for model := range mapping {
+			keys = append(keys, model)
+		}
+		sort.Strings(keys)
+		caps = nil
+		for _, model := range keys {
+			if strings.Contains(model, "*") {
+				return nil, nil, infraerrors.BadRequest("EXACT_MEDIA_MODEL_REQUIRED", "Media models require exact IDs")
+			}
+			cap, exists := byModel[model]
+			if !exists {
+				cap, exists = media.ModelPreset(mapping[model])
+				if !exists {
+					return nil, nil, infraerrors.BadRequest("MEDIA_ADAPTER_REQUIRED", "Choose the interface type for model "+model)
+				}
+				cap.Enabled = false
+			}
+			cap.Model, cap.UpstreamModel = model, mapping[model]
+			caps = append(caps, cap)
+		}
+	}
+	projected := map[string]any{}
+	for i, cap := range caps {
+		if strings.Contains(strings.ToLower(fmt.Sprint(credentials["base_url"])), "yunfei.best") {
+			cap = media.RepairManualPlaceholder(cap)
+		}
+		caps[i] = media.CapabilityDefaults(cap)
+		projected[cap.Model] = caps[i].UpstreamModel
+	}
+	extra["media_models"] = caps
+	credentials["model_mapping"] = projected
+	return credentials, extra, nil
+}
+
+func cloneAnyMap(value map[string]any) map[string]any {
+	result := make(map[string]any, len(value))
+	for key, v := range value {
+		result[key] = v
+	}
+	return result
 }
 
 func ValidateMediaAccount(platform, kind string, extra map[string]any) error {
@@ -194,7 +260,7 @@ func ValidateMediaAccount(platform, kind string, extra map[string]any) error {
 // when only concurrency, priority, proxy, or status changed. Re-validating an
 // unchanged enabled capability as a publish in that case makes an unrelated
 // account edit depend on a verification record. A changed media_models value
-// still goes through the full validation, including the real-channel gate.
+// still goes through capability validation. Verification is informational.
 func validateMediaAccountUpdate(platform, kind string, currentExtra, requestedExtra map[string]any) error {
 	// Always enforce the account-level platform/type invariant.
 	if err := ValidateMediaAccount(platform, kind, nil); err != nil {
@@ -266,6 +332,9 @@ func UnifiedMediaConfig(accounts AccountRepository, groups GroupRepository, chan
 				return nil, nil, err
 			}
 			for _, cap := range models {
+				if strings.Contains(strings.ToLower(account.GetCredential("base_url")), "yunfei.best") {
+					cap = media.RepairManualPlaceholder(cap)
+				}
 				cap.Status = "enabled"
 				cap.ID = fmt.Sprintf("account:%d:%s", account.ID, cap.Model)
 				cap.Version = mediaVersion(cap)

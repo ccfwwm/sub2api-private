@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -1263,9 +1264,12 @@ func (h *AccountHandler) Delete(c *gin.Context) {
 
 // TestAccountRequest represents the request body for testing an account
 type TestAccountRequest struct {
-	ModelID string `json:"model_id"`
-	Prompt  string `json:"prompt"`
-	Mode    string `json:"mode"`
+	ModelID    string         `json:"model_id"`
+	Prompt     string         `json:"prompt"`
+	Mode       string         `json:"mode"`
+	TestKind   string         `json:"test_kind"`
+	Operation  string         `json:"operation"`
+	Parameters map[string]any `json:"parameters"`
 	// Optional media for Grok (and future) real generation tests.
 	// ImageDataURL / AudioDataURL are data:<mime>;base64,... payloads.
 	ImageDataURL string `json:"image_data_url"`
@@ -1297,11 +1301,18 @@ func (h *AccountHandler) Test(c *gin.Context) {
 
 	var req TestAccountRequest
 	// Allow empty body, model_id is optional
-	_ = c.ShouldBindJSON(&req)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<20)
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		response.BadRequest(c, "Invalid test request")
+		return
+	}
 
 	opts := service.AccountTestOptions{
 		ImageDataURL: req.ImageDataURL,
 		AudioDataURL: req.AudioDataURL,
+		TestKind:     req.TestKind,
+		Operation:    req.Operation,
+		Parameters:   req.Parameters,
 	}
 
 	// Use AccountTestService to test the account with SSE streaming
@@ -1310,7 +1321,7 @@ func (h *AccountHandler) Test(c *gin.Context) {
 		return
 	}
 
-	if h.rateLimitService != nil {
+	if h.rateLimitService != nil && c.GetBool("account_test_completed_success") {
 		if _, err := h.rateLimitService.RecoverAccountAfterSuccessfulTest(c.Request.Context(), accountID); err != nil {
 			_ = c.Error(err)
 		}
@@ -2804,6 +2815,26 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
+	// Media test discovery includes disabled and unpriced configured models.
+	if account.Platform == service.PlatformImageVideo {
+		_, extra, normalizeErr := service.NormalizeMediaAccountConfig(account.Platform, account.Credentials, account.Extra, false)
+		if normalizeErr != nil {
+			response.BadRequest(c, normalizeErr.Error())
+			return
+		}
+		raw, _ := json.Marshal(extra["media_models"])
+		var caps []struct {
+			Model string `json:"model"`
+			Type  string `json:"media_type"`
+		}
+		_ = json.Unmarshal(raw, &caps)
+		models := make([]map[string]any, 0, len(caps))
+		for _, cap := range caps {
+			models = append(models, map[string]any{"id": cap.Model, "object": "model", "type": "model", "display_name": cap.Model, "media_type": cap.Type})
+		}
+		response.Success(c, models)
+		return
+	}
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
 		// Prefer the shared, account-keyed upstream catalog. If discovery fails,

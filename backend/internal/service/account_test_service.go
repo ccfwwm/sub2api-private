@@ -70,6 +70,9 @@ type TestEvent struct {
 type AccountTestOptions struct {
 	ImageDataURL string
 	AudioDataURL string
+	TestKind     string
+	Operation    string
+	Parameters   map[string]any
 }
 
 func firstAccountTestOptions(opts []AccountTestOptions) AccountTestOptions {
@@ -83,7 +86,7 @@ func firstAccountTestOptions(opts []AccountTestOptions) AccountTestOptions {
 const maxAccountTestMediaBytes = 8 << 20
 
 const (
-	defaultGeminiTextTestPrompt  = "hi"
+	defaultGeminiTextTestPrompt  = "请只回复 OK。"
 	defaultGeminiImageTestPrompt = "Generate a cute orange cat astronaut sticker on a clean pastel background."
 	defaultOpenAIImageTestPrompt = "Generate a cute orange cat astronaut sticker on a clean pastel background."
 	defaultGrokImageTestPrompt   = "Generate a cute orange cat astronaut sticker on a clean pastel background."
@@ -152,6 +155,7 @@ type AccountTestService struct {
 	modelMetadataRegistryAt   time.Time
 	pluginManager             *PluginManager
 	openaiGatewayService      *OpenAIGatewayService
+	mediaTests                *mediaAccountTester
 	agentIdentityTaskMu       sync.Mutex
 	agentIdentityWS           agentIdentityWSConnectionInvalidator
 	// grokWSDialer is optional; realtime account tests use the default OpenAI-style
@@ -268,7 +272,7 @@ func NewAccountTestService(
 	cfg *config.Config,
 	tlsFPProfileService *TLSFingerprintProfileService,
 ) *AccountTestService {
-	return &AccountTestService{
+	s := &AccountTestService{
 		accountRepo:               accountRepo,
 		geminiTokenProvider:       geminiTokenProvider,
 		claudeTokenProvider:       claudeTokenProvider,
@@ -278,6 +282,8 @@ func NewAccountTestService(
 		cfg:                       cfg,
 		tlsFPProfileService:       tlsFPProfileService,
 	}
+	s.initMediaTests()
+	return s
 }
 
 func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -347,7 +353,7 @@ func createTestPayload(modelID string) (map[string]any, error) {
 		"metadata": map[string]string{
 			"user_id": sessionID,
 		},
-		"max_tokens":  1024,
+		"max_tokens":  64,
 		"temperature": 1,
 		"stream":      true,
 	}, nil
@@ -359,9 +365,17 @@ func createTestPayload(modelID string) (map[string]any, error) {
 // mode is optional - "compact" routes OpenAI accounts to the /responses/compact probe path
 // opts is optional media (image/audio data URLs for real generation / STT).
 func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int64, modelID string, prompt string, mode string, opts ...AccountTestOptions) error {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
 	initAccountTestLogger(c, accountID, modelID, mode)
 	ctx := c.Request.Context()
 	testOpts := firstAccountTestOptions(opts)
+	c.Set("account_test_prompt", strings.TrimSpace(prompt))
+	if testOpts.TestKind != "" && testOpts.TestKind != "minimal" && testOpts.TestKind != "custom" && testOpts.TestKind != "connection" {
+		return s.sendErrorAndEnd(c, "Invalid test type")
+	}
 
 	// Get account
 	account, err := s.accountRepo.GetByID(ctx, accountID)
@@ -369,6 +383,17 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return s.sendErrorAndEnd(c, "Account not found")
 	}
 	bindAccountTestPlatform(c, account)
+	c.Set("account_test_credentials", account.Credentials)
+	if account.Platform != PlatformImageVideo || testOpts.TestKind == "connection" {
+		s.beginBasicTest(c, account, modelID, mode, testOpts.TestKind)
+		defer s.finishBasicTest(c)
+	}
+	if testOpts.TestKind == "connection" {
+		return s.testConnectionOnly(c, account)
+	}
+	if account.Platform == PlatformImageVideo {
+		return s.testMediaAccount(c, account, modelID, prompt, testOpts)
+	}
 
 	// Synthetic UI load-test accounts exercise the real SSE parsing and modal
 	// interactions, but intentionally do not send their placeholder credentials
@@ -379,7 +404,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 			testModelID = claude.DefaultTestModel
 		}
 		s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
-		s.sendEvent(c, TestEvent{Type: "content", Text: "Synthetic Anthropic OAuth account is healthy and interactive."})
+		s.sendEvent(c, TestEvent{Type: "content", Text: "Simulated UI test only; no real upstream generation."})
 		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 		return nil
 	}
@@ -561,6 +586,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 
 	// Create Claude Code style payload (same for all account types)
 	payload, err := createTestPayload(testModelID)
+	applyAccountTestPrompt(c, payload)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -639,6 +665,7 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 	c.Writer.Flush()
 
 	payload, err := createTestPayload(testModelID)
+	applyAccountTestPrompt(c, payload)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -718,12 +745,12 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 				"content": []map[string]any{
 					{
 						"type": "text",
-						"text": "hi",
+						"text": accountTestPrompt(c),
 					},
 				},
 			},
 		},
-		"max_tokens":  256,
+		"max_tokens":  64,
 		"temperature": 1,
 	}
 	bedrockBody, _ := json.Marshal(bedrockPayload)
@@ -890,7 +917,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if isOAuth {
 		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, testModelID)
 	}
-	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth)
+	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth, accountTestPrompt(c))
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event once. A task-invalid Agent Identity response may
@@ -1343,26 +1370,11 @@ func (s *AccountTestService) testGrokImageGeneration(c *gin.Context, ctx context
 		return io.NopCloser(bytes.NewReader(payloadBytes)), nil
 	}
 
-	// One retry on transport EOF (proxies occasionally drop large edit payloads).
-	var resp *http.Response
-	var doErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		if attempt > 0 {
-			s.sendEvent(c, TestEvent{Type: "status", Text: "Retrying Grok image request after transport error..."})
-			req, err = http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payloadBytes))
-			if err != nil {
-				return s.sendErrorAndEnd(c, "Failed to create Grok image retry request")
-			}
-			s.applyGrokTestRequestHeaders(req, account, authToken, "application/json")
-			req.ContentLength = int64(len(payloadBytes))
-		}
-		resp, doErr = s.httpUpstream.Do(req, s.grokTestProxyURL(account), account.ID, account.Concurrency)
-		if doErr == nil {
-			break
-		}
-		if !isTransientGrokTransportError(doErr) || attempt == 1 {
-			return s.sendErrorAndEnd(c, formatGrokImageTransportError(doErr, hasSourceImage, len(payloadBytes)))
-		}
+	// Acceptance may be uncertain after a transport failure. Never repeat a
+	// potentially billable generation submission automatically.
+	resp, doErr := s.httpUpstream.Do(req, s.grokTestProxyURL(account), account.ID, account.Concurrency)
+	if doErr != nil {
+		return s.sendErrorAndEnd(c, formatGrokImageTransportError(doErr, hasSourceImage, len(payloadBytes)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	s.observeGrokTestResponse(ctx, account, resp)
@@ -1978,18 +1990,6 @@ func normalizeAccountTestImageDataURL(raw string) (string, error) {
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
-func isTransientGrokTransportError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unexpected eof") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "broken pipe") ||
-		strings.Contains(msg, "i/o timeout") ||
-		strings.Contains(msg, "timeout awaiting response")
-}
-
 func formatGrokImageTransportError(err error, hasSourceImage bool, payloadBytes int) string {
 	base := fmt.Sprintf("Grok image request failed: %s", err.Error())
 	if !hasSourceImage {
@@ -2489,7 +2489,7 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
 	// 调用 AntigravityGatewayService.TestConnection（复用协议转换逻辑）
-	result, err := s.antigravityGatewayService.TestConnection(ctx, account, testModelID)
+	result, err := s.antigravityGatewayService.TestConnection(ctx, account, testModelID, accountTestPrompt(c))
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}
@@ -2772,7 +2772,11 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 }
 
 // createOpenAITestPayload creates a test payload for OpenAI Responses API
-func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
+func createOpenAITestPayload(modelID string, isOAuth bool, prompts ...string) map[string]any {
+	prompt := DefaultAccountTestPrompt("text")
+	if len(prompts) > 0 && strings.TrimSpace(prompts[0]) != "" {
+		prompt = strings.TrimSpace(prompts[0])
+	}
 	payload := map[string]any{
 		"model": modelID,
 		"input": []map[string]any{
@@ -2781,7 +2785,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": "hi",
+						"text": prompt,
 					},
 				},
 			},
@@ -2803,7 +2807,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 func createOpenAIChatCompletionsTestPayload(modelID string, prompt string) map[string]any {
 	testPrompt := strings.TrimSpace(prompt)
 	if testPrompt == "" {
-		testPrompt = "hi"
+		testPrompt = DefaultAccountTestPrompt("text")
 	}
 
 	return map[string]any{
@@ -3273,6 +3277,9 @@ func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {
 				return
 			}
 		}
+		if event.Success {
+			c.Set("account_test_completed_success", true)
+		}
 	}
 	eventJSON, _ := json.Marshal(event)
 	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", eventJSON); err != nil {
@@ -3284,6 +3291,8 @@ func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {
 
 // sendErrorAndEnd sends an error event and ends the stream
 func (s *AccountTestService) sendErrorAndEnd(c *gin.Context, errorMsg string) error {
+	errorMsg = redactAccountTestError(c, errorMsg)
+	c.Set("basic_test_error", errorMsg)
 	logAccountTestError(c, errorMsg)
 	s.sendEvent(c, TestEvent{Type: "error", Error: errorMsg})
 	return fmt.Errorf("%s", errorMsg)

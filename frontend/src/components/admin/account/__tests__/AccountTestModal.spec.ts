@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AccountTestModal from '../AccountTestModal.vue'
+import { newMediaCapability } from '@/types/media'
 
 const { getAvailableModels, copyToClipboard } = vi.hoisted(() => ({
   getAvailableModels: vi.fn(),
@@ -140,7 +141,8 @@ describe('AccountTestModal', () => {
     const [, request] = (global.fetch as any).mock.calls[0]
     expect(JSON.parse(request.body)).toEqual({
       model_id: 'gemini-3.1-flash-image',
-      prompt: 'draw a tiny orange cat astronaut'
+      prompt: 'draw a tiny orange cat astronaut',
+      test_kind: 'minimal'
     })
 
     const preview = wrapper.find('img[alt="test-image-1"]')
@@ -182,7 +184,8 @@ describe('AccountTestModal', () => {
     const [, request] = (global.fetch as any).mock.calls[0]
     expect(JSON.parse(request.body)).toEqual({
       model_id: 'grok-4.3',
-      prompt: '',
+      prompt: '请只回复 OK。',
+      test_kind: 'minimal',
       mode: 'text'
     })
   })
@@ -216,8 +219,55 @@ describe('AccountTestModal', () => {
     const [, request] = (global.fetch as any).mock.calls[0]
     expect(JSON.parse(request.body)).toMatchObject({
       model_id: 'gpt-5.4',
-      prompt: '',
+      prompt: '请只回复 OK。',
+      test_kind: 'minimal',
       mode: 'compact'
     })
   })
+  it('文本账号可编辑提示词并恢复默认', async () => {
+    getAvailableModels.mockResolvedValue([{id:'gpt-5.4',display_name:'GPT'}])
+    const wrapper = mountModal({id:42,name:'Text',platform:'openai',type:'apikey',status:'active'})
+    await wrapper.setProps({show:true}); await flushPromises()
+    await wrapper.find('textarea').setValue('Reply CUSTOM')
+    await (wrapper.vm as any).startTest(); await flushPromises()
+    const body=JSON.parse((global.fetch as any).mock.calls[0][1].body)
+    expect(body.prompt).toBe('Reply CUSTOM')
+    ;(wrapper.vm as any).resetPrompt()
+    expect((wrapper.vm as any).testPrompt).toBe('请只回复 OK。')
+    wrapper.unmount()
+  })
+  it('媒体提交成功仍显示处理中，关闭重开只查询持久任务', async () => {
+    const cap=newMediaCapability('omni-flash')
+    getAvailableModels.mockResolvedValue([{id:cap.model,display_name:cap.model}])
+    const result={test_id:'mt_one',model:cap.model,status:'in_progress',test_kind:'minimal',operation:'video',started_at:new Date().toISOString(),config_changed:false,artifacts:[],request:{seconds:4}}
+    global.fetch=vi.fn().mockImplementation((url,opts) => opts?.method==='POST'
+      ? Promise.resolve(createStreamResponse([`data: ${JSON.stringify({type:'status',text:'in_progress',data:result})}\n`]))
+      : Promise.resolve({ok:true,status:200,json:async()=>({data:result})})) as any
+    const wrapper=mountModal({id:42,name:'Media',platform:'imagevideo',type:'apikey',status:'active',credentials:{},extra:{media_models:[cap]}})
+    await wrapper.setProps({show:true});await flushPromises()
+    expect((wrapper.vm as any).status).toBe('connecting')
+    await wrapper.setProps({show:false});await wrapper.setProps({show:true});await flushPromises()
+    expect((global.fetch as any).mock.calls.every((call:any[])=>!call[1]?.method)).toBe(true)
+    expect((wrapper.vm as any).savedTest.test_id).toBe('mt_one')
+    expect((wrapper.vm as any).status).toBe('connecting')
+    wrapper.unmount()
+  })
+  it('关闭且无售价的媒体模型支持自定义参数，并拒绝非对象 JSON', async () => {
+    const cap=newMediaCapability('omni-flash')
+    getAvailableModels.mockResolvedValue([{id:cap.model,display_name:cap.model}])
+    global.fetch=vi.fn().mockImplementation((_url,opts)=>opts?.method==='POST'
+      ? Promise.resolve(createStreamResponse(['data: {"type":"test_complete","success":false,"error":"failed"}\n']))
+      : Promise.resolve({ok:false,status:404})) as any
+    const wrapper=mountModal({id:42,name:'Media',platform:'imagevideo',type:'apikey',status:'active',extra:{media_models:[cap]}})
+    await wrapper.setProps({show:true});await flushPromises()
+    ;(wrapper.vm as any).testKind='custom';(wrapper.vm as any).customParameters='{"seconds":6}'
+    await (wrapper.vm as any).startTest();await flushPromises()
+    const post=(global.fetch as any).mock.calls.find((call:any[])=>call[1]?.method==='POST')
+    expect(JSON.parse(post[1].body)).toMatchObject({test_kind:'custom',operation:'video',model_id:cap.model,parameters:{seconds:6}})
+    ;(wrapper.vm as any).customParameters='[]'
+    const calls=(global.fetch as any).mock.calls.length
+    await (wrapper.vm as any).startTest();expect((global.fetch as any).mock.calls.length).toBe(calls)
+    wrapper.unmount()
+  })
+
 })

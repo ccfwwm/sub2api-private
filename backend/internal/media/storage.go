@@ -173,6 +173,9 @@ func originURL(account Account, path string) (string, error) {
 	}
 	// Configured origin may include a path prefix; never resolve task IDs as URLs.
 	escaped := strings.TrimRight(base.EscapedPath(), "/") + path
+	if strings.HasSuffix(strings.TrimRight(base.Path, "/"), "/v1") && strings.HasPrefix(path, "/v1/") {
+		escaped = strings.TrimRight(base.EscapedPath(), "/") + strings.TrimPrefix(path, "/v1")
+	}
 	decoded, err := url.PathUnescape(escaped)
 	if err != nil {
 		return "", err

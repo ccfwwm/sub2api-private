@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -79,7 +80,7 @@ func TestAccountTestErrorLogRedaction(t *testing.T) {
 	initAccountTestLogger(c, 1, "", "")
 	message := `API returned 403: {"api_key":"secret-key","access_token":"secret-token","message":"denied"}`
 	err := (&AccountTestService{}).sendErrorAndEnd(c, message)
-	require.EqualError(t, err, message)
+	require.EqualError(t, err, logredact.RedactText(message, "api_key", "authorization"))
 	entry := logs.FilterMessage("account_test.failed").All()[0]
 	logged, ok := entry.ContextMap()["error"].(string)
 	require.True(t, ok)
@@ -90,4 +91,14 @@ func TestAccountTestErrorLogRedaction(t *testing.T) {
 	last, ok := logs.All()[1].ContextMap()["error"].(string)
 	require.True(t, ok)
 	require.Less(t, len(last), 2100)
+}
+
+func TestAccountTestRedactsUnlabelledCredentialValues(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/test", nil)
+	c.Set("account_test_credentials", map[string]any{"api_key": "private-account-key", "access_token": "private-oauth-token"})
+	err := (&AccountTestService{}).sendErrorAndEnd(c, "upstream echoed private-account-key and private-oauth-token")
+	require.NotContains(t, err.Error(), "private-account-key")
+	require.NotContains(t, err.Error(), "private-oauth-token")
+	require.NotContains(t, c.GetString("basic_test_error"), "private-account-key")
 }

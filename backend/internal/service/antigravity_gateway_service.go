@@ -353,7 +353,7 @@ type TestConnectionResult struct {
 // TestConnection 测试 Antigravity 账号连接。
 // 复用 antigravityRetryLoop 的完整重试 / credits overages / 智能重试逻辑，
 // 与真实调度行为一致。差异：不做账号切换（测试指定账号）、不记录 ops 错误。
-func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account *Account, modelID string) (*TestConnectionResult, error) {
+func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account *Account, modelID string, prompts ...string) (*TestConnectionResult, error) {
 
 	// 获取 token
 	if s.tokenProvider == nil {
@@ -384,6 +384,20 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 	}
 	if err != nil {
 		return nil, fmt.Errorf("构建请求失败: %w", err)
+	}
+	if len(prompts) > 0 && strings.TrimSpace(prompts[0]) != "" {
+		var payload map[string]any
+		if err = json.Unmarshal(requestBody, &payload); err != nil {
+			return nil, err
+		}
+		if request, ok := payload["request"].(map[string]any); ok {
+			request["contents"] = []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": strings.TrimSpace(prompts[0])}}}}
+			request["generationConfig"] = map[string]any{"maxOutputTokens": 64}
+		}
+		requestBody, err = json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 代理 URL

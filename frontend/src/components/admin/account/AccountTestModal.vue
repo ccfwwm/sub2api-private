@@ -41,6 +41,27 @@
         </span>
       </div>
 
+      <div class="space-y-2">
+        <label class="text-sm font-medium">{{ tr('测试类型', 'Test type') }}</label>
+        <select v-model="testKind" class="input" :disabled="status === 'connecting'">
+          <option value="connection">{{ tr('连接检查（不生成）', 'Connection check (no generation)') }}</option>
+          <option value="minimal">{{ tr('最小生成', 'Minimum generation') }}</option>
+          <option value="custom">{{ tr('自定义生成', 'Custom generation') }}</option>
+        </select>
+        <p class="text-xs text-gray-500">{{ tr('生成测试不扣用户余额，上游可能收费。每次仅提交一次，失败后由你决定是否再次测试。', 'Tests do not charge user balances. Upstream providers may charge. Each test submits once; you decide whether to retry.') }}</p>
+      </div>
+      <div v-if="isMediaAccount && testKind === 'custom'" class="space-y-2">
+        <label class="text-sm">{{ tr('操作', 'Operation') }}<select v-model="testOperation" class="input"><option v-for="op in mediaCapability?.operations" :key="op">{{ op }}</option></select></label>
+        <TextArea v-model="customParameters" :label="tr('参数 JSON（可选）', 'Parameters JSON (optional)')" rows="3" :disabled="status === 'connecting'" />
+      </div>
+      <div v-if="savedTest" class="space-y-1 rounded-lg border p-3 text-xs">
+        <div>{{ savedTest.test_kind }} · {{ savedTest.model }} · {{ savedTest.operation }} · {{ savedTest.status }}</div>
+        <div>{{ tr('开始时间', 'Started') }}: {{ new Date(savedTest.started_at).toLocaleString() }} · {{ Math.max(0, Math.round((new Date(savedTest.completed_at || Date.now()).getTime() - new Date(savedTest.started_at).getTime()) / 1000)) }} s</div>
+        <div v-if="savedTest.upstream_task_id">{{ tr('上游任务', 'Upstream task') }}: {{ savedTest.upstream_task_id }} · {{ savedTest.upstream_status }}</div>
+        <div>{{ JSON.stringify(savedTest.request) }}</div>
+        <div v-if="savedTest.config_changed" class="text-amber-600">{{ tr('配置已变化，结果对应旧配置。', 'Configuration changed; result belongs to previous settings.') }}</div>
+        <button type="button" class="text-primary-600" @click="viewSavedTest(savedTest.test_id)">{{ tr('刷新记录', 'Refresh record') }}</button>
+      </div>
       <!-- Grok: mode first, then optional model / mode params -->
       <div v-if="isGrokAccount" class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -82,6 +103,7 @@
       </div>
 
       <div v-if="supportsPromptInput" class="space-y-1.5">
+        <button type="button" class="text-xs text-primary-600" :disabled="status === 'connecting'" @click="resetPrompt">{{ tr('恢复默认提示词', 'Restore default prompt') }}</button>
         <TextArea
           v-model="testPrompt"
           :label="promptInputLabel"
@@ -365,7 +387,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { accountMediaCapabilities } from '@/types/media'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -377,7 +400,8 @@ import { ADMIN_UI_REQUEST_HEADER } from '@/api/adminUIRequest'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const tr = (zh: string, en: string) => (locale?.value ?? 'zh').startsWith('zh') ? zh : en
 const { copyToClipboard } = useClipboard()
 
 interface OutputLine {
@@ -393,6 +417,7 @@ interface PreviewMedia {
 const props = defineProps<{
   show: boolean
   account: Account | null
+  initialModelId?: string
 }>()
 
 const emit = defineEmits<{
@@ -407,6 +432,59 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const testKind = ref<'connection' | 'minimal' | 'custom'>('minimal')
+const customParameters = ref('{}')
+const testOperation = ref('')
+interface SavedTest {
+  test_id: string; model: string; status: string; test_kind: string; operation: string
+  started_at: string; completed_at?: string; error?: string; config_changed: boolean
+  upstream_task_id?: string; upstream_status?: string; request: Record<string, unknown>
+  artifacts: { type: string; content_url: string; mime_type?: string; available: boolean }[]
+}
+const savedTest = ref<SavedTest | null>(null)
+const isMediaAccount = computed(() => props.account?.platform === 'imagevideo')
+const mediaCapability = computed(() => accountMediaCapabilities(props.account?.extra, props.account?.credentials).find(c => c.model === selectedModelId.value))
+const mediaKind = computed(() => isMediaAccount.value ? mediaCapability.value?.media_type || 'text' : supportsImageTest.value ? 'image' : supportsGrokVideoTest.value ? 'video' : 'text')
+const defaultPrompt = computed(() => ({text:'请只回复 OK。', image:'A simple blue circle on a plain white background.', video:'A fixed camera watching a blue ball slowly roll across a plain white floor.', audio:'A short quiet instrumental piano melody, no vocals.'})[mediaKind.value as 'text' | 'image' | 'video' | 'audio'] || '请只回复 OK。')
+const resetPrompt = () => { testPrompt.value = defaultPrompt.value }
+let pollTimer: ReturnType<typeof setTimeout> | undefined
+const previewURLs = new Set<string>()
+const previewSources = new Set<string>()
+const clearPreviews = () => { for (const url of previewURLs) URL.revokeObjectURL(url); previewURLs.clear(); previewSources.clear() }
+const stopPolling = () => { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined }
+async function addPreview(type: string, url: string, mimeType?: string) {
+  if (previewSources.has(url)) return
+  previewSources.add(url)
+  let preview = url
+  if (url.startsWith('/api/v1/admin/accounts/')) {
+    const response = await fetch(buildApiUrl(url.replace('/api/v1', '')), { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}`, [ADMIN_UI_REQUEST_HEADER]: '1' } })
+    if (!response.ok) throw new Error(tr('产物预览读取失败', 'Failed to read preview'))
+    preview = URL.createObjectURL(await response.blob()); previewURLs.add(preview)
+  }
+  const target = type === 'image' ? generatedImages : type === 'video' ? generatedVideos : generatedAudios
+  target.value.push({url:preview, mimeType})
+}
+async function applySavedTest(result: SavedTest) {
+  savedTest.value = result
+  status.value = ['submitting', 'in_progress'].includes(result.status) ? 'connecting' : result.status === 'completed' ? 'success' : 'error'
+  errorMessage.value = result.error || ''
+  for (const artifact of result.artifacts || []) if (artifact.available) await addPreview(artifact.type, artifact.content_url, artifact.mime_type)
+}
+async function viewSavedTest(id = 'latest') {
+  if (!props.account || !props.show) return
+  const accountID = props.account.id
+  try {
+    const response = await fetch(buildApiUrl(`/admin/accounts/${accountID}/tests/${id}`), {headers:{Authorization:`Bearer ${localStorage.getItem('auth_token')}`, [ADMIN_UI_REQUEST_HEADER]:'1'}})
+    if (response.status === 404) return
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const body = await response.json()
+    if (!props.show || props.account?.id !== accountID) return
+    const result = body.data as SavedTest
+    await applySavedTest(result)
+    if (['submitting','in_progress'].includes(result.status)) pollTimer = setTimeout(() => { void viewSavedTest(result.test_id) }, 3000)
+  } catch { errorMessage.value = tr('测试记录读取失败，可重新查看；不会重复生成。','Failed to read test. Reopen to retry viewing; generation is not repeated.') }
+}
+onBeforeUnmount(() => { stopPolling(); abortStream(); clearPreviews() })
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewMedia[]>([])
@@ -496,17 +574,7 @@ const modelOptionsForMode = computed(() => {
   return []
 })
 
-const supportsPromptInput = computed(() => {
-  if (!isGrokAccount.value) {
-    return supportsImageTest.value
-  }
-  return (
-    grokTestMode.value === 'image' ||
-    grokTestMode.value === 'video' ||
-    grokTestMode.value === 'search' ||
-    grokTestMode.value === 'tts'
-  )
-})
+const supportsPromptInput = computed(() => testKind.value !== 'connection' && (!isGrokAccount.value || !['stt', 'realtime'].includes(grokTestMode.value)))
 
 const supportsImageUpload = computed(
   () => isGrokAccount.value && (grokTestMode.value === 'image' || grokTestMode.value === 'video')
@@ -609,7 +677,7 @@ const promptInputLabel = computed(() => {
   if (grokTestMode.value === 'tts') {
     return t('admin.accounts.grok.ttsTextLabel')
   }
-  return t('admin.accounts.imagePromptLabel')
+  return tr('提示词', 'Prompt')
 })
 
 const promptInputPlaceholder = computed(() => {
@@ -675,6 +743,7 @@ const testModeSummary = computed(() => {
 
 const canStartTest = computed(() => {
   if (status.value === 'connecting') return false
+  if (testKind.value === 'connection') return true
   if (isGrokAccount.value) {
     if (
       grokTestMode.value === 'search' ||
@@ -701,19 +770,7 @@ const sortTestModels = (models: ClaudeModel[]) => {
 }
 
 // Load available models when modal opens
-const applyDefaultPromptForMode = () => {
-  if (!supportsPromptInput.value) return
-  if (testPrompt.value.trim()) return
-  if (grokTestMode.value === 'video') {
-    testPrompt.value = t('admin.accounts.videoPromptDefault')
-  } else if (grokTestMode.value === 'image' || supportsImageTest.value) {
-    testPrompt.value = t('admin.accounts.imagePromptDefault')
-  } else if (grokTestMode.value === 'search') {
-    testPrompt.value = t('admin.accounts.grok.searchQueryDefault')
-  } else if (grokTestMode.value === 'tts') {
-    testPrompt.value = t('admin.accounts.grok.ttsTextDefault')
-  }
-}
+const applyDefaultPromptForMode = () => { if (!testPrompt.value.trim()) resetPrompt() }
 
 const pickDefaultModelForMode = () => {
   const opts = modelOptionsForMode.value
@@ -733,24 +790,7 @@ const pickDefaultModelForMode = () => {
   selectedModelId.value = opts[0].id
 }
 
-watch(
-  () => props.show,
-  async (newVal) => {
-    if (newVal && props.account) {
-      testPrompt.value = ''
-      testMode.value = 'default'
-      grokTestMode.value = 'text'
-      resetState()
-      await loadAvailableModels()
-      if (isGrokAccount.value) {
-        pickDefaultModelForMode()
-        applyDefaultPromptForMode()
-      }
-    } else {
-      abortStream()
-    }
-  }
-)
+watch(mediaKind, () => { resetPrompt(); testOperation.value = mediaCapability.value?.operations[0] || '' })
 
 watch(grokTestMode, () => {
   if (!isGrokAccount.value) return
@@ -791,6 +831,9 @@ const loadAvailableModels = async () => {
 }
 
 const resetState = () => {
+  stopPolling()
+  clearPreviews()
+  savedTest.value = null
   status.value = 'idle'
   outputLines.value = []
   streamingContent.value = ''
@@ -802,6 +845,7 @@ const resetState = () => {
 }
 
 const handleClose = () => {
+  stopPolling()
   abortStream()
   emit('close')
 }
@@ -845,14 +889,26 @@ const startTest = async () => {
 
   try {
     const requestBody: {
+      test_kind: string
+      operation?: string
+      parameters?: Record<string, unknown>
       model_id: string
       prompt: string
       mode?: string
       image_data_url?: string
       audio_data_url?: string
     } = {
+      test_kind: testKind.value,
       model_id: showModelSelect.value ? selectedModelId.value : '',
       prompt: supportsPromptInput.value ? testPrompt.value.trim() : ''
+    }
+    if (isMediaAccount.value) {
+      requestBody.operation = testOperation.value
+      if (testKind.value === 'custom') {
+        const parsed = JSON.parse(customParameters.value)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(tr('参数必须是 JSON 对象', 'Parameters must be a JSON object'))
+        requestBody.parameters = parsed
+      }
     }
     if (isOpenAIAccount.value) {
       requestBody.mode = testMode.value
@@ -918,7 +974,7 @@ const startTest = async () => {
           if (jsonStr) {
             try {
               const event = JSON.parse(jsonStr)
-              handleEvent(event)
+              await handleEvent(event)
             } catch (e) {
               console.error('Failed to parse SSE event:', e)
             }
@@ -938,7 +994,7 @@ const startTest = async () => {
   }
 }
 
-const handleEvent = (event: {
+const handleEvent = async (event: {
   type: string
   text?: string
   model?: string
@@ -948,7 +1004,9 @@ const handleEvent = (event: {
   audio_url?: string
   video_url?: string
   mime_type?: string
+  data?: SavedTest | { test_id: string; test_kind: string }
 }) => {
+  if (event.data && 'status' in event.data) await applySavedTest(event.data)
   switch (event.type) {
     case 'test_start':
       addLine(t('admin.accounts.connectedToApi'), 'text-green-400')
@@ -988,30 +1046,21 @@ const handleEvent = (event: {
 
     case 'image':
       if (event.image_url) {
-        generatedImages.value.push({
-          url: event.image_url,
-          mimeType: event.mime_type
-        })
+        await addPreview('image', event.image_url, event.mime_type)
         addLine(t('admin.accounts.imageReceived', { count: generatedImages.value.length }), 'text-purple-300')
       }
       break
 
     case 'audio':
       if (event.audio_url) {
-        generatedAudios.value.push({
-          url: event.audio_url,
-          mimeType: event.mime_type
-        })
+        await addPreview('audio', event.audio_url, event.mime_type)
         addLine(t('admin.accounts.audioReceived', { count: generatedAudios.value.length }), 'text-purple-300')
       }
       break
 
     case 'video':
       if (event.video_url) {
-        generatedVideos.value.push({
-          url: event.video_url,
-          mimeType: event.mime_type
-        })
+        await addPreview('video', event.video_url, event.mime_type)
         addLine(t('admin.accounts.videoReceived', { count: generatedVideos.value.length }), 'text-purple-300')
       }
       break
@@ -1051,6 +1100,38 @@ const copyOutput = () => {
   const text = outputLines.value.map((l) => l.text).join('\n')
   copyToClipboard(text, t('admin.accounts.outputCopied'))
 }
+watch(
+  () => props.show,
+  async (newVal) => {
+    if (newVal && props.account) {
+      testPrompt.value = ''
+      testKind.value = 'minimal'
+      savedTest.value = null
+      testMode.value = 'default'
+      grokTestMode.value = 'text'
+      resetState()
+      await loadAvailableModels()
+      if (props.initialModelId) selectedModelId.value = props.initialModelId
+      applyDefaultPromptForMode()
+      testOperation.value = mediaCapability.value?.operations[0] || ''
+      if (isMediaAccount.value || props.account.extra?.account_last_test) {
+        const byModel = props.account.extra?.media_test_results as Record<string,{test_id:string}> | undefined
+        const testID = props.initialModelId ? byModel?.[props.initialModelId]?.test_id : undefined
+        if (!props.initialModelId || testID) await viewSavedTest(testID || 'latest')
+      }
+      if (isGrokAccount.value) {
+        pickDefaultModelForMode()
+        applyDefaultPromptForMode()
+      }
+    } else {
+      abortStream()
+      stopPolling()
+      clearPreviews()
+    }
+  },
+  { immediate: true }
+)
+
 </script>
 
 <style>
