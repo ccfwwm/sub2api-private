@@ -26,7 +26,7 @@ def main():
     args = parser.parse_args()
     manifest = json.loads(Path(args.manifest).read_text())
     image = manifest['image'] + '@' + manifest['digest']
-    for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis']:
+    for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']:
         if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
             raise SystemExit('Refusing to touch existing container ' + name)
     with tempfile.TemporaryDirectory(prefix='sub2api-fixture-') as tmp:
@@ -55,6 +55,9 @@ def main():
             'postgres': {'image': 'postgres:18-alpine', 'container_name': 'sub2api-postgres',
                          'environment': {'POSTGRES_USER': 'sub2api', 'POSTGRES_DB': 'sub2api', 'POSTGRES_PASSWORD': password, 'TZ': 'Asia/Shanghai'}},
             'redis': {'image': 'redis:8-alpine', 'container_name': 'sub2api-redis'},
+            # A separate disposable service exercises the production boundary:
+            # app cutover must preserve the pricing service container identity.
+            'pricing-overlay': {'image': 'redis:8-alpine', 'container_name': 'sub2api-pricing-overlay'},
             'sub2api': {'image': base, 'container_name': 'sub2api', 'environment': env,
                         'ports': ['127.0.0.1:8081:8080'], 'volumes': [str(prod / 'data') + ':/app/data']}},
             'networks': {'default': {}}}
@@ -71,7 +74,7 @@ def main():
                         'release_token_file': str(release_token), 'health_urls': []})
         c.manifest = lambda version: manifest
         try:
-            run(c.compose() + ['up', '-d', 'postgres', 'redis'])
+            run(c.compose() + ['up', '-d', 'postgres', 'redis', 'pricing-overlay'])
             c.wait_command(['docker', 'exec', 'sub2api-postgres', 'pg_isready', '-h', '127.0.0.1', '-U', 'sub2api', '-d', 'sub2api'], 90)
             run(c.compose() + ['up', '-d', '--no-deps', 'sub2api'])
             c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8081/health'], 180)
@@ -79,7 +82,7 @@ def main():
             # the runtime, not merely the original base image.
             run(['docker', 'exec', '-u', '0', 'sub2api', 'touch', '/app/fixture-runtime-marker'])
             dependencies = {n: json.loads(run(['docker', 'inspect', n]))[0]['State']['StartedAt']
-                            for n in ['sub2api-postgres', 'sub2api-redis']}
+                            for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
             if args.ops:
                 from manage import Manager
                 manager = Manager(root / 'ops-state', prod)
@@ -89,7 +92,7 @@ def main():
                 (release / 'image-inspect.json').write_bytes(run(['docker', 'image', 'inspect', image]))
                 run(['docker', 'tag', image, manifest['image'] + ':' + manifest['version']])
                 def operation(action, target=''):
-                    j = {'id': uuid.uuid4().hex, 'action': action, 'target': target}
+                    j = {'id': uuid.uuid4().hex, 'action': action, 'target': target, 'immediate': action == 'upgrade'}
                     manager.execute(j)
                     assert j['status'] == 'succeeded', j
                     return j
@@ -122,7 +125,7 @@ def main():
         except Exception:
             # All accounts and passwords in this runner are disposable fixtures.
             # Preserve diagnostics before destroying the temporary environment.
-            for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis']:
+            for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']:
                 subprocess.run(['docker', 'logs', '--tail', '35', name], check=False)
                 subprocess.run(['docker', 'inspect', '--format', '{{json .State}}', name], check=False)
             errors = (manager.state if args.ops else c.state) / 'command-errors.log'
