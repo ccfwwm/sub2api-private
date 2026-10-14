@@ -14,7 +14,7 @@ import (
 func TestTaskPageCombinedFiltersAndStableOrder(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	start := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 	f := TaskListFilter{UserID: 42, KeyID: 3, GroupID: 66, AccountID: 7, TaskID: "task_a", Model: "Model'", MediaType: "video", Status: "queued", Settlement: "held", Start: &start, End: &end, Page: 3, PageSize: 20, SortOrder: "asc"}
@@ -34,7 +34,7 @@ func TestTaskRecordsBatchingAndUserPrivacy(t *testing.T) {
 		t.Run(map[bool]string{false: "user", true: "admin"}[admin], func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			tasks := []StoredTask{}
 			for _, id := range []string{"a", "b"} {
 				tasks = append(tasks, StoredTask{ID: id, State: "completed", Created: time.Unix(123, 0), Accepted: "1", Captured: "2", Refunded: "0.5", Identity: Identity{UserID: 42, KeyID: 3, GroupID: 66}, Snapshot: Snapshot{Capability: Capability{MediaType: "video", Model: "m"}, Request: Request{Operation: "video"}}})
@@ -72,7 +72,7 @@ func TestTaskRecordsBatchingAndUserPrivacy(t *testing.T) {
 func TestEmptyTaskRecordsDoNotQuery(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	records, err := (&Store{DB: db}).TaskRecords(context.Background(), nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, records)

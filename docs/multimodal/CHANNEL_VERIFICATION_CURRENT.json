@@ -1,5 +1,5 @@
 {
-  "version": "v1.2.4",
+  "version": "v1.2.5",
   "status": "recorded",
   "verified_at": "2026-10-13T15:18:39.965477+00:00",
   "environment": "production, existing user-generated artifacts; authenticated preview retrieval",

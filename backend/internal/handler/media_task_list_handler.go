@@ -17,7 +17,7 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 	// Empty values still select page mode, and then fail validation.
 	q, queryErr := url.ParseQuery(c.Request.URL.RawQuery)
 	if queryErr != nil {
-		return f, false, fmt.Errorf("Invalid query parameters")
+		return f, false, fmt.Errorf("invalid query parameters")
 	}
 	_, hasPage := q["page"]
 	_, hasSize := q["page_size"]
@@ -35,7 +35,7 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 		if _, ok := q[p.key]; ok {
 			n, e := strconv.Atoi(c.Query(p.key))
 			if e != nil || n < 1 || n > p.max {
-				return f, paged, fmt.Errorf("Invalid %s", p.key)
+				return f, paged, fmt.Errorf("invalid %s", p.key)
 			}
 			*p.target = n
 		}
@@ -52,7 +52,7 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 		}
 		n, e := strconv.ParseInt(c.Query(p.key), 10, 64)
 		if e != nil || n <= 0 {
-			return f, paged, fmt.Errorf("Invalid %s", p.key)
+			return f, paged, fmt.Errorf("invalid %s", p.key)
 		}
 		*p.target = n
 	}
@@ -63,11 +63,11 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 			valid = valid || p.value == option
 		}
 		if !valid {
-			return f, paged, fmt.Errorf("Invalid %s", p.key)
+			return f, paged, fmt.Errorf("invalid %s", p.key)
 		}
 	}
 	if sort := c.Query("sort_by"); sort != "" && sort != "created_at" {
-		return f, paged, fmt.Errorf("Only created_at sorting is supported")
+		return f, paged, fmt.Errorf("only created_at sorting is supported")
 	}
 	if c.Query("sort_order") != "" {
 		f.SortOrder = c.Query("sort_order")
@@ -81,7 +81,7 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 		}
 		v, e := time.Parse(time.RFC3339Nano, c.Query(p.key))
 		if e != nil {
-			return f, paged, fmt.Errorf("Invalid %s; use RFC3339", p.key)
+			return f, paged, fmt.Errorf("invalid %s; use RFC3339", p.key)
 		}
 		*p.target = &v
 	}
@@ -89,7 +89,7 @@ func parseMediaTaskFilter(c *gin.Context, userID int64, admin bool) (media.TaskL
 		return f, paged, fmt.Errorf("start_time must precede end_time")
 	}
 	if len(f.TaskID) > 200 || len(f.Model) > 300 {
-		return f, paged, fmt.Errorf("Task or model filter is too long")
+		return f, paged, fmt.Errorf("task or model filter is too long")
 	}
 	return f, paged, nil
 }
