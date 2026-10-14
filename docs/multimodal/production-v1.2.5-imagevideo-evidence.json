@@ -1,0 +1,134 @@
+{
+  "verified_at": "2026-10-14T09:43:21.513644+00:00",
+  "version": "1.2.5",
+  "commit": "ced4df335010b5f808fbe1fb8bb0cc812f3d9579",
+  "digest": "sha256:9c5983e801c3d5d0768b94e6af2aaf573a8e65f5fa1ad1730d61e7a89bf18d45",
+  "automatic_job": "6394daca931f4d84be5f8a7be994e4c7",
+  "manager_job": "2fef393d1ca545eba65981418407ce37",
+  "backup_id": "f68c95c30e384da887df321232e7c509",
+  "backup_checksums_verified": 8,
+  "migration_rehearsal": {
+    "filename": "247_media_task_list_indexes.sql",
+    "restore_verified": true,
+    "rollback_verified": true,
+    "data_unchanged": true
+  },
+  "public": {
+    "http://127.0.0.1:8081": {
+      "health": 200,
+      "version": "1.2.5",
+      "docs": 200
+    },
+    "https://code.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.5",
+      "docs": 200
+    },
+    "https://code.aicodeme.cn": {
+      "health": 200,
+      "version": "1.2.5",
+      "docs": 200
+    },
+    "https://hkcode.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.5",
+      "docs": 200
+    }
+  },
+  "app_healthy": true,
+  "neighbor_containers_unchanged": 34,
+  "neighbor_restarts_before_deployment": [
+    {
+      "name": "gptimageweb-pro-frontend-1",
+      "started_at": "2026-10-14T08:33:05.712823956Z",
+      "same_container_and_image": true,
+      "before_deployment": true
+    }
+  ],
+  "deployment_started_at": "2026-10-14T09:28:23+00:00",
+  "app_mounts_networks_ports_preserved": true,
+  "old_migration_checksums_preserved": 296,
+  "migration_count": 297,
+  "indexes": [
+    {
+      "name": "media_tasks_created_id",
+      "valid": true,
+      "ready": true,
+      "definition": "CREATE INDEX media_tasks_created_id ON public.media_tasks USING btree (created_at DESC, id DESC)"
+    },
+    {
+      "name": "media_tasks_user_created_id",
+      "valid": true,
+      "ready": true,
+      "definition": "CREATE INDEX media_tasks_user_created_id ON public.media_tasks USING btree (user_id, created_at DESC, id DESC)"
+    }
+  ],
+  "historical_media_hashes_preserved": 6,
+  "media_counts": {
+    "media_tasks": 11,
+    "media_artifacts": 10,
+    "media_ledger_entries": 31,
+    "media_cost_entries": 10
+  },
+  "media_api": {
+    "total": 11,
+    "tested_pages": 6,
+    "combined_filter_cases": 3,
+    "legacy_array_and_cursor": true,
+    "invalid_parameter_cases": 4,
+    "anonymous_denied": true
+  },
+  "public_examples": {
+    "imagevideo.py": {
+      "status": 200,
+      "sha256": "10e3b612bf75730462bc93e6d5902b243921ebf60c396ddb2d1fa9f603aa9a8c",
+      "mime": "text/plain; charset=utf-8"
+    },
+    "imagevideo.mjs": {
+      "status": 200,
+      "sha256": "524792247b93021a2e3d8eab04ae24e3f81357b46f7ab48673d77a6ca8f20785",
+      "mime": "text/javascript; charset=utf-8"
+    }
+  },
+  "new_generation_requests": 0,
+  "browser": {
+    "isolated_context": true,
+    "mock_routes": false,
+    "anonymous": true,
+    "section_count": 10,
+    "markdown_matches_shared_source_after_crlf_normalization": true,
+    "markdown_sha256": "bd757f72031210ad929bc0f913fa19dacd2426df1b4b2e95c4b3416d0bed834c",
+    "mobile_width": 390,
+    "mobile_hash": "#music",
+    "mobile_menu_closed": true,
+    "page_overflow": false,
+    "javascript_errors": 0,
+    "screenshots": [
+      "output/imagevideo/screenshots/production-docs-desktop.png",
+      "output/imagevideo/screenshots/production-docs-mobile.png"
+    ]
+  },
+  "manual_build_verification": {
+    "version": "v1.2.5",
+    "commit": "ced4df335010b5f808fbe1fb8bb0cc812f3d9579",
+    "digest": "sha256:9c5983e801c3d5d0768b94e6af2aaf573a8e65f5fa1ad1730d61e7a89bf18d45",
+    "source_release_run": 38532903463,
+    "source_tests": "success",
+    "ci_run": 38532903345,
+    "ci": "success",
+    "github_image_job": "not started due account billing or spending limit",
+    "build": "original Dockerfile in isolated local Docker-in-Docker",
+    "smoke": "passed",
+    "controller_rehearsal": "passed",
+    "manager_rehearsal_including_247_and_rescue": "passed",
+    "local_engine_id": "c0e0083d-3b02-4442-a216-3c5b57477b0b",
+    "local_rehearsal_adaptations": "CI-only entry guard replaced by exact disposable engine ID; image registry constant switched to localhost-only registry for immutable pull; no production management gates removed",
+    "ghcr_same_digest": "confirmed",
+    "new_generation_requests": 0
+  },
+  "limitations": [
+    "No production ordinary-user login session was used; user privacy and UI verified by local unit/integration/browser fixtures.",
+    "No paid media generation requests submitted.",
+    "GitHub image job was blocked by account billing; exact image built and rehearsed in isolated local Docker."
+  ]
+}

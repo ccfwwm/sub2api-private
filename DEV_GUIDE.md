@@ -268,18 +268,17 @@ psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
 ### Git 操作
 
 ```bash
-# 同步上游
-git fetch upstream
-git checkout main
-git merge upstream/main
+# 日常直接在私有 main 开发（2026-10-14 用户约定）
+git switch main
+git pull --ff-only origin main
+# 完成改动、检查后，仅暂存本次文件并提交
+git add <本次文件>
+git commit -m "<说明>"
 git push origin main
 
-# 创建功能分支
-git checkout -b feature/xxx
-
-# Rebase 到最新 main
+# 官方上游同步另行审阅；保留本项目定制
 git fetch upstream
-git rebase upstream/main
+# 核对 upstream/main 差异和冲突后再合并，不把 main 跟踪到 upstream
 ```
 
 ### 前端操作
