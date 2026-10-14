@@ -2,7 +2,7 @@
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { join } from 'node:path'
+import { join, extname } from 'node:path'
 
 export class Client {
   constructor(base = process.env.MEDIA_BASE_URL || 'https://code.aicodeme.xyz', key = process.env.MEDIA_API_KEY) {
@@ -16,8 +16,9 @@ export class Client {
     const url = new URL(path, this.base + '/')
     if (url.origin !== this.base) throw new Error('Artifact URL must belong to the API origin')
     const headers = { Authorization: `Bearer ${this.key}`, ...extra }
-    if (payload !== undefined) headers['Content-Type'] = 'application/json'
-    const r = await fetch(url, { method, headers, body: payload === undefined ? undefined : JSON.stringify(payload), redirect: 'error', signal: AbortSignal.timeout(200000) })
+    const multipart = payload instanceof FormData
+    if (payload !== undefined && !multipart) headers['Content-Type'] = 'application/json'
+    const r = await fetch(url, { method, headers, body: payload === undefined ? undefined : multipart ? payload : JSON.stringify(payload), redirect: 'error', signal: AbortSignal.timeout(200000) })
     if (!r.ok) throw new Error(`HTTP ${r.status}; retain task state; do not blindly resubmit`)
     return r
   }
@@ -40,7 +41,18 @@ async function save(path, state, exclusive = false) {
   await rename(path + '.tmp', path)
 }
 
-export async function submit(client, endpoint, payload, statePath) {
+export async function submit(client, endpoint, payload, statePath, images = []) {
+  if (images.length) {
+    if (endpoint !== '/v1/images/edits' || images.length > 2) throw new Error('Image uploads require /v1/images/edits and 1-2 files')
+    const form = new FormData()
+    for (const [name, value] of Object.entries(payload)) form.append(name, typeof value === 'string' ? value : JSON.stringify(value))
+    for (const path of images) {
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[extname(path).toLowerCase()]
+      if (!mime) throw new Error('Use PNG, JPEG or WebP references')
+      form.append('image[]', new Blob([await readFile(path)], { type: mime }), 'reference' + extname(path))
+    }
+    payload = form
+  }
   const state = { base: client.base, idempotency_key: randomUUID(), task_id: null, status: 'submitting' }
   await save(statePath, state, true)
   // Never automatically retry POST. State persists if the connection fails.
@@ -80,11 +92,16 @@ export async function resume(client, statePath, directory, interval = 20, maxWai
 async function main() {
   const [command, ...rest] = process.argv.slice(2)
   const args = {}
-  for (let i = 0; i < rest.length; i += 2) args[rest[i].replace(/^--/, '')] = rest[i + 1]
+  const images = []
+  for (let i = 0; i < rest.length; i += 2) {
+    const name = rest[i].replace(/^--/, '')
+    if (name === 'image') images.push(rest[i + 1])
+    else args[name] = rest[i + 1]
+  }
   const client = new Client()
   const state = args.state || 'media-task.json'
   if (command === 'submit' && args.payload) {
-    console.log(await submit(client, args.endpoint || '/v1/videos', JSON.parse((await readFile(args.payload, 'utf8')).replace(/^\uFEFF/, '')), state))
+    console.log(await submit(client, args.endpoint || '/v1/videos', JSON.parse((await readFile(args.payload, 'utf8')).replace(/^\uFEFF/, '')), state, images))
   } else if (command === 'resume') {
     const interval = Number(args.interval || 20), maxWait = Number(args['max-wait'] || 3600)
     if (!(interval > 0 && maxWait > 0)) throw new Error('interval and max-wait must be positive')

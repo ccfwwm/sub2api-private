@@ -1,5 +1,7 @@
 """Offline contract checks for the downloadable clients. Never calls a provider."""
 import json
+from email.parser import BytesParser
+from email.policy import default
 import os
 import subprocess
 import sys
@@ -32,7 +34,19 @@ class PublicClientsTest(unittest.TestCase):
 
             def do_POST(self):
                 calls.append(("POST", self.path, self.headers.get("Authorization")))
-                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                raw = self.rfile.read(int(self.headers["Content-Length"]))
+                if scenario == "multipart":
+                    message = BytesParser(policy=default).parsebytes(("Content-Type: " + self.headers["Content-Type"] + "\r\nMIME-Version: 1.0\r\n\r\n").encode() + raw)
+                    parts = list(message.iter_parts())
+                    refs = [p for p in parts if p.get_param("name", header="Content-Disposition") == "image[]"]
+                    self.server.test.assertEqual(len(refs), 2)
+                    for ref in refs:
+                        self.server.test.assertEqual(ref.get_content_type(), "image/png")
+                        self.server.test.assertEqual(ref.get_payload(decode=True), b"PNG-REFERENCE")
+                    payload = {p.get_param("name", header="Content-Disposition"): p.get_payload(decode=True).decode() for p in parts if not p.get_filename()}
+                    self.server.test.assertEqual(self.path, "/v1/images/edits")
+                else:
+                    payload = json.loads(raw)
                 self.server.test.assertEqual(payload["model"], "lyria-3.5")
                 self.server.test.assertTrue(self.headers.get("Idempotency-Key"))
                 if scenario == "sync":
@@ -69,6 +83,10 @@ class PublicClientsTest(unittest.TestCase):
                 env = dict(os.environ, MEDIA_API_KEY="local-test-key", MEDIA_BASE_URL=f"http://127.0.0.1:{server.server_port}")
                 command = [sys.executable, str(CLIENTS / "imagevideo.py")] if language == "python" else ["node", str(CLIENTS / "imagevideo.mjs")]
                 submit = [*command, "submit", "--endpoint", "/v1/audio/generations", "--payload", str(payload), "--state", str(state)]
+                if scenario == "multipart":
+                    reference = folder / "reference.png"
+                    reference.write_bytes(b"PNG-REFERENCE")
+                    submit = [*command, "submit", "--endpoint", "/v1/images/edits", "--payload", str(payload), "--state", str(state), "--image", str(reference), "--image", str(reference)]
                 result = subprocess.run(submit, env=env, capture_output=True, text=True, timeout=15)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 # Existing state prevents another POST, including after restart.
@@ -99,6 +117,11 @@ class PublicClientsTest(unittest.TestCase):
         for language in ("python", "javascript"):
             with self.subTest(language=language):
                 self.run_case(language, "unknown")
+
+    def test_multipart_edit_preserves_two_files_and_resumes(self):
+        for language in ("python", "javascript"):
+            with self.subTest(language=language):
+                self.run_case(language, "multipart", "image/png", ".png")
 
     def test_never_sends_key_to_foreign_artifact_origin(self):
         for language in ("python", "javascript"):

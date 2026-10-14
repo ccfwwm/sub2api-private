@@ -55,6 +55,25 @@ func CapabilityDefaults(c Capability) Capability {
 	if c.Materials == nil {
 		c.Materials = map[string]Material{}
 	}
+	// Image-edit profiles created from an exact model mapping used to omit
+	// material bounds entirely. Give the GPT multipart protocol bounded defaults;
+	// an explicit zero remains an administrator's disabled-reference setting.
+	if c.Adapter == "yunfei_gpt_images" && contains(c.Operations, "image_edit") {
+		materials := make(map[string]Material, len(c.Materials)+1)
+		for kind, material := range c.Materials {
+			materials[kind] = material
+		}
+		c.Materials = materials
+		m := c.Materials["image"]
+		if m.MaxCount == nil {
+			v := 2
+			m.MaxCount = &v
+		}
+		if len(m.Formats) == 0 {
+			m.Formats = []string{"file_png", "file_jpeg", "file_webp"}
+		}
+		c.Materials["image"] = m
+	}
 	for kind, m := range c.Materials {
 		if m.MaxCount != nil && *m.MaxCount > 0 {
 			if m.MaxFileBytes == nil {

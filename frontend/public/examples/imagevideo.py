@@ -1,6 +1,7 @@
 """Python 3.10+; only standard library. Submit once, resume by saved task ID."""
 import argparse
 import json
+import mimetypes
 import os
 import time
 import uuid
@@ -32,8 +33,11 @@ class Client:
         headers = {"Authorization": "Bearer " + self.key, **(extra or {})}
         body = None
         if payload is not None:
-            body = json.dumps(payload, ensure_ascii=False).encode()
-            headers["Content-Type"] = "application/json"
+            if isinstance(payload, bytes):
+                body = payload
+            else:
+                body = json.dumps(payload, ensure_ascii=False).encode()
+                headers["Content-Type"] = "application/json"
         return self.opener.open(Request(url, data=body, headers=headers, method=method), timeout=200)
 
     def json(self, method, path, payload=None, extra=None):
@@ -70,11 +74,32 @@ def save(path, state, exclusive=False):
         tmp.replace(path)
 
 
-def submit(client, endpoint, payload, state_path):
+def edit_body(payload, images):
+    boundary = "media-" + uuid.uuid4().hex
+    chunks = []
+    for name, value in payload.items():
+        value = value if isinstance(value, str) else json.dumps(value)
+        chunks.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    for name in images:
+        path = Path(name)
+        mime = mimetypes.guess_type(path.name)[0]
+        if mime not in ("image/png", "image/jpeg", "image/webp"):
+            raise ValueError("Use PNG, JPEG or WebP references")
+        chunks.extend([f'--{boundary}\r\nContent-Disposition: form-data; name="image[]"; filename="reference"\r\nContent-Type: {mime}\r\n\r\n'.encode(), path.read_bytes(), b"\r\n"])
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), "multipart/form-data; boundary=" + boundary
+
+
+def submit(client, endpoint, payload, state_path, images=None):
+    extra = {}
+    if images:
+        if endpoint != "/v1/images/edits" or len(images) > 2:
+            raise ValueError("Image uploads require /v1/images/edits and 1-2 files")
+        payload, extra["Content-Type"] = edit_body(payload, images)
     state = {"base": client.base, "idempotency_key": str(uuid.uuid4()), "task_id": None, "status": "submitting"}
     save(state_path, state, exclusive=True)
     # Never retry POST automatically, even if the connection times out.
-    result = client.json("POST", endpoint, payload, {"Idempotency-Key": state["idempotency_key"]})
+    result = client.json("POST", endpoint, payload, {"Idempotency-Key": state["idempotency_key"], **extra})
     state.update(task_id=result.get("task_id") or result.get("id"), status=result.get("status", "submitted"))
     save(state_path, state)
     if not isinstance(state["task_id"], str) or not state["task_id"].strip():
@@ -114,6 +139,7 @@ def main():
     p.add_argument("command", choices=("submit", "resume"))
     p.add_argument("--endpoint", default="/v1/videos")
     p.add_argument("--payload", help="UTF-8 JSON file; required for submit")
+    p.add_argument("--image", action="append", help="Local GPT edit reference; repeat for two files")
     p.add_argument("--state", default="media-task.json")
     p.add_argument("--output", default="media-output")
     p.add_argument("--interval", type=float, default=20)
@@ -126,7 +152,7 @@ def main():
         if not args.payload:
             p.error("submit requires --payload")
         payload = json.loads(Path(args.payload).read_text(encoding="utf-8-sig"))
-        print(submit(client, args.endpoint, payload, Path(args.state)))
+        print(submit(client, args.endpoint, payload, Path(args.state), args.image))
     else:
         print(resume(client, Path(args.state), Path(args.output), args.interval, args.max_wait))
 

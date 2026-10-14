@@ -1,12 +1,12 @@
 {
-  "version": "v1.2.5",
+  "version": "v1.2.6",
   "status": "recorded",
-  "verified_at": "2026-10-13T15:18:39.965477+00:00",
-  "environment": "production, existing user-generated artifacts; authenticated preview retrieval",
-  "policy": "Reuse existing real video/audio outputs from v1.2.1. This release adds public documentation and paginated task history; no new billable generation requests are made. The timestamps below retain the original verification times.",
+  "verified_at": "2026-10-14T10:40:55.368Z",
+  "environment": "production, authorized user key, GPT single and dual multipart edits",
+  "policy": "Two authorized image-edit requests; no video or music generation. Earlier video/audio cases retain original evidence.",
   "verification_reused_from": "v1.2.3",
-  "new_generation_requests": 0,
-  "verification_note": "No new upstream generation is performed in this release workflow. Existing authenticated real-channel video/audio evidence is reused. Local pagination, permissions and client contract tests passed; public docs and task list APIs are checked again after deployment.",
+  "new_generation_requests": 2,
+  "verification_note": "GPT /v1/images/edits single and dual references completed; task polling and authenticated PNG download verified. Historic video/audio evidence below is unchanged.",
   "cases": [
     {
       "account_id": 2092,
@@ -100,6 +100,38 @@
       "checked_path": "/api/v1/admin/accounts/2094/tests/mt_df9e96fefd9a4a998abe6333288d41f6/artifacts/audio1",
       "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
       "verified_at": "2026-10-13T15:12:01.350494+00:00"
+    },
+    {
+      "case": "gpt-single-edit",
+      "model": "gpt-image-2-1k",
+      "operation": "image_edit",
+      "test_id": "mt_9ec4dc92-e7b9-4da5-a894-929e3dd2e4a9",
+      "status": "completed",
+      "verification": "real_generation",
+      "verified_at": "2026-10-14T10:15:19.024Z",
+      "mime_type": "image/png",
+      "bytes": 355608,
+      "sha256": "37069608d2dc3e8ac7deb2fadfd270e4a333b35400f009b89e739b0bbd353de8",
+      "submit_http": 202,
+      "download_http": 200,
+      "billing_state": "settled",
+      "settled_usd": "0.04000000"
+    },
+    {
+      "case": "gpt-multi-edit",
+      "model": "gpt-image-2-1k",
+      "operation": "image_edit",
+      "test_id": "mt_fa423e6f-0b85-433e-8fb7-101124e30db4",
+      "status": "completed",
+      "verification": "real_generation",
+      "verified_at": "2026-10-14T10:40:55.368Z",
+      "mime_type": "image/png",
+      "bytes": 1030184,
+      "sha256": "436f75579b47e64f9604fd0b0419c29a62fa6fe9ff3d23f8f47ded893412bd24",
+      "submit_http": 202,
+      "download_http": 200,
+      "billing_state": "settled",
+      "settled_usd": "0.04000000"
     }
   ],
   "browser_preview": {
