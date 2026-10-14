@@ -104,7 +104,7 @@ func (e *Engine) Capability(ctx context.Context, model, operation string, identi
 // SelectCapability keeps each account's limits and protocol together. A request
 // may use a second account when the first profile does not support its parameters.
 func (e *Engine) SelectCapability(ctx context.Context, model, operation string, p map[string]any, uploads []Upload, identity Identity) (*Capability, error) {
-	if e.Config == nil {
+	if e.Config == nil && p["public_profile_id"] == nil {
 		return e.Capability(ctx, model, operation, identity)
 	}
 	caps, _, err := e.configuration(ctx, identity.GroupID)
@@ -113,7 +113,7 @@ func (e *Engine) SelectCapability(ctx context.Context, model, operation string, 
 	}
 	var validation error
 	for _, cap := range caps {
-		if !cap.Matches(model, operation, identity.GroupID) {
+		if !cap.Matches(model, operation, identity.GroupID) || (p["public_profile_id"] != nil && stringValue(p["public_profile_id"]) != publicProfileID(cap)) {
 			continue
 		}
 		if _, err := NormalizeUploads(cap, operation, p, uploads); err != nil {
@@ -123,6 +123,9 @@ func (e *Engine) SelectCapability(ctx context.Context, model, operation string, 
 			continue
 		}
 		return &cap, nil
+	}
+	if validation == nil && p["public_profile_id"] != nil {
+		validation = fail(400, "invalid_public_profile", "Selected capability is unavailable")
 	}
 	return nil, validation
 }
@@ -705,6 +708,13 @@ func NormalizeUploads(cap Capability, operation string, p map[string]any, upload
 		originalCounts[kind] = len(values)
 	}
 	for _, u := range uploads {
+		if u.Field == "mask" {
+			if normalized["mask"] != nil || u.MIME != "image/png" {
+				return Request{}, fail(400, "invalid_mask", "One PNG mask is allowed")
+			}
+			normalized["mask"] = "data:image/png;base64," + base64String(u.Data)
+			continue
+		}
 		kind := ""
 		switch u.Field {
 		case "image", "image[]", "images", "input_reference":
@@ -763,6 +773,11 @@ func NormalizeUploads(cap Capability, operation string, p map[string]any, upload
 		delete(req.Parameters, "image")
 	}
 	req.Uploads = uploads
+	for _, u := range uploads {
+		if u.Field == "mask" {
+			delete(req.Parameters, "mask")
+		}
+	}
 	return req, nil
 }
 func base64String(raw []byte) string { return base64.StdEncoding.EncodeToString(raw) }

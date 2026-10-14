@@ -29,6 +29,7 @@ import (
 )
 
 type MediaHandler struct {
+	groups  mediaGroupAuthorizer
 	Engine  *media.Engine
 	gateway *service.OpenAIGatewayService
 	openAI  *OpenAIGatewayHandler
@@ -205,7 +206,7 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		}
 		return nil
 	})
-	return &MediaHandler{Engine: engine, gateway: gateway, openAI: openAI, cache: cache}, nil
+	return &MediaHandler{Engine: engine, gateway: gateway, openAI: openAI, cache: cache, groups: keys}, nil
 }
 func (h *MediaHandler) Stop() {
 	if h != nil && h.Engine != nil {

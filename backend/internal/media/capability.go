@@ -1,9 +1,12 @@
 package media
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -195,8 +198,14 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		return result, e
 	}
 	p = result.Parameters
+	if selected, ok := p["public_profile_id"]; ok {
+		if stringValue(selected) != publicProfileID(cap) {
+			return result, fail(400, "invalid_public_profile", "Selected capability is unavailable")
+		}
+		delete(p, "public_profile_id")
+	}
 	allowed := map[string]bool{}
-	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
+	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
 		allowed[k] = true
 	}
 	for k := range p {
@@ -378,6 +387,11 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	if operation == "image_edit" && len(refs["image"]) == 0 {
 		return result, fail(400, "image_required", "Image editing needs a reference image")
 	}
+	if p["mask"] != nil {
+		if err := validateImageMask(cap, operation, p["mask"], refs["image"]); err != nil {
+			return result, err
+		}
+	}
 	if meta, ok := p["metadata"].(map[string]any); ok {
 		for _, k := range []string{"model", "seconds", "duration", "price", "billing", "user_id", "account_id", "group_id", "owner"} {
 			if meta[k] != nil {
@@ -507,6 +521,58 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	}
 	result.MaterialRefs = refs
 	return result, nil
+}
+
+// Masks are edit controls, not additional billable reference images. They use
+// the selected profile's image byte limit and must match its first reference.
+func validateImageMask(cap Capability, operation string, value any, refs []any) error {
+	if cap.Adapter != "yunfei_gpt_images" || operation != "image_edit" || len(refs) == 0 {
+		return fail(400, "unsupported_mask", "Masks require GPT image editing")
+	}
+	raw, ok := value.(string)
+	if !ok || !strings.HasPrefix(raw, "data:image/png;base64,") {
+		return fail(400, "invalid_mask", "A PNG mask is required")
+	}
+	limit := cap.Materials["image"].MaxFileBytes
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(raw, "data:image/png;base64,"))
+	if err != nil || limit == nil || int64(len(data)) > *limit || len(data) < 26 || http.DetectContentType(data) != "image/png" {
+		return fail(400, "invalid_mask", "Invalid mask MIME or size")
+	}
+	// PNG color types 4/6 carry an alpha channel; indexed/RGB PNGs may use tRNS.
+	alpha := data[25] == 4 || data[25] == 6
+	for offset := 8; offset+12 <= len(data); {
+		length := int(data[offset])<<24 | int(data[offset+1])<<16 | int(data[offset+2])<<8 | int(data[offset+3])
+		if length < 0 || length > len(data)-offset-12 {
+			break
+		}
+		if string(data[offset+4:offset+8]) == "tRNS" {
+			alpha = true
+		}
+		offset += length + 12
+	}
+	mask, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !alpha {
+		return fail(400, "invalid_mask", "Mask requires PNG alpha")
+	}
+	first, _, err := refString(refs[0])
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(first, "data:") {
+		pos := strings.Index(first, ",")
+		if pos < 0 {
+			return fail(400, "invalid_reference", "Invalid image")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(first[pos+1:])
+		if err != nil {
+			return fail(400, "invalid_reference", "Invalid image")
+		}
+		config, _, err := image.DecodeConfig(bytes.NewReader(decoded))
+		if err != nil || config.Width != mask.Width || config.Height != mask.Height {
+			return fail(400, "mask_dimensions", "Mask must match the first image dimensions")
+		}
+	}
+	return nil
 }
 
 func nativeReferences(raw any) (map[string][]any, error) {

@@ -388,6 +388,19 @@ def openapi():
         "Models": obj({"object": {"const": "list"}, "data": arr({"type": "object", "required": ["id"], "properties": {"id": TEXT, "object": {"const": "model"}, "capabilities": {"type": "object"}}})}, ["object", "data"]),
         "Artifacts": obj({"task_id": TEXT, "artifacts": arr(sr("Artifact"))}, ["task_id", "artifacts"]),
         "VersionRequest": obj({"expected_version": {"type": "integer"}, "reason": TEXT}, ["expected_version", "reason"]),
+        "PublicMediaCapability": obj({
+            "profile_id": {"type": "string", "pattern": "^mp_[0-9a-f]{64}$"}, "version": TEXT, "model": TEXT,
+            "media_type": enum("image", "video", "audio"), "operations": arr(TEXT),
+            "reference_field": TEXT, "reference_shape": TEXT,
+            "duration": obj({"mode": TEXT, "values": {"type": ["array", "null"], "items": {"type": "integer"}},
+                             "min": NULL_INT, "max": NULL_INT, "default": NULL_INT, "required": {"type": "boolean"}, "scenarios": {"type": "null"}}),
+            **{name: {"type": ["array", "null"], "items": TEXT} for name in ["sizes", "resolutions", "aspect_ratios", "qualities", "formats"]},
+            "materials": {"type": "object", "additionalProperties": obj({"formats": {"type": ["array", "null"], "items": TEXT},
+                "max_count": NULL_INT, "max_file_bytes": NULL_INT, "max_duration_seconds": {"type": ["string", "null"]}})},
+            "poll_seconds": {"type": "integer"}, "max_request_bytes": NULL_INT, "observation_seconds": NULL_INT
+        }, ["profile_id", "version", "model", "media_type", "operations"]),
+        "PublicMediaCatalog": obj({"group_id": {"type": "integer", "minimum": 1}, "group_name": TEXT,
+            "platform": {"const": "imagevideo"}, "models": arr(sr("PublicMediaCapability"))}, ["group_id", "group_name", "platform", "models"]),
         "SimulationRequest": obj({"operation": TEXT, "request": {"type": "object"}, "capability": sr("Capability"),
                                   "price": sr("PriceCard"), "cost": sr("PriceCard"), "identity": {"type": "object"},
                                   "cost_multiplier": DECIMAL, "observed_quantities": {"type": "object", "additionalProperties": arr(DECIMAL)}},
@@ -400,12 +413,15 @@ def openapi():
         "RefundRequest": obj({"expected_version": {"type": "integer"}, "amount": DECIMAL,
                               "reason": TEXT}, ["expected_version", "amount", "reason"]),
     })
+    for name in ["VideoRequest", "ImageRequest", "GeminiRequest", "MusicRequest", "ChatRequest"]:
+        schemas[name]["properties"]["public_profile_id"] = {"type": "string", "pattern": "^mp_[0-9a-f]{64}$", "description": "可选；精确选择登录能力目录中的配置。"}
     api = dict(openapi="3.1.0", info=dict(title="Sub2API 多模态 API 实施规格（非已部署承诺）", version=DRAFT,
               description="v0.2.15基础上的媒体运行时接口。模型受能力和发布价卡门控，模板默认关闭；实测范围见REAL_CHANNEL_VALIDATION.md。接口存在不表示所有模型验证通过。"),
               servers=[{"url": "https://your-sub2api.example", "description": "替换为自己的站点根；paths已包含/v1"}],
               security=[{"DownstreamKey": []}], paths={},
               components=dict(securitySchemes={"DownstreamKey": {"type": "http", "scheme": "bearer"},
                                                "GeminiKey": {"type": "apiKey", "in": "header", "name": "x-goog-api-key"},
+                                               "UserSession": {"type": "http", "scheme": "bearer", "description": "现有用户登录JWT，不是下游API Key。"},
                                                "AdminSession": {"type": "http", "scheme": "bearer", "description": "现有管理员认证token，非下游API Key；沿用权限及敏感操作验证。"}}, schemas=schemas))
     def response(name, desc="成功", media="application/json"):
         return {"description": desc, "content": {media: {"schema": sr(name)}}}
@@ -424,10 +440,11 @@ def openapi():
         api["paths"].setdefault(path, {})[method] = op
         return op
     add("/v1/models", "get", "listModels", "当前Key模型发现", status="existing-foundation", responses={"200": response("Models")})
+    add("/v1/tasks/{id}", "get", "getOwnedMediaTask", "统一查询当前Key所属媒体任务；不重新提交或收费", responses={"200": response("Task")})
     add("/v1/images/generations", "post", "createImage", "同步图像生成", "ImageRequest", "existing-foundation", {"200": response("ImageResponse")})
     op = add("/v1/images/edits", "post", "editImage", "同步图像编辑", status="existing-foundation", responses={"200": response("ImageResponse")})
     edit = copy.deepcopy(schemas["ImageRequest"])
-    edit["properties"].update({"image": {"type": "string", "format": "binary"}, "image[]": arr({"type": "string", "format": "binary"})})
+    edit["properties"].update({"image": {"type": "string", "format": "binary"}, "image[]": arr({"type": "string", "format": "binary"}), "mask": {"type": "string", "format": "binary", "description": "可选的单张PNG mask，仅支持GPT图片编辑。"}})
     edit["anyOf"] = [{"required": ["image"]}, {"required": ["image[]"]}]
     op["requestBody"] = {"required": True, "content": {"multipart/form-data": {"schema": edit}}}
     op = add("/v1beta/models/{model}:generateContent", "post", "geminiImage", "Gemini原生图像", "GeminiRequest", "existing-foundation", {"200": response("NativeResponse")})
@@ -479,6 +496,10 @@ def openapi():
     op["requestBody"]={"required":True,"content":{"application/json":{"schema":obj({"amount":DECIMAL,"evidence":TEXT,"expected_version":{"type":"integer"}},["amount","evidence","expected_version"])}}}
     op["parameters"].append({"name":"Idempotency-Key","in":"header","required":True,"schema":TEXT})
     add("/api/v1/media/tasks","get","listOwnMediaTasks","当前用户任务和收费记录",admin=True)
+    op = add("/api/v1/media/capabilities", "get", "listOwnMediaCapabilities", "登录用户可绑定分组的公开媒体能力；不创建Key或扣费")
+    op["security"] = [{"UserSession": []}]
+    op["parameters"] = [{"name": "group_id", "in": "query", "required": True, "schema": {"type": "integer", "minimum": 1}}]
+    op["description"] = "仅返回启用、白名单允许且有有效售价的能力。每个参数配置独立返回不可混合；不返回供应商凭据、账户绑定、成本或内部地址。生成和估价请求可携带public_profile_id精确选择此配置。"
     # Management and user JSON use the existing code/message/data envelope;
     # gateway responses stay native. Errors can come from either media guards
     # or existing auth/step-up middleware.
@@ -492,6 +513,8 @@ def openapi():
                 payload = sr("Simulation")
             elif url.endswith("/tasks"):
                 payload = arr(sr("TaskRecord"))
+            elif url.endswith("/capabilities"):
+                payload = sr("PublicMediaCatalog")
             else:
                 payload = obj({"ok": {"type": "boolean"}}, ["ok"])
             operation["responses"]["200"] = {"description": "成功；现有管理/用户响应信封", "content": {"application/json": {"schema": obj({"code": {"const": 0}, "message": TEXT, "data": payload}, ["code", "message", "data"])}}}

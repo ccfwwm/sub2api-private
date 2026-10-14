@@ -319,6 +319,7 @@ func RegisterGatewayRoutes(
 			gateway.GET("/audio/generations/:id", h.Media.Get)
 			gateway.GET("/audio/generations/:id/content", h.Media.Content)
 			gateway.HEAD("/audio/generations/:id/content", h.Media.Content)
+			gateway.GET("/tasks/:id", h.Media.Get)
 			gateway.GET("/tasks/:id/artifacts", h.Media.Artifacts)
 			gateway.GET("/tasks/:id/artifacts/:key/content", h.Media.Content)
 			gateway.HEAD("/tasks/:id/artifacts/:key/content", h.Media.Content)

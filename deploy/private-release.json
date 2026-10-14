@@ -5,10 +5,10 @@
   "upstream_commit": "f2669c8cf62555cd92389b3f55920e9e6e7c6ff2",
   "upstream_version": "0.2.15",
   "first_private_version": "1.0.0",
-  "deployment": "manual",
+  "deployment": "formal-release-automatic",
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.1.2 integrates imagevideo media capabilities and manual pricing into existing accounts, groups and channels; upstream baseline remains 0.2.15.",
+  "version_note": "Private release 1.2.3 adds a JWT-authorized public media capability catalog, exact profile selection, unified owned task queries and GPT edit-mask validation for ZeroWall; upstream baseline remains 0.2.15. No database migrations are added.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

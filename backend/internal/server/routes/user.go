@@ -26,6 +26,7 @@ func RegisterUserRoutes(
 	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
 		if h.Media != nil {
+			authenticated.GET("/media/capabilities", h.Media.Capabilities)
 			authenticated.GET("/media/tasks", h.Media.UserTasks)
 		}
 		// 用户接口

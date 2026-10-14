@@ -85,6 +85,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Models'
+  /v1/tasks/{id}:
+    get:
+      operationId: getOwnedMediaTask
+      summary: 统一查询当前Key所属媒体任务；不重新提交或收费
+      description: 具体模型能力、价卡与渠道验证完成后才开放。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: &id002
+          type: string
+          minLength: 1
   /v1/images/generations:
     post:
       operationId: createImage
@@ -264,6 +347,10 @@ paths:
                   enum:
                   - url
                   - b64_json
+                public_profile_id:
+                  type: string
+                  pattern: ^mp_[0-9a-f]{64}$
+                  description: 可选；精确选择登录能力目录中的配置。
                 image:
                   type: string
                   format: binary
@@ -272,6 +359,10 @@ paths:
                   items:
                     type: string
                     format: binary
+                mask:
+                  type: string
+                  format: binary
+                  description: 可选的单张PNG mask，仅支持GPT图片编辑。
               required:
               - model
               - prompt
@@ -361,9 +452,7 @@ paths:
       - name: model
         in: path
         required: true
-        schema: &id003
-          type: string
-          minLength: 1
+        schema: *id002
       requestBody:
         required: true
         content:
@@ -471,7 +560,7 @@ paths:
             schema:
               type: object
               properties:
-                model: &id002
+                model: &id003
                   type: string
                   minLength: 1
                 prompt:
@@ -488,17 +577,17 @@ paths:
                     minimum: 1
                   - type: string
                     pattern: ^[1-9][0-9]*$
-                ratio: *id002
-                aspect_ratio: *id002
-                resolution: *id002
-                size: *id002
+                ratio: *id003
+                aspect_ratio: *id003
+                resolution: *id003
+                size: *id003
                 image:
                   type: string
                   format: binary
-                image_url: *id002
+                image_url: *id003
                 image_urls:
                   type: array
-                  items: *id002
+                  items: *id003
                 images:
                   type: array
                   items:
@@ -537,6 +626,10 @@ paths:
                   type: string
                 metadata:
                   type: object
+                public_profile_id:
+                  type: string
+                  pattern: ^mp_[0-9a-f]{64}$
+                  description: 可选；精确选择登录能力目录中的配置。
                 video:
                   type: string
                   format: binary
@@ -553,7 +646,7 @@ paths:
       parameters:
       - name: Idempotency-Key
         in: header
-        schema: *id003
+        schema: *id002
         description: 建议必传；服务端以Key+规范化operation+请求hash约束。
   /v1/videos/{id}:
     get:
@@ -635,7 +728,7 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
   /v1/videos/{id}/content:
     get:
       operationId: downloadVideo
@@ -710,16 +803,16 @@ paths:
           description: 完整媒体字节；HEAD无响应体
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -729,16 +822,16 @@ paths:
           description: 支持Range时返回部分字节
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -758,13 +851,13 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Range
         in: header
-        schema: *id003
+        schema: *id002
       - name: If-None-Match
         in: header
-        schema: *id003
+        schema: *id002
     head:
       operationId: headVideo
       summary: 读取制品头部
@@ -838,30 +931,30 @@ paths:
           description: 完整媒体字节；HEAD无响应体
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
         '206':
           description: 支持Range时返回部分字节
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
         '304':
           description: 支持条件请求时未修改
         '410':
@@ -876,13 +969,13 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Range
         in: header
-        schema: *id003
+        schema: *id002
       - name: If-None-Match
         in: header
-        schema: *id003
+        schema: *id002
   /v1/tasks/{id}/artifacts:
     get:
       operationId: listArtifacts
@@ -963,7 +1056,7 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
   /v1/tasks/{id}/artifacts/{key}/content:
     get:
       operationId: downloadArtifact
@@ -1038,16 +1131,16 @@ paths:
           description: 完整媒体字节；HEAD无响应体
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -1057,16 +1150,16 @@ paths:
           description: 支持Range时返回部分字节
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -1086,17 +1179,17 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: key
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Range
         in: header
-        schema: *id003
+        schema: *id002
       - name: If-None-Match
         in: header
-        schema: *id003
+        schema: *id002
   /v1/chat/completions:
     post:
       operationId: chatOrMusic
@@ -1274,7 +1367,7 @@ paths:
       parameters:
       - name: Idempotency-Key
         in: header
-        schema: *id003
+        schema: *id002
   /v1/music/generations:
     post:
       operationId: createMusicAlias
@@ -1366,7 +1459,7 @@ paths:
       parameters:
       - name: Idempotency-Key
         in: header
-        schema: *id003
+        schema: *id002
   /v1/audio/generations/{id}:
     get:
       operationId: getMusic
@@ -1447,7 +1540,7 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
   /v1/audio/generations/{id}/content:
     get:
       operationId: downloadMusic
@@ -1522,16 +1615,16 @@ paths:
           description: 完整媒体字节；HEAD无响应体
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -1541,16 +1634,16 @@ paths:
           description: 支持Range时返回部分字节
           headers:
             Content-Type:
-              schema: *id003
+              schema: *id002
             Content-Length:
               schema:
                 type: integer
             ETag:
-              schema: *id003
+              schema: *id002
             Accept-Ranges:
-              schema: *id003
+              schema: *id002
             Content-Range:
-              schema: *id003
+              schema: *id002
           content:
             application/octet-stream:
               schema:
@@ -1570,13 +1663,13 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Range
         in: header
-        schema: *id003
+        schema: *id002
       - name: If-None-Match
         in: header
-        schema: *id003
+        schema: *id002
   /v1/sub2api/estimates:
     post:
       operationId: estimateMedia
@@ -1758,7 +1851,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: array
                     items:
@@ -1773,7 +1866,7 @@ paths:
       parameters:
       - name: id
         in: query
-        schema: *id003
+        schema: *id002
     post:
       operationId: saveCapability
       summary: 保存草稿或发布版本（敏感操作认证）
@@ -1872,7 +1965,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     $ref: '#/components/schemas/ConfigRecord'
                 required:
@@ -1889,7 +1982,7 @@ paths:
             schema:
               type: object
               properties:
-                id: *id003
+                id: *id002
                 expected_version:
                   type: integer
                   minimum: 0
@@ -2002,7 +2095,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     $ref: '#/components/schemas/ConfigRecord'
                 required:
@@ -2019,7 +2112,7 @@ paths:
             schema:
               type: object
               properties:
-                id: *id003
+                id: *id002
                 expected_version:
                   type: integer
                   minimum: 1
@@ -2126,7 +2219,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: array
                     items:
@@ -2141,7 +2234,7 @@ paths:
       parameters:
       - name: id
         in: query
-        schema: *id003
+        schema: *id002
     post:
       operationId: savePriceCard
       summary: 保存草稿或发布版本（敏感操作认证）
@@ -2240,7 +2333,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     $ref: '#/components/schemas/ConfigRecord'
                 required:
@@ -2257,7 +2350,7 @@ paths:
             schema:
               type: object
               properties:
-                id: *id003
+                id: *id002
                 expected_version:
                   type: integer
                   minimum: 0
@@ -2370,7 +2463,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     $ref: '#/components/schemas/ConfigRecord'
                 required:
@@ -2387,7 +2480,7 @@ paths:
             schema:
               type: object
               properties:
-                id: *id003
+                id: *id002
                 expected_version:
                   type: integer
                   minimum: 1
@@ -2494,7 +2587,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     $ref: '#/components/schemas/Simulation'
                 required:
@@ -2609,7 +2702,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: array
                     items:
@@ -2624,7 +2717,7 @@ paths:
       parameters:
       - name: before
         in: query
-        schema: *id003
+        schema: *id002
       - name: user_id
         in: query
         schema:
@@ -2734,7 +2827,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: object
                     properties:
@@ -2752,7 +2845,7 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       requestBody:
         required: true
         content:
@@ -2860,7 +2953,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: object
                     properties:
@@ -2878,11 +2971,11 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Idempotency-Key
         in: header
         required: true
-        schema: *id003
+        schema: *id002
       requestBody:
         required: true
         content:
@@ -2990,7 +3083,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: object
                     properties:
@@ -3008,11 +3101,11 @@ paths:
       - name: id
         in: path
         required: true
-        schema: *id003
+        schema: *id002
       - name: Idempotency-Key
         in: header
         required: true
-        schema: *id003
+        schema: *id002
       security:
       - AdminSession: []
       requestBody:
@@ -3025,7 +3118,7 @@ paths:
                 amount: &id004
                   type: string
                   pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
-                evidence: *id003
+                evidence: *id002
                 expected_version:
                   type: integer
               required:
@@ -3132,7 +3225,7 @@ paths:
                 properties:
                   code:
                     const: 0
-                  message: *id003
+                  message: *id002
                   data:
                     type: array
                     items:
@@ -3144,6 +3237,122 @@ paths:
                 additionalProperties: false
       security:
       - AdminSession: []
+  /api/v1/media/capabilities:
+    get:
+      operationId: listOwnMediaCapabilities
+      summary: 登录用户可绑定分组的公开媒体能力；不创建Key或扣费
+      description: 仅返回启用、白名单允许且有有效售价的能力。每个参数配置独立返回不可混合；不返回供应商凭据、账户绑定、成本或内部地址。生成和估价请求可携带public_profile_id精确选择此配置。
+      tags:
+      - Media
+      x-implementation-status: implemented-model-gated
+      x-live-provider-verified: false
+      responses:
+        '400':
+          description: 参数或别名冲突
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '404':
+          description: 接口/任务不存在或无归属权限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '409':
+          description: 幂等/版本冲突或制品未就绪
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '422':
+          description: 未配置能力/价格或预留无上限
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '429':
+          description: 限流
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '502':
+          description: 上游异常/提交结果待确认
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '503':
+          description: 功能关闭/繁忙
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '504':
+          description: 超时；不自动重提
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/Error'
+                - $ref: '#/components/schemas/AdminError'
+        '200':
+          description: 成功；现有管理/用户响应信封
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    const: 0
+                  message: *id002
+                  data:
+                    $ref: '#/components/schemas/PublicMediaCatalog'
+                required:
+                - code
+                - message
+                - data
+                additionalProperties: false
+      security:
+      - UserSession: []
+      parameters:
+      - name: group_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
 components:
   securitySchemes:
     DownstreamKey:
@@ -3153,6 +3362,10 @@ components:
       type: apiKey
       in: header
       name: x-goog-api-key
+    UserSession:
+      type: http
+      scheme: bearer
+      description: 现有用户登录JWT，不是下游API Key。
     AdminSession:
       type: http
       scheme: bearer
@@ -3769,9 +3982,9 @@ components:
         error:
           type: object
           properties:
-            code: *id003
-            message: *id003
-            type: *id003
+            code: *id002
+            message: *id002
+            type: *id002
             param:
               type:
               - string
@@ -3780,8 +3993,8 @@ components:
           - type
           - message
           additionalProperties: false
-        request_id: *id003
-        task_id: *id003
+        request_id: *id002
+        task_id: *id002
       required:
       - error
       additionalProperties: false
@@ -3790,7 +4003,7 @@ components:
       properties:
         code:
           type: integer
-        message: *id003
+        message: *id002
         reason:
           type: string
         metadata:
@@ -3802,14 +4015,14 @@ components:
     ConfigRecord:
       type: object
       properties:
-        id: *id003
+        id: *id002
         version:
           type: integer
         published_version:
           type:
           - integer
           - 'null'
-        status: *id003
+        status: *id002
         config:
           type: object
       required:
@@ -3858,7 +4071,7 @@ components:
         uncapped: *id004
         missing_usage:
           type: array
-          items: *id003
+          items: *id002
       required:
       - currency
       - items
@@ -3876,7 +4089,7 @@ components:
         refunded: *id004
         accepted: *id004
         released: *id004
-        price_version: *id003
+        price_version: *id002
         multiplier: *id004
         time_multiplier: *id004
         version:
@@ -3905,15 +4118,15 @@ components:
     Artifact:
       type: object
       properties:
-        key: *id003
+        key: *id002
         type:
           type: string
           enum:
           - image
           - video
           - audio
-        mime_type: *id003
-        size_bytes:
+        mime_type: *id002
+        size_bytes: &id005
           type:
           - integer
           - 'null'
@@ -3923,7 +4136,7 @@ components:
           - string
           - 'null'
           pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
-        content_url: *id003
+        content_url: *id002
         available:
           type: boolean
       required:
@@ -3936,14 +4149,14 @@ components:
     Task:
       type: object
       properties:
-        id: *id003
+        id: *id002
         object:
           type: string
           enum:
           - video
           - audio.generation
           - image.generation
-        model: *id003
+        model: *id002
         status:
           type: string
           enum:
@@ -3976,7 +4189,7 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Error'
           - type: 'null'
-        diagnostic: *id003
+        diagnostic: *id002
       required:
       - id
       - object
@@ -3985,10 +4198,10 @@ components:
       additionalProperties: false
     Reference:
       oneOf:
-      - *id003
+      - *id002
       - type: object
         properties:
-          url: *id003
+          url: *id002
           duration_seconds: *id004
         required:
         - url
@@ -3996,7 +4209,7 @@ components:
     VideoRequest:
       type: object
       properties:
-        model: *id003
+        model: *id002
         prompt:
           type: string
         seconds:
@@ -4011,16 +4224,16 @@ components:
             minimum: 1
           - type: string
             pattern: ^[1-9][0-9]*$
-        ratio: *id003
-        aspect_ratio: *id003
-        resolution: *id003
-        size: *id003
+        ratio: *id002
+        aspect_ratio: *id002
+        resolution: *id002
+        size: *id002
         image:
           $ref: '#/components/schemas/Reference'
-        image_url: *id003
+        image_url: *id002
         image_urls:
           type: array
-          items: *id003
+          items: *id002
         images:
           type: array
           items:
@@ -4045,7 +4258,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Reference'
-        input_reference: *id003
+        input_reference: *id002
         generate_audio:
           type: boolean
         generateAudio:
@@ -4056,16 +4269,20 @@ components:
           type: string
         metadata:
           type: object
+        public_profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+          description: 可选；精确选择登录能力目录中的配置。
       required:
       - model
       additionalProperties: false
     ImageRequest:
       type: object
       properties:
-        model: *id003
-        prompt: *id003
-        size: *id003
-        quality: *id003
+        model: *id002
+        prompt: *id002
+        size: *id002
+        quality: *id002
         n:
           type: integer
           minimum: 1
@@ -4074,6 +4291,10 @@ components:
           enum:
           - url
           - b64_json
+        public_profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+          description: 可选；精确选择登录能力目录中的配置。
       required:
       - model
       - prompt
@@ -4088,8 +4309,8 @@ components:
           items:
             type: object
             properties:
-              url: *id003
-              b64_json: *id003
+              url: *id002
+              b64_json: *id002
     GeminiRequest:
       type: object
       properties:
@@ -4099,6 +4320,10 @@ components:
             type: object
         generationConfig:
           type: object
+        public_profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+          description: 可选；精确选择登录能力目录中的配置。
       required:
       - contents
       additionalProperties: false
@@ -4111,7 +4336,7 @@ components:
       - model
       - messages
       properties:
-        model: *id003
+        model: *id002
         messages:
           type: array
           minItems: 1
@@ -4119,11 +4344,15 @@ components:
             type: object
         stream:
           type: boolean
+        public_profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+          description: 可选；精确选择登录能力目录中的配置。
       additionalProperties: true
     MusicRequest:
       type: object
       properties:
-        model: *id003
+        model: *id002
         prompt:
           type: string
           minLength: 1
@@ -4166,6 +4395,10 @@ components:
           enum:
           - url
           - b64_json
+        public_profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+          description: 可选；精确选择登录能力目录中的配置。
       required:
       - model
       - prompt
@@ -4194,7 +4427,7 @@ components:
       properties:
         currency:
           const: USD
-        price_version: *id003
+        price_version: *id002
         maximum_charge: *id004
         calculation:
           $ref: '#/components/schemas/Calculation'
@@ -4219,7 +4452,7 @@ components:
             required:
             - id
             properties:
-              id: *id003
+              id: *id002
               object:
                 const: model
               capabilities:
@@ -4231,7 +4464,7 @@ components:
     Artifacts:
       type: object
       properties:
-        task_id: *id003
+        task_id: *id002
         artifacts:
           type: array
           items:
@@ -4245,15 +4478,126 @@ components:
       properties:
         expected_version:
           type: integer
-        reason: *id003
+        reason: *id002
       required:
       - expected_version
       - reason
       additionalProperties: false
+    PublicMediaCapability:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          pattern: ^mp_[0-9a-f]{64}$
+        version: *id002
+        model: *id002
+        media_type:
+          type: string
+          enum:
+          - image
+          - video
+          - audio
+        operations:
+          type: array
+          items: *id002
+        reference_field: *id002
+        reference_shape: *id002
+        duration:
+          type: object
+          properties:
+            mode: *id002
+            values:
+              type:
+              - array
+              - 'null'
+              items:
+                type: integer
+            min: *id005
+            max: *id005
+            default: *id005
+            required:
+              type: boolean
+            scenarios:
+              type: 'null'
+          required: []
+          additionalProperties: false
+        sizes:
+          type:
+          - array
+          - 'null'
+          items: *id002
+        resolutions:
+          type:
+          - array
+          - 'null'
+          items: *id002
+        aspect_ratios:
+          type:
+          - array
+          - 'null'
+          items: *id002
+        qualities:
+          type:
+          - array
+          - 'null'
+          items: *id002
+        formats:
+          type:
+          - array
+          - 'null'
+          items: *id002
+        materials:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              formats:
+                type:
+                - array
+                - 'null'
+                items: *id002
+              max_count: *id005
+              max_file_bytes: *id005
+              max_duration_seconds:
+                type:
+                - string
+                - 'null'
+            required: []
+            additionalProperties: false
+        poll_seconds:
+          type: integer
+        max_request_bytes: *id005
+        observation_seconds: *id005
+      required:
+      - profile_id
+      - version
+      - model
+      - media_type
+      - operations
+      additionalProperties: false
+    PublicMediaCatalog:
+      type: object
+      properties:
+        group_id:
+          type: integer
+          minimum: 1
+        group_name: *id002
+        platform:
+          const: imagevideo
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicMediaCapability'
+      required:
+      - group_id
+      - group_name
+      - platform
+      - models
+      additionalProperties: false
     SimulationRequest:
       type: object
       properties:
-        operation: *id003
+        operation: *id002
         request:
           type: object
         capability:
@@ -4303,8 +4647,8 @@ components:
           enum:
           - query
           - failed
-        evidence: *id003
-        upstream_id: *id003
+        evidence: *id002
+        upstream_id: *id002
       required:
       - expected_version
       - decision
@@ -4316,7 +4660,7 @@ components:
         expected_version:
           type: integer
         amount: *id004
-        reason: *id003
+        reason: *id002
       required:
       - expected_version
       - amount
