@@ -1,6 +1,10 @@
 .PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
+	src/components/media/__tests__/MediaTaskHistory.spec.ts \
+	src/components/media/__tests__/MediaTaskDetail.spec.ts \
+	src/views/__tests__/ImageVideoDocs.spec.ts \
+	src/views/__tests__/HomeView.compact.spec.ts \
 	src/components/admin/monitor/__tests__/MonitorMediaConfig.spec.ts \
 	src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts \
 	src/views/admin/__tests__/MonitorFormDialog.accountSelector.spec.ts \

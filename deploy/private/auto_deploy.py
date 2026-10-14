@@ -119,10 +119,10 @@ def worker(job):
             atomic_json(staged / 'deployment.json', manifest); atomic_json(staged / 'image-inspect.json', [identity])
             # Stage the checksum-verified, exact reviewed monitor migration for
             # the manager's restore-rehearsal gate. Other schema changes still fail.
-            monitor_sql = '246_channel_monitor_imagevideo.sql'
-            if (folder / monitor_sql).exists():
-                import shutil
-                shutil.copyfile(folder / monitor_sql, staged / monitor_sql)
+            import shutil
+            for reviewed_sql in ('246_channel_monitor_imagevideo.sql', '247_media_task_list_indexes.sql'):
+                if (folder / reviewed_sql).exists():
+                    shutil.copyfile(folder / reviewed_sql, staged / reviewed_sql)
             # Install checksum-verified release management sources without executing
             # archive paths or commands supplied through the SSH request.
             import tarfile

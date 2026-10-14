@@ -62,6 +62,11 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'separate migration'):
                 self.controller.assert_migrations(self.manifest)
 
+    def test_task_index_rehearsal_can_fingerprint_media_but_not_arbitrary_tables(self):
+        for table in ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):
+            self.assertIn('"' + table + '"', self.controller.fingerprint_sql(table))
+        with self.assertRaises(ValueError): self.controller.fingerprint_sql('unreviewed_table')
+
     def test_credentials_stripped_on_asset_redirect(self):
         req = urllib.request.Request('https://api.github.com/repos/' + REPO + '/releases/assets/1',
                                      headers={'Authorization': 'Bearer test-token'})

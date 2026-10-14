@@ -28,7 +28,56 @@ UNIFIED_FILES = {
 }
 
 MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
+TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
 MONITOR_PROVIDERS = "'openai', 'anthropic', 'gemini', 'grok', 'antigravity', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'imagevideo'"
+
+
+def task_index_statements():
+    return ('CREATE INDEX IF NOT EXISTS media_tasks_created_id ON media_tasks(created_at DESC, id DESC);\n'
+            'CREATE INDEX IF NOT EXISTS media_tasks_user_created_id ON media_tasks(user_id, created_at DESC, id DESC);')
+
+
+def task_index_transaction(sql, checksum):
+    import re
+    normalized = ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+    if normalized != ' '.join(task_index_statements().split()) or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+        raise ValueError('outside reviewed media task indexes')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + task_index_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{TASK_INDEX_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_task_index_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('247_media_task_list_indexes.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == task_index_transaction(task_index_statements(), match[1]))
+
+
+def reviewed_upgrade(before, target, folder):
+    if before == target:
+        return None
+    if set(target) - set(before) != {TASK_INDEX_FILE}:
+        return reviewed_monitor_upgrade(before, target, folder)
+    if {k: v for k, v in target.items() if k != TASK_INDEX_FILE} != before:
+        raise ValueError('migration inventory differs outside reviewed task indexes')
+    folder = Path(folder)
+    source = folder / TASK_INDEX_FILE
+    # Older installed workers download checksummed SQL before installing the new
+    # manager, but only stage the monitor asset. Require the exact release here.
+    if not source.exists():
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / TASK_INDEX_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / TASK_INDEX_FILE
+                break
+    sql = source.read_text().replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if target[TASK_INDEX_FILE] != checksum:
+        raise ValueError('task index migration checksum differs')
+    return {'filename': TASK_INDEX_FILE, 'transaction': task_index_transaction(sql, checksum), 'expected_migrations': target}
 
 
 def monitor_statements():

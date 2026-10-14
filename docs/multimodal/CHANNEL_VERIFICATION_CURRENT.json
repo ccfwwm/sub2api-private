@@ -1,12 +1,12 @@
 {
-  "version": "v1.2.3",
+  "version": "v1.2.4",
   "status": "recorded",
   "verified_at": "2026-10-13T15:18:39.965477+00:00",
   "environment": "production, existing user-generated artifacts; authenticated preview retrieval",
-  "policy": "Reuse existing real video/audio outputs from v1.2.1. This release adds the authenticated capability and owned-task APIs; no new billable generation requests are made in the release workflow.",
-  "verification_reused_from": "v1.2.2",
+  "policy": "Reuse existing real video/audio outputs from v1.2.1. This release adds public documentation and paginated task history; no new billable generation requests are made. The timestamps below retain the original verification times.",
+  "verification_reused_from": "v1.2.3",
   "new_generation_requests": 0,
-  "verification_note": "No new upstream generation is performed in this release workflow. Existing authenticated real-channel video/audio evidence is reused; capability and task API verification is performed after deployment.",
+  "verification_note": "No new upstream generation is performed in this release workflow. Existing authenticated real-channel video/audio evidence is reused. Local pagination, permissions and client contract tests passed; public docs and task list APIs are checked again after deployment.",
   "cases": [
     {
       "account_id": 2092,

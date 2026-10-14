@@ -120,6 +120,19 @@ def main():
                     assert expanded['monitor_migration']['data_unchanged']
                     assert manager.c.migrations() == manifest['migrations']
                     operation('rescue', expanded['id'])
+                # Rebuild only the two reviewed list indexes on this disposable
+                # database, exercising restore, business fingerprints and rescue.
+                from media_migrate import TASK_INDEX_FILE
+                if TASK_INDEX_FILE in manifest['migrations']:
+                    import shutil
+                    shutil.copyfile(Path(__file__).resolve().parents[2] / 'backend/migrations' / TASK_INDEX_FILE, release / TASK_INDEX_FILE)
+                    run(['docker', 'exec', '-i', 'sub2api-postgres', 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'sub2api', '-d', 'sub2api'],
+                        stdin=("DROP INDEX media_tasks_created_id; DROP INDEX media_tasks_user_created_id; DELETE FROM schema_migrations WHERE filename='" + TASK_INDEX_FILE + "';").encode())
+                    indexed = operation('upgrade', manifest['version'])
+                    assert indexed['task_index_migration']['data_unchanged']
+                    assert manager.c.migrations() == manifest['migrations']
+                    assert manager.c.sql("SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('media_tasks_created_id','media_tasks_user_created_id');") == '2'
+                    operation('rescue', indexed['id'])
                 print('PASS OPS: offline upgrade, runtime rollback, isolated restore, recovered-database backup, emergency rescue; original DB/Redis unchanged')
                 return
             job = {'id': uuid.uuid4().hex, 'version': manifest['version']}

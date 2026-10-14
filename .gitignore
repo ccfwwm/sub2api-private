@@ -122,6 +122,9 @@ tests
 CLAUDE.md
 .claude
 scripts
+!frontend/scripts/
+frontend/scripts/*
+!frontend/scripts/export-imagevideo-docs.mjs
 !backend/scripts/
 !backend/scripts/resolve-version.sh
 .code-review-state
@@ -153,6 +156,7 @@ docs/multimodal/*
 !docs/multimodal/*.json
 !docs/multimodal/generate_spec.py
 !docs/multimodal/verify_spec.py
+!docs/multimodal/test_public_clients.py
 !docs/multimodal/requirements-spec.txt
 !docs/multimodal/examples/
 docs/multimodal/examples/*

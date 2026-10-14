@@ -107,3 +107,9 @@ GitHub 的 `deploy-production.yml` 通过专用受限 SSH Key 调用
 任务、日志和清单在 `/root/sub2api-ops/state/automatic` 持久保存；
 GitHub 必须查询到最终 `succeeded` 才报告上线成功。
 重复版本复核当前镜像与健康，旧版本不能覆盖新版本。
+
+## v1.2.4 媒体任务分页索引
+
+`247_media_task_list_indexes.sql` 仅增加 `media_tasks` 的全局及用户时间/任务 ID 索引。管理器只接受这两条固定 CREATE INDEX、对应的原始 checksum 和唯一新增迁移；其他 schema 差异仍拒绝。正式 Release 包含该 SQL 及校验值，旧 worker 下载后新管理器可从同一 Release 的已验证 assets 读取。
+
+生产切换前先完整备份、恢复隔离副本，比较原业务、媒体任务、账务及制品表指纹，再验证新旧实际程序能启动；通过后才用 3 秒锁等待和 60 秒语句超时的事务创建生产索引并登记迁移。失败不覆盖数据库，也不删旧表或账务记录。

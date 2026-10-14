@@ -18,6 +18,7 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  { path: '/docs/imagevideo', name: 'ImageVideoDocs', component: () => import('@/views/public/ImageVideoDocsView.vue'), meta: { requiresAuth: false, title: '词元互联图片、视频与音乐接口文档' } },
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -738,11 +739,12 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
+  scrollBehavior(to, _from, savedPosition) {
     // Scroll to saved position when using browser back/forward
     if (savedPosition) {
       return savedPosition
     }
+    if (to.hash) return { el: to.hash, top: 24 }
     // Scroll to top for new routes
     return { top: 0 }
   }
@@ -757,7 +759,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/docs/imagevideo', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',

@@ -24,6 +24,7 @@
         </div>
         <div class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
           <LocaleSwitcher />
+          <router-link to="/docs/imagevideo" class="text-sm font-medium px-2">{{ t('nav.imagevideoDocs') }}</router-link>
           <a
             v-if="docUrl"
             :href="docUrl"
@@ -99,6 +100,7 @@
           <span>词元互联</span>
         </router-link>
         <nav class="token-nav" aria-label="首页导航">
+          <router-link to="/docs/imagevideo" class="token-nav-link">音视频接口文档</router-link>
           <router-link v-if="showModelPlazaEntry" :to="modelPlazaRoute" class="token-nav-link">
             模型能力
           </router-link>

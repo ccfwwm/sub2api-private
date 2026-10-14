@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -180,8 +179,7 @@ func (h *MediaHandler) AdminSimulate(c *gin.Context) {
 	response.Success(c, result)
 }
 func (h *MediaHandler) AdminTasks(c *gin.Context) {
-	userID, _ := strconv.ParseInt(c.Query("user_id"), 10, 64)
-	h.listTasks(c, userID, true)
+	h.listTasks(c, 0, true)
 }
 func (h *MediaHandler) AdminRefund(c *gin.Context) {
 	subject, _ := middleware.GetAuthSubjectFromContext(c)

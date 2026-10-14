@@ -214,8 +214,9 @@ class Manager:
         self.c.rehearse(test, folder)
         if reviewed:
             if not all(test.get(k) for k in ('restore_verified', 'rollback_verified', 'additive_data_verified')):
-                raise ValueError('incomplete monitor migration rehearsal')
-            job['monitor_migration'] = {'filename': reviewed['filename'], 'restore_verified': True,
+                raise ValueError('incomplete additive migration rehearsal')
+            field = 'task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql' else 'monitor_migration'
+            job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
                                         'rollback_verified': True, 'data_unchanged': True}
         # The controller adds an evidence file; retain the original backup seal.
         (folder / 'restored-fingerprints.json').unlink(missing_ok=True)
@@ -441,8 +442,8 @@ class Manager:
         reviewed = None
         if action in ('prepare', 'upgrade'):
             image, manifest = self.offline(arg)
-            from media_migrate import reviewed_monitor_upgrade
-            reviewed = reviewed_monitor_upgrade(self.c.migrations(), manifest['migrations'], self.state / 'releases' / arg)
+            from media_migrate import reviewed_upgrade
+            reviewed = reviewed_upgrade(self.c.migrations(), manifest['migrations'], self.state / 'releases' / arg)
         else:
             source, old = self.verified_backup(arg)
             image = self.load_runtime(source, old)
@@ -471,7 +472,7 @@ class Manager:
             raise ValueError('production runtime changed during preparation')
         self.c.assert_migrations({'migrations': meta['migrations']})
         if reviewed:
-            self.save(job, 'applying_reviewed_monitor_enum_expansion')
+            self.save(job, 'applying_reviewed_task_indexes' if reviewed['filename'] == '247_media_task_list_indexes.sql' else 'applying_reviewed_monitor_enum_expansion')
             self.c.apply_reviewed_media_migration(reviewed['transaction'])
             self.c.assert_migrations(manifest)
         self.cutover(job, target, rescue, arg if action == 'upgrade' else '')

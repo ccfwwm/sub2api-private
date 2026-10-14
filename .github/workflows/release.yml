@@ -100,6 +100,7 @@ jobs:
           MEDIA_TEST_DATABASE_URL: postgres://postgres:media-ci-isolated-only@127.0.0.1:5432/media_ci?sslmode=disable
       - run: python3 -m pip install -r docs/multimodal/requirements-spec.txt
       - run: python3 docs/multimodal/verify_spec.py
+      - run: python3 docs/multimodal/test_public_clients.py
       - run: python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -196,8 +197,10 @@ jobs:
           cp backend/migrations/244_unified_media_model_pricing.sql ./244_unified_media_model_pricing.sql
           cp backend/migrations/245_unified_media_account_cost.sql ./245_unified_media_account_cost.sql
           cp backend/migrations/246_channel_monitor_imagevideo.sql ./246_channel_monitor_imagevideo.sql
+          cp backend/migrations/247_media_task_list_indexes.sql ./247_media_task_list_indexes.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
+          sha256sum 247_media_task_list_indexes.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
@@ -214,6 +217,7 @@ jobs:
             244_unified_media_model_pricing.sql
             245_unified_media_account_cost.sql
             246_channel_monitor_imagevideo.sql
+            247_media_task_list_indexes.sql
 
 
   deploy:

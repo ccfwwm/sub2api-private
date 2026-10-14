@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.3 adds a JWT-authorized public media capability catalog, exact profile selection, unified owned task queries and GPT edit-mask validation for ZeroWall; upstream baseline remains 0.2.15. No database migrations are added.",
+  "version_note": "Private release 1.2.4 adds public imagevideo API documentation and paginated media task tabs for administrators and users. Migration 247 adds two task history indexes; existing task, billing and configuration data are preserved. Upstream baseline remains 0.2.15.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

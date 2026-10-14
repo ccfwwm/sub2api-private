@@ -5,9 +5,47 @@ from pathlib import Path
 from unittest.mock import Mock
 from media_migrate import reviewed_transaction, tracked_operation, unified_transaction, validate_unified_transaction, UNIFIED_FILES
 from media_migrate import monitor_transaction, validate_monitor_transaction, reviewed_monitor_upgrade, MONITOR_FILE
+from media_migrate import task_index_transaction, validate_task_index_transaction, reviewed_upgrade, TASK_INDEX_FILE
 import tempfile
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_task_indexes_require_exact_sql_and_preserve_old_migrations(self):
+        sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / TASK_INDEX_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        transaction = task_index_transaction(sql, checksum)
+        self.assertTrue(validate_task_index_transaction(transaction))
+        self.assertFalse(validate_task_index_transaction(transaction + 'DROP TABLE users;'))
+        for bad in (sql + 'DELETE FROM media_tasks;', sql.replace('DESC', 'ASC'), sql.replace('media_tasks(', 'users(')):
+            with self.subTest(sql=bad), self.assertRaises(ValueError):
+                task_index_transaction(bad, checksum)
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, TASK_INDEX_FILE).write_text(sql)
+            before = {'old.sql': 'b' * 64}
+            target = {**before, TASK_INDEX_FILE: checksum}
+            self.assertEqual(reviewed_upgrade(before, target, folder)['transaction'], transaction)
+            self.assertIsNone(reviewed_upgrade(target, target, folder))
+            for bad in ({**target, 'old.sql': 'a' * 64}, {**target, 'unexpected.sql': 'a' * 64}, {**target, TASK_INDEX_FILE: 'a' * 64}, {TASK_INDEX_FILE: checksum}):
+                with self.assertRaises(ValueError): reviewed_upgrade(before, bad, folder)
+
+    def test_task_index_assets_from_previous_worker_match_release_and_checksum(self):
+        sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / TASK_INDEX_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, TASK_INDEX_FILE: checksum}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release = state / 'releases/v1.2.4'
+            release.mkdir(parents=True)
+            assets = state / 'automatic/receipt-assets'
+            assets.mkdir(parents=True)
+            (assets / TASK_INDEX_FILE).write_text(sql)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.2.4', 'migrations': target}))
+            self.assertTrue(validate_task_index_transaction(reviewed_upgrade(before, target, release)['transaction']))
+            (assets / TASK_INDEX_FILE).write_text(sql + ' DROP TABLE users;')
+            with self.assertRaises(ValueError): reviewed_upgrade(before, target, release)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.2.3', 'migrations': target}))
+            with self.assertRaises(FileNotFoundError): reviewed_upgrade(before, target, release)
+
     def test_previous_worker_assets_are_accepted_only_for_matching_release_and_exact_sql(self):
         sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / MONITOR_FILE).read_text().strip()
         checksum = hashlib.sha256(sql.encode()).hexdigest()

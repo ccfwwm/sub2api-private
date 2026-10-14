@@ -76,19 +76,7 @@ func (s *Store) PublicTask(ctx context.Context, t StoredTask) (Task, error) {
 	if e != nil {
 		return Task{}, e
 	}
-	status := t.State
-	if status == "submitting" {
-		status = "queued"
-	}
-	progress := 0
-	if status == "completed" {
-		progress = 100
-	}
-	public := Task{ID: t.ID, Object: Object(t.Snapshot.Capability.MediaType), Model: t.Snapshot.Capability.Model, Status: status, CreatedAt: t.Created.Unix(), Progress: progress, Artifacts: artifacts, Diagnostic: t.Diagnostic, Billing: map[string]any{"currency": "USD", "reserved": t.Reserved, "accepted": t.Accepted, "settled": t.Captured, "released": t.Released, "refunded": t.Refunded, "maximum_charge": t.Snapshot.Maximum, "price_version": t.Snapshot.Sale.Version, "multiplier": t.Identity.Multiplier, "time_multiplier": t.Identity.TimeMultiplier, "state": t.Settlement, "quantities": t.Quantities, "version": t.Version}}
-	if t.Completed != nil {
-		unix := t.Completed.Unix()
-		public.CompletedAt = &unix
-	}
+	public := publicTaskValue(t, artifacts)
 	var raw []byte
 	e = s.DB.QueryRowContext(ctx, `SELECT details FROM media_ledger_entries WHERE operation_key=$1`, t.ID+":finalize").Scan(&raw)
 	if e != nil && e != sql.ErrNoRows {
@@ -102,6 +90,24 @@ func (s *Store) PublicTask(ctx context.Context, t StoredTask) (Task, error) {
 	}
 	return public, nil
 }
+
+func publicTaskValue(t StoredTask, artifacts []Artifact) Task {
+	status := t.State
+	if status == "submitting" {
+		status = "queued"
+	}
+	progress := 0
+	if status == "completed" {
+		progress = 100
+	}
+	public := Task{ID: t.ID, Object: Object(t.Snapshot.Capability.MediaType), Model: t.Snapshot.Capability.Model, Status: status, CreatedAt: t.Created.Unix(), Progress: progress, Artifacts: artifacts, Diagnostic: t.Diagnostic, Billing: map[string]any{"currency": "USD", "reserved": t.Reserved, "accepted": t.Accepted, "settled": t.Captured, "released": t.Released, "refunded": t.Refunded, "maximum_charge": t.Snapshot.Maximum, "price_version": t.Snapshot.Sale.Version, "multiplier": t.Identity.Multiplier, "time_multiplier": t.Identity.TimeMultiplier, "state": t.Settlement, "quantities": t.Quantities, "version": t.Version}}
+	if t.Completed != nil {
+		unix := t.Completed.Unix()
+		public.CompletedAt = &unix
+	}
+	return public
+}
+
 func (s *Store) History(ctx context.Context, kind, id string) ([]ConfigRecord, error) {
 	rows, e := s.DB.QueryContext(ctx, `SELECT id,version,NULL::bigint,status,config FROM media_config_versions WHERE kind=$1 AND id=$2 ORDER BY version DESC`, kind, id)
 	if e != nil {

@@ -66,7 +66,13 @@
         </div>
       </div>
 
-      <div class="card p-6">
+      <div class="card overflow-hidden">
+        <div class="flex flex-wrap border-b border-gray-200 px-2 dark:border-dark-700 sm:px-4">
+          <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">{{ t('usage.tabs.usage') }}</button>
+          <button v-if="errorViewEnabled" class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">{{ t('usage.tabs.errors') }}</button>
+          <button class="tab" :class="{ 'tab-active': activeTab === 'media' }" @click="mediaMounted = true; activeTab = 'media'">{{ t('usage.tabs.media') }}</button>
+        </div>
+      <div v-show="activeTab !== 'media'" class="p-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
@@ -167,17 +173,9 @@
         </div>
       </div>
 
-      <div v-if="errorViewEnabled" class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
-        <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
-          {{ t('usage.tabs.usage') }}
-        </button>
-        <button class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
-          {{ t('usage.tabs.errors') }}
-        </button>
-      </div>
-
       <template v-if="activeTab === 'usage'">
         <UsageTable
+          flat
           :data="usageLogs"
           :loading="loading"
           :columns="visibleColumns"
@@ -201,7 +199,7 @@
       </template>
 
       <UserErrorRequestsTable
-        v-else-if="errorViewEnabled"
+        v-else-if="activeTab === 'errors' && errorViewEnabled"
         :rows="errorRows"
         :total="errorTotal"
         :loading="errorLoading"
@@ -213,8 +211,9 @@
         @update:pageSize="onErrorPageSize"
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
       />
+        <MediaTaskHistory v-if="mediaMounted" v-show="activeTab === 'media'" :start-date="startDate" :end-date="endDate" />
+      </div>
     </div>
-    <MediaTaskHistory />
   </AppLayout>
 
 </template>
@@ -357,7 +356,8 @@ const modelDistributionMetric = ref<DistributionMetric>('tokens')
 const groupDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionSource = ref<EndpointSource>('inbound')
-const activeTab = ref<'usage' | 'errors'>('usage')
+const mediaMounted = ref(false)
+const activeTab = ref<'usage' | 'errors' | 'media'>('usage')
 const errorViewEnabled = computed(() => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false)
 
 const filters = ref<UsageQueryParams>({

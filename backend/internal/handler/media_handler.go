@@ -21,7 +21,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/media"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -665,50 +664,11 @@ func (h *MediaHandler) Estimate(c *gin.Context) {
 }
 func (h *MediaHandler) UserTasks(c *gin.Context) {
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
-	if !ok {
+	if !ok || subject.UserID <= 0 {
 		c.Status(401)
 		return
 	}
 	h.listTasks(c, subject.UserID, false)
-}
-func (h *MediaHandler) listTasks(c *gin.Context, userID int64, admin bool) {
-	tasks, err := h.Engine.Store.TaskList(c.Request.Context(), userID, 50, c.Query("before"))
-	if err != nil {
-		mediaError(c, err)
-		return
-	}
-	public := []gin.H{}
-	for _, t := range tasks {
-		value, err := h.Engine.Store.PublicTask(c.Request.Context(), t)
-		if err != nil {
-			mediaError(c, err)
-			return
-		}
-		item := gin.H{"task": value}
-		if admin {
-			item["user_id"] = t.Identity.UserID
-			item["account_id"] = t.AccountID
-			var status string
-			var amount *string
-			err = h.Engine.Store.DB.QueryRowContext(c.Request.Context(), `SELECT status,amount::text FROM media_cost_entries WHERE task_id=$1`, t.ID).Scan(&status, &amount)
-			if err == nil {
-				item["cost_status"] = status
-				item["cost_amount"] = amount
-				if amount != nil && (status == "estimated" || status == "verified") {
-					accepted, _ := decimal.NewFromString(t.Accepted)
-					captured, _ := decimal.NewFromString(t.Captured)
-					refunded, _ := decimal.NewFromString(t.Refunded)
-					expense, _ := decimal.NewFromString(*amount)
-					item["margin_amount"] = accepted.Add(captured).Sub(refunded).Sub(expense).StringFixed(8)
-				}
-			} else if err != sql.ErrNoRows {
-				mediaError(c, err)
-				return
-			}
-		}
-		public = append(public, item)
-	}
-	response.Success(c, public)
 }
 
 func sanitizeMediaResult(value any, replacements map[string]string) any {
