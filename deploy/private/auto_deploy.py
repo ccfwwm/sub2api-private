@@ -86,6 +86,16 @@ def release_assets(version, folder):
     names = [a['name'] for a in release['assets']]
     if any(names.count(n) != 1 for n in assets): raise ValueError('release inventory incomplete')
     run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder)] + sum([['--pattern', n] for n in assets], []))
+    # Read the manifest before validating the checksum inventory so the
+    # independently replaceable docs receipt is present when checksums.txt
+    # lists it. A fresh production worker starts with an empty folder.
+    manifest = read(folder / 'deployment.json')
+    validate_manifest(manifest, version)
+    manifest_images(manifest, version)
+    if manifest.get('docs_digest'):
+        if names.count('docs-image-inspect.json') != 1:
+            raise ValueError('documentation image inventory missing')
+        run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder), '--pattern', 'docs-image-inspect.json'])
     for checksum in ['checksums.txt', 'management-checksums.txt']:
         for line in (folder / checksum).read_text().splitlines():
             digest, name = line.split(None, 1); name = name.lstrip('*')
@@ -93,12 +103,7 @@ def release_assets(version, folder):
             if name.endswith('.sql') and not (folder / name).exists():
                 run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder), '--pattern', name])
             if file_hash(folder / name) != digest: raise ValueError('asset checksum mismatch')
-    manifest = read(folder / 'deployment.json'); validate_manifest(manifest, version)
-    manifest_images(manifest, version)
     if manifest.get('docs_digest'):
-        if names.count('docs-image-inspect.json') != 1:
-            raise ValueError('documentation image inventory missing')
-        run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder), '--pattern', 'docs-image-inspect.json'])
         docs_receipt = next((line for line in (folder / 'checksums.txt').read_text().splitlines() if line.split()[-1] == 'docs-image-inspect.json'), None)
         if not docs_receipt:
             raise ValueError('documentation image checksum missing')

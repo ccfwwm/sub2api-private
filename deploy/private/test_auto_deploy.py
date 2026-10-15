@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -7,10 +10,55 @@ if sys.platform == 'win32':
  import types
  sys.modules['fcntl']=types.SimpleNamespace(flock=lambda *args:None,LOCK_EX=1,LOCK_NB=2)
 import auto_deploy
-from auto_deploy import check_order, dispatch, stage_reviewed_migrations, REVIEWED_MIGRATION_ASSETS
+from auto_deploy import check_order, dispatch, release_assets, stage_reviewed_migrations, REVIEWED_MIGRATION_ASSETS
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
+ def test_release_assets_downloads_docs_receipt_before_checksum_validation(self):
+  version='v1.2.7'; commit='a'*40; docs_name='docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
+  verification=json.dumps({'version':version,'status':'recorded'}).encode()
+  manifest={
+   'schema':1,'repository':'ccfwwm/sub2api-private','image':'ghcr.io/ccfwwm/sub2api-private',
+   'platform':'linux/amd64','version':version,'digest':'sha256:'+'b'*64,'commit':commit,
+   'upstream_commit':'c'*40,'upstream_version':'0.2.15','migrations':{'248_public_imagevideo_docs.sql':'d'*64},
+   'docs_image':'ghcr.io/ccfwwm/sub2api-private-docs','docs_digest':'sha256:'+'e'*64,
+   'channel_verification_record':{'path':docs_name,'sha256':hashlib.sha256(verification).hexdigest()}}
+  asset_bytes={
+   'deployment.json':(json.dumps(manifest)+'\n').encode(),
+   'docs-image-inspect.json':b'[{"Config":{"Labels":{}}}]\n',
+   'server-management.tar.gz':b'fixture archive',
+   'management-source.txt':(commit+'\n').encode(),
+   '248_public_imagevideo_docs.sql':b'CREATE TABLE fixture_docs (id integer);\n'}
+  def checksum(name): return hashlib.sha256(asset_bytes[name]).hexdigest()
+  asset_bytes['checksums.txt']=(''.join(f'{checksum(n)}  {n}\n' for n in
+   ['deployment.json','docs-image-inspect.json','248_public_imagevideo_docs.sql'])).encode()
+  asset_bytes['management-checksums.txt']=(''.join(f'{checksum(n)}  {n}\n' for n in
+   ['server-management.tar.gz','management-source.txt'])).encode()
+  names=list(asset_bytes)
+  release={'draft':False,'prerelease':False,'tag_name':version,'assets':[{'name':n} for n in names]}
+  downloads=[]
+  with tempfile.TemporaryDirectory() as root:
+   folder=Path(root); folder.mkdir(exist_ok=True)
+   def fake_run(args, **kwargs):
+    if args[:2]==['gh','api']:
+     path=args[2]
+     if path.endswith('/releases/tags/'+version): return json.dumps(release).encode()
+     if path.startswith('repos/ccfwwm/sub2api-private/contents/'):
+      return json.dumps({'content':base64.b64encode(verification).decode()}).encode()
+     if path.endswith('/commits/'+version): return json.dumps({'sha':commit}).encode()
+     if path.endswith('/compare/'+commit+'...main'): return json.dumps({'status':'identical'}).encode()
+    if args[:3]==['gh','release','download']:
+     selected=[args[i+1] for i,v in enumerate(args[:-1]) if v=='--pattern']
+     downloads.append(selected)
+     for name in selected: (folder/name).write_bytes(asset_bytes[name])
+     return b''
+    raise AssertionError(args)
+   with patch('auto_deploy.run',side_effect=fake_run):
+    result=release_assets(version,folder)
+   self.assertEqual(result,manifest)
+   self.assertIn(['docs-image-inspect.json'],downloads)
+   self.assertTrue((folder/'docs-image-inspect.json').is_file())
+
  def test_reviewed_migration_staging_includes_public_docs_asset(self):
   with tempfile.TemporaryDirectory() as root:
    assets, release = Path(root) / 'assets', Path(root) / 'release'
