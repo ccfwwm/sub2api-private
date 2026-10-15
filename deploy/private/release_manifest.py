@@ -25,13 +25,18 @@ manifest = {
 if args.docs_digest:
     manifest['docs_image'] = 'ghcr.io/ccfwwm/sub2api-private-docs'
     manifest['docs_digest'] = args.docs_digest
-record_path = root / 'docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
-record = json.loads(record_path.read_text(encoding='utf-8'))
+# Use the committed bytes for both validation and the production checksum.
+# GitHub serves LF Git blobs even when a Windows checkout uses CRLF.
+record_blob = subprocess.check_output(
+    ['git', 'show', 'HEAD:docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'],
+    cwd=root,
+)
+record = json.loads(record_blob)
 if record.get('version') != args.version or record.get('status') != 'recorded' or not record.get('cases'):
     raise SystemExit('Record current real-channel verification before publishing')
 if not any(case.get('verification') in ('real_generation', 'real_connection') and case.get('status') == 'completed' for case in record['cases']):
     raise SystemExit('At least one completed real-channel verification is required')
-manifest['channel_verification_record'] = {'path':'docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json', 'sha256':hashlib.sha256(record_path.read_bytes()).hexdigest(), 'verified_at':record['verified_at']}
+manifest['channel_verification_record'] = {'path':'docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json', 'sha256':hashlib.sha256(record_blob).hexdigest(), 'verified_at':record['verified_at']}
 from controller import validate_manifest
 validate_manifest(manifest, args.version)
 Path(args.output).write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
