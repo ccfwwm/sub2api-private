@@ -113,3 +113,7 @@ GitHub 必须查询到最终 `succeeded` 才报告上线成功。
 `247_media_task_list_indexes.sql` 仅增加 `media_tasks` 的全局及用户时间/任务 ID 索引。管理器只接受这两条固定 CREATE INDEX、对应的原始 checksum 和唯一新增迁移；其他 schema 差异仍拒绝。正式 Release 包含该 SQL 及校验值，旧 worker 下载后新管理器可从同一 Release 的已验证 assets 读取。
 
 生产切换前先完整备份、恢复隔离副本，比较原业务、媒体任务、账务及制品表指纹，再验证新旧实际程序能启动；通过后才用 3 秒锁等待和 60 秒语句超时的事务创建生产索引并登记迁移。失败不覆盖数据库，也不删旧表或账务记录。
+
+## 文档草稿的同源预览
+
+文档专用 `/docs/` location 使用 `X-Frame-Options: SAMEORIGIN` 和 `frame-ancestors 'self'`，使后台可在 iframe 中显示未发布草稿；其他路径继续继承原有禁止嵌入策略。location 同时显式保留 HSTS 和 nosniff。管理器只接受原始片段或已审阅的新片段，未知配置仍拒绝覆盖；Nginx 校验或平滑重载失败时恢复原文件。更新该配置不重启 API、文档或数据容器。

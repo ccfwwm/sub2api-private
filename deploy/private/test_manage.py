@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from controller import atomic_json, file_hash
-from manage import Manager, ident, DOCS_PROXY_SNIPPET
+from manage import Manager, ident, DOCS_PROXY_SNIPPET, LEGACY_DOCS_PROXY_SNIPPET
 
 
 class ManagementSafetyTests(unittest.TestCase):
@@ -73,6 +73,54 @@ class ManagementSafetyTests(unittest.TestCase):
                 manager.sync_docs_proxy(True)
         self.assertEqual(vhost.read_text(), original)
         self.assertFalse(snippet.exists())
+
+    def test_docs_proxy_upgrades_legacy_headers_and_preserves_vhost(self):
+        vhost = self.root / 'nginx.conf'
+        snippet = self.root / 'sub2api-docs-web.conf'
+        original = ('server {\n    listen 443 ssl;\n    server_name code.aicodeme.xyz;\n'
+                    '    include /etc/nginx/snippets/sub2api-docs-web.conf;\n'
+                    '    add_header X-Frame-Options "DENY" always;\n}\n')
+        vhost.write_text(original)
+        snippet.write_text(LEGACY_DOCS_PROXY_SNIPPET)
+        manager = Manager(self.root / 'proxy-state', self.root / 'production',
+                          nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run', return_value=b''):
+            manager.sync_docs_proxy(True)
+        self.assertEqual(vhost.read_text(), original)
+        updated = snippet.read_text()
+        self.assertIn('X-Frame-Options "SAMEORIGIN" always', updated)
+        self.assertIn('frame-ancestors \'self\'', updated)
+        self.assertIn('Strict-Transport-Security "max-age=31536000; includeSubDomains"', updated)
+        self.assertIn('X-Content-Type-Options "nosniff"', updated)
+
+    def test_docs_proxy_failed_upgrade_restores_legacy_snippet(self):
+        vhost = self.root / 'nginx.conf'
+        snippet = self.root / 'sub2api-docs-web.conf'
+        original = 'server {\n    listen 443 ssl;\n    server_name code.aicodeme.xyz;\n}\n'
+        vhost.write_text(original)
+        snippet.write_text(LEGACY_DOCS_PROXY_SNIPPET)
+        manager = Manager(self.root / 'proxy-state', self.root / 'production',
+                          nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run', side_effect=RuntimeError('nginx -t failed')):
+            with self.assertRaises(RuntimeError):
+                manager.sync_docs_proxy(True)
+        self.assertEqual(vhost.read_text(), original)
+        self.assertEqual(snippet.read_text(), LEGACY_DOCS_PROXY_SNIPPET)
+
+    def test_docs_proxy_rejects_unknown_snippet_before_changing_files(self):
+        vhost = self.root / 'nginx.conf'
+        snippet = self.root / 'sub2api-docs-web.conf'
+        original = 'server {\n    listen 443 ssl;\n    server_name code.aicodeme.xyz;\n}\n'
+        vhost.write_text(original)
+        snippet.write_text('location /custom/ { return 200; }\n')
+        manager = Manager(self.root / 'proxy-state', self.root / 'production',
+                          nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run') as run:
+            with self.assertRaisesRegex(ValueError, 'unexpected contents'):
+                manager.sync_docs_proxy(True)
+        run.assert_not_called()
+        self.assertEqual(vhost.read_text(), original)
+        self.assertEqual(snippet.read_text(), 'location /custom/ { return 200; }\n')
 
     def test_backup_tampering_prevents_restore(self):
         folder = self.manager.state / 'backups' / ('a' * 32)

@@ -28,7 +28,7 @@ IDENT = re.compile(r'[0-9a-f]{32}\Z')
 DOCS_PROXY_INCLUDE = 'include /etc/nginx/snippets/sub2api-docs-web.conf;'
 DOCS_SERVICE = 'docs-web'
 DOCS_CONTAINER = 'sub2api-docs-web'
-DOCS_PROXY_SNIPPET = '''location ^~ /docs/ {
+LEGACY_DOCS_PROXY_SNIPPET = '''location ^~ /docs/ {
     proxy_pass http://127.0.0.1:8082/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -38,6 +38,17 @@ DOCS_PROXY_SNIPPET = '''location ^~ /docs/ {
     proxy_read_timeout 60s;
 }
 '''
+# Location-level add_header directives replace the vhost's inherited headers.
+# Keep HSTS/nosniff while permitting only same-origin admin draft previews.
+DOCS_PROXY_SNIPPET = LEGACY_DOCS_PROXY_SNIPPET.replace(
+    '    proxy_read_timeout 60s;\n',
+    '    proxy_read_timeout 60s;\n'
+    '    proxy_hide_header X-Frame-Options;\n'
+    '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
+    '    add_header X-Content-Type-Options "nosniff" always;\n'
+    '    add_header X-Frame-Options "SAMEORIGIN" always;\n'
+    '    add_header Content-Security-Policy "frame-ancestors \'self\'" always;\n'
+)
 
 
 def read(path):
@@ -488,7 +499,7 @@ class Manager:
                 updated = before_vhost
             # Normalize newlines because CI rehearses this code on Windows
             # while production stores the source-controlled LF snippet.
-            if before_snippet and before_snippet.decode(errors='replace').replace('\r\n', '\n') != DOCS_PROXY_SNIPPET:
+            if before_snippet and before_snippet.decode(errors='replace').replace('\r\n', '\n') not in (LEGACY_DOCS_PROXY_SNIPPET, DOCS_PROXY_SNIPPET):
                 raise ValueError('managed documentation Nginx snippet has unexpected contents')
             snippet.parent.mkdir(parents=True, exist_ok=True)
             snippet.write_text(DOCS_PROXY_SNIPPET, encoding='utf-8')
