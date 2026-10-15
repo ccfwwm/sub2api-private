@@ -1,12 +1,12 @@
 {
-  "version": "v1.2.7",
+  "version": "v1.2.8",
   "status": "recorded",
   "verified_at": "2026-10-14T10:40:55.368Z",
   "environment": "production, authorized user key, GPT single and dual multipart edits",
-  "policy": "Reused existing authorized verification; no new video or music generation. Existing GPT image edit, video and audio evidence remains unchanged.",
-  "verification_reused_from": "v1.2.3",
-  "new_generation_requests": 2,
-  "verification_note": "v1.2.7 reuses the recorded GPT /v1/images/edits, video and audio evidence; no new chargeable video or music generation was submitted. Task polling and authenticated artifact retrieval remain covered.",
+  "policy": "Frontend documentation editor repair only. Existing media generation evidence is reused unchanged; no new paid generation requests are submitted by this patch.",
+  "verification_reused_from": "v1.2.7",
+  "new_generation_requests": 0,
+  "verification_note": "v1.2.8 reuses historical GPT image edits, video and audio evidence with the original per-case timestamps. Patch verification covers actual Axios URL composition, authentication, errors and document editing. No new media generation.",
   "cases": [
     {
       "account_id": 2092,

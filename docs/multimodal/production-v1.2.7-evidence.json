@@ -1,0 +1,139 @@
+{
+  "version": "v1.2.7",
+  "commit": "f6df33f83a6543fb239837b9fb3e527a769bae4c",
+  "job": {
+    "id": "c137796b53db422891bc572602aa544e",
+    "version": "v1.2.7",
+    "status": "succeeded",
+    "phase": "online_verified",
+    "digest": "sha256:4ad5c23d4121789b5c8677a3ded5e5755fd8a3c3dc9bb29ec521ad771a6bd502",
+    "commit": "f6df33f83a6543fb239837b9fb3e527a769bae4c",
+    "manager_job": "2463cc91032b4aaaa796b1580151d6eb",
+    "backup_id": "2699e6488927441a9f48e17216c9405a"
+  },
+  "entrypoints": {
+    "http://127.0.0.1:8081": {
+      "health": 200,
+      "version": "1.2.7"
+    },
+    "https://code.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.7"
+    },
+    "https://code.aicodeme.cn": {
+      "health": 200,
+      "version": "1.2.7"
+    },
+    "https://hkcode.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.7"
+    }
+  },
+  "images": {
+    "application": "sha256:4ad5c23d4121789b5c8677a3ded5e5755fd8a3c3dc9bb29ec521ad771a6bd502",
+    "docs": "sha256:5f5424a17c893a70b861995f7fbadf73e23fb36f5ad242bd35fe197b63f8839f",
+    "app_healthy": true,
+    "docs_running": true
+  },
+  "docs": {
+    "published_version": 3,
+    "sections": 23,
+    "edits": true,
+    "sizes": true,
+    "no_reference_brand_or_pending_placeholder": true,
+    "sha256": "9fdf67c47050b3e14d38317d32f8ca152645bd4c62119174fa5514f6b004b563"
+  },
+  "docs_admin": {
+    "state": 200,
+    "history": 200,
+    "history_count": 3,
+    "published_version": 3,
+    "draft_version": 3,
+    "anonymous_status": 401,
+    "ordinary_user_status": 403
+  },
+  "plaza_status": 401,
+  "migrations": {
+    "count": 298,
+    "checksums_match": true,
+    "public_docs": true
+  },
+  "protected_containers_unchanged": true,
+  "backup": {
+    "id": "2699e6488927441a9f48e17216c9405a",
+    "retained": true
+  },
+  "live_pricing_guide_publish": {
+    "published_version": 3,
+    "sections": 23,
+    "pricing_rows": 8,
+    "draft_isolation_verified": true,
+    "settings_changed": [
+      "model_plaza_description"
+    ],
+    "application_not_restarted": true,
+    "docs_container_not_restarted": true,
+    "history_count": 3
+  },
+  "verified_at": "2026-10-15T20:07:13.479743+08:00",
+  "plaza": {
+    "authenticated_status": 200,
+    "groups": 8,
+    "model_entries": 87,
+    "media_entries": 26,
+    "currencies_ok": true,
+    "video_seconds": [
+      {
+        "name": "TTseadanco2.5-720",
+        "unit": "second",
+        "sale_price": "0.60"
+      },
+      {
+        "name": "XXsedanco2.5S",
+        "unit": "second",
+        "sale_price": "0.80"
+      }
+    ],
+    "pricing_description_published": true
+  },
+  "plaza_status_note": "Anonymous access remains disabled by existing site configuration; authorized user access returned 200.",
+  "browser": {
+    "docs_light_dark": true,
+    "docs_mobile_menu": true,
+    "docs_mobile_page_overflow": false,
+    "plaza_mobile_page_overflow": false,
+    "markdown_characters": 52596,
+    "copied_content_clean": true
+  },
+  "validation": {
+    "frontend_tests": 45,
+    "deployment_tests": 51,
+    "isolated_docs_api": {
+      "anonymous_admin_denied": true,
+      "draft_private": true,
+      "conflict_409": true,
+      "publish_immediate": true,
+      "rollback_immediate": true,
+      "history_entries": 4,
+      "app_not_restarted": true,
+      "published_sections": 23
+    },
+    "new_chargeable_generation_requests": 0
+  },
+  "screenshots": [
+    "docs-desktop-dark.png",
+    "docs-desktop-light.png",
+    "docs-mobile-light.png",
+    "plaza-dark.png",
+    "plaza-media-desktop.png",
+    "plaza-video-units.png",
+    "docs/screenshots/v1.2.7/docs-mobile-menu.png"
+  ],
+  "failed_attempts_retained": [
+    "1b8d35b9520647d3a695444fa362ceed",
+    "2bbef2a1bb9644c4a2894ae426aeac68"
+  ],
+  "limitations": [
+    "Administrator browser editor load was found to fail after the original v1.2.7 acceptance because of a duplicate API prefix. API-key endpoint checks passed but did not cover this frontend defect. Corrected in the subsequent v1.2.8 patch."
+  ]
+}
