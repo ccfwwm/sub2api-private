@@ -11,11 +11,28 @@ import subprocess
 import sys
 import time
 import uuid
-from controller import IMAGE, REPO, VERSION, atomic_json, file_hash, run, validate_manifest
+from controller import IMAGE, REPO, VERSION, atomic_json, file_hash, run, validate_manifest, manifest_images
 from manage import STATE, Manager, inspect, read
 
 AUTO = STATE / 'automatic'
 TERMINAL = {'succeeded', 'failed', 'failed_rolled_back', 'failed_needs_inspection'}
+REVIEWED_MIGRATION_ASSETS = (
+    '246_channel_monitor_imagevideo.sql',
+    '247_media_task_list_indexes.sql',
+    '248_public_imagevideo_docs.sql',
+)
+
+def stage_reviewed_migrations(assets, release):
+    """Stage reviewed SQL from the checksum-verified release inventory."""
+    import shutil
+    assets, release = Path(assets), Path(release)
+    staged = []
+    for name in REVIEWED_MIGRATION_ASSETS:
+        source = assets / name
+        if source.exists():
+            shutil.copyfile(source, release / name)
+            staged.append(name)
+    return staged
 
 def version_tuple(version):
     if not VERSION.fullmatch(version):
@@ -64,6 +81,8 @@ def release_assets(version, folder):
     if release.get('draft') or release.get('prerelease') or release.get('tag_name') != version:
         raise ValueError('only formal published releases may deploy')
     assets = ['deployment.json', 'checksums.txt', 'server-management.tar.gz', 'management-source.txt', 'management-checksums.txt']
+    # The versioned docs image receipt is mandatory only when the immutable
+    # deployment manifest declares one, preserving historical release handling.
     names = [a['name'] for a in release['assets']]
     if any(names.count(n) != 1 for n in assets): raise ValueError('release inventory incomplete')
     run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder)] + sum([['--pattern', n] for n in assets], []))
@@ -75,6 +94,17 @@ def release_assets(version, folder):
                 run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder), '--pattern', name])
             if file_hash(folder / name) != digest: raise ValueError('asset checksum mismatch')
     manifest = read(folder / 'deployment.json'); validate_manifest(manifest, version)
+    manifest_images(manifest, version)
+    if manifest.get('docs_digest'):
+        if names.count('docs-image-inspect.json') != 1:
+            raise ValueError('documentation image inventory missing')
+        run(['gh', 'release', 'download', version, '--repo', REPO, '--dir', str(folder), '--pattern', 'docs-image-inspect.json'])
+        docs_receipt = next((line for line in (folder / 'checksums.txt').read_text().splitlines() if line.split()[-1] == 'docs-image-inspect.json'), None)
+        if not docs_receipt:
+            raise ValueError('documentation image checksum missing')
+        digest, _ = docs_receipt.split(None, 1)
+        if file_hash(folder / 'docs-image-inspect.json') != digest:
+            raise ValueError('documentation image inventory checksum mismatch')
     # Require the current-run verification record produced with the release source.
     receipt = manifest.get('channel_verification_record')
     if not isinstance(receipt,dict) or receipt.get('path') != 'docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json' or not re.fullmatch(r'[0-9a-f]{64}',receipt.get('sha256','')): raise ValueError('current release verification record missing')
@@ -103,12 +133,19 @@ def worker(job):
             save(job, 'running', 'validating_release')
             manifest = release_assets(job['version'], folder)
             job.update(digest=manifest['digest'], commit=manifest['commit']); save(job)
-            image = validate_manifest(manifest, job['version'])
+            image, docs_image = manifest_images(manifest, job['version'])
             save(job, phase='pulling_fixed_digest'); run(['docker', 'pull', image])
+            if docs_image:
+                run(['docker', 'pull', docs_image])
             identity = inspect(image)
             labels = identity['Config'].get('Labels', {})
             if identity['Os'] != 'linux' or identity['Architecture'] != 'amd64' or labels.get('org.opencontainers.image.revision') != manifest['commit'] or labels.get('org.opencontainers.image.version') != job['version']:
                 raise ValueError('image source or architecture mismatch')
+            if docs_image:
+                docs_identity = inspect(docs_image)
+                docs_labels = docs_identity['Config'].get('Labels', {})
+                if docs_identity['Os'] != 'linux' or docs_identity['Architecture'] != 'amd64' or docs_labels.get('org.opencontainers.image.revision') != manifest['commit']:
+                    raise ValueError('documentation image source or architecture mismatch')
             if current == job['version']:
                 verify_online(job['version'], identity['Id'])
                 save(job, 'succeeded', 'already_deployed'); return
@@ -117,12 +154,15 @@ def worker(job):
                 raise ValueError('immutable version digest changed')
             run(['docker', 'tag', image, IMAGE + ':' + job['version']])
             atomic_json(staged / 'deployment.json', manifest); atomic_json(staged / 'image-inspect.json', [identity])
+            if docs_image:
+                atomic_json(staged / 'docs-image-inspect.json', [docs_identity])
             # Stage the checksum-verified, exact reviewed monitor migration for
             # the manager's restore-rehearsal gate. Other schema changes still fail.
-            import shutil
-            for reviewed_sql in ('246_channel_monitor_imagevideo.sql', '247_media_task_list_indexes.sql'):
-                if (folder / reviewed_sql).exists():
-                    shutil.copyfile(folder / reviewed_sql, staged / reviewed_sql)
+            # Stage every migration that the reviewed gate may apply.  This is
+            # deliberately explicit: older workers must receive the new docs
+            # DDL before installing the manager, otherwise a v1.2.7 upgrade
+            # would fail closed after backup with a missing SQL asset.
+            stage_reviewed_migrations(folder, staged)
             # Install checksum-verified release management sources without executing
             # archive paths or commands supplied through the SSH request.
             import tarfile
@@ -136,7 +176,7 @@ def worker(job):
             launcher = Path('/root/sub2api-manage').read_text()
             manager_path = re.search(r'(/root/sub2api-ops/releases/[0-9a-f]+/manage.py)', launcher).group(1)
             job['manager_job'] = uuid.uuid4().hex
-            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':True}
+            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':True, 'docs_image': docs_image}
             save(job, phase='backup_restore_and_cutover')
             # Import the verified installed module in an isolated Python process;
             # execute directly because this worker already owns operations.lock.

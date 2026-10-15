@@ -468,6 +468,17 @@ const routes: RouteRecordRaw[] = [
     redirect: '/admin/channels/pricing'
   },
   {
+    path: '/admin/docs/imagevideo',
+    name: 'AdminImageVideoDocs',
+    component: () => import('@/views/admin/ImageVideoDocsEditorView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Media API Documentation',
+      titleKey: 'nav.imagevideoDocsEditor'
+    }
+  },
+  {
     path: '/admin/channels/pricing',
     name: 'AdminChannels',
     component: () => import('@/views/admin/ChannelsView.vue'),

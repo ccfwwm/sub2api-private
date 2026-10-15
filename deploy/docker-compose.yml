@@ -12,6 +12,29 @@
 # =============================================================================
 
 services:
+  # Static documentation shell.  It reads the published document API from
+  # sub2api at request time, so publishing a new version never restarts the API.
+  docs-web:
+    image: ${DOCS_IMAGE:-ghcr.io/ccfwwm/sub2api-private-docs:latest}
+    build:
+      context: ..
+      dockerfile: docs-web/Dockerfile
+    container_name: sub2api-docs-web
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - sub2api-network
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # ===========================================================================
   # Sub2API Application
   # ===========================================================================

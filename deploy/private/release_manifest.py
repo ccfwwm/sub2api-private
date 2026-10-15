@@ -9,6 +9,7 @@ import subprocess
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', required=True)
 parser.add_argument('--digest', required=True)
+parser.add_argument('--docs-digest', default='')
 parser.add_argument('--output', required=True)
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
@@ -21,6 +22,9 @@ manifest = {
     'migrations': {p.name: hashlib.sha256(p.read_text(encoding='utf-8').strip().encode()).hexdigest()
                    for p in sorted((root / 'backend/migrations').glob('*.sql'))}
 }
+if args.docs_digest:
+    manifest['docs_image'] = 'ghcr.io/ccfwwm/sub2api-private-docs'
+    manifest['docs_digest'] = args.docs_digest
 record_path = root / 'docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
 record = json.loads(record_path.read_text(encoding='utf-8'))
 if record.get('version') != args.version or record.get('status') != 'recorded' or not record.get('cases'):

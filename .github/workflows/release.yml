@@ -161,11 +161,39 @@ jobs:
             org.opencontainers.image.version=${{ needs.validate.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - id: build-docs
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docs-web/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ghcr.io/ccfwwm/sub2api-private-docs:${{ needs.validate.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/ccfwwm/sub2api-private
+            org.opencontainers.image.revision=${{ needs.validate.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.validate.outputs.tag }}
+          cache-from: type=gha,scope=docs-web
+          cache-to: type=gha,mode=max,scope=docs-web
       - name: Verify image with isolated database and Redis
         env:
           IMAGE: ghcr.io/ccfwwm/sub2api-private@${{ steps.build.outputs.digest }}
+          DOCS_IMAGE: ghcr.io/ccfwwm/sub2api-private-docs@${{ steps.build-docs.outputs.digest }}
           TAG: ${{ needs.validate.outputs.tag }}
         run: python3 deploy/private/smoke_image.py --image "$IMAGE" --version "$TAG"
+      - name: Verify documentation image health
+        env:
+          DOCS_IMAGE: ghcr.io/ccfwwm/sub2api-private-docs@${{ steps.build-docs.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker image inspect "$DOCS_IMAGE" > docs-image-inspect.json
+          docker run -d --name sub2api-docs-ci "$DOCS_IMAGE"
+          trap 'docker rm -f sub2api-docs-ci >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if docker run --rm --network container:sub2api-docs-ci curlimages/curl:8.12.1 -fsS http://127.0.0.1:8080/health; then exit 0; fi
+            sleep 2
+          done
+          exit 1
       - name: Verify private repository and image visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -180,7 +208,7 @@ jobs:
           SHA: ${{ needs.validate.outputs.sha }}
           CANDIDATE: ${{ inputs.candidate || false }}
         run: |
-          python3 deploy/private/release_manifest.py --version "$TAG" --digest "$DIGEST" --output deployment.json
+          python3 deploy/private/release_manifest.py --version "$TAG" --digest "$DIGEST" --docs-digest "${{ steps.build-docs.outputs.digest }}" --output deployment.json
           sudo install -d -m 755 /run/sub2api-deployer
           echo 'Runner disk before rehearsal:'
           df -h /
@@ -192,20 +220,22 @@ jobs:
           df -h /
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
-          sha256sum deployment.json > checksums.txt
+          sha256sum deployment.json docs-image-inspect.json > checksums.txt
           cp backend/migrations/243_media_tasks_and_pricing.sql ./243_media_tasks_and_pricing.sql
           cp backend/migrations/244_unified_media_model_pricing.sql ./244_unified_media_model_pricing.sql
           cp backend/migrations/245_unified_media_account_cost.sql ./245_unified_media_account_cost.sql
           cp backend/migrations/246_channel_monitor_imagevideo.sql ./246_channel_monitor_imagevideo.sql
           cp backend/migrations/247_media_task_list_indexes.sql ./247_media_task_list_indexes.sql
+          cp backend/migrations/248_public_imagevideo_docs.sql ./248_public_imagevideo_docs.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
           sha256sum 247_media_task_list_indexes.sql >> checksums.txt
+          sha256sum 248_public_imagevideo_docs.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated private image; production deployment uses the restricted host manager. Models support direct enablement; real-channel testing is recorded separately. Formal releases deploy automatically after backup and isolated restore verification."
+            gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated application and documentation images; production deployment uses the restricted host manager. Models support direct enablement; real-channel testing is recorded separately. Formal releases deploy automatically after backup and isolated restore verification."
           fi
       - uses: actions/upload-artifact@v7
         with:
@@ -218,6 +248,8 @@ jobs:
             245_unified_media_account_cost.sql
             246_channel_monitor_imagevideo.sql
             247_media_task_list_indexes.sql
+            248_public_imagevideo_docs.sql
+            docs-image-inspect.json
 
 
   deploy:

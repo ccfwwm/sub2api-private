@@ -7,10 +7,20 @@ if sys.platform == 'win32':
  import types
  sys.modules['fcntl']=types.SimpleNamespace(flock=lambda *args:None,LOCK_EX=1,LOCK_NB=2)
 import auto_deploy
-from auto_deploy import check_order, dispatch
+from auto_deploy import check_order, dispatch, stage_reviewed_migrations, REVIEWED_MIGRATION_ASSETS
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
+ def test_reviewed_migration_staging_includes_public_docs_asset(self):
+  with tempfile.TemporaryDirectory() as root:
+   assets, release = Path(root) / 'assets', Path(root) / 'release'
+   assets.mkdir(); release.mkdir()
+   for name in REVIEWED_MIGRATION_ASSETS:
+    (assets / name).write_text(name)
+   staged = stage_reviewed_migrations(assets, release)
+   self.assertEqual(staged, list(REVIEWED_MIGRATION_ASSETS))
+   self.assertEqual((release / '248_public_imagevideo_docs.sql').read_text(), '248_public_imagevideo_docs.sql')
+
  def test_online_verification_requires_all_production_domains(self):
   with patch('auto_deploy.run',return_value=b'{"data":{"version":"1.2.1"}}') as run,patch('auto_deploy.inspect',return_value={'Image':'fixed-image'}):
    auto_deploy.verify_online('v1.2.1','fixed-image')

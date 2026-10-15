@@ -167,6 +167,7 @@ export default {
     announcements: 'Announcements',
     apiKeys: 'API Keys',
     imagevideoDocs: 'Media API docs',
+    imagevideoDocsEditor: 'Documentation editor',
     batchImage: 'Batch Images',
     usage: 'Usage',
     redeem: 'Redeem',

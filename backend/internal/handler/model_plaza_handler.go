@@ -1,9 +1,10 @@
 package handler
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/media"
 	"log/slog"
+	"strconv"
 
+	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -66,10 +67,14 @@ type modelPlazaTimePricing struct {
 
 // modelPlazaModel 广场模型条目：实收口径展示定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name            string                     `json:"name"`
-	Platform        string                     `json:"platform"`
-	Pricing         *userSupportedModelPricing `json:"pricing"`
-	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
+	Name             string                     `json:"name"`
+	Platform         string                     `json:"platform"`
+	SaleCurrency     string                     `json:"sale_currency"`
+	OfficialCurrency string                     `json:"official_currency"`
+	BillingMode      string                     `json:"billing_mode"`
+	BillingUnit      string                     `json:"billing_unit"`
+	Pricing          *userSupportedModelPricing `json:"pricing"`
+	OfficialPricing  *modelPlazaOfficialPricing `json:"official_pricing"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
 	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
@@ -78,19 +83,19 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	MediaModels        []media.CatalogEntry `json:"media_models,omitempty"`
-	ID                 int64                `json:"id"`
-	Name               string               `json:"name"`
-	Description        string               `json:"description"`
-	Platform           string               `json:"platform"`
-	SubscriptionType   string               `json:"subscription_type"`
-	RateMultiplier     float64              `json:"rate_multiplier"`
-	UserRateMultiplier *float64             `json:"user_rate_multiplier,omitempty"`
-	PeakRateEnabled    bool                 `json:"peak_rate_enabled"`
-	PeakStart          string               `json:"peak_start"`
-	PeakEnd            string               `json:"peak_end"`
-	PeakRateMultiplier float64              `json:"peak_rate_multiplier"`
-	IsExclusive        bool                 `json:"is_exclusive"`
+	MediaModels        []modelPlazaMediaModel `json:"media_models,omitempty"`
+	ID                 int64                  `json:"id"`
+	Name               string                 `json:"name"`
+	Description        string                 `json:"description"`
+	Platform           string                 `json:"platform"`
+	SubscriptionType   string                 `json:"subscription_type"`
+	RateMultiplier     float64                `json:"rate_multiplier"`
+	UserRateMultiplier *float64               `json:"user_rate_multiplier,omitempty"`
+	PeakRateEnabled    bool                   `json:"peak_rate_enabled"`
+	PeakStart          string                 `json:"peak_start"`
+	PeakEnd            string                 `json:"peak_end"`
+	PeakRateMultiplier float64                `json:"peak_rate_multiplier"`
+	IsExclusive        bool                   `json:"is_exclusive"`
 	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
@@ -100,6 +105,44 @@ type modelPlazaGroup struct {
 	// 分组是否启用长上下文阶梯计费；关闭时模型实付列只展示最低档/基础价。
 	LongContextPricingEnabled bool              `json:"long_context_pricing_enabled"`
 	Models                    []modelPlazaModel `json:"models"`
+}
+
+// modelPlazaMediaModel adds display-only currency metadata to the media catalog.
+// Sale values are displayed as CNY under the product's configured price policy;
+// official USD prices are not part of the current media catalog and remain absent.
+type modelPlazaMediaModel struct {
+	media.CatalogEntry
+	SaleCurrency     string `json:"sale_currency"`
+	OfficialCurrency string `json:"official_currency"`
+	// SaleMultiplier is the single effective media multiplier used by the
+	// model-plaza display. The media engine keeps the billing snapshot intact.
+	SaleMultiplier float64 `json:"sale_multiplier"`
+}
+
+func toModelPlazaMediaModels(entries []media.CatalogEntry, group modelPlazaGroup) []modelPlazaMediaModel {
+	models := make([]modelPlazaMediaModel, 0, len(entries))
+	for _, entry := range entries {
+		rate := group.RateMultiplier
+		if group.UserRateMultiplier != nil {
+			rate = *group.UserRateMultiplier
+		}
+		if entry.MediaType == "image" && group.ImageRateIndependent {
+			rate = group.ImageRateMultiplier
+		} else if entry.MediaType == "video" && group.VideoRateIndependent {
+			rate = group.VideoRateMultiplier
+		} else if entry.MediaType == "audio" && entry.MusicMultiplier != nil {
+			if parsed, err := strconv.ParseFloat(*entry.MusicMultiplier, 64); err == nil {
+				rate = parsed
+			}
+		}
+		models = append(models, modelPlazaMediaModel{
+			CatalogEntry:     entry,
+			SaleCurrency:     "CNY",
+			OfficialCurrency: "USD",
+			SaleMultiplier:   rate,
+		})
+	}
+	return models
 }
 
 // modelPlazaResponse 广场页响应。
@@ -182,7 +225,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 				response.ErrorFrom(c, err)
 				return
 			}
-			dto.MediaModels = catalog
+			dto.MediaModels = toModelPlazaMediaModels(catalog, dto)
 		}
 		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {
 			continue
@@ -224,9 +267,17 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 	models := make([]modelPlazaModel, 0, len(g.Models))
 	for i := range g.Models {
 		m := &g.Models[i]
+		billingMode := service.BillingModeToken
+		if m.Pricing != nil && m.Pricing.BillingMode != "" {
+			billingMode = m.Pricing.BillingMode
+		}
 		models = append(models, modelPlazaModel{
 			Name:             m.Name,
 			Platform:         m.Platform,
+			SaleCurrency:     "CNY",
+			OfficialCurrency: "USD",
+			BillingMode:      string(billingMode),
+			BillingUnit:      modelPlazaModelBillingUnit(billingMode, m.Pricing),
 			Pricing:          toUserPricing(m.Pricing),
 			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
 			LongContextBasis: string(m.LongContextBasis),
@@ -256,6 +307,37 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		dto.UserRateMultiplier = &rate
 	}
 	return dto
+}
+
+func modelPlazaBillingUnit(mode service.BillingMode) string {
+	switch mode {
+	case service.BillingModeVideo:
+		return "second"
+	case service.BillingModePerRequest:
+		return "request"
+	case "image":
+		return "image"
+	default:
+		return "token"
+	}
+}
+
+// A per-request model with resolution tiers is billed per image. Keep the
+// legacy billing_mode value unchanged, but provide the display unit explicitly
+// so clients do not infer it from the historical per_request_price field.
+func modelPlazaModelBillingUnit(mode service.BillingMode, pricing *service.ChannelModelPricing) string {
+	if mode == service.BillingModePerRequest && pricing != nil {
+		for _, interval := range pricing.Intervals {
+			switch interval.TierLabel {
+			case "1K", "2K", "4K":
+				return "image"
+			}
+		}
+		if pricing.ImageInputPrice != nil || pricing.ImageOutputPrice != nil {
+			return "image"
+		}
+	}
+	return modelPlazaBillingUnit(mode)
 }
 
 // toModelPlazaTimePricing 转换分时倍率；nil 透传（JSON 省略）。

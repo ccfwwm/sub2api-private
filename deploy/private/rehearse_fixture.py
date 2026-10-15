@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import uuid
 
-from controller import Controller, run
+from controller import Controller, manifest_images, run
 
 
 def main():
@@ -26,6 +26,7 @@ def main():
     args = parser.parse_args()
     manifest = json.loads(Path(args.manifest).read_text())
     image = manifest['image'] + '@' + manifest['digest']
+    _, docs_image = manifest_images(manifest, manifest['version'])
     for name in ['sub2api', 'sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']:
         if subprocess.run(['docker', 'inspect', name], capture_output=True).returncode == 0:
             raise SystemExit('Refusing to touch existing container ' + name)
@@ -46,6 +47,8 @@ def main():
         password = secrets.token_hex(24)
         base = 'sub2api-fixture-original:local'
         run(['docker', 'tag', image, base])
+        if docs_image:
+            run(['docker', 'pull', docs_image])
         env = {'AUTO_SETUP': 'true', 'DATABASE_HOST': 'postgres', 'DATABASE_PORT': '5432',
                'DATABASE_USER': 'sub2api', 'DATABASE_DBNAME': 'sub2api', 'DATABASE_PASSWORD': password,
                'DATABASE_SSLMODE': 'disable', 'REDIS_HOST': 'redis', 'REDIS_PORT': '6379',
@@ -61,6 +64,9 @@ def main():
             'sub2api': {'image': base, 'container_name': 'sub2api', 'environment': env,
                         'ports': ['127.0.0.1:8081:8080'], 'volumes': [str(prod / 'data') + ':/app/data']}},
             'networks': {'default': {}}}
+        if docs_image:
+            compose['services']['docs-web'] = {'image': docs_image, 'container_name': 'sub2api-docs-web',
+                                               'ports': ['127.0.0.1:8082:8080']}
         if args.ops:
             # Match the existing production wrapper and stale Redis CLI env.
             compose['services']['redis']['environment'] = {'REDISCLI_AUTH': 'stale-fixture-value'}
@@ -71,13 +77,19 @@ def main():
                 'exec /app/docker-entrypoint.sh /app/sub2api']
         (prod / 'docker-compose.yml').write_text(json.dumps(compose))
         c = Controller({'enabled': True, 'production_dir': str(prod), 'state_dir': str(root / 'state'),
-                        'release_token_file': str(release_token), 'health_urls': []})
+                        'release_token_file': str(release_token), 'health_urls': [], 'docs_proxy_enabled': False})
         c.manifest = lambda version: manifest
         try:
             run(c.compose() + ['up', '-d', 'postgres', 'redis', 'pricing-overlay'])
             c.wait_command(['docker', 'exec', 'sub2api-postgres', 'pg_isready', '-h', '127.0.0.1', '-U', 'sub2api', '-d', 'sub2api'], 90)
             run(c.compose() + ['up', '-d', '--no-deps', 'sub2api'])
             c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8081/health'], 180)
+            if docs_image:
+                run(c.compose() + ['up', '-d', '--no-deps', 'docs-web'])
+                c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8082/health'], 60)
+                html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
+                if '词元互联图片、视频与音乐接口文档' not in html:
+                    raise ValueError('fixture documentation route content check failed')
             # Mark the current container's writable layer to prove rollback captures
             # the runtime, not merely the original base image.
             run(['docker', 'exec', '-u', '0', 'sub2api', 'touch', '/app/fixture-runtime-marker'])
@@ -90,6 +102,8 @@ def main():
                 release.mkdir(parents=True)
                 (release / 'deployment.json').write_text(json.dumps(manifest))
                 (release / 'image-inspect.json').write_bytes(run(['docker', 'image', 'inspect', image]))
+                if docs_image:
+                    (release / 'docs-image-inspect.json').write_bytes(run(['docker', 'image', 'inspect', docs_image]))
                 run(['docker', 'tag', image, manifest['image'] + ':' + manifest['version']])
                 def operation(action, target=''):
                     j = {'id': uuid.uuid4().hex, 'action': action, 'target': target, 'immediate': action == 'upgrade'}

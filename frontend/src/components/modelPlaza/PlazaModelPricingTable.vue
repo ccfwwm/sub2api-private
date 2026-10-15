@@ -33,7 +33,7 @@
           >
             <div class="border-b border-gray-200 pb-2 text-gray-400 dark:border-dark-600 dark:text-dark-500">
               {{ t('modelPlaza.table.officialPrice') }}
-              <span class="ml-1 normal-case font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.unitPerMillion') }}</span>
+              <span class="ml-1 normal-case font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.officialUnitPerMillion') }}</span>
             </div>
           </th>
           <th
@@ -157,7 +157,7 @@
                     <span class="ml-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadShort') }}</span>
                     {{ paidPerMillion(iv.cache_read_price, period) }}
                   </template>
-                  <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+                  <span v-else class="text-gray-400 dark:text-dark-500">—</span>
                 </div>
               </template>
               <div
@@ -177,7 +177,7 @@
                   {{ paidPerMillion(m.pricing?.cache_read_price, period) }}
                 </div>
               </div>
-              <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+              <span v-else class="text-gray-400 dark:text-dark-500">—</span>
             </td>
           </template>
 
@@ -204,7 +204,7 @@
                 </span>
                 <span class="ml-1 text-xs text-gray-400 dark:text-dark-500">{{ perUnitSuffix(m) }}</span>
               </template>
-              <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+              <span v-else class="text-gray-400 dark:text-dark-500">—</span>
             </td>
           </template>
 
@@ -255,7 +255,7 @@
                   <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadShort') }}</span>
                   {{ official(iv.cache_read_price) }}
                 </template>
-                <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+                <span v-else class="text-gray-400 dark:text-dark-500">—</span>
               </div>
             </template>
             <div
@@ -275,7 +275,7 @@
                 {{ official(m.official_pricing.cache_read_price) }}
               </div>
             </div>
-            <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="text-gray-400 dark:text-dark-500">—</span>
           </td>
 
           <!-- 折扣倍率(分时时段行展示 生效倍率×时段倍率;生图独立倍率行展示独立倍率;专属倍率划线展示原倍率) -->
@@ -314,6 +314,7 @@ import {
   BILLING_MODE_TOKEN,
   BILLING_MODE_IMAGE,
   BILLING_MODE_VIDEO,
+  BILLING_MODE_PER_REQUEST,
   REASONING_EFFORT_LEVELS,
   type BillingMode
 } from '@/constants/channel'
@@ -386,13 +387,30 @@ const hasCustomRate = computed(
 )
 
 function billingMode(m: PlazaModel): BillingMode {
-  return (m.pricing?.billing_mode || BILLING_MODE_TOKEN) as BillingMode
+  return (m.billing_mode || m.pricing?.billing_mode || BILLING_MODE_TOKEN) as BillingMode
+}
+
+function billingUnit(m: PlazaModel): PlazaModel['billing_unit'] {
+  if (m.billing_unit) return m.billing_unit
+  switch (billingMode(m)) {
+    case BILLING_MODE_VIDEO: return 'second'
+    case BILLING_MODE_IMAGE: return 'image'
+    case BILLING_MODE_PER_REQUEST: return 'request'
+    default: return 'token'
+  }
 }
 
 function billingModeLabel(m: PlazaModel): string {
-  return billingMode(m) === BILLING_MODE_IMAGE
-    ? t('modelPlaza.table.perImage')
-    : t('modelPlaza.table.perRequest')
+  switch (billingUnit(m)) {
+    case 'image':
+      return t('modelPlaza.table.perImage')
+    case 'second':
+      return t('modelPlaza.table.perSecond')
+    case 'request':
+      return t('modelPlaza.table.perRequest')
+    default:
+      return t('modelPlaza.table.perToken')
+  }
 }
 
 /** 价格统一保底 2 位小数,更长的有效小数原样保留。 */
@@ -422,25 +440,25 @@ function periodRate(period: PlazaTimePricingPeriod): number {
   return Math.round(effectiveRate.value * period.multiplier * 1000) / 1000
 }
 
-/** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。 */
+/** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 ¥/1M token 展示。 */
 function paidPerMillion(value: number | null | undefined, period: PlazaTimePricingPeriod | null = null): string {
   if (value == null) return '-'
   const rate = period ? periodRate(period) : effectiveRate.value
-  return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS)
+  return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS, '¥')
 }
 
 /** 图片和视频分别使用对应的独立倍率开关。 */
 function usesIndependentMediaRate(m: PlazaModel): boolean {
-  return (billingMode(m) === BILLING_MODE_IMAGE && props.imageRateIndependent === true) ||
-    (billingMode(m) === BILLING_MODE_VIDEO && props.videoRateIndependent === true)
+  return (billingUnit(m) === 'image' && props.imageRateIndependent === true) ||
+    (billingUnit(m) === 'second' && props.videoRateIndependent === true)
 }
 
 /** 非 token 行的生效倍率，图片和视频可分别覆盖通用倍率。 */
 function requestRate(m: PlazaModel): number {
-  if (billingMode(m) === BILLING_MODE_VIDEO && props.videoRateIndependent === true) {
+  if (billingUnit(m) === 'second' && props.videoRateIndependent === true) {
     return Math.max(0, props.videoRateMultiplier ?? 1)
   }
-  return billingMode(m) === BILLING_MODE_IMAGE && props.imageRateIndependent === true
+  return billingUnit(m) === 'image' && props.imageRateIndependent === true
     ? (props.imageRateMultiplier ?? 1)
     : effectiveRate.value
 }
@@ -448,20 +466,25 @@ function requestRate(m: PlazaModel): number {
 /** 非 token 单价乘该行生效倍率，不换算为每百万 token。 */
 function paidRequestPrice(m: PlazaModel, value: number | null | undefined): string {
   if (value == null) return '-'
-  return formatScaled(value * requestRate(m), 1, MIN_DECIMALS)
+  return formatScaled(value * requestRate(m), 1, MIN_DECIMALS, '¥')
 }
 
 /** 官方参考价不乘倍率。 */
 function official(value: number | null | undefined): string {
-  if (value == null) return '-'
+  if (value == null) return '—'
   return formatScaled(value, PER_MILLION, MIN_DECIMALS)
 }
 
 /** 非 token 计费的单位后缀:按图片 → “/ 张”,按次 → “/ 次”。 */
 function perUnitSuffix(m: PlazaModel): string {
-  return billingMode(m) === BILLING_MODE_IMAGE
-    ? t('modelPlaza.table.perUnitImage')
-    : t('modelPlaza.table.perUnitRequest')
+  switch (billingUnit(m)) {
+    case 'image':
+      return t('modelPlaza.table.perUnitImage')
+    case 'second':
+      return t('modelPlaza.table.perUnitSecond')
+    default:
+      return t('modelPlaza.table.perUnitRequest')
+  }
 }
 
 function hasCachePricing(m: PlazaModel): boolean {

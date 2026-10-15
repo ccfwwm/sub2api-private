@@ -32,6 +32,23 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
 		if h.Media != nil {
+			admin.GET("/docs/imagevideo", h.Media.AdminImageVideoDocument)
+			admin.GET("/docs/imagevideo/history", func(c *gin.Context) {
+				c.Params = append(c.Params, gin.Param{Key: "action", Value: "history"})
+				h.Media.AdminImageVideoDocument(c)
+			})
+			admin.PUT("/docs/imagevideo/draft", func(c *gin.Context) {
+				c.Params = append(c.Params, gin.Param{Key: "action", Value: "save"})
+				h.Media.AdminImageVideoDocument(c)
+			})
+			admin.POST("/docs/imagevideo/publish", func(c *gin.Context) {
+				c.Params = append(c.Params, gin.Param{Key: "action", Value: "publish"})
+				h.Media.AdminImageVideoDocument(c)
+			})
+			admin.POST("/docs/imagevideo/rollback", func(c *gin.Context) {
+				c.Params = append(c.Params, gin.Param{Key: "action", Value: "rollback"})
+				h.Media.AdminImageVideoDocument(c)
+			})
 			admin.GET("/media/configs/:kind", h.Media.AdminConfigs)
 			admin.POST("/media/configs/:kind", gin.HandlerFunc(stepUpAuth), h.Media.AdminSave)
 			admin.POST("/media/configs/:kind/disable", gin.HandlerFunc(stepUpAuth), h.Media.AdminDisable)

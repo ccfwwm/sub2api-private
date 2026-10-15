@@ -1,12 +1,12 @@
 {
-  "version": "v1.2.6",
+  "version": "v1.2.7",
   "status": "recorded",
   "verified_at": "2026-10-14T10:40:55.368Z",
   "environment": "production, authorized user key, GPT single and dual multipart edits",
-  "policy": "Two authorized image-edit requests; no video or music generation. Earlier video/audio cases retain original evidence.",
+  "policy": "Reused existing authorized verification; no new video or music generation. Existing GPT image edit, video and audio evidence remains unchanged.",
   "verification_reused_from": "v1.2.3",
   "new_generation_requests": 2,
-  "verification_note": "GPT /v1/images/edits single and dual references completed; task polling and authenticated PNG download verified. Historic video/audio evidence below is unchanged.",
+  "verification_note": "v1.2.7 reuses the recorded GPT /v1/images/edits, video and audio evidence; no new chargeable video or music generation was submitted. Task polling and authenticated artifact retrieval remain covered.",
   "cases": [
     {
       "account_id": 2092,
@@ -39,7 +39,7 @@
       "generation_submitted_by_this_run": false,
       "checked_path": "/api/v1/admin/accounts/2092/tests/mt_1cc1494562d74c4e8a8601bf2f269e18/artifacts/video1",
       "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T15:12:01.350494+00:00"
+      "verified_at": "2026-10-13T23:12:01.350494+08:00"
     },
     {
       "account_id": 2092,
@@ -72,7 +72,7 @@
       "generation_submitted_by_this_run": false,
       "checked_path": "/api/v1/admin/accounts/2092/tests/mt_84ec4f8924f646e089b2a427084930a5/artifacts/video1",
       "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T15:12:01.350494+00:00"
+      "verified_at": "2026-10-13T23:12:01.350494+08:00"
     },
     {
       "account_id": 2094,
@@ -99,7 +99,7 @@
       "generation_submitted_by_this_run": false,
       "checked_path": "/api/v1/admin/accounts/2094/tests/mt_df9e96fefd9a4a998abe6333288d41f6/artifacts/audio1",
       "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T15:12:01.350494+00:00"
+      "verified_at": "2026-10-13T23:12:01.350494+08:00"
     },
     {
       "case": "gpt-single-edit",

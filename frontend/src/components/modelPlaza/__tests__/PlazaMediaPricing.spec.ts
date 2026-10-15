@@ -23,13 +23,13 @@ function render(method: string) {
 describe('media price disclosure', () => {
   it('discloses a 30 second package as a total instead of a per second price', () => {
     const text = render('package').text()
-    expect(text).toContain('30 second package total: $1')
-    expect(text).not.toContain('$1 / second')
+    expect(text).toContain('30 second package total: ¥2')
+    expect(text).not.toContain('¥2 / second')
   })
   it('shows configured progressive prices when the linear price is intentionally null', () => {
     const text = render('progressive').text()
-    expect(text).toContain('0–10 second: $0.04 / second')
-    expect(text).toContain('10–∞ second: $0.02 / second')
+    expect(text).toContain('0–10 second: ¥0.08 / second')
+    expect(text).toContain('10–∞ second: ¥0.04 / second')
     expect(text).not.toContain('Unconfigured')
   })
 })

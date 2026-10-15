@@ -20,6 +20,9 @@ func RegisterModelPlazaRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
+	if h.Media != nil {
+		v1.GET("/public-docs/imagevideo", h.Media.PublicImageVideoDocument)
+	}
 	plaza := v1.Group("/model-plaza")
 	plaza.Use(panelRateLimiter.PublicIP())
 	plaza.Use(gin.HandlerFunc(optionalJWT))

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -129,6 +130,9 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	models := decoded["models"].([]any)
 	require.Len(t, models, 1)
 	model := models[0].(map[string]any)
+	require.Equal(t, "CNY", model["sale_currency"])
+	require.Equal(t, "USD", model["official_currency"])
+	require.Equal(t, "token", model["billing_unit"])
 	require.Contains(t, model, "pricing")
 	require.Contains(t, model, "official_pricing")
 	official := model["official_pricing"].(map[string]any)
@@ -151,6 +155,39 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawNoRate, &decodedNoRate))
 	_, hasRate := decodedNoRate["user_rate_multiplier"]
 	require.False(t, hasRate, "无专属倍率时 user_rate_multiplier 应 omitempty")
+}
+
+func TestModelPlazaBillingUnitsAndMediaMultipliers(t *testing.T) {
+	require.Equal(t, "token", modelPlazaBillingUnit(service.BillingModeToken))
+	require.Equal(t, "request", modelPlazaBillingUnit(service.BillingModePerRequest))
+	require.Equal(t, "second", modelPlazaBillingUnit(service.BillingModeVideo))
+	require.Equal(t, "image", modelPlazaBillingUnit("image"))
+	require.Equal(t, "image", modelPlazaModelBillingUnit(service.BillingModePerRequest, &service.ChannelModelPricing{
+		Intervals: []service.PricingInterval{{TierLabel: "4K"}},
+	}))
+
+	groupRate, userRate, imageRate, videoRate := 1.5, 0.8, 0.3, 0.6
+	group := modelPlazaGroup{
+		RateMultiplier:       groupRate,
+		UserRateMultiplier:   &userRate,
+		ImageRateIndependent: true,
+		ImageRateMultiplier:  imageRate,
+		VideoRateIndependent: true,
+		VideoRateMultiplier:  videoRate,
+	}
+	models := toModelPlazaMediaModels([]media.CatalogEntry{
+		{Model: "image-model", MediaType: "image"},
+		{Model: "video-model", MediaType: "video"},
+		{Model: "audio-model", MediaType: "audio", MusicMultiplier: testStringPtr("0.4")},
+		{Model: "audio-inherited", MediaType: "audio"},
+	}, group)
+	require.Equal(t, []float64{imageRate, videoRate, 0.4, userRate}, []float64{
+		models[0].SaleMultiplier, models[1].SaleMultiplier, models[2].SaleMultiplier, models[3].SaleMultiplier,
+	})
+	for _, model := range models {
+		require.Equal(t, "CNY", model.SaleCurrency)
+		require.Equal(t, "USD", model.OfficialCurrency)
+	}
 }
 
 func TestToModelPlazaOfficialPricing_NilPassthrough(t *testing.T) {
