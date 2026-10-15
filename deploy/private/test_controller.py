@@ -94,6 +94,15 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(invocation[-6:], ['up', '-d', '--no-deps', '--pull', 'never', 'sub2api'])
         self.assertNotIn('down', invocation)
 
+    def test_docs_image_is_optional_for_legacy_manifests(self):
+        legacy = self.controller.override(IMAGE + '@sha256:' + 'a' * 64)
+        self.assertNotIn('docs-web', json.loads(legacy.read_text())['services'])
+
+    def test_v127_manifest_requires_docs_image_digest(self):
+        manifest = dict(self.manifest, version='v1.2.7')
+        with self.assertRaisesRegex(ValueError, 'documentation image identity'):
+            validate_manifest(manifest, 'v1.2.7')
+
     def test_stale_production_aborts_before_backup_or_switch(self):
         job = {'id': 'a' * 32, 'version': 'v1.0.0', 'restore_verified': True, 'rollback_verified': True,
                'original_container': 'old', 'original_started': 'old'}

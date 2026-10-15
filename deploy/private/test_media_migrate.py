@@ -6,9 +6,27 @@ from unittest.mock import Mock
 from media_migrate import reviewed_transaction, tracked_operation, unified_transaction, validate_unified_transaction, UNIFIED_FILES
 from media_migrate import monitor_transaction, validate_monitor_transaction, reviewed_monitor_upgrade, MONITOR_FILE
 from media_migrate import task_index_transaction, validate_task_index_transaction, reviewed_upgrade, TASK_INDEX_FILE
+from media_migrate import docs_transaction, validate_docs_transaction, reviewed_docs_upgrade, DOCS_FILE
 import tempfile
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_public_documentation_migration_is_exact_and_additive(self):
+        sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / DOCS_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        transaction = docs_transaction(sql, checksum)
+        self.assertTrue(validate_docs_transaction(transaction))
+        self.assertFalse(validate_docs_transaction(transaction.replace(' COMMIT;', ' DROP TABLE users; COMMIT;')))
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, DOCS_FILE).write_text(sql)
+            before = {'247_media_task_list_indexes.sql': 'b' * 64}
+            target = {**before, DOCS_FILE: checksum}
+            reviewed = reviewed_docs_upgrade(before, target, folder)
+            self.assertEqual(reviewed['transaction'], transaction)
+            self.assertEqual(reviewed['expected_migrations'], target)
+            self.assertIsNone(reviewed_docs_upgrade(target, target, folder))
+            for bad in ({**target, 'unexpected.sql': 'a' * 64}, {**target, DOCS_FILE: 'a' * 64}):
+                with self.assertRaises(ValueError): reviewed_docs_upgrade(before, bad, folder)
+
     def test_task_indexes_require_exact_sql_and_preserve_old_migrations(self):
         sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / TASK_INDEX_FILE).read_text().strip()
         checksum = hashlib.sha256(sql.encode()).hexdigest()

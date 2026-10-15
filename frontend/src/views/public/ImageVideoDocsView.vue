@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
-import { apiOrigin, docsTitle, docsVersion, imagevideoSections, imagevideoGroups, imagevideoMarkdown, sectionMarkdown, groupMarkdown } from '@/data/imagevideoDocs'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { apiOrigin, docsTitle, docsVersion, sectionMarkdown } from '@/data/imagevideoDocs'
 
 const menuOpen = ref(false), active = ref('start'), notice = ref('')
 const dark = ref(false)
+// Public pages render only the published database version.  The bundled
+// content is used by the seed/editor build, never as a public fallback.
+const imagevideoSections = ref([] as import('@/data/imagevideoDocs').DocSection[])
+const imagevideoGroups = computed(() => [...new Set(imagevideoSections.value.map(s => s.group))].map(title => ({ title, sections: imagevideoSections.value.filter(s => s.group === title) })))
+const publishedVersion = ref('')
+const documentLoading = ref(true), documentError = ref(false)
+const dynamicMarkdown = () => `# ${docsTitle}\n\n版本：${publishedVersion.value || docsVersion}\n\n根地址：${apiOrigin}\n\n` + imagevideoSections.value.map(sectionMarkdown).join('\n\n')
+const dynamicGroupMarkdown = (title: string) => imagevideoSections.value.filter(s => s.group === title).map(sectionMarkdown).join('\n\n')
 function toggleTheme() {
   dark.value = !dark.value
   try { localStorage.setItem('media-docs-theme', dark.value ? 'dark' : 'light') } catch { /* Storage may be unavailable. */ }
@@ -20,8 +28,15 @@ onMounted(() => {
     const visible = entries.find(entry => entry.isIntersecting)
     if (visible) active.value = visible.target.id
   }, { rootMargin: '-5% 0px -75% 0px' })
-  document.querySelectorAll('.media-doc-section').forEach(section => observer?.observe(section))
+  fetch('/api/v1/public-docs/imagevideo').then(response => response.ok ? response.json() : null).then(payload => {
+    const content = payload?.data?.content
+    if (Array.isArray(content) && content.length) {
+      imagevideoSections.value = content
+      publishedVersion.value = `v${payload.data.version}`
+    } else documentError.value = true
+  }).catch(() => { documentError.value = true }).finally(() => { documentLoading.value = false })
 })
+watch(imagevideoSections, async () => { await nextTick(); document.querySelectorAll('.media-doc-section').forEach(section => observer?.observe(section)) })
 onUnmounted(() => { observer?.disconnect(); clearTimeout(timer) })
 </script>
 
@@ -41,20 +56,22 @@ onUnmounted(() => { observer?.disconnect(); clearTimeout(timer) })
           <a v-for="section in group.sections" :key="section.id" :href="`#${section.id}`" :class="{ active: active === section.id }" @click="menuOpen = false; active = section.id">{{ section.navTitle }}</a>
         </div>
       </nav>
-      <div class="media-doc-nav-footer"><p>API BASE</p><code>{{ apiOrigin }}</code><p>版本 {{ docsVersion }} · 26 个模型</p><router-link to="/keys">管理 API Key ↗</router-link></div>
+      <div class="media-doc-nav-footer"><p>API BASE</p><code>{{ apiOrigin }}</code><p>版本 {{ publishedVersion || docsVersion }} · 26 个模型</p><router-link to="/keys">管理 API Key ↗</router-link></div>
     </aside>
     <main class="media-doc-main">
-      <div class="media-doc-top"><span>IMAGEVIDEO · 开发者指南</span><div class="media-doc-actions"><button :aria-pressed="dark" aria-label="切换文档主题" @click="toggleTheme">{{ dark ? '☀ 浅色' : '☾ 深色' }}</button><button @click="copy(imagevideoMarkdown())">复制完整 Markdown ↗</button></div></div>
+      <div class="media-doc-top"><span>IMAGEVIDEO · 开发者指南</span><div class="media-doc-actions"><button :aria-pressed="dark" aria-label="切换文档主题" @click="toggleTheme">{{ dark ? '☀ 浅色' : '☾ 深色' }}</button><button @click="copy(dynamicMarkdown())">复制完整 Markdown ↗</button></div></div>
       <div class="media-doc-hero">
         <p class="media-doc-eyebrow">CREATE WITH ONE API</p>
         <h1 :aria-label="docsTitle"><span>词元互联</span>图片、视频与音乐接口文档</h1>
         <p class="media-doc-lead">每种调用场景独立列出接口地址、请求参数、示例与响应。</p>
         <div class="media-doc-tags"><span>图片生成</span><span>视频创作</span><span>音乐生成</span></div>
         <div class="media-doc-origin"><span>统一接口地址</span><code>{{ apiOrigin }}</code><button @click="copy(apiOrigin)">复制</button></div>
-        <div class="media-doc-copy-guide"><button @click="copy(imagevideoMarkdown())">一键复制全文</button><p>复制后发送给 AI，并描述你想生成的图片、视频或音乐，即可协助编写请求、检查参数和读取结果。</p></div>
+        <div class="media-doc-copy-guide"><button @click="copy(dynamicMarkdown())">一键复制全文</button><p>复制后发送给 AI，并描述你想生成的图片、视频或音乐，即可协助编写请求、检查参数和读取结果。</p></div>
       </div>
+      <div v-if="documentLoading" class="media-doc-section">正在读取已发布的接口文档…</div>
+      <div v-else-if="documentError" class="media-doc-section">文档暂时无法加载，请稍后刷新。</div>
       <section v-for="(section,index) in imagevideoSections" :id="section.id" :key="section.id" class="media-doc-section">
-        <div v-if="index === 0 || imagevideoSections[index-1].group !== section.group" class="media-doc-product"><strong>{{ section.group }}</strong><button @click="copy(groupMarkdown(section.group))">复制本组 Markdown</button></div>
+        <div v-if="index === 0 || imagevideoSections[index-1].group !== section.group" class="media-doc-product"><strong>{{ section.group }}</strong><button @click="copy(dynamicGroupMarkdown(section.group))">复制本组 Markdown</button></div>
         <div class="media-doc-section-heading"><div><p class="media-doc-eyebrow">{{ String(index+1).padStart(2,'0') }} / API GUIDE</p><h2>{{ section.title }}</h2><p class="media-doc-subtitle">{{ section.subtitle }}</p></div><button @click="copy(sectionMarkdown(section))">复制为 Markdown ↗</button></div>
         <template v-for="(block,blockIndex) in section.blocks" :key="blockIndex">
           <h3 v-if="block.kind === 'heading'" class="media-doc-block-heading">{{ block.text }}</h3>
@@ -65,7 +82,7 @@ onUnmounted(() => { observer?.disconnect(); clearTimeout(timer) })
         </template>
         <div v-if="section.id === 'clients'" class="media-doc-downloads"><a href="/examples/imagevideo.py" download>下载 Python 示例 ↓</a><a href="/examples/imagevideo.mjs" download>下载 JavaScript 示例 ↓</a></div>
       </section>
-      <footer class="media-doc-footer">词元互联 · {{ docsVersion }} <a href="#start">返回顶部 ↑</a></footer>
+      <footer class="media-doc-footer">词元互联 · {{ publishedVersion || docsVersion }} <a href="#start">返回顶部 ↑</a></footer>
     </main>
     <div v-if="notice" class="media-doc-notice" role="status">{{ notice }}</div>
   </div>

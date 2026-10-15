@@ -18,13 +18,24 @@ import time
 import traceback
 import uuid
 
-from controller import Controller, IMAGE, VERSION, PROTECTED, atomic_json, file_hash, run, validate_manifest
+from controller import Controller, IMAGE, VERSION, PROTECTED, atomic_json, file_hash, run, validate_manifest, manifest_images
 
 BASE = Path('/root/sub2api-ops')
 STATE = BASE / 'state'
 PRODUCTION = Path('/root/sub2api-deploy')
 ACTIVE = STATE / 'active.json'
 IDENT = re.compile(r'[0-9a-f]{32}\Z')
+DOCS_PROXY_INCLUDE = 'include /etc/nginx/snippets/sub2api-docs-web.conf;'
+DOCS_PROXY_SNIPPET = '''location ^~ /docs/ {
+    proxy_pass http://127.0.0.1:8082/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+}
+'''
 
 
 def read(path):
@@ -42,7 +53,9 @@ def inspect(name):
 
 
 class Manager:
-    def __init__(self, state=STATE, production=PRODUCTION):
+    def __init__(self, state=STATE, production=PRODUCTION, docs_proxy_enabled=True,
+                 nginx_vhost='/etc/nginx/conf.d/sub2api-code-xyz-https.conf',
+                 nginx_snippet='/etc/nginx/snippets/sub2api-docs-web.conf'):
         self.state, self.production = Path(state), Path(production)
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.active_path = self.state / 'active.json'
@@ -50,6 +63,9 @@ class Manager:
         self.drain_dir.mkdir(exist_ok=True, mode=0o755)
         os.chmod(self.drain_dir, 0o755)
         self.marker = self.drain_dir / 'drain'
+        self.docs_proxy_enabled = docs_proxy_enabled
+        self.nginx_vhost = Path(nginx_vhost)
+        self.nginx_snippet = Path(nginx_snippet)
         self.c = Controller({'production_dir': str(self.production), 'state_dir': str(self.state), 'health_urls': []})
 
     def active(self):
@@ -109,6 +125,9 @@ class Manager:
 
     def backup(self, job):
         original = self.preflight()
+        docs_original = None
+        if subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True).returncode == 0:
+            docs_original = inspect('sub2api-docs-web')
         self.save(job, 'backing_up')
         bid = uuid.uuid4().hex
         folder = self.state / 'backups' / bid
@@ -123,6 +142,17 @@ class Manager:
             raise ValueError('runtime changed during capture')
         with (folder / 'runtime-image.tar').open('wb') as out:
             run(['docker', 'image', 'save', tag], stdout=out)
+        docs_runtime_tag = None
+        docs_image_id = None
+        if docs_original:
+            docs_runtime_tag = 'sub2api-docs-ops-rollback:' + bid
+            # Commit the exact container layer before replacing the docs image.
+            # A registry tag can move; the local committed image plus archive is
+            # the rollback artifact.
+            run(['docker', 'commit', '--pause=false', 'sub2api-docs-web', docs_runtime_tag])
+            docs_image_id = inspect(docs_runtime_tag)['Id']
+            with (folder / 'docs-image.tar').open('wb') as out:
+                run(['docker', 'image', 'save', docs_runtime_tag], stdout=out)
         self.c.backup_database(folder)
         data = [m['Source'] for m in original['Mounts'] if m['Destination'] == '/app/data']
         if len(data) != 1:
@@ -149,6 +179,14 @@ class Manager:
                     'runtime_image': tag, 'binary_sha256': binary.decode(), 'migrations': self.c.migrations(),
                     'active': self.active(), 'application': original,
                     'compose_hashes': self.c.config_hashes()}
+        if docs_original:
+            metadata['docs_container'] = {'id': docs_original['Id'], 'started_at': docs_original['State']['StartedAt'],
+                                          'image': docs_runtime_tag, 'image_id': docs_image_id,
+                                          'original_image': docs_original['Config'].get('Image', docs_original['Image']),
+                                          'running': docs_original['State']['Running']}
+        metadata['docs_proxy'] = {'vhost': str(self.nginx_vhost),
+                                  'managed_include_present': self.nginx_vhost.exists() and DOCS_PROXY_INCLUDE in self.nginx_vhost.read_text(errors='replace'),
+                                  'snippet_present': self.nginx_snippet.exists()}
         atomic_json(folder / 'metadata.json', metadata)
         atomic_json(folder / 'checksums.json', {p.name: file_hash(p) for p in folder.iterdir() if p.is_file()})
         if self.c.inspect()['Id'] != original['Id']:
@@ -159,21 +197,26 @@ class Manager:
     def verified_backup(self, bid):
         folder = self.state / 'backups' / ident(bid)
         checks = read(folder / 'checksums.json')
+        meta = read(folder / 'metadata.json')
         required = {'database.dump', 'globals.sql', 'protected-snapshot.json', 'runtime-image.tar',
                     'application-data.tar.gz', 'configuration.tar.gz', 'redis.rdb', 'metadata.json'}
+        if meta.get('docs_container'):
+            if not meta['docs_container'].get('image') or not meta['docs_container'].get('image_id'):
+                raise ValueError('documentation rollback identity missing')
+            required.add('docs-image.tar')
         if set(checks) != required:
             raise ValueError('backup is incomplete')
         for name, digest in checks.items():
             if file_hash(folder / name) != digest:
                 raise ValueError('backup checksum mismatch: ' + name)
-        return folder, read(folder / 'metadata.json')
+        return folder, meta
 
     def offline(self, version):
         if not VERSION.fullmatch(version):
             raise ValueError('expected private vMAJOR.MINOR.PATCH')
         folder = self.state / 'releases' / version
         manifest, identity = read(folder / 'deployment.json'), read(folder / 'image-inspect.json')[0]
-        validate_manifest(manifest, version)
+        image, docs_image = manifest_images(manifest, version)
         image = IMAGE + ':' + version
         actual = inspect(image)
         if (actual['RootFS'] != identity['RootFS'] or actual['Os'] != 'linux' or actual['Architecture'] != 'amd64' or
@@ -193,15 +236,33 @@ class Manager:
         proc.stdout.close()
         if proc.wait() or not found:
             raise ValueError('staged image config mismatch')
+        if docs_image:
+            docs_identity = read(folder / 'docs-image-inspect.json')[0]
+            docs_actual = inspect(docs_image)
+            if docs_actual['RootFS'] != docs_identity['RootFS'] or docs_actual['Os'] != 'linux' or docs_actual['Architecture'] != 'amd64' or docs_actual['Config'].get('Labels', {}).get('org.opencontainers.image.revision') != manifest['commit']:
+                raise ValueError('staged documentation image identity mismatch')
         return actual['Id'], manifest
 
     def load_runtime(self, folder, meta):
         run(['docker', 'image', 'load', '-i', str(folder / 'runtime-image.tar')])
-        image = inspect(meta['runtime_image'])['Id']
+        image = meta['runtime_image']
         actual = run(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'sha256sum', image, '/app/sub2api']).decode().split()[0]
         if actual != meta['binary_sha256']:
             raise ValueError('backup runtime mismatch')
         return image
+
+    def load_docs_runtime(self, folder, meta):
+        docs = meta.get('docs_container') or {}
+        if not docs:
+            return None
+        archive = Path(folder) / 'docs-image.tar'
+        if not archive.is_file():
+            raise ValueError('documentation rollback image archive missing')
+        run(['docker', 'image', 'load', '-i', str(archive)])
+        identity = inspect(docs['image'])
+        if identity['Id'] != docs['image_id']:
+            raise ValueError('documentation rollback image identity mismatch')
+        return docs['image']
 
     def rehearse(self, job, folder, meta, image, version='', reviewed=None):
         self.save(job, 'restoring_and_testing')
@@ -215,7 +276,9 @@ class Manager:
         if reviewed:
             if not all(test.get(k) for k in ('restore_verified', 'rollback_verified', 'additive_data_verified')):
                 raise ValueError('incomplete additive migration rehearsal')
-            field = 'task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql' else 'monitor_migration'
+            field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
+                     else 'monitor_migration' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
+                     else 'docs_migration')
             job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
                                         'rollback_verified': True, 'data_unchanged': True}
         # The controller adds an evidence file; retain the original backup seal.
@@ -230,7 +293,7 @@ class Manager:
             raise ValueError('cannot determine captured runtime version')
         return match[1]
 
-    def target(self, image, base=None):
+    def target(self, image, base=None, docs_image=None):
         target = copy.deepcopy(base or self.active())
         service = target['services']['sub2api']
         service.update(image=image, pull_policy='never', stop_grace_period='130s')
@@ -240,6 +303,15 @@ class Manager:
         mount = str(self.drain_dir) + ':/run/sub2api-ops:ro'
         if mount not in volumes:
             volumes.append(mount)
+        if docs_image:
+            target.setdefault('services', {})['docs-web'] = {
+                'image': docs_image, 'pull_policy': 'never', 'restart': 'unless-stopped',
+                'ports': ['127.0.0.1:8082:8080']}
+        else:
+            # Explicitly make the target legacy-compatible.  Deep-copying an
+            # active v1.2.7 Compose overlay must not retain a docs service when
+            # rescuing a release that predates docs-web.
+            target.setdefault('services', {}).pop('docs-web', None)
         return target
 
     def deployment_status(self):
@@ -305,10 +377,119 @@ class Manager:
 
     def switch(self, target):
         atomic_json(self.active_path, target)
-        run(self.c.compose(self.active_path) + ['up', '-d', '--no-deps', '--pull', 'never', 'sub2api'], timeout=300)
+        services = ['sub2api'] + (['docs-web'] if 'docs-web' in target.get('services', {}) else [])
+        run(self.c.compose(self.active_path) + ['up', '-d', '--no-deps', '--pull', 'never', *services], timeout=300)
+        if 'docs-web' not in target.get('services', {}):
+            existing = subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True)
+            if existing.returncode == 0:
+                identity = json.loads(existing.stdout)[0]
+                labels = identity.get('Config', {}).get('Labels') or {}
+                if labels.get('com.docker.compose.project') != 'sub2api-deploy' or labels.get('com.docker.compose.service') != 'docs-web':
+                    raise ValueError('refusing to remove an unmanaged container named sub2api-docs-web')
+                run(['docker', 'rm', '-f', 'sub2api-docs-web'])
         self.c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8081/health'], 180)
         if self.c.inspect()['Config']['Image'] != target['services']['sub2api']['image']:
             raise ValueError('running image differs from requested image')
+        if 'docs-web' in services:
+            docs_target = target['services']['docs-web']['image']
+            docs = inspect('sub2api-docs-web')
+            if docs['Config']['Image'] != docs_target or not docs['State']['Running']:
+                raise ValueError('running documentation image differs from requested image')
+            self.c.wait_command(['docker', 'exec', 'sub2api-docs-web', 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], 60)
+            html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
+            if '词元互联图片、视频与音乐接口文档' not in html:
+                raise ValueError('documentation route content check failed')
+        self.sync_docs_proxy('docs-web' in target.get('services', {}))
+        if 'docs-web' in target.get('services', {}) and self.docs_proxy_enabled and self.nginx_vhost.is_file():
+            html = run(['curl', '-kfsS', '--max-time', '10', '--resolve',
+                        'code.aicodeme.xyz:443:127.0.0.1',
+                        'https://code.aicodeme.xyz/docs/imagevideo']).decode(errors='replace')
+            if '词元互联图片、视频与音乐接口文档' not in html:
+                raise ValueError('public Nginx documentation route check failed')
+
+    @staticmethod
+    def _nginx_server_block(content, hostname):
+        """Return a server block and insertion offset without evaluating config."""
+        starts = [match.start() for match in re.finditer(r'(?m)^\s*server\s*\{', content)]
+        for start in starts:
+            open_brace = content.find('{', start)
+            depth, quote, escaped, comment = 0, None, False, False
+            end = None
+            for index in range(open_brace, len(content)):
+                char = content[index]
+                if comment:
+                    if char == '\n': comment = False
+                    continue
+                if quote:
+                    if escaped: escaped = False
+                    elif char == '\\': escaped = True
+                    elif char == quote: quote = None
+                    continue
+                if char == '#': comment = True
+                elif char in ('"', "'"): quote = char
+                elif char == '{': depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = index + 1
+                        break
+            if end is None:
+                continue
+            block = content[start:end]
+            server_name = re.search(r'(?m)^[ \t]*server_name\s+([^;]+);', block)
+            if server_name and hostname in server_name.group(1).split():
+                return start, end, start + server_name.end()
+        raise ValueError('configured Nginx virtual host for documentation domain not found')
+
+    def sync_docs_proxy(self, enabled):
+        """Atomically add/remove the one managed /docs route in the API vhost."""
+        if not self.docs_proxy_enabled:
+            return
+        include = DOCS_PROXY_INCLUDE
+        vhost = self.nginx_vhost
+        snippet = self.nginx_snippet
+        if not vhost.is_file():
+            if enabled:
+                # The disposable CI fixture has no host Nginx.  Production
+                # installs the known vhost; refusing only there keeps the
+                # release rehearsal honest without inventing a host config.
+                if Path('/etc/nginx').exists():
+                    raise ValueError('production Nginx virtual host for code.aicodeme.xyz is missing')
+            return
+        before_vhost = vhost.read_text(encoding='utf-8')
+        before_snippet = snippet.read_bytes() if snippet.exists() else None
+        if enabled:
+            block_start, block_end, insertion = self._nginx_server_block(before_vhost, 'code.aicodeme.xyz')
+            if include not in before_vhost[block_start:block_end]:
+                updated = before_vhost[:insertion] + '\n    ' + include + before_vhost[insertion:]
+            else:
+                updated = before_vhost
+            # Normalize newlines because CI rehearses this code on Windows
+            # while production stores the source-controlled LF snippet.
+            if before_snippet and before_snippet.decode(errors='replace').replace('\r\n', '\n') != DOCS_PROXY_SNIPPET:
+                raise ValueError('managed documentation Nginx snippet has unexpected contents')
+            snippet.parent.mkdir(parents=True, exist_ok=True)
+            snippet.write_text(DOCS_PROXY_SNIPPET, encoding='utf-8')
+        else:
+            if include not in before_vhost:
+                return
+            updated = re.sub(r'(?m)^[ \t]*' + re.escape(include) + r'[ \t]*\r?\n?', '', before_vhost, count=1)
+        vhost.write_text(updated, encoding='utf-8')
+        try:
+            run(['nginx', '-t'], timeout=30)
+            run(['systemctl', 'reload', 'nginx'], timeout=30)
+            if not enabled:
+                snippet.unlink(missing_ok=True)
+        except Exception:
+            vhost.write_text(before_vhost, encoding='utf-8')
+            if before_snippet is None:
+                snippet.unlink(missing_ok=True)
+            else:
+                snippet.write_bytes(before_snippet)
+            with contextlib.suppress(Exception):
+                run(['nginx', '-t'], timeout=30)
+                run(['systemctl', 'reload', 'nginx'], timeout=30)
+            raise
 
     def cutover(self, job, target, rescue, version=''):
         self.save(job, 'preparing_cutover')
@@ -318,6 +499,10 @@ class Manager:
         switched = False
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
                   for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
+        if subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True).returncode == 0:
+            docs_before = inspect('sub2api-docs-web')
+        else:
+            docs_before = None
         try:
             if job.get('immediate'):
                 if self.marker.exists():
@@ -341,6 +526,14 @@ class Manager:
                     raise ValueError('database/Redis container changed unexpectedly')
             job['protected_containers'] = {n: {'id': state[0], 'started_at': state[1]} for n, state in before.items()}
             job['active_image'] = self.c.inspect()['Image']
+            if docs_before:
+                job['docs_container_before'] = {'id': docs_before['Id'], 'started_at': docs_before['State']['StartedAt'],
+                                                'image': docs_before['Config'].get('Image', docs_before['Image'])}
+            if 'docs-web' in target.get('services', {}):
+                docs_after = inspect('sub2api-docs-web')
+                job['active_docs_image'] = docs_after['Config']['Image']
+                job['docs_container_after'] = {'id': docs_after['Id'], 'started_at': docs_after['State']['StartedAt'],
+                                               'image': docs_after['Config']['Image']}
             self.save(job, 'succeeded')
         except Exception:
             if switched:
@@ -409,10 +602,11 @@ class Manager:
             base_networks = {name: {} for name in base_networks}
         networks = copy.deepcopy(base_networks)
         networks[network] = {}
+        docs_image = self.load_docs_runtime(folder, meta)
         target = self.target(image, {'services': {'sub2api': {'environment': env,
                             'volumes': [str(data) + ':/app/data'], 'networks': networks}},
                             'networks': {network: {'external': True, 'name': network}},
-                            'x-ops': {'postgres': pg, 'redis': redis}})
+                            'x-ops': {'postgres': pg, 'redis': redis}}, docs_image=docs_image)
         return target
 
     def execute(self, job):
@@ -440,17 +634,24 @@ class Manager:
             return
         original = self.preflight()
         reviewed = None
+        docs_image = None
         if action in ('prepare', 'upgrade'):
             image, manifest = self.offline(arg)
+            docs_image = manifest.get('docs_image') and manifest.get('docs_digest') and (manifest['docs_image'] + '@' + manifest['docs_digest'])
+            if docs_image:
+                job['docs_image'] = docs_image
             from media_migrate import reviewed_upgrade
             reviewed = reviewed_upgrade(self.c.migrations(), manifest['migrations'], self.state / 'releases' / arg)
         else:
             source, old = self.verified_backup(arg)
             image = self.load_runtime(source, old)
+            if action in ('rollback', 'restore'):
+                docs_image = self.load_docs_runtime(source, old)
             if action == 'rollback' and self.c.migrations() != old['migrations']:
                 raise ValueError('schema differs; application-only rollback refused')
         folder, meta = self.backup(job)
-        rescue = self.target(inspect(meta['runtime_image'])['Id'])
+        rescue_docs = (meta.get('docs_container') or {}).get('image')
+        rescue = self.target(meta['runtime_image'], docs_image=rescue_docs)
         atomic_json(self.state / 'jobs' / (job['id'] + '-rescue.json'), rescue)
         if action in ('prepare', 'upgrade'):
             self.rehearse(job, folder, meta, image, arg, reviewed=reviewed)
@@ -458,10 +659,10 @@ class Manager:
                 job['prepared_only'] = True
                 self.save(job, 'succeeded')
                 return
-            target = self.target(image)
+            target = self.target(image, docs_image=docs_image)
         elif action == 'rollback':
             self.rehearse(job, folder, meta, image)
-            target = self.target(image)
+            target = self.target(image, docs_image=docs_image)
         elif action == 'restore':
             target = self.recover_stack(job, source, old, image)
         else:
@@ -472,7 +673,10 @@ class Manager:
             raise ValueError('production runtime changed during preparation')
         self.c.assert_migrations({'migrations': meta['migrations']})
         if reviewed:
-            self.save(job, 'applying_reviewed_task_indexes' if reviewed['filename'] == '247_media_task_list_indexes.sql' else 'applying_reviewed_monitor_enum_expansion')
+            phase = ('applying_reviewed_task_indexes' if reviewed['filename'] == '247_media_task_list_indexes.sql'
+                     else 'applying_reviewed_monitor_enum_expansion' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
+                     else 'applying_reviewed_public_documentation_migration')
+            self.save(job, phase)
             self.c.apply_reviewed_media_migration(reviewed['transaction'])
             self.c.assert_migrations(manifest)
         self.cutover(job, target, rescue, arg if action == 'upgrade' else '')

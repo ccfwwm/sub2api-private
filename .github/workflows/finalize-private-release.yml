@@ -8,6 +8,10 @@ on:
       digest:
         required: true
         type: string
+      docs_digest:
+        description: 'Validated docs-web image digest'
+        required: true
+        type: string
       build_run:
         description: 'Private Release run whose exact source passed the test job'
         required: true
@@ -56,12 +60,22 @@ jobs:
           assert any(j['name']=='test' and j['conclusion']=='success' for j in jobs)
           PY
           IMAGE="ghcr.io/ccfwwm/sub2api-private@$DIGEST"
+          DOCS_IMAGE="ghcr.io/ccfwwm/sub2api-private-docs@${{ inputs.docs_digest }}"
           docker pull "$IMAGE"
+          docker pull "$DOCS_IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SHA"
+          test "$(docker image inspect "$DOCS_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SHA"
           gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
           gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
           python3 tooling/deploy/private/smoke_image.py --image "$IMAGE" --version "$VERSION"
-          python3 deploy/private/release_manifest.py --version "$VERSION" --digest "$DIGEST" --output deployment.json
+          docker run -d --name sub2api-docs-finalize "$DOCS_IMAGE"
+          for i in $(seq 1 30); do
+            if docker run --rm --network container:sub2api-docs-finalize curlimages/curl:8.12.1 -fsS http://127.0.0.1:8080/health; then break; fi
+            sleep 2
+          done
+          docker image inspect "$DOCS_IMAGE" > docs-image-inspect.json
+          docker rm -f sub2api-docs-finalize >/dev/null
+          python3 deploy/private/release_manifest.py --version "$VERSION" --digest "$DIGEST" --docs-digest "${{ inputs.docs_digest }}" --output deployment.json
           python3 -m unittest discover -s tooling/deploy/private -p 'test_*.py' -v
           sudo install -d -m 755 /run/sub2api-deployer
           echo 'Runner disk before rehearsal:'
@@ -76,11 +90,12 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 tooling/deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
-          sha256sum deployment.json > checksums.txt
+          sha256sum deployment.json docs-image-inspect.json > checksums.txt
           cp backend/migrations/24{3,4,5,6,7}_*.sql .
-          sha256sum 24{3,4,5,6,7}_*.sql >> checksums.txt
+          cp backend/migrations/248_public_imagevideo_docs.sql .
+          sha256sum 243_media_tasks_and_pricing.sql 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql 247_media_task_list_indexes.sql 248_public_imagevideo_docs.sql >> checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json checksums.txt 24{3,4,5,6,7}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact image validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
+          gh release create "$VERSION" deployment.json docs-image-inspect.json checksums.txt 24{3,4,5,6,7,8}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact application and independently replaceable docs images validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
 
 
   deploy:

@@ -46,6 +46,10 @@ export interface PlazaTimePricing {
 export interface PlazaModel {
   name: string
   platform: string
+  sale_currency: 'CNY'
+  official_currency: 'USD'
+  billing_mode: string
+  billing_unit: 'token' | 'image' | 'second' | 'request'
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
   official_pricing: PlazaOfficialPricing | null
@@ -101,6 +105,10 @@ export interface PlazaMediaModel {
   duration: { mode: string; values: number[]; min: number | null; max: number | null; default: number | null }
   duration_variants?: PlazaMediaModel['duration'][]
   music_multiplier?: string
+  sale_currency?: 'CNY'
+  official_currency?: 'USD'
+  /** Single effective media rate used by billing; display prices apply this once. */
+  sale_multiplier?: number
   prices: { operation: string; version: string; time_multiplier?: string; maximum_charge: string | null; rules: { priority: number; when: Record<string, unknown>; charges: PlazaMediaCharge[] }[] }[]
 }
 

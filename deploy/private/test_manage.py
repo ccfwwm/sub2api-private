@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from controller import atomic_json, file_hash
-from manage import Manager, ident
+from manage import Manager, ident, DOCS_PROXY_SNIPPET
 
 
 class ManagementSafetyTests(unittest.TestCase):
@@ -32,6 +32,38 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertEqual(target['services']['sub2api']['environment']['DATABASE_HOST'], 'recovered-pg')
         self.assertIn('/recovered/data:/app/data', target['services']['sub2api']['volumes'])
         self.assertEqual(list(target['services']), ['sub2api'])
+
+    def test_target_can_restore_docs_service_and_legacy_target_removes_it(self):
+        target = self.manager.target('image', {'services': {'sub2api': {}}, 'x-ops': {}}, 'ghcr.io/example/docs@sha256:' + 'a' * 64)
+        self.assertEqual(target['services']['docs-web']['image'], 'ghcr.io/example/docs@sha256:' + 'a' * 64)
+        self.assertNotIn('docs-web', self.manager.target('image', {'services': {'sub2api': {}}, 'x-ops': {}})['services'])
+
+    def test_docs_proxy_insertion_is_idempotent(self):
+        vhost = self.root / 'nginx.conf'
+        snippet = self.root / 'snippets' / 'sub2api-docs-web.conf'
+        vhost.write_text('server {\n    listen 443 ssl;\n    server_name code.aicodeme.xyz;\n    location / { proxy_pass http://127.0.0.1:8081; }\n}\n')
+        manager = Manager(self.root / 'proxy-state', self.root / 'production', docs_proxy_enabled=True,
+                          nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run', return_value=b'') as run:
+            manager.sync_docs_proxy(True)
+            manager.sync_docs_proxy(True)
+        content = vhost.read_text()
+        self.assertEqual(content.count('include /etc/nginx/snippets/sub2api-docs-web.conf;'), 1)
+        self.assertEqual(snippet.read_text(), DOCS_PROXY_SNIPPET)
+        self.assertGreaterEqual(run.call_count, 2)
+
+    def test_docs_proxy_restores_files_when_nginx_validation_fails(self):
+        vhost = self.root / 'nginx.conf'
+        snippet = self.root / 'snippets' / 'sub2api-docs-web.conf'
+        original = 'server {\n    listen 443 ssl;\n    server_name code.aicodeme.xyz;\n}\n'
+        vhost.write_text(original)
+        manager = Manager(self.root / 'proxy-state', self.root / 'production', docs_proxy_enabled=True,
+                          nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run', side_effect=RuntimeError('nginx -t failed')):
+            with self.assertRaisesRegex(RuntimeError, 'nginx -t failed'):
+                manager.sync_docs_proxy(True)
+        self.assertEqual(vhost.read_text(), original)
+        self.assertFalse(snippet.exists())
 
     def test_backup_tampering_prevents_restore(self):
         folder = self.manager.state / 'backups' / ('a' * 32)

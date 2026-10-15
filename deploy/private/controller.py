@@ -29,6 +29,7 @@ import uuid
 
 REPO = "ccfwwm/sub2api-private"
 IMAGE = "ghcr.io/ccfwwm/sub2api-private"
+DOCS_IMAGE = "ghcr.io/ccfwwm/sub2api-private-docs"
 CONFIG = Path("/etc/sub2api-deployer/config.json")
 SOCKET = "/run/sub2api-deployer/controller.sock"
 VERSION = re.compile(r"v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+\Z")
@@ -119,7 +120,26 @@ def validate_manifest(manifest, version):
     for name, digest in migrations.items():
         if not re.fullmatch(r"[A-Za-z0-9_]+\.sql", name) or not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise ValueError("invalid migration inventory")
+    # v1.2.7 introduced the independently replaceable documentation image.
+    # Keep older release manifests readable so historical rollback remains
+    # possible, while making the new release fail closed if either identity is
+    # missing or malformed.
+    if tuple(map(int, version[1:].split('.'))) >= (1, 2, 7):
+        if manifest.get("docs_image") != DOCS_IMAGE or not DIGEST.fullmatch(manifest.get("docs_digest", "")):
+            raise ValueError("documentation image identity missing")
+    elif manifest.get("docs_image") is not None or manifest.get("docs_digest") is not None:
+        if manifest.get("docs_image") != DOCS_IMAGE or not DIGEST.fullmatch(manifest.get("docs_digest", "")):
+            raise ValueError("invalid documentation image identity")
     return f"{IMAGE}@{manifest['digest']}"
+
+
+def manifest_images(manifest, version):
+    """Return the immutable application and optional docs image references."""
+    application = validate_manifest(manifest, version)
+    docs = None
+    if manifest.get("docs_digest"):
+        docs = f"{manifest.get('docs_image', DOCS_IMAGE)}@{manifest['docs_digest']}"
+    return application, docs
 
 
 def validate_request(request):
@@ -245,9 +265,14 @@ class Controller:
 
     def apply_reviewed_media_migration(self, transaction, container=None):
         # Kept separate from the read-only SQL helper and ordinary prepare.
-        from media_migrate import validate_unified_transaction, validate_monitor_transaction, validate_task_index_transaction
+        from media_migrate import (validate_unified_transaction, validate_monitor_transaction,
+                                   validate_task_index_transaction, validate_docs_transaction)
         legacy = "243_media_tasks_and_pricing.sql" in transaction
-        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not (legacy or validate_unified_transaction(transaction) or validate_monitor_transaction(transaction) or validate_task_index_transaction(transaction)):
+        reviewed = (legacy or validate_unified_transaction(transaction) or
+                    validate_monitor_transaction(transaction) or
+                    validate_task_index_transaction(transaction) or
+                    validate_docs_transaction(transaction))
+        if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not reviewed:
             raise ValueError("reviewed atomic media transaction required")
         container = container or self.config.get("database_container", "sub2api-postgres")
         run(["docker", "exec", "-i", container, "sh", "-c",
@@ -274,15 +299,24 @@ class Controller:
         if mode.st_uid != 0 or mode.st_gid != self.config.get("socket_gid", 1000) or not mode.st_mode & 0o040 or mode.st_mode & 0o007:
             raise ValueError("release credential must be root-owned, app-group-readable and not world-readable")
         manifest = self.manifest(job["version"])
-        image = validate_manifest(manifest, job["version"])
+        image, docs_image = manifest_images(manifest, job["version"])
         self.assert_migrations(manifest)
         original = self.inspect()
+        if docs_image and subprocess.run(["docker", "inspect", "sub2api-docs-web"], capture_output=True).returncode == 0:
+            docs_original = json.loads(run(["docker", "inspect", "sub2api-docs-web"]))[0]
+            job["rollback_docs_image"] = docs_original["Config"].get("Image", docs_original["Image"])
         job.update(image=image, manifest=manifest, original_container=original["Id"],
                    original_started=original["State"]["StartedAt"], config_hashes=self.config_hashes())
         run(["docker", "pull", image])
         labels = json.loads(run(["docker", "image", "inspect", image]))[0]["Config"].get("Labels", {})
         if labels.get("org.opencontainers.image.revision") != manifest["commit"]:
             raise ValueError("image revision differs from release manifest")
+        if docs_image:
+            run(["docker", "pull", docs_image])
+            docs_labels = json.loads(run(["docker", "image", "inspect", docs_image]))[0]["Config"].get("Labels", {})
+            if docs_labels.get("org.opencontainers.image.revision") != manifest["commit"]:
+                raise ValueError("documentation image revision differs from release manifest")
+            job["docs_image"] = docs_image
         self.save(job, "backing_up")
         backup = self.state / "backups" / job["id"]
         backup.mkdir(parents=True, mode=0o700)
@@ -290,7 +324,10 @@ class Controller:
         # and secrets remain root-only locally; this image is NEVER pushed.
         rollback_tag = "sub2api-local-rollback:" + job["id"]
         run(["docker", "commit", "--pause=false", "sub2api", rollback_tag])
-        job["rollback_image"] = json.loads(run(["docker", "image", "inspect", rollback_tag]))[0]["Id"]
+            # Keep the local rollback tag as the Compose image reference.  The
+            # inspect Image ID (sha256:...) is useful for verification but is
+            # not a portable Compose image reference.
+        job["rollback_image"] = rollback_tag
         job["original_binary_sha256"] = run(["docker", "exec", "sub2api", "sha256sum", "/app/sub2api"]).decode().split()[0]
         captured = run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "sha256sum",
                         job["rollback_image"], "/app/sub2api"]).decode().split()[0]
@@ -398,7 +435,7 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql"):
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
@@ -473,26 +510,52 @@ class Controller:
                 time.sleep(2)
         raise RuntimeError("health check timed out")
 
-    def override(self, image):
+    def override(self, image, docs_image=None):
         # JSON is valid YAML; preserve all production service settings by layering.
         path = self.state / "active-image.json"
-        atomic_json(path, {"services": {"sub2api": {"image": image, "pull_policy": "never",
+        services = {"sub2api": {"image": image, "pull_policy": "never",
                     "stop_grace_period": "130s", "environment": {
                         "IMAGE_DEPLOY_SOCKET": SOCKET, "IMAGE_DEPLOY_DRAIN_FILE": "/run/sub2api-deployer/drain",
                         "SERVER_SHUTDOWN_TIMEOUT_SECONDS": "120",
                         "UPDATE_GITHUB_TOKEN_FILE": "/run/secrets/sub2api-release-token"},
                     "volumes": ["/run/sub2api-deployer:/run/sub2api-deployer:ro",
-                                str(self.config.get("release_token_file", "/etc/sub2api-deployer/release-token")) + ":/run/secrets/sub2api-release-token:ro"]}}})
+                                str(self.config.get("release_token_file", "/etc/sub2api-deployer/release-token")) + ":/run/secrets/sub2api-release-token:ro"]}}
+        if docs_image:
+            services["docs-web"] = {"image": docs_image, "pull_policy": "never",
+                                    "restart": "unless-stopped",
+                                    "ports": ["127.0.0.1:8082:8080"],
+                                    "healthcheck": {"test": ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]}}
+        atomic_json(path, {"services": services})
         return path
 
-    def switch(self, image):
-        path = self.override(image)
-        run(self.compose(path) + ["up", "-d", "--no-deps", "--pull", "never", "sub2api"], timeout=300)
+    def switch(self, image, docs_image=None):
+        path = self.override(image, docs_image)
+        services = ["sub2api"] + (["docs-web"] if docs_image else [])
+        run(self.compose(path) + ["up", "-d", "--no-deps", "--pull", "never", *services], timeout=300)
+        # A rescue target can intentionally have no docs image (for example,
+        # the first release before docs-web existed).  Remove only the named
+        # docs container so a failed dual-container cutover cannot leave the
+        # newer documentation image serving traffic.
+        if not docs_image:
+            subprocess.run(["docker", "rm", "-f", "sub2api-docs-web"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.wait_command(["curl", "-fsS", "--max-time", "5", "http://127.0.0.1:8081/health"], 180)
         current = self.inspect()
         expected_id = json.loads(run(["docker", "image", "inspect", image]))[0]["Id"]
         if current["Image"] != expected_id:
             raise ValueError("running container image does not match requested digest")
+        if docs_image:
+            docs = json.loads(run(["docker", "inspect", "sub2api-docs-web"]))[0]
+            expected_docs_id = json.loads(run(["docker", "image", "inspect", docs_image]))[0]["Id"]
+            if docs["Image"] != expected_docs_id or not docs["State"].get("Running"):
+                raise ValueError("running documentation image does not match requested digest")
+            self.wait_command(["docker", "exec", "sub2api-docs-web", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/health"], 60)
+            html = run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/imagevideo"]).decode(errors="replace")
+            if "词元互联图片、视频与音乐接口文档" not in html:
+                raise ValueError("documentation route content check failed")
+        if self.config.get("manage_docs_proxy", True):
+            from manage import Manager
+            Manager(self.state, self.root, docs_proxy_enabled=self.config.get("docs_proxy_enabled", True)).sync_docs_proxy(bool(docs_image))
 
     def deploy(self, job):
         self.save(job, "checking_cutover")
@@ -534,7 +597,7 @@ class Controller:
                         raise ValueError("active requests did not drain; retry during a quieter window")
                     time.sleep(1)
             self.save(job, "switching")
-            self.switch(job["image"])
+            self.switch(job["image"], job.get("docs_image"))
             marker.unlink(missing_ok=True)
             # The application caches the drain marker briefly. Health bypasses
             # draining, so wait for normal admission before verifying settings.
@@ -551,7 +614,7 @@ class Controller:
             if job["status"] == "draining":
                 raise
             self.save(job, "rolling_back")
-            self.switch(job["rollback_image"])
+            self.switch(job["rollback_image"], job.get("rollback_docs_image"))
             self.save(job, "rolled_back")
         finally:
             marker.unlink(missing_ok=True)
@@ -580,11 +643,11 @@ class Controller:
                 time.sleep(1)
             self.save(job, "rolling_back")
             try:
-                self.switch(job["rollback_image"])
+                self.switch(job["rollback_image"], job.get("rollback_docs_image"))
             except Exception:
                 # A failed manual rollback should attempt to restore the image
                 # that was healthy when the operator requested rollback.
-                self.switch(job["image"])
+                self.switch(job["image"], job.get("docs_image"))
                 raise
             self.save(job, "rolled_back")
         finally:

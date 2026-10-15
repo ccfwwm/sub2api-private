@@ -29,6 +29,7 @@ UNIFIED_FILES = {
 
 MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
 TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
+DOCS_FILE = '248_public_imagevideo_docs.sql'
 MONITOR_PROVIDERS = "'openai', 'anthropic', 'gemini', 'grok', 'antigravity', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'imagevideo'"
 
 
@@ -53,11 +54,76 @@ def validate_task_index_transaction(transaction):
     return bool(match and transaction == task_index_transaction(task_index_statements(), match[1]))
 
 
+def docs_statements():
+    return ('CREATE TABLE IF NOT EXISTS public_documents (\n'
+            'slug TEXT PRIMARY KEY,\n'
+            'published_version BIGINT NOT NULL DEFAULT 0 CHECK (published_version >= 0),\n'
+            "published_content JSONB NOT NULL DEFAULT '[]'::jsonb,\n"
+            'draft_version BIGINT NOT NULL DEFAULT 0 CHECK (draft_version >= 0),\n'
+            "draft_content JSONB NOT NULL DEFAULT '[]'::jsonb,\n"
+            'updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n'
+            'published_at TIMESTAMPTZ\n'
+            ');\n'
+            'CREATE TABLE IF NOT EXISTS public_document_versions (\n'
+            'id BIGSERIAL PRIMARY KEY,\n'
+            'slug TEXT NOT NULL REFERENCES public_documents(slug) ON DELETE CASCADE,\n'
+            'version BIGINT NOT NULL,\n'
+            "action TEXT NOT NULL CHECK (action IN ('initial', 'draft', 'publish', 'rollback')),\n"
+            'content JSONB NOT NULL,\n'
+            'actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,\n'
+            'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n'
+            'UNIQUE (slug, version, action)\n'
+            ');\n'
+            'CREATE INDEX IF NOT EXISTS public_document_versions_history ON public_document_versions(slug, created_at DESC, id DESC);')
+
+
+def docs_transaction(sql, checksum):
+    import re
+    normalized = ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+    expected = ' '.join(docs_statements().split())
+    if normalized != expected or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+        raise ValueError('outside reviewed public documentation migration')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            'SELECT pg_advisory_xact_lock(694208311321144027);\n' + docs_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{DOCS_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_docs_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('248_public_imagevideo_docs\.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == docs_transaction(docs_statements(), match[1]))
+
+
+def reviewed_docs_upgrade(before, target, folder):
+    if before == target:
+        return None
+    if DOCS_FILE in before or set(target) - set(before) != {DOCS_FILE} or {k: v for k, v in target.items() if k != DOCS_FILE} != before:
+        raise ValueError('migration inventory differs outside reviewed public documentation migration')
+    folder = Path(folder)
+    source = folder / DOCS_FILE
+    if not source.exists():
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / DOCS_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / DOCS_FILE
+                break
+    sql = source.read_text().replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if target[DOCS_FILE] != checksum:
+        raise ValueError('public documentation migration checksum differs')
+    return {'filename': DOCS_FILE, 'transaction': docs_transaction(sql, checksum), 'expected_migrations': target}
+
+
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
     if set(target) - set(before) != {TASK_INDEX_FILE}:
-        return reviewed_monitor_upgrade(before, target, folder)
+        if set(target) - set(before) == {MONITOR_FILE}:
+            return reviewed_monitor_upgrade(before, target, folder)
+        return reviewed_docs_upgrade(before, target, folder)
     if {k: v for k, v in target.items() if k != TASK_INDEX_FILE} != before:
         raise ValueError('migration inventory differs outside reviewed task indexes')
     folder = Path(folder)
