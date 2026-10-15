@@ -98,6 +98,13 @@ class DeploymentTests(unittest.TestCase):
         legacy = self.controller.override(IMAGE + '@sha256:' + 'a' * 64)
         self.assertNotIn('docs-web', json.loads(legacy.read_text())['services'])
 
+    def test_docs_override_has_stable_container_name(self):
+        overlay = self.controller.override(
+            IMAGE + '@sha256:' + 'a' * 64,
+            'ghcr.io/example/docs@sha256:' + 'b' * 64)
+        service = json.loads(overlay.read_text())['services']['docs-web']
+        self.assertEqual(service['container_name'], 'sub2api-docs-web')
+
     def test_v127_manifest_requires_docs_image_digest(self):
         manifest = dict(self.manifest, version='v1.2.7')
         with self.assertRaisesRegex(ValueError, 'documentation image identity'):

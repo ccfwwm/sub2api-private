@@ -36,7 +36,16 @@ class ManagementSafetyTests(unittest.TestCase):
     def test_target_can_restore_docs_service_and_legacy_target_removes_it(self):
         target = self.manager.target('image', {'services': {'sub2api': {}}, 'x-ops': {}}, 'ghcr.io/example/docs@sha256:' + 'a' * 64)
         self.assertEqual(target['services']['docs-web']['image'], 'ghcr.io/example/docs@sha256:' + 'a' * 64)
+        self.assertEqual(target['services']['docs-web']['container_name'], 'sub2api-docs-web')
         self.assertNotIn('docs-web', self.manager.target('image', {'services': {'sub2api': {}}, 'x-ops': {}})['services'])
+
+    def test_docs_container_resolves_compose_generated_name(self):
+        result = type('Result', (), {'returncode': 0, 'stdout': 'sub2api-deploy-docs-web-1\n'})()
+        with patch('manage.subprocess.run', return_value=result) as run:
+            self.assertEqual(self.manager.docs_container(), 'sub2api-deploy-docs-web-1')
+        command = run.call_args.args[0]
+        self.assertIn('label=com.docker.compose.project=sub2api-deploy', command)
+        self.assertIn('label=com.docker.compose.service=docs-web', command)
 
     def test_docs_proxy_insertion_is_idempotent(self):
         vhost = self.root / 'nginx.conf'

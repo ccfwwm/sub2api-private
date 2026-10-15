@@ -26,6 +26,8 @@ PRODUCTION = Path('/root/sub2api-deploy')
 ACTIVE = STATE / 'active.json'
 IDENT = re.compile(r'[0-9a-f]{32}\Z')
 DOCS_PROXY_INCLUDE = 'include /etc/nginx/snippets/sub2api-docs-web.conf;'
+DOCS_SERVICE = 'docs-web'
+DOCS_CONTAINER = 'sub2api-docs-web'
 DOCS_PROXY_SNIPPET = '''location ^~ /docs/ {
     proxy_pass http://127.0.0.1:8082/;
     proxy_http_version 1.1;
@@ -81,6 +83,25 @@ class Manager:
         atomic_json(self.state / 'jobs' / (job['id'] + '.json'), job)
         print(status, flush=True)
 
+    @staticmethod
+    def docs_containers(running=False):
+        """Resolve docs containers by Compose ownership, not generated names."""
+        command = ['docker', 'ps']
+        if not running:
+            command.append('-a')
+        command += ['--filter', 'label=com.docker.compose.project=sub2api-deploy',
+                    '--filter', 'label=com.docker.compose.service=' + DOCS_SERVICE,
+                    '--format', '{{.Names}}']
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode:
+            return []
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+    @classmethod
+    def docs_container(cls, running=False):
+        names = cls.docs_containers(running=running)
+        return names[0] if names else None
+
     def preflight(self):
         self.refresh()
         original = self.c.inspect()
@@ -125,9 +146,8 @@ class Manager:
 
     def backup(self, job):
         original = self.preflight()
-        docs_original = None
-        if subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True).returncode == 0:
-            docs_original = inspect('sub2api-docs-web')
+        docs_name = self.docs_container(running=True) or self.docs_container()
+        docs_original = inspect(docs_name) if docs_name else None
         self.save(job, 'backing_up')
         bid = uuid.uuid4().hex
         folder = self.state / 'backups' / bid
@@ -149,7 +169,7 @@ class Manager:
             # Commit the exact container layer before replacing the docs image.
             # A registry tag can move; the local committed image plus archive is
             # the rollback artifact.
-            run(['docker', 'commit', '--pause=false', 'sub2api-docs-web', docs_runtime_tag])
+            run(['docker', 'commit', '--pause=false', docs_name, docs_runtime_tag])
             docs_image_id = inspect(docs_runtime_tag)['Id']
             with (folder / 'docs-image.tar').open('wb') as out:
                 run(['docker', 'image', 'save', docs_runtime_tag], stdout=out)
@@ -306,7 +326,7 @@ class Manager:
         if docs_image:
             target.setdefault('services', {})['docs-web'] = {
                 'image': docs_image, 'pull_policy': 'never', 'restart': 'unless-stopped',
-                'ports': ['127.0.0.1:8082:8080']}
+                'ports': ['127.0.0.1:8082:8080'], 'container_name': DOCS_CONTAINER}
         else:
             # Explicitly make the target legacy-compatible.  Deep-copying an
             # active v1.2.7 Compose overlay must not retain a docs service when
@@ -380,22 +400,24 @@ class Manager:
         services = ['sub2api'] + (['docs-web'] if 'docs-web' in target.get('services', {}) else [])
         run(self.c.compose(self.active_path) + ['up', '-d', '--no-deps', '--pull', 'never', *services], timeout=300)
         if 'docs-web' not in target.get('services', {}):
-            existing = subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True)
-            if existing.returncode == 0:
-                identity = json.loads(existing.stdout)[0]
+            for docs_name in self.docs_containers():
+                identity = inspect(docs_name)
                 labels = identity.get('Config', {}).get('Labels') or {}
                 if labels.get('com.docker.compose.project') != 'sub2api-deploy' or labels.get('com.docker.compose.service') != 'docs-web':
-                    raise ValueError('refusing to remove an unmanaged container named sub2api-docs-web')
-                run(['docker', 'rm', '-f', 'sub2api-docs-web'])
+                    raise ValueError('refusing to remove an unmanaged documentation container')
+                run(['docker', 'rm', '-f', docs_name])
         self.c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8081/health'], 180)
         if self.c.inspect()['Config']['Image'] != target['services']['sub2api']['image']:
             raise ValueError('running image differs from requested image')
         if 'docs-web' in services:
             docs_target = target['services']['docs-web']['image']
-            docs = inspect('sub2api-docs-web')
+            docs_name = self.docs_container(running=True) or self.docs_container()
+            if not docs_name:
+                raise ValueError('documentation container was not created')
+            docs = inspect(docs_name)
             if docs['Config']['Image'] != docs_target or not docs['State']['Running']:
                 raise ValueError('running documentation image differs from requested image')
-            self.c.wait_command(['docker', 'exec', 'sub2api-docs-web', 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], 60)
+            self.c.wait_command(['docker', 'exec', docs_name, 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], 60)
             html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
             if '词元互联图片、视频与音乐接口文档' not in html:
                 raise ValueError('documentation route content check failed')
@@ -499,10 +521,8 @@ class Manager:
         switched = False
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
                   for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
-        if subprocess.run(['docker', 'inspect', 'sub2api-docs-web'], capture_output=True).returncode == 0:
-            docs_before = inspect('sub2api-docs-web')
-        else:
-            docs_before = None
+        docs_before_name = self.docs_container(running=True) or self.docs_container()
+        docs_before = inspect(docs_before_name) if docs_before_name else None
         try:
             if job.get('immediate'):
                 if self.marker.exists():
@@ -530,7 +550,10 @@ class Manager:
                 job['docs_container_before'] = {'id': docs_before['Id'], 'started_at': docs_before['State']['StartedAt'],
                                                 'image': docs_before['Config'].get('Image', docs_before['Image'])}
             if 'docs-web' in target.get('services', {}):
-                docs_after = inspect('sub2api-docs-web')
+                docs_after_name = self.docs_container(running=True) or self.docs_container()
+                if not docs_after_name:
+                    raise ValueError('documentation container was not created')
+                docs_after = inspect(docs_after_name)
                 job['active_docs_image'] = docs_after['Config']['Image']
                 job['docs_container_after'] = {'id': docs_after['Id'], 'started_at': docs_after['State']['StartedAt'],
                                                'image': docs_after['Config']['Image']}

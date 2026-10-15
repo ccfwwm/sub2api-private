@@ -28,6 +28,8 @@ import urllib.parse
 import uuid
 
 REPO = "ccfwwm/sub2api-private"
+DOCS_SERVICE = "docs-web"
+DOCS_CONTAINER = "sub2api-docs-web"
 IMAGE = "ghcr.io/ccfwwm/sub2api-private"
 DOCS_IMAGE = "ghcr.io/ccfwwm/sub2api-private-docs"
 CONFIG = Path("/etc/sub2api-deployer/config.json")
@@ -252,6 +254,17 @@ class Controller:
     def inspect(self):
         return json.loads(run(["docker", "inspect", "sub2api"]))[0]
 
+    @staticmethod
+    def docs_containers():
+        result = subprocess.run([
+            "docker", "ps", "-a", "--filter", "label=com.docker.compose.project=sub2api-deploy",
+            "--filter", "label=com.docker.compose.service=" + DOCS_SERVICE,
+            "--format", "{{.Names}}"
+        ], capture_output=True, text=True)
+        if result.returncode:
+            return []
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
     def sql(self, query, container=None):
         container = container or self.config.get("database_container", "sub2api-postgres")
         return run(["docker", "exec", "-i", container, "sh", "-c",
@@ -302,8 +315,16 @@ class Controller:
         image, docs_image = manifest_images(manifest, job["version"])
         self.assert_migrations(manifest)
         original = self.inspect()
-        if docs_image and subprocess.run(["docker", "inspect", "sub2api-docs-web"], capture_output=True).returncode == 0:
-            docs_original = json.loads(run(["docker", "inspect", "sub2api-docs-web"]))[0]
+        if docs_image:
+            docs_names = subprocess.run([
+                "docker", "ps", "-a", "--filter", "label=com.docker.compose.project=sub2api-deploy",
+                "--filter", "label=com.docker.compose.service=docs-web", "--format", "{{.Names}}"
+            ], capture_output=True, text=True).stdout.splitlines()
+            docs_name = next((name.strip() for name in docs_names if name.strip()), None)
+            docs_original = json.loads(run(["docker", "inspect", docs_name]))[0] if docs_name else None
+        else:
+            docs_original = None
+        if docs_original:
             job["rollback_docs_image"] = docs_original["Config"].get("Image", docs_original["Image"])
         job.update(image=image, manifest=manifest, original_container=original["Id"],
                    original_started=original["State"]["StartedAt"], config_hashes=self.config_hashes())
@@ -524,6 +545,7 @@ class Controller:
             services["docs-web"] = {"image": docs_image, "pull_policy": "never",
                                     "restart": "unless-stopped",
                                     "ports": ["127.0.0.1:8082:8080"],
+                                    "container_name": DOCS_CONTAINER,
                                     "healthcheck": {"test": ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]}}
         atomic_json(path, {"services": services})
         return path
@@ -533,23 +555,27 @@ class Controller:
         services = ["sub2api"] + (["docs-web"] if docs_image else [])
         run(self.compose(path) + ["up", "-d", "--no-deps", "--pull", "never", *services], timeout=300)
         # A rescue target can intentionally have no docs image (for example,
-        # the first release before docs-web existed).  Remove only the named
-        # docs container so a failed dual-container cutover cannot leave the
+        # the first release before docs-web existed). Remove only Compose-owned
+        # docs containers so a failed dual-container cutover cannot leave the
         # newer documentation image serving traffic.
         if not docs_image:
-            subprocess.run(["docker", "rm", "-f", "sub2api-docs-web"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for name in self.docs_containers():
+                subprocess.run(["docker", "rm", "-f", name],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.wait_command(["curl", "-fsS", "--max-time", "5", "http://127.0.0.1:8081/health"], 180)
         current = self.inspect()
         expected_id = json.loads(run(["docker", "image", "inspect", image]))[0]["Id"]
         if current["Image"] != expected_id:
             raise ValueError("running container image does not match requested digest")
         if docs_image:
-            docs = json.loads(run(["docker", "inspect", "sub2api-docs-web"]))[0]
+            docs_name = self.docs_containers()[0] if self.docs_containers() else None
+            if not docs_name:
+                raise ValueError("documentation container was not created")
+            docs = json.loads(run(["docker", "inspect", docs_name]))[0]
             expected_docs_id = json.loads(run(["docker", "image", "inspect", docs_image]))[0]["Id"]
             if docs["Image"] != expected_docs_id or not docs["State"].get("Running"):
                 raise ValueError("running documentation image does not match requested digest")
-            self.wait_command(["docker", "exec", "sub2api-docs-web", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/health"], 60)
+            self.wait_command(["docker", "exec", docs_name, "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/health"], 60)
             html = run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/imagevideo"]).decode(errors="replace")
             if "词元互联图片、视频与音乐接口文档" not in html:
                 raise ValueError("documentation route content check failed")
