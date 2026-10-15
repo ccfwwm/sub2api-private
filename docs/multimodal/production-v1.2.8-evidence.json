@@ -1,0 +1,112 @@
+{
+  "version": "v1.2.8",
+  "commit": "24be1b4c9f3f2fe68280e234e981e41e3f2515df",
+  "verified_at": "2026-10-15T12:58:32.065509+00:00",
+  "job": {
+    "id": "ddd9baf300164a72b3f88d6a853db569",
+    "version": "v1.2.8",
+    "digest": "sha256:3356058d48929a80ca40d149ee3496a886d2674249806d3c4619f357c5e8c5a6",
+    "commit": "24be1b4c9f3f2fe68280e234e981e41e3f2515df",
+    "status": "succeeded",
+    "phase": "online_verified",
+    "manager_job": "daf1d76152e34f6f9075f91418b28559",
+    "backup_id": "f785920e747a4672a9210761588068ba"
+  },
+  "entrypoints": {
+    "http://127.0.0.1:8081": {
+      "health": 200,
+      "version": "1.2.8"
+    },
+    "https://code.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.8"
+    },
+    "https://code.aicodeme.cn": {
+      "health": 200,
+      "version": "1.2.8"
+    },
+    "https://hkcode.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.8"
+    }
+  },
+  "images": {
+    "application": "sha256:3356058d48929a80ca40d149ee3496a886d2674249806d3c4619f357c5e8c5a6",
+    "docs": "sha256:8f3dcd7e6e3b5126e6dee28126e14245282a8fb65ecb59382023b4ef8896e3df",
+    "app_healthy": true,
+    "docs_running": true
+  },
+  "protected_containers_unchanged": true,
+  "docs": {
+    "published_version": 5,
+    "sections": 23,
+    "published_content_preserved": true,
+    "container_page_status": 200
+  },
+  "editor_api": {
+    "load": 200,
+    "history": 200,
+    "history_count": 5,
+    "anonymous": 401
+  },
+  "migrations": {
+    "count": 298,
+    "checksums_match": true,
+    "new_schema_changes": false
+  },
+  "backup": {
+    "id": "f785920e747a4672a9210761588068ba",
+    "verified": true,
+    "restore_rehearsal_completed": true,
+    "manager_job": "daf1d76152e34f6f9075f91418b28559"
+  },
+  "browser": {
+    "session": "isolated test session shell; production admin API key via loopback transport",
+    "real_admin_jwt_login_tested": false,
+    "initial_load": 200,
+    "sections": 23,
+    "history": 200,
+    "draft_save": 200,
+    "publish": 200,
+    "same_origin_draft_preview": true,
+    "preview_marker_never_saved": true,
+    "draft_version_before": 3,
+    "draft_version_after": 5,
+    "published_version_before": 3,
+    "published_version_after": 5,
+    "content_preserved": true,
+    "duplicate_api_prefix": false,
+    "object_object_error": false,
+    "desktop_viewport": [
+      1440,
+      1000
+    ],
+    "mobile_viewport": [
+      390,
+      844
+    ],
+    "production_rollback_ui_tested": false,
+    "rollback_and_conflict_covered_by_automated_tests": true
+  },
+  "preview_proxy": {
+    "verified_at": "2026-10-15T12:54:36.986783+00:00",
+    "source_commit": "5ff7cb371e18a4f43821f085d9d5814f7a98dd1f",
+    "manager_release": "7bfd3e8b816555f8",
+    "docs_headers": {
+      "status": 200,
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "x-frame-options": "SAMEORIGIN",
+      "content-security-policy": "frame-ancestors 'self'"
+    },
+    "application_frame_options": "DENY",
+    "containers_unchanged": true,
+    "nginx_reload": true,
+    "api_health": 200
+  },
+  "cutover_observation": {
+    "transient_unavailability_observed": true,
+    "exact_downtime_seconds": null,
+    "subsequent_health_checks_passed": true
+  }
+}
