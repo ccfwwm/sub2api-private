@@ -41,6 +41,10 @@ RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/stor
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
+# The public image/video/music documentation is also imported by the
+# authenticated frontend editor. Keep the JSON source beside /app/frontend so
+# the relative import in src/data/imagevideoDocs.ts resolves in container builds.
+COPY docs/multimodal/imagevideo-content.json /app/docs/multimodal/imagevideo-content.json
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------

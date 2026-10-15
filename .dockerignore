@@ -16,6 +16,9 @@ docs/
 # Docker build context even though docs/ is otherwise excluded.
 !docs/legal/
 !docs/legal/*.md
+# The image/video/music documentation is a frontend build-time JSON import.
+!docs/multimodal/
+!docs/multimodal/imagevideo-content.json
 
 # IDE
 .idea/
