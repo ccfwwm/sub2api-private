@@ -1,0 +1,85 @@
+{
+  "version": "v1.2.9",
+  "commit": "cbf1a0ae8dc1d8432b17e9226829b2b1ed181fd9",
+  "verified_at": "2026-10-16T15:04:50.556003+00:00",
+  "job_id": "f770d33cef9f46e4bc66ba6330492de3",
+  "backup_id": "765ffa5aaacd4f77921e0d8942ab012c",
+  "backup_restore_rehearsal": true,
+  "images": {
+    "application": "sha256:d2499fab08b01e641cf65e8323a1caf27c47d7e4f2e99be29c65c4413b8bef29",
+    "docs": "sha256:d44d828c488c9d7b0b81b46ea1d517ae843fa10fecfe2aced60faa3c35bd04f9"
+  },
+  "entrypoints": {
+    "http://127.0.0.1:8081": {
+      "health": 200,
+      "version": "1.2.9",
+      "docs_http": 200,
+      "dedicated_docs_page": true
+    },
+    "https://code.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.9",
+      "docs_http": 200,
+      "dedicated_docs_page": true
+    },
+    "https://code.aicodeme.cn": {
+      "health": 200,
+      "version": "1.2.9",
+      "docs_http": 200,
+      "dedicated_docs_page": false
+    },
+    "https://hkcode.aicodeme.xyz": {
+      "health": 200,
+      "version": "1.2.9",
+      "docs_http": 200,
+      "dedicated_docs_page": true
+    }
+  },
+  "native_pricing": {
+    "PRICING_REMOTE_URL": "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.json",
+    "PRICING_HASH_URL": "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.sha256",
+    "PRICING_OVERRIDE_FILE": "/app/data/pricing/domestic-pricing-overrides.json"
+  },
+  "domestic_prices_preserved": 16,
+  "protected_containers_unchanged": {
+    "sub2api-postgres": {
+      "id": "f3593bf6d71bbfa09c56e6fa6fde5e49c5dd0aa16f54a09e589fb336037fbd73",
+      "started_at": "2026-09-24T11:41:48.843414454Z"
+    },
+    "sub2api-redis": {
+      "id": "9860f0d8485675414aaebccf339e69f60dfb97209a50631680c176212869e2bb",
+      "started_at": "2026-09-24T11:41:48.842352295Z"
+    }
+  },
+  "published_docs_preserved": {
+    "version": 5,
+    "sections": 23,
+    "content_sha256": "14985cf7f2da69510b85476bf45dbf124fa0df988ea539445570a600a6c24eaa"
+  },
+  "monitor": {
+    "id": 17,
+    "model": "gpt-image-2.5",
+    "status": "operational",
+    "latency_ms": 25117,
+    "latest_result": {
+      "id": 345541,
+      "model": "gpt-image-2.5",
+      "status": "operational",
+      "latency_ms": 25117,
+      "ping_latency_ms": null,
+      "message": "generation: valid image output received",
+      "checked_at": "2026-10-16T14:38:40Z"
+    },
+    "list_status": "operational"
+  },
+  "pricing_sidecar_retired": {
+    "container": "sub2api-pricing-overlay",
+    "absent": true,
+    "compose_service_removed": true,
+    "receipt_phase": "completed",
+    "override_sha256": "6b70a6e162433516dfdeb262260bc96d1ef61bc24be7cfac650a3d96e52fb816",
+    "native_catalog_download_confirmed": true,
+    "loaded_models": 263,
+    "sync_check_interval_seconds": 600
+  }
+}
