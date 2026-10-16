@@ -4,12 +4,14 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/branding"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -17,6 +19,65 @@ import (
 
 type settingHandlerPublicRepoStub struct {
 	values map[string]string
+}
+
+func TestPublicLogoIsCachedSeparatelyFromSettingsAndInjection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	png := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
+	data, err := base64.StdEncoding.DecodeString(png)
+	require.NoError(t, err)
+	// Uploaded branding images can be much larger than the application HTML.
+	data = append(data, make([]byte, 150000)...)
+	source := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
+	repo := &settingHandlerPublicRepoStub{values: map[string]string{service.SettingKeySiteLogo: source}}
+	svc := service.NewSettingService(repo, &config.Config{})
+	h := NewSettingHandler(svc, "test-version")
+	r := gin.New()
+	r.GET("/api/v1/settings/public", h.GetPublicSettings)
+	r.GET(branding.LogoPath+":asset", h.GetSiteLogo)
+	r.HEAD(branding.LogoPath+":asset", h.GetSiteLogo)
+	settings := httptest.NewRecorder()
+	r.ServeHTTP(settings, httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil))
+	require.Equal(t, http.StatusOK, settings.Code)
+	require.Less(t, settings.Body.Len(), 10000)
+	var payload struct {
+		Data struct {
+			SiteLogo string `json:"site_logo"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(settings.Body.Bytes(), &payload))
+	url := payload.Data.SiteLogo
+	require.Equal(t, branding.PublicLogoURL(source), url)
+	injected, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, url, injected.(*service.PublicSettingsInjectionPayload).SiteLogo)
+	image := httptest.NewRecorder()
+	r.ServeHTTP(image, httptest.NewRequest(http.MethodGet, url, nil))
+	require.Equal(t, http.StatusOK, image.Code)
+	require.Equal(t, data, image.Body.Bytes())
+	require.Equal(t, "image/png", image.Header().Get("Content-Type"))
+	require.Contains(t, image.Header().Get("Cache-Control"), "immutable")
+	for _, tag := range []string{image.Header().Get("ETag"), "W/" + image.Header().Get("ETag")} {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.Header.Set("If-None-Match", tag)
+		cached := httptest.NewRecorder()
+		r.ServeHTTP(cached, req)
+		require.Equal(t, http.StatusNotModified, cached.Code)
+		require.Zero(t, cached.Body.Len())
+	}
+	head := httptest.NewRecorder()
+	r.ServeHTTP(head, httptest.NewRequest(http.MethodHead, url, nil))
+	require.Equal(t, http.StatusOK, head.Code)
+	require.Zero(t, head.Body.Len())
+	raw, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, source, raw.SiteLogo)
+	require.Equal(t, source, repo.values[service.SettingKeySiteLogo])
+	// Changing branding invalidates its URL without changing cached image bytes.
+	repo.values[service.SettingKeySiteLogo] = "/new-logo.png"
+	stale := httptest.NewRecorder()
+	r.ServeHTTP(stale, httptest.NewRequest(http.MethodGet, url, nil))
+	require.Equal(t, http.StatusNotFound, stale.Code)
 }
 
 func (s *settingHandlerPublicRepoStub) Get(ctx context.Context, key string) (*service.Setting, error) {

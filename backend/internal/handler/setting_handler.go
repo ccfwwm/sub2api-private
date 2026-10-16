@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/branding"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -69,7 +70,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		AliyunCaptchaPrefix:                 settings.AliyunCaptchaPrefix,
 		AliyunCaptchaRegion:                 settings.AliyunCaptchaRegion,
 		SiteName:                            settings.SiteName,
-		SiteLogo:                            settings.SiteLogo,
+		SiteLogo:                            branding.PublicLogoURL(settings.SiteLogo),
 		SiteSubtitle:                        settings.SiteSubtitle,
 		APIBaseURL:                          settings.APIBaseURL,
 		ContactInfo:                         settings.ContactInfo,
@@ -124,6 +125,38 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		AllowUserViewErrorRequests: settings.AllowUserViewErrorRequests,
 	})
+}
+
+// GetSiteLogo serves the original branding image once, under a content-addressed
+// URL shared by the favicon and application logo. The admin setting stays intact.
+func (h *SettingHandler) GetSiteLogo(c *gin.Context) {
+	settings, err := h.settingService.GetPublicSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	logo, ok := branding.ParseInlineLogo(settings.SiteLogo)
+	if !ok || c.Param("asset") != logo.Asset {
+		c.Header("Cache-Control", "no-store")
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Header("ETag", logo.ETag)
+	c.Header("X-Content-Type-Options", "nosniff")
+	for _, tag := range strings.Split(c.GetHeader("If-None-Match"), ",") {
+		tag = strings.TrimSpace(tag)
+		if tag == "*" || strings.TrimPrefix(tag, "W/") == logo.ETag {
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
+	if c.Request.Method == http.MethodHead {
+		c.Header("Content-Type", logo.ContentType)
+		c.Status(http.StatusOK)
+		return
+	}
+	c.Data(http.StatusOK, logo.ContentType, logo.Data)
 }
 
 // UnsubscribeNotificationEmail handles optional notification email opt-outs.

@@ -1,12 +1,12 @@
 {
-  "version": "v1.2.9",
+  "version": "v1.2.10",
   "status": "recorded",
   "verified_at": "2026-10-16T22:39:05+08:00",
   "environment": "production monitor 17 and its existing group API key",
-  "policy": "Correct an invalid model ID and retain the existing enabled generation monitor. Saving the configuration triggered one scheduled generation; no separate paid pilot was submitted.",
-  "verification_reused_from": "v1.2.8",
-  "new_generation_requests": 1,
-  "verification_note": "Monitor 17 generated a valid image in 25117 ms after correcting gpt-image2.5 to gpt-image-2.5. Historical cases retain their original timestamps.",
+  "policy": "Website performance changes only. Reuse the v1.2.9 real-channel verification; no additional billable generation is submitted for this release.",
+  "verification_reused_from": "v1.2.9",
+  "new_generation_requests": 0,
+  "verification_note": "The existing monitor 17 verification generated a valid image in 25117 ms after correcting gpt-image2.5 to gpt-image-2.5. All real-generation cases retain their original timestamps.",
   "cases": [
     {
       "model": "gpt-image-2.5",
