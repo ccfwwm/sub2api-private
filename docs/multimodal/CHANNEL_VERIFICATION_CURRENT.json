@@ -1,13 +1,23 @@
 {
-  "version": "v1.2.8",
+  "version": "v1.2.9",
   "status": "recorded",
-  "verified_at": "2026-10-14T10:40:55.368Z",
-  "environment": "production, authorized user key, GPT single and dual multipart edits",
-  "policy": "Frontend documentation editor repair only. Existing media generation evidence is reused unchanged; no new paid generation requests are submitted by this patch.",
-  "verification_reused_from": "v1.2.7",
-  "new_generation_requests": 0,
-  "verification_note": "v1.2.8 reuses historical GPT image edits, video and audio evidence with the original per-case timestamps. Patch verification covers actual Axios URL composition, authentication, errors and document editing. No new media generation.",
+  "verified_at": "2026-10-16T22:39:05+08:00",
+  "environment": "production monitor 17 and its existing group API key",
+  "policy": "Correct an invalid model ID and retain the existing enabled generation monitor. Saving the configuration triggered one scheduled generation; no separate paid pilot was submitted.",
+  "verification_reused_from": "v1.2.8",
+  "new_generation_requests": 1,
+  "verification_note": "Monitor 17 generated a valid image in 25117 ms after correcting gpt-image2.5 to gpt-image-2.5. Historical cases retain their original timestamps.",
   "cases": [
+    {
+      "model": "gpt-image-2.5",
+      "monitor_id": 17,
+      "task_id": "mt_d4b8bf58-da58-4bf1-80c9-809314a4f3df",
+      "status": "completed",
+      "verification": "real_generation",
+      "latency_ms": 25117,
+      "verified_at": "2026-10-16T22:38:40+08:00",
+      "scope": "Existing enabled generation monitor automatically ran after saving the exact model ID and produced a valid image. Confirmed via monitor history and completed media task."
+    },
     {
       "account_id": 2092,
       "model": "veo-3.1-lite",

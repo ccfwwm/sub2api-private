@@ -100,5 +100,5 @@ class AutomaticDeployTests(unittest.TestCase):
     manager.cutover(job,target,{},'v1.2.0')
    drain.assert_not_called();switch.assert_called_once();self.assertEqual(job['status'],'succeeded')
    self.assertEqual(target['services']['sub2api']['stop_grace_period'],'1s')
-   self.assertIn('sub2api-pricing-overlay',job['protected_containers'])
+   self.assertEqual(set(job['protected_containers']), {'sub2api-postgres', 'sub2api-redis'})
 if __name__=='__main__': unittest.main()

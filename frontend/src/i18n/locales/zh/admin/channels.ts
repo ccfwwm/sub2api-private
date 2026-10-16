@@ -607,6 +607,7 @@ export default {
         kindRequired: '请选择供应商'
       },
       runResultTitle: '检测结果',
+      editDetectionSettings: '编辑检测配置',
       noMonitorsYet: '暂无监控',
       createFirstMonitor: '创建第一个监控来跟踪渠道可用性',
       advanced: {

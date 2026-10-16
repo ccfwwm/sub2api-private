@@ -239,13 +239,15 @@ func runMonitorMediaConnection(ctx context.Context, m *ChannelMonitor, c Monitor
 // Each subsequent check polls the same task. Interrupted or ambiguous POSTs
 // remain blocked until an administrator explicitly resets the revision.
 type monitorMediaTask struct {
-	Revision    string           `json:"revision"`
-	Fingerprint string           `json:"fingerprint"`
-	StartedAt   time.Time        `json:"started_at"`
-	State       string           `json:"state"`
-	UpstreamID  string           `json:"upstream_id"`
-	Capability  media.Capability `json:"capability"`
-	Account     media.Account    `json:"account"`
+	Revision     string           `json:"revision"`
+	Fingerprint  string           `json:"fingerprint"`
+	StartedAt    time.Time        `json:"started_at"`
+	State        string           `json:"state"`
+	UpstreamID   string           `json:"upstream_id"`
+	ResultStatus string           `json:"result_status,omitempty"`
+	Message      string           `json:"message,omitempty"`
+	Capability   media.Capability `json:"capability"`
+	Account      media.Account    `json:"account"`
 }
 
 func (s *ChannelMonitorService) monitorMediaStatePath(id int64, model string) string {
@@ -374,7 +376,13 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		upstream, err = adapter.Submit(ctx, cap, req, task.Account)
 	} else {
 		if task.State == "blocked" || task.UpstreamID == "" {
-			res.Message = "generation: acceptance uncertain or failed; no resubmission; reset task explicitly"
+			if task.ResultStatus == MonitorStatusFailed {
+				res.Status = MonitorStatusFailed
+			}
+			res.Message = task.Message
+			if res.Message == "" {
+				res.Message = "generation: previous probe stopped; edit detection settings and reset task before retrying; no resubmission"
+			}
 			return res
 		}
 		if time.Since(task.StartedAt) > time.Duration(*cap.Limits.ObservationSeconds)*time.Second {
@@ -408,13 +416,62 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: valid "+cap.MediaType+" output received"
 		}
 	case "failed":
-		task.State, res.Status, res.Message = "blocked", MonitorStatusFailed, "generation: upstream rejected or failed; no resubmission; reset task explicitly"
+		task.State, res.Status = "blocked", MonitorStatusFailed
+		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; edit detection settings and reset task before retrying; no resubmission"
 	default:
-		task.State, res.Message = "blocked", "generation: upstream failed or acceptance uncertain; no resubmission; reset task explicitly"
+		task.State = "blocked"
+		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; acceptance uncertain; reset task only after checking the original request; no resubmission"
 	}
+	res.Message = truncateMessage(res.Message)
+	task.ResultStatus, task.Message = res.Status, res.Message
 	if s.saveMonitorMediaTask(path, task) != nil {
 		res.Status, res.Message = MonitorStatusError, "generation: result journal could not be persisted; no resubmission"
 	}
 	res.Message = truncateMessage(res.Message)
 	return res
+}
+
+// Keep the upstream's actionable error instead of replacing a definite 4xx
+// rejection with an ambiguous acceptance warning on the next check. Never put
+// the complete response or credentials in the monitor history.
+func monitorMediaDiagnostic(result media.UpstreamResult, m *ChannelMonitor) string {
+	message := result.Diagnostic
+	var payload struct {
+		Message string          `json:"message"`
+		Error   json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(result.Response, &payload) == nil {
+		detail := payload.Message
+		var nested struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(payload.Error, &nested) == nil && nested.Message != "" {
+			detail = nested.Message
+		} else {
+			var text string
+			if json.Unmarshal(payload.Error, &text) == nil && text != "" {
+				detail = text
+			}
+		}
+		if detail != "" {
+			message += ": " + detail
+		}
+	}
+	if message == "" {
+		message = "upstream generation failed"
+	}
+	for _, secret := range append([]string{m.APIKey}, monitorMediaHeaderValues(m.ExtraHeaders)...) {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[redacted]")
+		}
+	}
+	return truncateMessage(sanitizeErrorMessage(strings.Join(strings.Fields(message), " ")))
+}
+
+func monitorMediaHeaderValues(headers map[string]string) []string {
+	values := make([]string, 0, len(headers))
+	for _, value := range headers {
+		values = append(values, value)
+	}
+	return values
 }

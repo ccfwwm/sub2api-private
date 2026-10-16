@@ -607,6 +607,7 @@ export default {
         kindRequired: 'Please select a provider'
       },
       runResultTitle: 'Check Result',
+      editDetectionSettings: 'Edit detection settings',
       noMonitorsYet: 'No monitors yet',
       createFirstMonitor: 'Create your first monitor to track channel availability',
       advanced: {

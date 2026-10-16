@@ -196,3 +196,50 @@ func TestMediaMonitorInterruptedSubmissionAndCorruptJournalNeverSubmit(t *testin
 	res = s.runMonitorMediaGeneration(context.Background(), m, m.PrimaryModel, c, &http.Client{})
 	require.Contains(t, res.Message, "journal unreadable")
 }
+
+func TestMediaMonitorRejectionKeepsReasonAndFailedStatusWithoutResubmitting(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"message":"Model gpt-image2.5 is not available for this group; private-key custom-secret"}}`))
+	}))
+	defer server.Close()
+	m := &ChannelMonitor{ID: 18, Endpoint: server.URL, APIKey: "private-key", ExtraHeaders: map[string]string{"X-Secret": "custom-secret"}, PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}}
+	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+	first := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, MonitorStatusFailed, first.Status)
+	require.Contains(t, first.Message, "HTTP 404")
+	require.Contains(t, first.Message, "Model gpt-image2.5 is not available for this group")
+	require.NotContains(t, first.Message, "acceptance uncertain")
+	require.NotContains(t, first.Message, "private-key")
+	require.NotContains(t, first.Message, "custom-secret")
+	// The useful diagnostic and classification must survive service restarts.
+	s = NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+	next := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, first.Status, next.Status)
+	require.Equal(t, first.Message, next.Message)
+	require.Equal(t, 1, posts)
+}
+
+func TestMediaMonitorUnknownAcceptanceStaysBlocked(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		w.WriteHeader(http.StatusGatewayTimeout)
+	}))
+	defer server.Close()
+	m := &ChannelMonitor{ID: 19, Endpoint: server.URL, APIKey: "private-key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}}
+	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+	first := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, MonitorStatusError, first.Status)
+	require.Contains(t, first.Message, "HTTP 504")
+	require.Contains(t, first.Message, "acceptance uncertain")
+	next := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, first.Message, next.Message)
+	require.Equal(t, 1, posts)
+}

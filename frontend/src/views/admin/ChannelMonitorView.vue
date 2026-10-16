@@ -152,6 +152,8 @@
     <MonitorRunResultDialog
       :show="showRunResult"
       :results="runResults"
+      :editable="runMonitor?.provider === 'imagevideo'"
+      @edit="editRunMonitor"
       @close="showRunResult = false"
     />
 
@@ -229,6 +231,13 @@ const showDeleteDialog = ref(false)
 const deleting = ref<ChannelMonitor | null>(null)
 const showRunResult = ref(false)
 const runResults = ref<CheckResult[]>([])
+const runMonitor = ref<ChannelMonitor | null>(null)
+
+function editRunMonitor() {
+  if (!runMonitor.value) return
+  showRunResult.value = false
+  openEditDialog(runMonitor.value)
+}
 const duplicatingIds = reactive(new Set<number>())
 
 let abortController: AbortController | null = null
@@ -334,6 +343,7 @@ async function handleRunNow(row: ChannelMonitor) {
   try {
     const res = await adminAPI.channelMonitor.runNow(row.id)
     runResults.value = res.results || []
+    runMonitor.value = row
     showRunResult.value = true
     appStore.showSuccess(t('admin.channelMonitor.runSuccess'))
     // Refresh row to get latest status from backend

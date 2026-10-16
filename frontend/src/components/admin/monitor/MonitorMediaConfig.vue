@@ -20,6 +20,7 @@ const capability = computed(() => {
   return { ...base, ...cap, duration: { ...base.duration, ...cap.duration }, operations: cap.operations || [], sizes: cap.sizes || [], resolutions: cap.resolutions || [], aspect_ratios: cap.aspect_ratios || [], qualities: cap.qualities || [] }
 })
 const params = computed(() => entry.value.parameters || {})
+const modelSuggestion = computed(() => capability.value.upstream_model.replace(/^gpt-image(?=\d)/, 'gpt-image-'))
 const defaultPrompt = computed(() => ({ image: 'A simple blue circle on a plain white background.', video: 'A fixed camera watching a blue ball slowly roll across a plain white floor.', audio: 'A short quiet instrumental piano melody, no vocals.' })[capability.value.media_type] || '')
 const durations = computed(() => capability.value.duration.values || [])
 const minimumSeconds = computed(() => durations.value.length ? Math.min(...durations.value) : capability.value.duration.min || 5)
@@ -93,6 +94,8 @@ const val = (e: Event) => (e.target as HTMLInputElement).value
     </label>
     <p class="text-xs text-gray-500">{{ config.mode === 'connection' ? tr('读取模型列表，检查鉴权和所选模型是否可见。连接通过不代表生成通过。', 'Checks authentication and model visibility using the model list. This does not verify generation.') : tr('按检测间隔生成一个产物；异步任务未结束时只查询原任务。异常或结果不确定时停止提交，需手动重置。', 'Generates one output per detection cycle. Pending tasks are only queried. Failed or uncertain submissions require an explicit reset.') }}</p>
     <label v-if="models.length" class="input-label">{{ tr('配置模型', 'Configure model') }}<select v-model="selected" class="input mt-1"><option v-for="model in models" :key="model">{{ model }}</option></select></label>
+    <p class="text-xs text-gray-500">{{ tr('模型名称须与该 Key 的 /v1/models 返回值完全一致，包括连字符；例如 gpt-image-2.5。上游模型是实际请求中发送的模型 ID。', 'Use the exact model ID returned by /v1/models for this key, including hyphens, e.g. gpt-image-2.5. The upstream model is the ID sent in the request.') }}</p>
+    <p v-if="modelSuggestion !== capability.upstream_model" role="alert" class="text-xs text-amber-600">{{ tr('请核对模型名称，是否应为：', 'Check whether the model ID should be: ') }}{{ modelSuggestion }}</p>
     <div v-if="selected" class="grid gap-3 sm:grid-cols-2">
       <label class="input-label">{{ tr('接口类型', 'Interface') }}<select class="input mt-1" :value="capability.adapter" @change="chooseAdapter(val($event))"><option value="">{{ tr('未知模型请选择接口', 'Choose an interface for unknown models') }}</option><option v-for="(label, value) in adapters" :key="value" :value="value">{{ label }}</option></select></label>
       <label class="input-label">{{ tr('上游模型', 'Upstream model') }}<input data-testid="media-monitor-upstream" class="input mt-1" :value="capability.upstream_model" @change="upstreamModel(val($event))" /></label>

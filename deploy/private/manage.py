@@ -531,7 +531,7 @@ class Manager:
         atomic_json(self.state / 'latest-cutover.json', {'id': job['id']})
         switched = False
         before = {n: (inspect(n)['Id'], inspect(n)['State']['StartedAt'])
-                  for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
+                  for n in ['sub2api-postgres', 'sub2api-redis']}
         docs_before_name = self.docs_container(running=True) or self.docs_container()
         docs_before = inspect(docs_before_name) if docs_before_name else None
         try:

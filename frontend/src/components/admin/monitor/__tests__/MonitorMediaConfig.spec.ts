@@ -14,6 +14,14 @@ function dialog(models = ['omni-flash', 'veo-3.1-lite']) {
 }
 
 describe('media monitor configuration', () => {
+  it('warns about a missing hyphen without silently changing the configured model', async () => {
+    const wrapper = dialog(['gpt-image2.5'])
+    await wrapper.get('[data-testid="media-monitor-mode"]').setValue('generation')
+    expect(wrapper.get('[role="alert"]').text()).toContain('gpt-image-2.5')
+    expect(wrapper.get('[data-testid="media-monitor-upstream"]').element).toHaveProperty('value', 'gpt-image2.5')
+    await wrapper.get('[data-testid="media-monitor-upstream"]').setValue('gpt-image-2.5')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
   it('defaults to a connection check and requires an explicit generation choice', async () => {
     const wrapper = dialog()
     expect(wrapper.get('[data-testid="media-monitor-mode"]').element).toHaveProperty('value', 'connection')

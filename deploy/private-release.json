@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.8 fixes the media documentation editor API prefix, readable errors and load protection. Documentation data, historical versions and billing behavior are preserved. Built locally and deployed through the private release manager.",
+  "version_note": "Private release 1.2.9 preserves actionable media monitor failures, improves model ID configuration and results, and removes the production pricing overlay dependency in favor of built-in catalog sync and overrides. Built locally; billing amounts and documentation content are preserved.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

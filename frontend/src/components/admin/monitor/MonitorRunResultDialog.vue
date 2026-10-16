@@ -9,14 +9,14 @@
       <div
         v-for="r in results"
         :key="r.model"
-        class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-600"
+        class="flex flex-col gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-dark-600"
       >
-        <div class="flex flex-col">
+        <div class="flex min-w-0 flex-col">
           <span class="font-medium text-gray-900 dark:text-white">{{ formatMonitorModel(r.model) }}</span>
-          <span v-if="r.message" class="text-xs text-gray-500 dark:text-gray-400">{{ r.message }}</span>
+          <span v-if="r.message" class="break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{{ r.message }}</span>
           <MonitorQuotaView :snapshot="r.quota" class="mt-1" />
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2 whitespace-nowrap">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
             :class="statusBadgeClass(r.status)"
@@ -28,7 +28,10 @@
       </div>
     </div>
     <template #footer>
-      <div class="flex justify-end">
+      <div class="flex flex-wrap justify-end gap-2">
+        <button v-if="editable" class="btn btn-secondary" @click="$emit('edit')">
+          {{ t('admin.channelMonitor.editDetectionSettings') }}
+        </button>
         <button @click="$emit('close')" class="btn btn-primary">
           {{ t('common.close') }}
         </button>
@@ -47,10 +50,12 @@ import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 defineProps<{
   show: boolean
   results: CheckResult[]
+  editable?: boolean
 }>()
 
 defineEmits<{
   (e: 'close'): void
+  (e: 'edit'): void
 }>()
 
 const { t } = useI18n()
