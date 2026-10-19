@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.10 removes duplicate inline branding image payloads from page bootstrap and public settings, serves original logos at immutable content-addressed URLs, and adds scoped website compression deployment. Built locally; streaming API behavior, stored branding, billing amounts and documentation content are preserved.",
+  "version_note": "Private release 1.2.11 adds explicitly configured Yunfei multimodal Base64 and v6k public-URL video contracts, shared estimate/submission material validation and measured input duration, and top-level/output-array artifact parsing. Legacy capability configurations and task snapshots remain readable; no automatic uploads or model configuration rewrites.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

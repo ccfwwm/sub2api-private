@@ -97,6 +97,7 @@ const val = (e: Event) => (e.target as HTMLInputElement).value
     <p class="text-xs text-gray-500">{{ tr('模型名称须与该 Key 的 /v1/models 返回值完全一致，包括连字符；例如 gpt-image-2.5。上游模型是实际请求中发送的模型 ID。', 'Use the exact model ID returned by /v1/models for this key, including hyphens, e.g. gpt-image-2.5. The upstream model is the ID sent in the request.') }}</p>
     <p v-if="modelSuggestion !== capability.upstream_model" role="alert" class="text-xs text-amber-600">{{ tr('请核对模型名称，是否应为：', 'Check whether the model ID should be: ') }}{{ modelSuggestion }}</p>
     <div v-if="selected" class="grid gap-3 sm:grid-cols-2">
+      <label class="input-label">{{ tr('视频请求格式','Video request format') }}<select class="input mt-1" v-model="capability.request_format"><option value="legacy">Legacy</option><option value="yunfei_multimodal">云飞 Base64 多媒体</option><option value="v6k_url">v6k 公网 URL</option></select></label>
       <label class="input-label">{{ tr('接口类型', 'Interface') }}<select class="input mt-1" :value="capability.adapter" @change="chooseAdapter(val($event))"><option value="">{{ tr('未知模型请选择接口', 'Choose an interface for unknown models') }}</option><option v-for="(label, value) in adapters" :key="value" :value="value">{{ label }}</option></select></label>
       <label class="input-label">{{ tr('上游模型', 'Upstream model') }}<input data-testid="media-monitor-upstream" class="input mt-1" :value="capability.upstream_model" @change="upstreamModel(val($event))" /></label>
       <template v-if="config.mode === 'generation'">

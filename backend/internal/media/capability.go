@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -29,6 +30,17 @@ func ValidateCapability(c Capability, publish bool) error {
 	}
 	if !contains([]string{"yunfei_gpt_images", "yunfei_gemini_native", "yunfei_grok", "yunfei_veo_preview", "yunfei_omni", "yunfei_lyria", "v6k_video_gateway", "ark_native"}, c.Adapter) {
 		return fail(400, "invalid_adapter", "Unknown adapter")
+	}
+	if c.RequestFormat != "" && !contains([]string{"legacy", "yunfei_multimodal", "v6k_url"}, c.RequestFormat) {
+		return fail(400, "invalid_request_format", "Unknown request format")
+	}
+	if c.RequestFormat != "" && c.RequestFormat != "legacy" && (c.MediaType != "video" || c.Adapter == "ark_native") {
+		return fail(400, "invalid_request_format", "Video gateway request format required")
+	}
+	for kind, m := range c.Materials {
+		if m.ReferenceField != "" && !contains([]string{kind + "s", "reference_" + kind + "s", "reference_" + kind + "_urls"}, m.ReferenceField) {
+			return fail(400, "invalid_reference_field", "Reference field must match material kind")
+		}
 	}
 	if c.MediaType != "image" && c.MediaType != "video" && c.MediaType != "audio" {
 		return fail(400, "invalid_media_type", "Unknown media type")
@@ -137,7 +149,7 @@ func refString(v any) (string, string, error) {
 			return "", "", fail(400, "invalid_reference", "Reference object requires url")
 		}
 		for k := range o {
-			if k != "url" && k != "duration_seconds" {
+			if k != "url" && k != "duration_seconds" && k != "role" {
 				return "", "", fail(400, "invalid_reference", "Unknown reference object field")
 			}
 		}
@@ -161,7 +173,11 @@ func referenceFormat(raw, form string) (string, error) {
 	}
 	if strings.HasPrefix(raw, "https://") {
 		u, e := url.Parse(raw)
-		if e != nil || u.Hostname() == "" || u.User != nil {
+		if e != nil {
+			return "", fail(400, "invalid_reference", "Invalid public URL")
+		}
+		host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+		if e != nil || host == "" || u.User != nil || u.Port() != "" || u.Fragment != "" || !strings.Contains(host, ".") || host == "localhost" || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") || (net.ParseIP(host) != nil && !publicIP(net.ParseIP(host))) {
 			return "", fail(400, "invalid_reference", "Invalid public URL")
 		}
 		if form == "object" {
@@ -205,7 +221,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		delete(p, "public_profile_id")
 	}
 	allowed := map[string]bool{}
-	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
+	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
 		allowed[k] = true
 	}
 	for k := range p {
@@ -216,10 +232,26 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	if stringValue(p["model"]) != "" && stringValue(p["model"]) != cap.Model {
 		return result, fail(400, "model_conflict", "Request model conflicts with capability")
 	}
+	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" {
+		for _, field := range []string{"image", "image_url", "image_urls", "input_reference", "mask", "contents", "messages"} {
+			if p[field] != nil {
+				return result, fail(400, "unsupported_reference_field", "Use the selected protocol reference arrays")
+			}
+		}
+	}
 	p["model"] = cap.UpstreamModel
 	for _, ab := range [][2]string{{"seconds", "duration"}, {"ratio", "aspect_ratio"}, {"generate_audio", "generateAudio"}, {"negative_prompt", "negativePrompt"}, {"images", "reference_image_urls"}, {"videos", "reference_video_urls"}, {"audios", "reference_audio_urls"}} {
 		if e := alias(p, ab[0], ab[1]); e != nil {
 			return result, e
+		}
+	}
+	for _, kind := range []string{"image", "video", "audio"} {
+		field := "reference_" + kind + "s"
+		if p[field] != nil && cap.RequestFormat != "yunfei_multimodal" && cap.RequestFormat != "v6k_url" {
+			return result, fail(400, "unsupported_reference_field", "Select a multimodal request format")
+		}
+		if err := alias(p, kind+"s", field); err != nil {
+			return result, err
 		}
 	}
 	if cap.MediaType == "video" {
@@ -310,7 +342,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		}
 		refs[kind] = append(refs[kind], list...)
 	}
-	if cap.Adapter == "v6k_video_gateway" {
+	if (cap.RequestFormat == "" || cap.RequestFormat == "legacy") && cap.Adapter == "v6k_video_gateway" {
 		if p["input_reference"] != nil {
 			if len(refs["image"]) > 0 {
 				return result, fail(400, "reference_conflict", "Choose images or input_reference")
@@ -328,59 +360,61 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			refs["image"] = []any{p["image"]}
 		}
 	}
-	switch cap.Adapter {
-	case "yunfei_grok":
-		if p["image_url"] != nil || p["image_urls"] != nil || p["images"] != nil || p["input_reference"] != nil {
-			return result, fail(400, "wrong_image_field", "Grok JSON requires image.url")
-		}
-		if p["image"] != nil {
-			refs["image"] = append(refs["image"], p["image"])
-		}
-	case "yunfei_gpt_images":
-		if p["image"] != nil {
-			if p["images"] != nil {
-				return result, fail(400, "reference_conflict", "Choose one image field")
+	if cap.RequestFormat == "" || cap.RequestFormat == "legacy" {
+		switch cap.Adapter {
+		case "yunfei_grok":
+			if p["image_url"] != nil || p["image_urls"] != nil || p["images"] != nil || p["input_reference"] != nil {
+				return result, fail(400, "wrong_image_field", "Grok JSON requires image.url")
 			}
-			list, e := orderedValues(p["image"])
-			if e != nil {
-				list = []any{p["image"]}
+			if p["image"] != nil {
+				refs["image"] = append(refs["image"], p["image"])
 			}
-			refs["image"] = list
-		}
-		if p["image_url"] != nil || p["image_urls"] != nil || p["input_reference"] != nil {
-			return result, fail(400, "wrong_image_field", "Image edits require image or images")
-		}
-		if operation == "image" && len(refs["image"]) > 0 {
-			return result, fail(400, "edit_endpoint_required", "Use image edits for reference images")
-		}
-	case "yunfei_omni":
-		if p["image_url"] != nil || p["image_urls"] != nil || p["negative_prompt"] != nil || p["generate_audio"] != nil {
-			return result, fail(400, "unsupported_parameter", "Omni uses image/images and has no audio/negative control")
-		}
-		if p["image"] != nil {
-			if p["images"] != nil {
-				return result, fail(400, "reference_conflict", "Choose image or images")
+		case "yunfei_gpt_images":
+			if p["image"] != nil {
+				if p["images"] != nil {
+					return result, fail(400, "reference_conflict", "Choose one image field")
+				}
+				list, e := orderedValues(p["image"])
+				if e != nil {
+					list = []any{p["image"]}
+				}
+				refs["image"] = list
 			}
-			refs["image"] = append(refs["image"], p["image"])
-		}
-	case "yunfei_veo_preview":
-		if p["image"] != nil || p["images"] != nil {
-			return result, fail(400, "wrong_image_field", "Veo preview uses image_url/image_urls")
-		}
-		if p["image_url"] != nil && p["image_urls"] != nil {
-			return result, fail(400, "reference_conflict", "Choose image_url or image_urls")
-		}
-		if p["image_url"] != nil {
-			refs["image"] = append(refs["image"], p["image_url"])
-		}
-		if p["image_urls"] != nil {
-			list, e := orderedValues(p["image_urls"])
-			if e != nil {
-				return result, e
+			if p["image_url"] != nil || p["image_urls"] != nil || p["input_reference"] != nil {
+				return result, fail(400, "wrong_image_field", "Image edits require image or images")
 			}
-			refs["image"] = list
-			if !strings.HasSuffix(cap.Model, "-ref") && len(list) != 2 {
-				return result, fail(400, "invalid_frames", "Exactly two ordered first/last frames required")
+			if operation == "image" && len(refs["image"]) > 0 {
+				return result, fail(400, "edit_endpoint_required", "Use image edits for reference images")
+			}
+		case "yunfei_omni":
+			if p["image_url"] != nil || p["image_urls"] != nil || p["negative_prompt"] != nil || p["generate_audio"] != nil {
+				return result, fail(400, "unsupported_parameter", "Omni uses image/images and has no audio/negative control")
+			}
+			if p["image"] != nil {
+				if p["images"] != nil {
+					return result, fail(400, "reference_conflict", "Choose image or images")
+				}
+				refs["image"] = append(refs["image"], p["image"])
+			}
+		case "yunfei_veo_preview":
+			if p["image"] != nil || p["images"] != nil {
+				return result, fail(400, "wrong_image_field", "Veo preview uses image_url/image_urls")
+			}
+			if p["image_url"] != nil && p["image_urls"] != nil {
+				return result, fail(400, "reference_conflict", "Choose image_url or image_urls")
+			}
+			if p["image_url"] != nil {
+				refs["image"] = append(refs["image"], p["image_url"])
+			}
+			if p["image_urls"] != nil {
+				list, e := orderedValues(p["image_urls"])
+				if e != nil {
+					return result, e
+				}
+				refs["image"] = list
+				if !strings.HasSuffix(cap.Model, "-ref") && len(list) != 2 {
+					return result, fail(400, "invalid_frames", "Exactly two ordered first/last frames required")
+				}
 			}
 		}
 	}
@@ -399,6 +433,9 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			}
 		}
 		if meta["content"] != nil {
+			if cap.RequestFormat != "" && cap.RequestFormat != "legacy" {
+				return result, fail(400, "reference_conflict", "Explicit video formats do not accept native metadata content")
+			}
 			if cap.Adapter != "v6k_video_gateway" && cap.Adapter != "ark_native" {
 				return result, fail(400, "unsupported_content", "Native content is not supported by this adapter")
 			}
@@ -414,12 +451,29 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			refs = content
 		}
 	}
+	frameRoles := map[string]bool{}
+	ordinaryImages := 0
 	for kind, list := range refs {
 		material, ok := cap.Materials[kind]
 		if len(list) > 0 && (!ok || material.MaxCount == nil || len(list) > *material.MaxCount) {
 			return result, fail(400, "reference_limit", "Reference type/count is not configured or exceeded")
 		}
+		if cap.RequestFormat == "v6k_url" && kind != "image" && len(list) > 0 && cap.Materials[kind].ReferenceField == "" {
+			return result, fail(400, "unsupported_reference_type", "Configure the verified material field")
+		}
 		for _, v := range list {
+			role := ""
+			if obj, ok := v.(map[string]any); ok && obj["role"] != nil {
+				role = stringValue(obj["role"])
+			}
+			if role != "" && role != "reference" && role != "reference_image" {
+				if cap.RequestFormat != "yunfei_multimodal" || kind != "image" || !contains([]string{"first_frame", "last_frame"}, role) || frameRoles[role] {
+					return result, fail(400, "invalid_reference_role", "Unsupported or duplicate frame role")
+				}
+				frameRoles[role] = true
+			} else if kind == "image" {
+				ordinaryImages++
+			}
 			raw, form, e := refString(v)
 			if e != nil {
 				return result, e
@@ -427,6 +481,9 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			f, e := referenceFormat(raw, form)
 			if e != nil {
 				return result, e
+			}
+			if cap.RequestFormat == "v6k_url" && (!strings.HasPrefix(f, "public_url") || role != "") {
+				return result, fail(400, "reference_url_required", "Provide public HTTPS material URLs")
 			}
 			if !allowedFormat(material, f) {
 				return result, fail(400, "unsupported_reference_format", "Unsupported "+kind+" format")
@@ -454,6 +511,9 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 				result.Quantities["accepted_input_"+kind+"_duration"] = []string{"0"}
 			}
 		}
+	}
+	if len(frameRoles) > 0 && ordinaryImages > 0 {
+		return result, fail(400, "frame_reference_conflict", "Frame mode cannot mix ordinary image references")
 	}
 	if cap.Model == "video-QY" && len(refs["video"]) == 0 {
 		return result, fail(400, "video_reference_required", "Video editing requires a reference video")

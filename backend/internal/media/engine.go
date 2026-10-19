@@ -226,6 +226,21 @@ func EffectiveMultiplier(cap Capability, identity Identity) string {
 	}
 	return multiplier
 }
+
+// PrepareRequest validates the same materials and measures the same accepted
+// input durations for estimates and submissions. Caller metadata is never usage.
+func (e *Engine) PrepareRequest(ctx context.Context, cap Capability, operation string, p map[string]any, uploads []Upload) (Request, error) {
+	req, err := NormalizeUploads(cap, operation, p, uploads)
+	if err != nil {
+		return req, err
+	}
+	if err = e.measureInputs(ctx, cap, &req); err != nil {
+		return req, err
+	}
+	req.Quantities["task_count"] = []string{"1"}
+	return req, nil
+}
+
 func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p map[string]any, uploads []Upload, identity Identity, idem string) (StoredTask, error) {
 	if len(idem) > 200 {
 		return StoredTask{}, fail(400, "invalid_idempotency_key", "Idempotency key exceeds 200 characters")
@@ -246,14 +261,10 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	if previous != nil {
 		return *previous, nil
 	}
-	req, err := NormalizeUploads(cap, operation, p, uploads)
+	req, err := e.PrepareRequest(ctx, cap, operation, p, uploads)
 	if err != nil {
 		return StoredTask{}, err
 	}
-	if err = e.measureInputs(ctx, cap, &req); err != nil {
-		return StoredTask{}, err
-	}
-	req.Quantities["task_count"] = []string{"1"}
 	snapshot, accountID, _, err := e.Snapshot(ctx, cap, req, identity)
 	if err != nil {
 		return StoredTask{}, err
@@ -626,13 +637,17 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 func (b *limitedBuffer) String() string { return string(b.raw) }
 func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request) error {
 	// Input video/audio billing is never sourced from caller duration metadata.
-	for _, kind := range []string{"video", "audio"} {
+	kinds := []string{"video", "audio"}
+	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" {
+		kinds = append(kinds, "image")
+	}
+	for _, kind := range kinds {
 		values := req.MaterialRefs[kind]
 		if len(values) == 0 {
 			continue
 		}
 		material := cap.Materials[kind]
-		if material.MaxFileBytes == nil || material.MaxDuration == nil {
+		if material.MaxFileBytes == nil || (kind != "image" && material.MaxDuration == nil) {
 			return fail(422, "material_probe_limits_required", "Input media requires file and duration bounds")
 		}
 		measured := []string{}
@@ -664,6 +679,13 @@ func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request
 			}
 			if err != nil {
 				return fail(400, "invalid_material", "Cannot validate input media")
+			}
+			if kind == "image" {
+				artifact := Artifact{Type: "image"}
+				if err := validateArtifact(ctx, path, &artifact); err != nil {
+					return fail(400, "invalid_material", "Cannot validate reference image")
+				}
+				continue
 			}
 			duration, err := probeMedia(ctx, path, kind)
 			if err != nil {

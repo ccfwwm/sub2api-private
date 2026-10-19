@@ -1,179 +1,149 @@
 {
-  "version": "v1.2.10",
+  "version": "v1.2.11",
   "status": "recorded",
-  "verified_at": "2026-10-16T22:39:05+08:00",
-  "environment": "production monitor 17 and its existing group API key",
-  "policy": "Website performance changes only. Reuse the v1.2.9 real-channel verification; no additional billable generation is submitted for this release.",
-  "verification_reused_from": "v1.2.9",
-  "new_generation_requests": 0,
-  "verification_note": "The existing monitor 17 verification generated a valid image in 25117 ms after correcting gpt-image2.5 to gpt-image-2.5. All real-generation cases retain their original timestamps.",
+  "verified_at": "2026-10-19T16:12:08.092Z",
+  "environment": "Authorized supplier tests and existing production AI gateway, plus isolated durable protocol regression",
+  "policy": "No automatic uploads. Reuse public URLs. Preserve uncertain tasks; do not resubmit them.",
   "cases": [
     {
-      "model": "gpt-image-2.5",
-      "monitor_id": 17,
-      "task_id": "mt_d4b8bf58-da58-4bf1-80c9-809314a4f3df",
+      "label": "gateway-grok15-1s-base64",
+      "provider": "gateway",
+      "model": "grok-imagine-video-1.5",
+      "task_id": "mt_72307cb8-1b86-4ddd-8fea-2b48f3224c3f",
       "status": "completed",
+      "bytes": 181366,
+      "sha256": "3991dc054b621288b110c44278196cc6cf5f0109f9d9485bc9acdf34b60687eb",
       "verification": "real_generation",
-      "latency_ms": 25117,
-      "verified_at": "2026-10-16T22:38:40+08:00",
-      "scope": "Existing enabled generation monitor automatically ran after saving the exact model ID and produced a valid image. Confirmed via monitor history and completed media task."
-    },
-    {
-      "account_id": 2092,
-      "model": "veo-3.1-lite",
-      "test_id": "mt_1cc1494562d74c4e8a8601bf2f269e18",
-      "upstream_task_id": "task_dWPBotQpLM6cfM8v8BdEtc6wJe3R2BZL",
-      "status": "completed",
       "mime_type": "video/mp4",
-      "bytes": 931678,
-      "sha256": "2129273bb123fc5520e72aae2165235dca3af09a4440ff7d2eb065186dcea1f7",
+      "scope": "Production gateway estimate, submission, poll, authenticated saved artifact download; legacy Grok image.url Base64 contract.",
+      "artifact_name": "gateway-grok15-1s-base64.mp4",
       "probe": {
         "programs": [],
         "streams": [
           {
             "codec_name": "h264",
             "codec_type": "video",
-            "width": 1280,
-            "height": 720
+            "width": 544,
+            "height": 544
           },
           {
             "codec_name": "aac",
             "codec_type": "audio"
-          }
-        ],
-        "format": {
-          "duration": "8.000000"
-        }
-      },
-      "verification": "real_generation",
-      "generation_submitted_by_this_run": false,
-      "checked_path": "/api/v1/admin/accounts/2092/tests/mt_1cc1494562d74c4e8a8601bf2f269e18/artifacts/video1",
-      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T23:12:01.350494+08:00"
-    },
-    {
-      "account_id": 2092,
-      "model": "omni-flash",
-      "test_id": "mt_84ec4f8924f646e089b2a427084930a5",
-      "upstream_task_id": "task_nmw1Ca3538m9xdjimfM18k7LfLxuHWkc",
-      "status": "completed",
-      "mime_type": "video/mp4",
-      "bytes": 511265,
-      "sha256": "1de33e9b91591e09082cd096ff14b8a4bdd9b55f24ef6bfcc41c17346f2a8ab9",
-      "probe": {
-        "programs": [],
-        "streams": [
+          },
           {
-            "codec_name": "h264",
+            "codec_name": "mjpeg",
             "codec_type": "video",
-            "width": 1280,
-            "height": 720
-          },
-          {
-            "codec_name": "aac",
-            "codec_type": "audio"
+            "width": 544,
+            "height": 544
           }
         ],
         "format": {
-          "duration": "4.010000"
+          "duration": "1.041667"
         }
-      },
-      "verification": "real_generation",
-      "generation_submitted_by_this_run": false,
-      "checked_path": "/api/v1/admin/accounts/2092/tests/mt_84ec4f8924f646e089b2a427084930a5/artifacts/video1",
-      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T23:12:01.350494+08:00"
-    },
-    {
-      "account_id": 2094,
-      "model": "lyria-3-pro",
-      "test_id": "mt_df9e96fefd9a4a998abe6333288d41f6",
-      "upstream_task_id": "gen_74920ea4-524e-4380-8f69-6f86d218fdf0",
-      "status": "completed",
-      "mime_type": "audio/mp4",
-      "bytes": 836539,
-      "sha256": "bf74a6692fb1992e3e51898264e6ec828a1a9eb03c8328a8e8d8f678b97041c0",
-      "probe": {
-        "programs": [],
-        "streams": [
-          {
-            "codec_name": "aac",
-            "codec_type": "audio"
-          }
-        ],
-        "format": {
-          "duration": "58.688000"
-        }
-      },
-      "verification": "real_generation",
-      "generation_submitted_by_this_run": false,
-      "checked_path": "/api/v1/admin/accounts/2094/tests/mt_df9e96fefd9a4a998abe6333288d41f6/artifacts/audio1",
-      "scope": "Existing user-submitted real generation, authenticated saved artifact retrieval and ffprobe validation. No new upstream generation submission.",
-      "verified_at": "2026-10-13T23:12:01.350494+08:00"
-    },
-    {
-      "case": "gpt-single-edit",
-      "model": "gpt-image-2-1k",
-      "operation": "image_edit",
-      "test_id": "mt_9ec4dc92-e7b9-4da5-a894-929e3dd2e4a9",
-      "status": "completed",
-      "verification": "real_generation",
-      "verified_at": "2026-10-14T10:15:19.024Z",
-      "mime_type": "image/png",
-      "bytes": 355608,
-      "sha256": "37069608d2dc3e8ac7deb2fadfd270e4a333b35400f009b89e739b0bbd353de8",
-      "submit_http": 202,
-      "download_http": 200,
-      "billing_state": "settled",
-      "settled_usd": "0.04000000"
-    },
-    {
-      "case": "gpt-multi-edit",
-      "model": "gpt-image-2-1k",
-      "operation": "image_edit",
-      "test_id": "mt_fa423e6f-0b85-433e-8fb7-101124e30db4",
-      "status": "completed",
-      "verification": "real_generation",
-      "verified_at": "2026-10-14T10:40:55.368Z",
-      "mime_type": "image/png",
-      "bytes": 1030184,
-      "sha256": "436f75579b47e64f9604fd0b0419c29a62fa6fe9ff3d23f8f47ded893412bd24",
-      "submit_http": 202,
-      "download_http": 200,
-      "billing_state": "settled",
-      "settled_usd": "0.04000000"
-    }
-  ],
-  "browser_preview": {
-    "before": {
-      "video_error": 4,
-      "audio_error": 4,
-      "reason": "CSP has no media-src; default-src self blocks blob URLs"
-    },
-    "after_test_response_header_override": {
-      "video": {
-        "duration_seconds": 4.01,
-        "current_time_seconds": 0.48008,
-        "ready_state": 4,
-        "play_error": null
-      },
-      "audio": {
-        "duration_seconds": 58.688,
-        "current_time_seconds": 0.624992,
-        "ready_state": 4,
-        "play_error": null
       }
     },
-    "scope": "Production bytes in Chromium. Only test-browser document response header was overridden to reproduce the candidate media-src fix; production headers are verified after deployment.",
-    "production_domains": [
-      "https://code.aicodeme.cn",
-      "https://code.aicodeme.xyz",
-      "https://hkcode.aicodeme.xyz"
-    ]
-  },
+    {
+      "label": "v6k-tt480-5s-public-image",
+      "provider": "v6k",
+      "model": "TTseadanco2.0480",
+      "task_id": "task_xOKSQiom5n7aBn113R41Sp0qLTcWYbkV",
+      "status": "completed",
+      "bytes": 816815,
+      "sha256": "a32267be1aa542e21ffacfc69e54430f9435b25179f656f7cf2890a44aa96aa6",
+      "verification": "real_generation",
+      "mime_type": "video/mp4",
+      "scope": "Direct supplier submit, poll and authenticated same-origin content download. New generic protocol is separately covered by isolated local tests.",
+      "artifact_name": "v6k-tt480-5s-public-image.mp4",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 496,
+            "height": 864
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "5.088000"
+        }
+      }
+    },
+    {
+      "label": "v6k-doolaa-5s-existing-logo",
+      "provider": "v6k",
+      "model": "doolaa2.0",
+      "task_id": "task_rmcU8MDEWz4rC8eRg0OiUrTjIOqJsUKK",
+      "status": "completed",
+      "bytes": 966146,
+      "sha256": "977073d9a2cdf0b0a18c9fdd1fbe078c4e7f28fb96c51039f11b3a3443348084",
+      "verification": "real_generation",
+      "mime_type": "video/mp4",
+      "scope": "Direct supplier submit, poll and authenticated same-origin content download. New generic protocol is separately covered by isolated local tests.",
+      "artifact_name": "v6k-doolaa-5s-existing-logo.mp4",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 960,
+            "height": 960
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "5.050000"
+        }
+      }
+    }
+  ],
+  "unverified": [
+    "Yunfei generic mixed image/video/audio references have no successful new real-model run; protocol covered locally with real media bytes and mocks.",
+    "v6k video/audio reference fields remain disabled unless explicitly configured and verified."
+  ],
+  "uncertain_tasks": [
+    {
+      "provider": "yunfei",
+      "label": "yunfei-base64-image",
+      "task_id": null,
+      "status": "uncertain",
+      "note": "Do not automatically resubmit or assume refund."
+    },
+    {
+      "provider": "v6k",
+      "label": "v6k-minimax-4s-image",
+      "task_id": null,
+      "status": "uncertain",
+      "note": "Do not automatically resubmit or assume refund."
+    },
+    {
+      "provider": "v6k",
+      "label": "v6k-minimax-5s-image",
+      "task_id": null,
+      "status": "uncertain",
+      "note": "Do not automatically resubmit or assume refund."
+    },
+    {
+      "provider": "gateway",
+      "label": "gateway-minimax-5s-image",
+      "task_id": "mt_2f339a7c-5275-4d08-8805-dca9090f6251",
+      "status": "unknown",
+      "note": "Do not automatically resubmit or assume refund."
+    }
+  ],
   "application_checks": {
-    "csp_middleware_tests_passed": true,
-    "account_test_ui_tests_passed": 10,
-    "typecheck_lint_build_passed": true
+    "mock_durable_end_to_end": [
+      "yunfei_multimodal",
+      "v6k_url"
+    ],
+    "reference_measurement": "Server probes true AV duration; estimates and submissions share preparation."
   }
 }

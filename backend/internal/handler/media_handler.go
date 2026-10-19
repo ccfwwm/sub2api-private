@@ -651,7 +651,7 @@ func (h *MediaHandler) Estimate(c *gin.Context) {
 		mediaError(c, &media.Error{Status: 403, Code: "model_not_allowed", Message: "Model is not allowed in this group"})
 		return
 	}
-	req, err := media.Normalize(*cap, body.Operation, body.Request)
+	req, err := h.Engine.PrepareRequest(c.Request.Context(), *cap, body.Operation, body.Request, nil)
 	if err != nil {
 		mediaError(c, err)
 		return

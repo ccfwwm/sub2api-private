@@ -40,10 +40,59 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 		delete(p, "prompt")
 		p["stream"] = false
 	}
-	for from, to := range cap.FieldMapping {
-		if to != "" && !strings.ContainsAny(to, ":.[") && p[from] != nil && from != to {
-			p[to] = p[from]
-			delete(p, from)
+	if req.Operation == "video" && (cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url") {
+		for _, field := range []string{"images", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "image", "input_reference"} {
+			delete(p, field)
+		}
+		for _, kind := range []string{"image", "video", "audio"} {
+			refs := req.MaterialRefs[kind]
+			if len(refs) == 0 {
+				continue
+			}
+			field := "reference_" + kind + "s"
+			values := []any{}
+			if cap.RequestFormat == "v6k_url" {
+				field = cap.Materials[kind].ReferenceField
+				if kind == "image" {
+					field = "images"
+				}
+				if field == "" {
+					return UpstreamResult{}, fail(400, "unsupported_reference_type", "Configure the verified material field")
+				}
+			}
+			for _, ref := range refs {
+				raw, _, err := refString(ref)
+				if err != nil {
+					return UpstreamResult{}, err
+				}
+				if cap.RequestFormat == "v6k_url" {
+					values = append(values, map[string]any{"url": raw})
+				} else if obj, ok := ref.(map[string]any); ok && (obj["role"] == "first_frame" || obj["role"] == "last_frame") {
+					values = append(values, map[string]any{"url": raw, "role": obj["role"]})
+				} else {
+					values = append(values, raw)
+				}
+			}
+			p[field] = values
+		}
+		if cap.RequestFormat == "yunfei_multimodal" {
+			if p["seconds"] != nil {
+				p["duration"] = p["seconds"]
+				delete(p, "seconds")
+			}
+			if p["ratio"] != nil {
+				p["aspect_ratio"] = p["ratio"]
+				delete(p, "ratio")
+			}
+		}
+	}
+	// Legacy mappings never override an explicitly selected protocol.
+	if cap.RequestFormat == "" || cap.RequestFormat == "legacy" {
+		for from, to := range cap.FieldMapping {
+			if to != "" && !strings.ContainsAny(to, ":.[") && p[from] != nil && from != to {
+				p[to] = p[from]
+				delete(p, from)
+			}
 		}
 	}
 	if cap.Adapter == "ark_native" {
@@ -191,7 +240,20 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		if response.StatusCode >= 500 || response.StatusCode == 408 || response.StatusCode == 429 {
 			return UpstreamResult{Status: "unknown", Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
 		}
-		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: fmt.Sprintf("Upstream rejected request: HTTP %d", response.StatusCode)}, nil
+		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", response.StatusCode)
+		if response.StatusCode == 400 || response.StatusCode == 415 || response.StatusCode == 422 {
+			var rejected map[string]any
+			if len(raw) <= 8192 && json.Unmarshal(raw, &rejected) == nil {
+				code := stringValue(rejected["code"])
+				if detail, ok := rejected["error"].(map[string]any); ok {
+					code = stringValue(detail["code"])
+				}
+				if contains([]string{"unsupported_reference_format", "base64_not_supported", "reference_url_required"}, code) {
+					diagnostic = "reference_url_required"
+				}
+			}
+		}
+		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic}, nil
 	}
 	var object map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -239,7 +301,7 @@ func parseResult(p map[string]any, cap Capability) UpstreamResult {
 	for _, field := range []string{"url", "download_url", "video_url", "audio_url"} {
 		add(stringValue(p[field]), "")
 	}
-	for _, field := range []string{"data", "videos", "artifacts", "content"} {
+	for _, field := range []string{"data", "videos", "artifacts", "content", "output"} {
 		if item, ok := p[field].(map[string]any); ok {
 			for _, key := range []string{"url", "download_url", "content_url", cap.MediaType + "_url"} {
 				add(stringValue(item[key]), stringValue(item["mime_type"]))

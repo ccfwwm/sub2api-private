@@ -16,6 +16,8 @@ import (
 func TestPublicCapabilitiesPreservesVariantsAndRedactsBindings(t *testing.T) {
 	cap := Capability{ID: "small", Version: "1", Model: "00sd2.5", MediaType: "video", Enabled: true, Status: "enabled", GroupIDs: []int64{1}, Operations: []string{"video"}, Sizes: []string{"1024x1024"}, AccountIDs: []int64{987}, UpstreamModel: "PRIVATE_MODEL", CostTemplates: []string{"PRIVATE_COST"}, ArtifactHosts: []string{"PRIVATE_HOST"}}
 	cap.Duration = Duration{Mode: "enum", Values: []int{5}, Scenarios: []map[string]any{{"private": "PRIVATE_SCENARIO"}}}
+	cap.RequestFormat = "v6k_url"
+	cap.Materials = map[string]Material{"video": {ReferenceField: "videos"}}
 	large := cap
 	large.ID = "large"
 	large.Sizes = []string{"2048x2048"}
@@ -32,6 +34,9 @@ func TestPublicCapabilitiesPreservesVariantsAndRedactsBindings(t *testing.T) {
 	entries, err := engine.PublicCapabilities(context.Background(), 1)
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
+	require.Equal(t, "v6k_url", entries[0].RequestFormat)
+	require.Equal(t, "images", entries[0].ReferenceField)
+	require.Equal(t, "videos", entries[0].Materials["video"].ReferenceField)
 	require.Equal(t, []int{5}, entries[0].Duration.Values)
 	require.Equal(t, []int{10}, entries[1].Duration.Values)
 	require.Equal(t, []string{"1024x1024"}, entries[0].Sizes)

@@ -22,13 +22,14 @@ export interface MediaPricing {
 }
 export interface MediaCapability {
   profile_id: string; version: string; model: string; upstream_model: string
+  request_format?: 'legacy' | 'yunfei_multimodal' | 'v6k_url'
   provider: string; adapter: string; media_type: string; enabled: boolean; status: string
   validation_status: string; verification_evidence: string
   operations: string[]; formats: string[]; scenarios: string[]
   duration: { mode: string; values: number[]; min: number | null; max: number | null; default: number | null; required: boolean }
   resolutions: string[]; sizes: string[]; aspect_ratios: string[]; qualities: string[]
   resolution_policy: string
-  materials: Record<string, { formats: string[]; max_count: number | null; max_file_bytes: number | null; max_duration_seconds: string | null }>
+  materials: Record<string, { reference_field?: string; formats: string[]; max_count: number | null; max_file_bytes: number | null; max_duration_seconds: string | null }>
   delivery: { poll_seconds: number; head: boolean; range: boolean; refresh: boolean }
   limits: { max_request_bytes: number; max_concurrent_tasks: number; observation_seconds: number }
   artifact_hosts: string[]; usage_fields: Record<string, string>

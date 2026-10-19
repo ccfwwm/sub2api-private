@@ -26,10 +26,11 @@ type Duration struct {
 	Scenarios []map[string]any `json:"scenarios"`
 }
 type Material struct {
-	Formats      []string `json:"formats"`
-	MaxCount     *int     `json:"max_count"`
-	MaxFileBytes *int64   `json:"max_file_bytes"`
-	MaxDuration  *string  `json:"max_duration_seconds"`
+	ReferenceField string   `json:"reference_field,omitempty"`
+	Formats        []string `json:"formats"`
+	MaxCount       *int     `json:"max_count"`
+	MaxFileBytes   *int64   `json:"max_file_bytes"`
+	MaxDuration    *string  `json:"max_duration_seconds"`
 }
 type Capability struct {
 	ID               string              `json:"profile_id"`
@@ -38,6 +39,7 @@ type Capability struct {
 	UpstreamModel    string              `json:"upstream_model"`
 	Provider         string              `json:"provider"`
 	Adapter          string              `json:"adapter"`
+	RequestFormat    string              `json:"request_format,omitempty"`
 	MediaType        string              `json:"media_type"`
 	Enabled          bool                `json:"enabled"`
 	Status           string              `json:"status"`
