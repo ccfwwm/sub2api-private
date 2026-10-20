@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import ImageVideoDocsView from '../public/ImageVideoDocsView.vue'
 import { imagevideoMarkdown, imagevideoModels, imagevideoSections, sectionMarkdown, groupMarkdown } from '@/data/imagevideoDocs'
 
@@ -9,8 +9,8 @@ describe('Public media docs', () => {
     localStorage.removeItem('media-docs-theme')
   })
   it('uses 26 exact unique models and validates JSON and cURL JSON bodies', () => {
-    expect(imagevideoModels).toHaveLength(26)
-    expect(new Set(imagevideoModels.map(m => m.id)).size).toBe(26)
+    expect(imagevideoModels).toHaveLength(28)
+    expect(new Set(imagevideoModels.map(m => m.id)).size).toBe(28)
     expect(imagevideoModels.some(m => m.id === 'MinimaxH3-2K')).toBe(true)
     for (const section of imagevideoSections) for (const block of section.blocks) {
       if (block.kind !== 'code') continue
@@ -37,27 +37,10 @@ describe('Public media docs', () => {
     expect(groupMarkdown('GPT 图片')).toContain(sectionMarkdown(edit))
     expect(imagevideoSections.some(s => s.id === 'clients')).toBe(true)
   })
-  it('copies the same content source and provides a collapsible mobile directory', async () => {
-    vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} })
-    const published = imagevideoSections.map(section => ({ ...section, subtitle: `${section.subtitle} Published revision.` }))
-    const fetchPublished = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { version: 7, content: published } }) })
-    vi.stubGlobal('fetch', fetchPublished)
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-    const w = mount(ImageVideoDocsView, { global: { stubs: { RouterLink: RouterLinkStub } } })
-    await flushPromises()
-    expect(fetchPublished).toHaveBeenCalledWith('/api/v1/public-docs/imagevideo')
-    expect(w.get('.media-docs').classes()).not.toContain('docs-dark')
-    await w.get('[aria-label="切换文档主题"]').trigger('click')
-    expect(w.get('.media-docs').classes()).toContain('docs-dark')
-    expect(localStorage.getItem('media-docs-theme')).toBe('dark')
-    await w.get('[aria-label="切换文档主题"]').trigger('click')
-    await w.findAll('button').find(b => b.text() === '复制完整 Markdown ↗')!.trigger('click')
-    expect(writeText).toHaveBeenLastCalledWith(imagevideoMarkdown(published, 'v7'))
-    await w.get('.media-doc-mobile button').trigger('click')
-    expect(w.get('aside').classes()).toContain('open')
-    await w.get('nav a').trigger('click')
-    expect(w.get('aside').classes()).not.toContain('open')
+  it('uses the standalone repository docs fallback without draft communication', () => {
+    const w = mount(ImageVideoDocsView)
+    expect(w.get('iframe').attributes('src')).toBe('/media-docs/index.html')
+    expect(w.get('iframe').attributes('src')).not.toContain('preview')
     w.unmount()
   })
 })

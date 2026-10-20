@@ -167,7 +167,6 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     imagevideoDocs: '音视频接口文档',
-    imagevideoDocsEditor: '文档编辑',
     batchImage: '批量生图',
     usage: '使用记录',
     redeem: '兑换',

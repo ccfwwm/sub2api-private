@@ -145,11 +145,17 @@ func refString(v any) (string, string, error) {
 	}
 	if o, ok := v.(map[string]any); ok {
 		s, ok := o["url"].(string)
+		if encoded, exists := o["b64_json"]; exists {
+			if ok {
+				return "", "", fail(400, "reference_conflict", "Choose url or b64_json")
+			}
+			s, ok = encoded.(string)
+		}
 		if !ok || s == "" {
 			return "", "", fail(400, "invalid_reference", "Reference object requires url")
 		}
 		for k := range o {
-			if k != "url" && k != "duration_seconds" && k != "role" {
+			if k != "url" && k != "b64_json" && k != "duration_seconds" && k != "role" {
 				return "", "", fail(400, "invalid_reference", "Unknown reference object field")
 			}
 		}
@@ -221,7 +227,8 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		delete(p, "public_profile_id")
 	}
 	allowed := map[string]bool{}
-	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
+	allowed["background"], allowed["output_format"] = true, true
+	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "first_frame", "last_frame", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
 		allowed[k] = true
 	}
 	for k := range p {
@@ -231,6 +238,24 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	}
 	if stringValue(p["model"]) != "" && stringValue(p["model"]) != cap.Model {
 		return result, fail(400, "model_conflict", "Request model conflicts with capability")
+	}
+	if cap.RequestFormat == "yunfei_multimodal" {
+		// The upstream selects the first present image alias, including [].
+		for _, field := range []string{"reference_images", "input_reference", "images"} {
+			if value, present := p[field]; present {
+				if _, ok := value.([]any); !ok {
+					value = []any{value}
+				}
+				p["images"] = value
+				break
+			}
+		}
+		delete(p, "reference_images")
+		delete(p, "input_reference")
+		if value, present := p["duration"]; present {
+			p["seconds"] = value
+			delete(p, "duration")
+		}
 	}
 	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" {
 		for _, field := range []string{"image", "image_url", "image_urls", "input_reference", "mask", "contents", "messages"} {
@@ -247,7 +272,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	}
 	for _, kind := range []string{"image", "video", "audio"} {
 		field := "reference_" + kind + "s"
-		if p[field] != nil && cap.RequestFormat != "yunfei_multimodal" && cap.RequestFormat != "v6k_url" {
+		if p[field] != nil && cap.RequestFormat != "yunfei_multimodal" && cap.RequestFormat != "v6k_url" && cap.Adapter != "yunfei_lyria" {
 			return result, fail(400, "unsupported_reference_field", "Select a multimodal request format")
 		}
 		if err := alias(p, kind+"s", field); err != nil {
@@ -296,6 +321,40 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		if cap.Duration.Mode == "fixed" {
 			result.Quantities["fixed_duration"] = []string{result.Duration}
 		}
+		if pixels, ok := p["size"].(string); ok && strings.Contains(pixels, "x") {
+			dimensions := strings.Split(pixels, "x")
+			if len(dimensions) != 2 {
+				return result, fail(400, "invalid_size", "Invalid video pixel size")
+			}
+			w, we := strconv.Atoi(dimensions[0])
+			h, he := strconv.Atoi(dimensions[1])
+			if we != nil || he != nil || w <= 0 || h <= 0 {
+				return result, fail(400, "invalid_size", "Invalid video pixel size")
+			}
+			matched := ""
+			for _, ratio := range cap.AspectRatios {
+				var rw, rh int
+				if _, e := fmt.Sscanf(ratio, "%d:%d", &rw, &rh); e == nil && rw > 0 && rh > 0 {
+					difference := float64(w*rh)/float64(h*rw) - 1
+					if difference > -0.02 && difference < 0.02 {
+						matched = ratio
+						break
+					}
+				}
+			}
+			if matched == "" {
+				return result, fail(400, "unsupported_ratio", "Video size does not match a configured aspect ratio")
+			}
+			if ratio, present := p["ratio"]; present && ratio != matched {
+				return result, fail(400, "conflicting_ratio", "Video size conflicts with ratio")
+			}
+			p["ratio"] = matched
+			edge := min(w, h)
+			if edge == 1088 {
+				edge = 1080
+			}
+			p["size"] = fmt.Sprintf("%dp", edge)
+		}
 		if e := alias(p, "resolution", "size"); e != nil {
 			return result, e
 		}
@@ -312,6 +371,14 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		}
 	}
 	if cap.MediaType == "image" {
+		for field, choices := range map[string][]string{"background": cap.Backgrounds, "output_format": cap.OutputFormats} {
+			if v, ok := p[field]; ok && (cap.Adapter != "yunfei_gpt_images" || !contains(choices, stringValue(v))) {
+				return result, fail(400, "unsupported_parameter", "Unsupported "+field+" for selected model")
+			}
+		}
+		if p["background"] == "transparent" && p["output_format"] != nil && p["output_format"] != "png" && p["output_format"] != "webp" {
+			return result, fail(400, "transparent_format", "Transparent output requires PNG or WebP")
+		}
 		if v, ok := p["size"]; ok {
 			if len(cap.Sizes) > 0 && !contains(cap.Sizes, stringValue(v)) {
 				return result, fail(400, "unsupported_size", "Image pixel size is not configured")
@@ -449,6 +516,19 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 				return result, e
 			}
 			refs = content
+		}
+	}
+	for _, role := range []string{"first_frame", "last_frame"} {
+		if value, present := p[role]; present {
+			if cap.RequestFormat != "yunfei_multimodal" {
+				return result, fail(400, "unsupported_reference_role", "Frame roles require the multimodal protocol")
+			}
+			raw, _, err := refString(value)
+			if err != nil {
+				return result, err
+			}
+			refs["image"] = append(refs["image"], map[string]any{"url": raw, "role": role})
+			delete(p, role)
 		}
 	}
 	frameRoles := map[string]bool{}
@@ -684,11 +764,30 @@ func musicChat(p map[string]any) error {
 		if !contains([]string{"user", "system"}, stringValue(v["role"])) {
 			return fail(400, "invalid_messages", "Music supports user and system messages")
 		}
-		s, ok := v["content"].(string)
-		if !ok {
-			return fail(400, "invalid_messages", "Music content must be text")
+		if s, ok := v["content"].(string); ok {
+			prompt = append(prompt, s)
+			continue
 		}
-		prompt = append(prompt, s)
+		parts, ok := v["content"].([]any)
+		if !ok {
+			return fail(400, "invalid_messages", "Music content must be text or ordered text/image_url blocks")
+		}
+		for _, part := range parts {
+			block, ok := part.(map[string]any)
+			if !ok {
+				return fail(400, "invalid_messages", "Invalid music content block")
+			}
+			switch block["type"] {
+			case "text":
+				prompt = append(prompt, stringValue(block["text"]))
+			case "image_url":
+				refs, _ := orderedValues(p["images"])
+				refs = append(refs, block["image_url"])
+				p["images"] = refs
+			default:
+				return fail(400, "invalid_messages", "Unsupported music content block")
+			}
+		}
 	}
 	p["prompt"] = strings.Join(prompt, "\n")
 	return nil
@@ -769,6 +868,23 @@ func geminiReferences(p map[string]any, cap Capability, conditions map[string]an
 		}
 	}
 	if gc, ok := p["generationConfig"].(map[string]any); ok {
+		if v, ok := gc["candidateCount"]; ok && stringValue(v) != "1" {
+			return refs, fail(400, "unsupported_output_count", "candidateCount must be 1")
+		}
+		if v, ok := gc["responseModalities"]; ok {
+			list, err := orderedValues(v)
+			if err != nil || len(list) == 0 || len(list) > 2 {
+				return refs, fail(400, "invalid_modalities", "Use IMAGE, TEXT or both")
+			}
+			seen := map[string]bool{}
+			for _, v := range list {
+				s := stringValue(v)
+				if (s != "IMAGE" && s != "TEXT") || seen[s] {
+					return refs, fail(400, "invalid_modalities", "Use IMAGE, TEXT or both")
+				}
+				seen[s] = true
+			}
+		}
 		if image, ok := gc["imageConfig"].(map[string]any); ok {
 			if size := stringValue(image["imageSize"]); size != "" {
 				if !contains(cap.Resolutions, size) {

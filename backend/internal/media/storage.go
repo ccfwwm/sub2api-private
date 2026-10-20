@@ -58,6 +58,23 @@ func (b *BlobStore) Open(raw []byte) ([]byte, error) {
 	}
 	return b.AEAD.Open(nil, raw[:n], raw[n:], []byte("media-v1"))
 }
+
+// Purpose-bound tickets cannot be substituted with encrypted request/storage blobs.
+func (b *BlobStore) SealAccess(raw []byte) ([]byte, error) {
+	nonce := make([]byte, b.AEAD.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	return b.AEAD.Seal(nonce, nonce, raw, []byte("admin-artifact-access-v1")), nil
+}
+func (b *BlobStore) OpenAccess(raw []byte) ([]byte, error) {
+	n := b.AEAD.NonceSize()
+	if len(raw) < n {
+		return nil, fmt.Errorf("invalid access ticket")
+	}
+	return b.AEAD.Open(nil, raw[:n], raw[n:], []byte("admin-artifact-access-v1"))
+}
+
 func (b *BlobStore) Path(id, key string) (string, error) {
 	if !strings.HasPrefix(id, "mt_") || strings.ContainsAny(id+key, "/\\.\x00") {
 		return "", fail(400, "invalid_blob_id", "Invalid storage identifier")

@@ -13,6 +13,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -261,6 +262,20 @@ func mediaPayload(c *gin.Context, operation string) (map[string]any, []media.Upl
 	p := map[string]any{}
 	files := []media.Upload{}
 	mimeType, params, _ := mime.ParseMediaType(c.GetHeader("Content-Type"))
+	if mimeType == "application/x-www-form-urlencoded" {
+		values, err := url.ParseQuery(string(raw))
+		if err != nil {
+			return nil, nil, err
+		}
+		for field, values := range values {
+			for _, value := range values {
+				if err := mediaFormField(p, field, value); err != nil {
+					return nil, nil, err
+				}
+			}
+		}
+		return p, files, nil
+	}
 	if mimeType == "multipart/form-data" {
 		reader := multipart.NewReader(bytes.NewReader(raw), params["boundary"])
 		for {
@@ -280,18 +295,9 @@ func mediaPayload(c *gin.Context, operation string) (map[string]any, []media.Upl
 			if part.FileName() != "" {
 				files = append(files, media.Upload{Field: field, Name: filepath.Base(part.FileName()), MIME: strings.Split(part.Header.Get("Content-Type"), ";")[0], Data: data})
 			} else {
-				if _, exists := p[field]; exists {
-					return nil, nil, &media.Error{Status: 400, Code: "duplicate_field", Message: "Duplicate multipart field"}
+				if err := mediaFormField(p, field, string(data)); err != nil {
+					return nil, nil, err
 				}
-				text := string(data)
-				if strings.HasPrefix(text, "[") || strings.HasPrefix(text, "{") || text == "true" || text == "false" {
-					var object any
-					if json.Unmarshal(data, &object) == nil {
-						p[field] = object
-						continue
-					}
-				}
-				p[field] = text
 			}
 		}
 	} else {
@@ -313,6 +319,35 @@ func mediaPayload(c *gin.Context, operation string) (map[string]any, []media.Upl
 		p["model"] = strings.TrimSuffix(action, ":generateContent")
 	}
 	return p, files, nil
+}
+
+func mediaFormField(p map[string]any, field, text string) error {
+	field = strings.TrimSuffix(field, "[]")
+	arrays := map[string]bool{"images": true, "videos": true, "audios": true, "reference_images": true, "reference_videos": true, "reference_audios": true, "reference_image_urls": true, "reference_video_urls": true, "reference_audio_urls": true}
+	var value any = text
+	if strings.HasPrefix(text, "[") || strings.HasPrefix(text, "{") || text == "true" || text == "false" {
+		var parsed any
+		dec := json.NewDecoder(strings.NewReader(text))
+		dec.UseNumber()
+		if dec.Decode(&parsed) == nil {
+			value = parsed
+		}
+	}
+	if arrays[field] {
+		list, _ := p[field].([]any)
+		if values, ok := value.([]any); ok {
+			list = append(list, values...)
+		} else {
+			list = append(list, value)
+		}
+		p[field] = list
+		return nil
+	}
+	if _, exists := p[field]; exists {
+		return &media.Error{Status: 400, Code: "duplicate_field", Message: "Duplicate scalar field: " + field}
+	}
+	p[field] = value
+	return nil
 }
 
 // TrySubmit preserves all legacy gateway behavior for unconfigured models.
@@ -469,6 +504,16 @@ func (h *MediaHandler) writeSynchronous(c *gin.Context, t media.StoredTask, oper
 		data = append(data, item)
 	}
 	result := gin.H{"id": t.ID, "created": t.Created.Unix(), "data": data}
+	if operation == "image" || operation == "image_edit" {
+		var upstream map[string]any
+		if t.ResultPath != "" && h.Engine.Blobs.ReadJSON(t.ResultPath, &upstream) == nil {
+			for _, field := range []string{"usage", "size", "quality", "background", "output_format"} {
+				if value, ok := upstream[field]; ok {
+					result[field] = sanitizeMediaResult(value, nil)
+				}
+			}
+		}
+	}
 	if operation == "gemini_image" || operation == "chat_music" {
 		var upstream map[string]any
 		if err = h.Engine.Blobs.ReadJSON(t.ResultPath, &upstream); err != nil {
@@ -603,25 +648,7 @@ func (h *MediaHandler) Content(c *gin.Context) {
 		mediaError(c, err)
 		return
 	}
-	if t.State != "completed" {
-		c.JSON(409, gin.H{"error": gin.H{"type": "artifact_not_ready", "message": "Task has not completed"}})
-		return
-	}
-	file, mime, hash, err := h.Engine.Store.ArtifactFile(c.Request.Context(), t.ID, c.Param("key"))
-	if err != nil {
-		mediaError(c, err)
-		return
-	}
-	defer func() { _ = file.Close() }()
-	info, err := file.Stat()
-	if err != nil {
-		mediaError(c, err)
-		return
-	}
-	c.Header("Content-Type", mime)
-	c.Header("ETag", `"`+hash+`"`)
-	c.Header("Cache-Control", "private, no-store")
-	http.ServeContent(c.Writer, c.Request, "artifact", info.ModTime(), file)
+	h.serveArtifact(c, t)
 }
 func (h *MediaHandler) Estimate(c *gin.Context) {
 	identity, err := h.identity(c)

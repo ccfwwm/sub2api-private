@@ -3,9 +3,9 @@ import pythonClient from '../../public/examples/imagevideo.py?raw'
 import javascriptClient from '../../public/examples/imagevideo.mjs?raw'
 
 /** Public media documentation metadata. The reviewed JSON is the single source
- * used by the API seed, docs-web fallback and the authenticated editor. */
+ * used by the independent docs container and the frontend fallback. */
 export const docsTitle = '词元互联图片、视频与音乐接口文档'
-export const docsVersion = 'v1.2.7 · 2026-10-15'
+export const docsVersion = 'v1.2.12 · 2026-10-20'
 export const apiOrigin = 'https://code.aicodeme.xyz'
 
 export type DocBlock =
@@ -46,6 +46,6 @@ export const imagevideoGroups = [...new Set(imagevideoSections.map(section => se
   .map(title => ({ title, sections: imagevideoSections.filter(section => section.group === title) }))
 export const groupMarkdown = (title: string) => imagevideoSections.filter(section => section.group === title).map(sectionMarkdown).join('\n\n')
 
-// Examples are included in the editor/export source so copied documentation
+// Examples are included in the export source so copied documentation
 // and downloadable files always use the same client implementation.
 export { pythonClient, javascriptClient }

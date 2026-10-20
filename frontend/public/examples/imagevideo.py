@@ -91,12 +91,14 @@ def edit_body(payload, images):
 
 
 def submit(client, endpoint, payload, state_path, images=None):
+    operation = ("gemini_image" if endpoint.startswith("/v1beta/") else {"/v1/images/generations":"image", "/v1/images/edits":"image_edit", "/v1/videos":"video", "/v1/chat/completions":"chat_music"}.get(endpoint, "audio"))
+    payload = {**payload, "async": True}
     extra = {}
     if images:
-        if endpoint != "/v1/images/edits" or len(images) > 2:
-            raise ValueError("Image uploads require /v1/images/edits and 1-2 files")
+        if endpoint != "/v1/images/edits":
+            raise ValueError("Image uploads require /v1/images/edits with configured reference limits")
         payload, extra["Content-Type"] = edit_body(payload, images)
-    state = {"base": client.base, "idempotency_key": str(uuid.uuid4()), "task_id": None, "status": "submitting"}
+    state = {"base": client.base, "operation": operation, "idempotency_key": str(uuid.uuid4()), "task_id": None, "status": "submitting"}
     save(state_path, state, exclusive=True)
     # Never retry POST automatically, even if the connection times out.
     result = client.json("POST", endpoint, payload, {"Idempotency-Key": state["idempotency_key"], **extra})
@@ -109,8 +111,16 @@ def submit(client, endpoint, payload, state_path, images=None):
 
 def resume(client, state_path, directory, interval=20, max_wait=3600):
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    if state["base"] != client.base or not state.get("task_id"):
-        raise ValueError("State origin mismatch or no task ID; reconcile before another submission")
+    if state["base"] != client.base:
+        raise ValueError("State origin mismatch")
+    if not state.get("task_id"):
+        if not state.get("operation") or not state.get("idempotency_key"):
+            raise ValueError("Legacy state needs manual reconciliation; do not resubmit")
+        recovered = client.json("GET", "/v1/media/tasks/recover?operation=" + quote(state["operation"], safe="") + "&idempotency_key=" + quote(state["idempotency_key"], safe=""))
+        state["task_id"] = recovered.get("id")
+        if not state["task_id"]:
+            raise ValueError("Original task not found yet; retry resume, never submit")
+        save(state_path, state)
     deadline = time.monotonic() + max_wait
     path = "/v1/tasks/" + quote(state["task_id"], safe="")
     while time.monotonic() < deadline:
@@ -139,7 +149,7 @@ def main():
     p.add_argument("command", choices=("submit", "resume"))
     p.add_argument("--endpoint", default="/v1/videos")
     p.add_argument("--payload", help="UTF-8 JSON file; required for submit")
-    p.add_argument("--image", action="append", help="Local GPT edit reference; repeat for two files")
+    p.add_argument("--image", action="append", help="Local GPT edit reference; repeat within model reference limits")
     p.add_argument("--state", default="media-task.json")
     p.add_argument("--output", default="media-output")
     p.add_argument("--interval", type=float, default=20)

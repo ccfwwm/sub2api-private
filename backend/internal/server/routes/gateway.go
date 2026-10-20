@@ -313,6 +313,8 @@ func RegisterGatewayRoutes(
 		gateway.GET("/videos/:request_id", videoStatusHandler)
 		gateway.GET("/videos/:request_id/content", videoContentHandler)
 		if h.Media != nil {
+			gateway.GET("/media/capabilities", h.Media.KeyCapabilities)
+			gateway.GET("/media/tasks/recover", h.Media.Recover)
 			gateway.HEAD("/videos/:request_id/content", videoContentHandler)
 			gateway.POST("/audio/generations", h.Media.SubmitAudio)
 			gateway.POST("/music/generations", h.Media.SubmitAudio)

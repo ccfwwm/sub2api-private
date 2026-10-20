@@ -254,5 +254,5 @@ func RedactAuditQuery(rawQuery string) string {
 	if rawQuery == "" {
 		return ""
 	}
-	return logredact.RedactText(rawQuery, "api_key", "apikey", "token", "secret", "key")
+	return logredact.RedactText(rawQuery, "api_key", "apikey", "token", "secret", "key", "access")
 }

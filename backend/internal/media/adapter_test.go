@@ -32,7 +32,9 @@ func TestAdapterAcceptanceAndUnknownResponses(t *testing.T) {
 		{"html", "<html>interstitial</html>", "unknown", 200},
 		{"missing_id", `{"status":"queued"}`, "unknown", 202},
 		{"failed", `{"error":{"message":"rejected"}}`, "failed", 400},
-		{"server_error", `{}`, "unknown", 503},
+		{"service_unavailable", `{}`, "failed", 503},
+		{"gateway_timeout", `{}`, "unknown", 504},
+		{"rate_limited", `{}`, "failed", 429},
 		{"accepted", `{"id":"remote","status":"queued"}`, "in_progress", 202},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

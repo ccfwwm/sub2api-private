@@ -23,6 +23,11 @@ func RegisterAdminRoutes(
 	// 插件 UI 使用短时能力 URL，仅提供经过安装校验的静态资源。
 	v1.GET("/plugin-ui/:token/*path", h.Admin.Plugin.ServeUIAsset)
 
+	if h.Media != nil {
+		review := v1.Group("/media/review", h.Media.ArtifactAccessAuth, gin.HandlerFunc(auditLog))
+		review.GET("/tasks/:id/artifacts/:key/content", h.Media.AdminArtifactContent)
+		review.HEAD("/tasks/:id/artifacts/:key/content", h.Media.AdminArtifactContent)
+	}
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
 	// 面板全局按用户限流（默认管理员豁免，可在系统设置中关闭豁免）
@@ -32,31 +37,20 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
 		if h.Media != nil {
-			admin.GET("/docs/imagevideo", h.Media.AdminImageVideoDocument)
-			admin.GET("/docs/imagevideo/history", func(c *gin.Context) {
-				c.Params = append(c.Params, gin.Param{Key: "action", Value: "history"})
-				h.Media.AdminImageVideoDocument(c)
-			})
-			admin.PUT("/docs/imagevideo/draft", func(c *gin.Context) {
-				c.Params = append(c.Params, gin.Param{Key: "action", Value: "save"})
-				h.Media.AdminImageVideoDocument(c)
-			})
-			admin.POST("/docs/imagevideo/publish", func(c *gin.Context) {
-				c.Params = append(c.Params, gin.Param{Key: "action", Value: "publish"})
-				h.Media.AdminImageVideoDocument(c)
-			})
-			admin.POST("/docs/imagevideo/rollback", func(c *gin.Context) {
-				c.Params = append(c.Params, gin.Param{Key: "action", Value: "rollback"})
-				h.Media.AdminImageVideoDocument(c)
-			})
 			admin.GET("/media/configs/:kind", h.Media.AdminConfigs)
 			admin.POST("/media/configs/:kind", gin.HandlerFunc(stepUpAuth), h.Media.AdminSave)
 			admin.POST("/media/configs/:kind/disable", gin.HandlerFunc(stepUpAuth), h.Media.AdminDisable)
 			admin.POST("/media/simulate", h.Media.AdminSimulate)
 			admin.GET("/media/tasks", h.Media.AdminTasks)
+			admin.GET("/media/tasks/:id", h.Media.AdminTask)
+			admin.GET("/media/tasks/:id/export", h.Media.AdminTaskExport)
+			admin.GET("/media/tasks/:id/artifacts/:key/content", h.Media.AdminArtifactContent)
+			admin.HEAD("/media/tasks/:id/artifacts/:key/content", h.Media.AdminArtifactContent)
+			admin.POST("/media/tasks/:id/artifacts/:key/access", h.Media.AdminArtifactAccess)
 			admin.POST("/media/tasks/:id/refund", gin.HandlerFunc(stepUpAuth), h.Media.AdminRefund)
 			admin.POST("/media/tasks/:id/cost", gin.HandlerFunc(stepUpAuth), h.Media.AdminCost)
 			admin.POST("/media/tasks/:id/reconcile", gin.HandlerFunc(stepUpAuth), h.Media.AdminReconcile)
+			admin.POST("/media/tasks/:id/review", gin.HandlerFunc(stepUpAuth), h.Media.AdminReview)
 		}
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)

@@ -638,7 +638,7 @@ func (b *limitedBuffer) String() string { return string(b.raw) }
 func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request) error {
 	// Input video/audio billing is never sourced from caller duration metadata.
 	kinds := []string{"video", "audio"}
-	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" {
+	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" || cap.Adapter == "yunfei_gpt_images" || cap.Adapter == "yunfei_gemini_native" || cap.Adapter == "yunfei_lyria" {
 		kinds = append(kinds, "image")
 	}
 	for _, kind := range kinds {
@@ -661,6 +661,13 @@ func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request
 			t := StoredTask{ID: id, Snapshot: Snapshot{Capability: cap}}
 			account := Account{BaseURL: "https://invalid.invalid"}
 			var path string
+			if !strings.HasPrefix(source, "https://") && !strings.HasPrefix(source, "data:") {
+				decoded, decodeErr := base64.StdEncoding.DecodeString(source)
+				if decodeErr != nil {
+					return fail(400, "invalid_material", "Invalid Base64 material")
+				}
+				source = "data:" + http.DetectContentType(decoded) + ";base64," + source
+			}
 			if strings.HasPrefix(source, "data:") {
 				var raw []byte
 				var mime string
@@ -730,6 +737,9 @@ func NormalizeUploads(cap Capability, operation string, p map[string]any, upload
 		originalCounts[kind] = len(values)
 	}
 	for _, u := range uploads {
+		if cap.RequestFormat == "v6k_url" {
+			return Request{}, fail(400, "reference_url_required", "This model accepts public material URLs only; Base64 and uploads are not supported")
+		}
 		if u.Field == "mask" {
 			if normalized["mask"] != nil || u.MIME != "image/png" {
 				return Request{}, fail(400, "invalid_mask", "One PNG mask is allowed")

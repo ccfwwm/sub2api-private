@@ -235,3 +235,20 @@ func (h *MediaHandler) AdminReconcile(c *gin.Context) {
 	}
 	response.Success(c, gin.H{"ok": true, "message": fmt.Sprint("Recorded ", body.Decision, "; worker will query or release once")})
 }
+
+func (h *MediaHandler) AdminReview(c *gin.Context) {
+	if !requireMediaAdmin(c) {
+		return
+	}
+	var input media.ManualReview
+	if c.ShouldBindJSON(&input) != nil {
+		response.BadRequest(c, "核对参数不完整")
+		return
+	}
+	subject, _ := middleware.GetAuthSubjectFromContext(c)
+	if err := h.Engine.Store.ReviewTask(c.Request.Context(), c.Param("id"), c.GetHeader("Idempotency-Key"), input, subject.UserID); err != nil {
+		mediaError(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}

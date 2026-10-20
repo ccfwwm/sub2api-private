@@ -159,12 +159,16 @@ func TestYunfeiOutputArrayIsDeduplicatedAndNormalized(t *testing.T) {
 
 func TestExplicitFormatsNeverDiscardReferenceFields(t *testing.T) {
 	cap := videoFormatCapability("yunfei_multimodal")
-	for _, field := range []string{"image", "image_url", "image_urls", "input_reference", "mask", "contents", "messages"} {
+	for _, field := range []string{"image", "image_url", "image_urls", "mask", "contents", "messages"} {
 		_, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, field: "https://example.com/a.png"})
 		require.ErrorContains(t, err, "unsupported_reference_field")
 	}
-	_, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, "images": []any{}, "reference_images": []any{"https://example.com/a.png"}})
-	require.Error(t, err)
+	req, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, "images": []any{}, "reference_images": []any{"https://example.com/a.png"}})
+	require.NoError(t, err)
+	require.Len(t, req.MaterialRefs["image"], 1)
+	req, err = Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, "reference_images": []any{}, "input_reference": "https://example.com/a.png"})
+	require.NoError(t, err)
+	require.Empty(t, req.MaterialRefs["image"])
 	for _, u := range []string{"https://127.0.0.1/a", "https://10.0.0.1/a", "https://[::1]/a", "https://example.local/a", "https://example.com:8443/a", "https://[bad/a"} {
 		_, err := referenceFormat(u, "string")
 		require.Error(t, err)

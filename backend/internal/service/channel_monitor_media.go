@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/google/uuid"
 )
 
 // Media configuration lives in the existing request snapshot. Old clients,
@@ -25,6 +27,7 @@ type MonitorMediaConfig struct {
 	Mode     string                       `json:"mode"`
 	Revision string                       `json:"revision,omitempty"`
 	Models   map[string]MonitorMediaModel `json:"models"`
+	TaskAPI  bool                         `json:"task_api,omitempty"`
 }
 
 type MonitorMediaModel struct {
@@ -108,7 +111,7 @@ func normalizeMonitorMediaModel(model string, entry MonitorMediaModel) (media.Ca
 			return cap, media.Request{}, fmt.Errorf("audio monitor duration must be an integer between 1 and 600")
 		}
 	}
-	for _, key := range []string{"image", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "messages", "contents", "metadata", "generationConfig", "async", "stream"} {
+	for _, key := range []string{"image", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "reference_images", "reference_videos", "reference_audios", "first_frame", "last_frame", "messages", "contents", "metadata", "generationConfig", "async", "stream"} {
 		if _, ok := entry.Parameters[key]; ok {
 			return cap, media.Request{}, fmt.Errorf("monitor parameter %s is not supported", key)
 		}
@@ -170,6 +173,15 @@ func (t monitorMediaHeaders) RoundTrip(req *http.Request) (*http.Response, error
 
 func monitorMediaClient(m *ChannelMonitor) *http.Client {
 	client := *monitorHTTPClient
+	client.Timeout = 180 * time.Second
+	// Keep safe dialing while giving synchronous media enough time for headers.
+	// A custom test transport is preserved.
+	if monitorHTTPClient.Timeout == monitorRequestTimeout {
+		client = *newSSRFSafeHTTPClient(180 * time.Second)
+		client.Transport = &http.Transport{DialContext: safeDialContext, ForceAttemptHTTP2: true,
+			MaxIdleConns: 16, IdleConnTimeout: monitorIdleConnTimeout,
+			TLSHandshakeTimeout: monitorTLSHandshakeTimeout, ResponseHeaderTimeout: 180 * time.Second}
+	}
 	if client.Transport == nil {
 		client.Transport = http.DefaultTransport
 	}
@@ -239,15 +251,24 @@ func runMonitorMediaConnection(ctx context.Context, m *ChannelMonitor, c Monitor
 // Each subsequent check polls the same task. Interrupted or ambiguous POSTs
 // remain blocked until an administrator explicitly resets the revision.
 type monitorMediaTask struct {
-	Revision     string           `json:"revision"`
-	Fingerprint  string           `json:"fingerprint"`
-	StartedAt    time.Time        `json:"started_at"`
-	State        string           `json:"state"`
-	UpstreamID   string           `json:"upstream_id"`
-	ResultStatus string           `json:"result_status,omitempty"`
-	Message      string           `json:"message,omitempty"`
-	Capability   media.Capability `json:"capability"`
-	Account      media.Account    `json:"account"`
+	Revision       string           `json:"revision"`
+	Fingerprint    string           `json:"fingerprint"`
+	StartedAt      time.Time        `json:"started_at"`
+	State          string           `json:"state"`
+	UpstreamID     string           `json:"upstream_id"`
+	ResultStatus   string           `json:"result_status,omitempty"`
+	Message        string           `json:"message,omitempty"`
+	Capability     media.Capability `json:"capability"`
+	Account        media.Account    `json:"account"`
+	IdempotencyKey string           `json:"idempotency_key,omitempty"`
+}
+
+func monitorTaskAPI(m *ChannelMonitor, c MonitorMediaConfig) bool {
+	u, err := url.Parse(m.Endpoint)
+	if err != nil {
+		return false
+	}
+	return c.TaskAPI || u.Hostname() == "code.aicodeme.xyz" || u.Hostname() == "code.aicodeme.cn" || u.Hostname() == "hkcode.aicodeme.xyz"
 }
 
 func (s *ChannelMonitorService) monitorMediaStatePath(id int64, model string) string {
@@ -348,34 +369,50 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			return res
 		}
 		if task.Fingerprint != fingerprint {
-			// A changed revision is an explicit reset; changing credentials or
-			// parameters alone cannot accidentally duplicate an accepted task.
-			var old struct {
-				Revision string `json:"revision"`
-			}
-			_ = json.Unmarshal([]byte(plain), &old)
-			if old.Revision == c.Revision {
-				res.Message = "generation: configuration changed; reset task explicitly"
+			sameOwner := task.Account.BaseURL == m.Endpoint && task.Account.Key == m.APIKey
+			if task.State == "completed" {
+				task = monitorMediaTask{Fingerprint: fingerprint, Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}, Revision: c.Revision, State: "completed"}
+			} else if sameOwner && task.UpstreamID != "" && task.ResultStatus != MonitorStatusFailed {
+				// Updated defaults must not orphan the accepted original task.
+				task.Fingerprint = fingerprint
+			} else if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed {
+				task = monitorMediaTask{Fingerprint: fingerprint, Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}, Revision: c.Revision}
+				readErr = os.ErrNotExist
+			} else {
+				res.Message = "generation: 配置已变化，需核对原任务后恢复；no resubmission"
 				return res
 			}
-			task = monitorMediaTask{Fingerprint: fingerprint, StartedAt: start, State: "submitting", Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}, Revision: c.Revision}
-			readErr = os.ErrNotExist
 		}
 	} else if !os.IsNotExist(readErr) {
 		res.Message = "generation: task journal unavailable; no submission"
 		return res
 	}
 	adapter := &media.Adapter{Client: client}
+	task.Account.TaskAPI = monitorTaskAPI(m, c)
+	wasPending := task.State != "completed" && !os.IsNotExist(readErr)
 	var upstream media.UpstreamResult
 	if os.IsNotExist(readErr) || task.State == "completed" {
 		task.StartedAt, task.State, task.UpstreamID, task.Revision = start, "submitting", "", c.Revision
+		task.Capability, task.Fingerprint = cap, fingerprint
+		task.IdempotencyKey = "monitor-" + uuid.NewString()
+		task.Account.IdempotencyKey = task.IdempotencyKey
 		if s.saveMonitorMediaTask(path, task) != nil {
 			res.Message = "generation: cannot persist acceptance journal; no submission"
 			return res
 		}
 		upstream, err = adapter.Submit(ctx, cap, req, task.Account)
 	} else {
-		if task.State == "blocked" || task.UpstreamID == "" {
+		if task.UpstreamID == "" && task.Account.TaskAPI && task.IdempotencyKey != "" {
+			task.Account.IdempotencyKey = task.IdempotencyKey
+			upstream, err = adapter.Recover(ctx, task.Account, task.Capability, string(req.Operation))
+			if err != nil || upstream.ID == "" {
+				res.Message = "generation: 正在核对原任务；未重新提交 (no resubmission)"
+				return res
+			}
+			task.UpstreamID = upstream.ID
+			task.State = "in_progress"
+		}
+		if (task.State == "blocked" && task.ResultStatus == MonitorStatusFailed) || task.UpstreamID == "" {
 			if task.ResultStatus == MonitorStatusFailed {
 				res.Status = MonitorStatusFailed
 			}
@@ -385,16 +422,13 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			}
 			return res
 		}
-		if time.Since(task.StartedAt) > time.Duration(*cap.Limits.ObservationSeconds)*time.Second {
-			task.State = "blocked"
-			_ = s.saveMonitorMediaTask(path, task)
-			res.Message = "generation: observation timed out; no resubmission"
-			return res
+
+		if upstream.ID == "" {
+			upstream, err = adapter.Poll(ctx, media.StoredTask{UpstreamID: task.UpstreamID, Snapshot: media.Snapshot{Capability: task.Capability}}, task.Account)
 		}
-		upstream, err = adapter.Poll(ctx, media.StoredTask{UpstreamID: task.UpstreamID, Snapshot: media.Snapshot{Capability: task.Capability}}, task.Account)
 	}
 	if err != nil {
-		res.Message = "generation: upstream query unavailable; original task retained"
+		res.Message = "generation: 原任务查询暂不可用；保留任务 " + task.UpstreamID + "，下次继续查询"
 		return res
 	}
 	if upstream.ID != "" {
@@ -408,12 +442,12 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message = "generation: accepted response missing task ID; no resubmission"
 			break
 		}
-		res.Status, res.Message = MonitorStatusPending, "generation: task in progress; next check queries this task"
+		res.Status, res.Message = MonitorStatusPending, "generation: task in progress; 下次只查询原任务 "+task.UpstreamID
 	case "completed":
-		if err := media.ValidateMonitorArtifacts(ctx, client, cap, upstream.Artifacts, task.Account); err != nil {
+		if err := media.ValidateMonitorArtifacts(ctx, client, task.Capability, upstream.Artifacts, task.Account); err != nil {
 			task.State, res.Message = "blocked", "generation: result is not a valid deliverable artifact; no resubmission"
 		} else {
-			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: valid "+cap.MediaType+" output received"
+			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: 已校验实际 "+task.Capability.MediaType+" 文件；任务 "+task.UpstreamID
 		}
 	case "failed":
 		task.State, res.Status = "blocked", MonitorStatusFailed
@@ -426,6 +460,17 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	task.ResultStatus, task.Message = res.Status, res.Message
 	if s.saveMonitorMediaTask(path, task) != nil {
 		res.Status, res.Message = MonitorStatusError, "generation: result journal could not be persisted; no resubmission"
+	}
+	if wasPending && task.State == "completed" && res.Status == MonitorStatusOperational && m.IntervalSeconds > 0 && time.Since(task.StartedAt) >= time.Duration(m.IntervalSeconds)*time.Second {
+		// The previous async probe finished between scheduled checks. Start the
+		// next interval only after validating and persisting that original result.
+		// This avoids turning a four-minute generation schedule into eight minutes.
+		next := s.runMonitorMediaGeneration(ctx, m, model, c, client)
+		if next.Status == MonitorStatusPending {
+			res.Message += "；本轮已提交：" + next.Message
+		} else {
+			res = next
+		}
 	}
 	res.Message = truncateMessage(res.Message)
 	return res

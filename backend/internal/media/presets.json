@@ -48,7 +48,115 @@
         "formats": [
           "file_png",
           "file_jpeg",
-          "file_webp"
+          "file_webp",
+          "public_url_string",
+          "public_url_object",
+          "data_url",
+          "data_url_in_url_object"
+        ],
+        "max_count": null,
+        "max_file_bytes": null,
+        "max_duration_seconds": null
+      },
+      "video": {
+        "formats": [],
+        "max_count": 0,
+        "max_file_bytes": null,
+        "max_duration_seconds": null
+      },
+      "audio": {
+        "formats": [],
+        "max_count": 0,
+        "max_file_bytes": null,
+        "max_duration_seconds": null
+      }
+    },
+    "field_mapping": {
+      "image": "multipart:image[]",
+      "size": "size",
+      "quality": "quality"
+    },
+    "constraints": [
+      {
+        "n": 1,
+        "depends_on_authorized_group": true
+      }
+    ],
+    "unverified": [
+      "max_request_bytes",
+      "max_concurrent_tasks",
+      "observation_seconds",
+      "real_generation",
+      "image.max_count",
+      "image.max_file_bytes",
+      "size_pixel_enum_by_group"
+    ],
+    "delivery": {
+      "poll_seconds": 10,
+      "head": null,
+      "range": null,
+      "refresh": null
+    },
+    "limits": {
+      "max_request_bytes": null,
+      "max_concurrent_tasks": null,
+      "observation_seconds": null
+    }
+  },
+  {
+    "profile_id": "yunfei:gpt-image-2.5",
+    "version": "draft-v1",
+    "provider": "yunfei",
+    "model": "gpt-image-2.5",
+    "upstream_model": "gpt-image-2.5",
+    "adapter": "yunfei_gpt_images",
+    "media_type": "image",
+    "enabled": false,
+    "status": "draft",
+    "validation_status": "待渠道验证",
+    "source": "https://doc.yunfei.best/",
+    "scenarios": [
+      "gpt-text",
+      "gpt-edit"
+    ],
+    "operations": [
+      "image",
+      "image_edit"
+    ],
+    "formats": [
+      "json",
+      "multipart"
+    ],
+    "duration": {
+      "mode": "not_applicable",
+      "values": [],
+      "min": null,
+      "max": null,
+      "default": null,
+      "required": false,
+      "scenarios": []
+    },
+    "resolutions": [
+      "1K",
+      "2K",
+      "4K"
+    ],
+    "aspect_ratios": null,
+    "qualities": [
+      "medium",
+      "high"
+    ],
+    "resolution_policy": "native",
+    "materials": {
+      "image": {
+        "formats": [
+          "file_png",
+          "file_jpeg",
+          "file_webp",
+          "public_url_string",
+          "public_url_object",
+          "data_url",
+          "data_url_in_url_object"
         ],
         "max_count": null,
         "max_file_bytes": null,

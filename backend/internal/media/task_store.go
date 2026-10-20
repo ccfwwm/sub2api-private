@@ -70,6 +70,17 @@ func (s *Store) Existing(ctx context.Context, keyID int64, op, idem, hash string
 	return &t, nil
 }
 
+func (s *Store) RecoverTask(ctx context.Context, keyID int64, op, idem string) (StoredTask, error) {
+	if idem == "" || len(idem) > 200 || !contains([]string{"image", "image_edit", "video", "audio", "chat_music", "gemini_image"}, op) {
+		return StoredTask{}, fail(400, "invalid_recovery", "operation and idempotency_key are required")
+	}
+	t, err := scanTask(s.DB.QueryRowContext(ctx, `SELECT `+taskSelect+` FROM media_tasks WHERE api_key_id=$1 AND operation=$2 AND idempotency_key=$3`, keyID, op, idem))
+	if err == sql.ErrNoRows {
+		return t, fail(404, "task_not_found", "Original task not found; acceptance is not established")
+	}
+	return t, err
+}
+
 type quotaSpec struct {
 	kind, table, used, limit, start string
 	source                          int64

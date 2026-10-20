@@ -5,14 +5,19 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 type Adapter struct{ Client *http.Client }
@@ -23,6 +28,9 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 		p[k] = v
 	}
 	delete(p, "async")
+	if account.TaskAPI {
+		p["async"] = true
+	}
 	path := "/v1/videos"
 	switch req.Operation {
 	case "image":
@@ -39,6 +47,10 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 		}
 		delete(p, "prompt")
 		p["stream"] = false
+		if refs := req.MaterialRefs["image"]; len(refs) > 0 {
+			p["reference_images"] = refs
+			delete(p, "images")
+		}
 	}
 	if req.Operation == "video" && (cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url") {
 		for _, field := range []string{"images", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "image", "input_reference"} {
@@ -187,6 +199,9 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 }
 func (a *Adapter) Poll(ctx context.Context, t StoredTask, account Account) (UpstreamResult, error) {
 	path := "/v1/videos/" + url.PathEscape(t.UpstreamID)
+	if account.TaskAPI {
+		return a.call(ctx, account, t.Snapshot.Capability, http.MethodGet, "/v1/tasks/"+url.PathEscape(t.UpstreamID), nil, "", false)
+	}
 	if t.Snapshot.Capability.Adapter == "ark_native" {
 		path = arkTaskPath(account.BaseURL) + "/" + url.PathEscape(t.UpstreamID)
 	}
@@ -204,9 +219,31 @@ func arkTaskPath(base string) string {
 	return "/api/v3/contents/generations/tasks"
 }
 func (a *Adapter) call(ctx context.Context, account Account, cap Capability, method, path string, body io.Reader, mime string, submission bool) (UpstreamResult, error) {
-	target, e := originURL(account, path)
+	limit := 30 * time.Second
+	if submission {
+		limit = 180 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	var stage atomic.Value
+	stage.Store("连接")
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		DNSStart:             func(httptrace.DNSStartInfo) { stage.Store("域名解析") },
+		ConnectStart:         func(string, string) { stage.Store("连接") },
+		TLSHandshakeStart:    func() { stage.Store("TLS 握手") },
+		WroteRequest:         func(httptrace.WroteRequestInfo) { stage.Store("等待响应头") },
+		GotFirstResponseByte: func() { stage.Store("读取响应") },
+	})
+	endpoint, e := url.Parse(path)
 	if e != nil {
 		return UpstreamResult{}, e
+	}
+	target, e := originURL(account, endpoint.EscapedPath())
+	if e != nil {
+		return UpstreamResult{}, e
+	}
+	if endpoint.RawQuery != "" {
+		target += "?" + endpoint.RawQuery
 	}
 	req, e := http.NewRequestWithContext(ctx, method, target, body)
 	if e != nil {
@@ -215,13 +252,23 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	req.Header.Set("Authorization", "Bearer "+account.Key)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Sub2API-media/1")
+	if submission && account.IdempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", account.IdempotencyKey)
+	}
 	if mime != "" {
 		req.Header.Set("Content-Type", mime)
 	}
 	response, e := a.Client.Do(req)
 	if e != nil {
 		if submission {
-			return UpstreamResult{Status: "unknown", Diagnostic: "Submission transport failed; do not resubmit"}, nil
+			reason := "传输中断"
+			var network net.Error
+			if errors.Is(e, context.Canceled) {
+				reason = "调用取消"
+			} else if errors.Is(e, context.DeadlineExceeded) || (errors.As(e, &network) && network.Timeout()) {
+				reason = "超时"
+			}
+			return UpstreamResult{Status: "unknown", Diagnostic: "提交失败：" + stage.Load().(string) + reason + "；受理状态待核对，请勿重复提交"}, nil
 		}
 		return UpstreamResult{}, fmt.Errorf("upstream query unavailable")
 	}
@@ -237,8 +284,10 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		if !submission {
 			return UpstreamResult{}, fmt.Errorf("upstream query HTTP %d", response.StatusCode)
 		}
-		if response.StatusCode >= 500 || response.StatusCode == 408 || response.StatusCode == 429 {
-			return UpstreamResult{Status: "unknown", Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
+		// A complete 503 response is an explicit rejection, not a lost response.
+		// Gateway timeouts can still conceal acceptance and require recovery.
+		if (response.StatusCode >= 500 && response.StatusCode != http.StatusServiceUnavailable) || response.StatusCode == 408 {
+			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
 		}
 		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", response.StatusCode)
 		if response.StatusCode == 400 || response.StatusCode == 415 || response.StatusCode == 422 {
@@ -267,6 +316,12 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"
 	}
 	return result, nil
+}
+
+// Recover performs a read only lookup; a missing response never triggers POST.
+func (a *Adapter) Recover(ctx context.Context, account Account, cap Capability, operation string) (UpstreamResult, error) {
+	path := "/v1/media/tasks/recover?operation=" + url.QueryEscape(operation) + "&idempotency_key=" + url.QueryEscape(account.IdempotencyKey)
+	return a.call(ctx, account, cap, http.MethodGet, path, nil, "", false)
 }
 func parseResult(p map[string]any, cap Capability) UpstreamResult {
 	result := UpstreamResult{ID: stringValue(p["id"]), Status: "unknown", Quantities: map[string][]string{}}

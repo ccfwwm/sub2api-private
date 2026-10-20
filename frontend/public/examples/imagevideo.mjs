@@ -42,8 +42,10 @@ async function save(path, state, exclusive = false) {
 }
 
 export async function submit(client, endpoint, payload, statePath, images = []) {
+  const operation = endpoint.startsWith('/v1beta/') ? 'gemini_image' : ({ '/v1/images/generations':'image', '/v1/images/edits':'image_edit', '/v1/videos':'video', '/v1/chat/completions':'chat_music' }[endpoint] || 'audio')
+  payload = { ...payload, async: true }
   if (images.length) {
-    if (endpoint !== '/v1/images/edits' || images.length > 2) throw new Error('Image uploads require /v1/images/edits and 1-2 files')
+    if (endpoint !== '/v1/images/edits') throw new Error('Image uploads require /v1/images/edits with configured reference limits')
     const form = new FormData()
     for (const [name, value] of Object.entries(payload)) form.append(name, typeof value === 'string' ? value : JSON.stringify(value))
     for (const path of images) {
@@ -53,7 +55,7 @@ export async function submit(client, endpoint, payload, statePath, images = []) 
     }
     payload = form
   }
-  const state = { base: client.base, idempotency_key: randomUUID(), task_id: null, status: 'submitting' }
+  const state = { base: client.base, operation, idempotency_key: randomUUID(), task_id: null, status: 'submitting' }
   await save(statePath, state, true)
   // Never automatically retry POST. State persists if the connection fails.
   const result = await client.json('POST', endpoint, payload, { 'Idempotency-Key': state.idempotency_key })
@@ -66,7 +68,14 @@ export async function submit(client, endpoint, payload, statePath, images = []) 
 
 export async function resume(client, statePath, directory, interval = 20, maxWait = 3600) {
   const state = JSON.parse(await readFile(statePath, 'utf8'))
-  if (state.base !== client.base || !state.task_id) throw new Error('Origin mismatch or no task ID; reconcile')
+  if (state.base !== client.base) throw new Error('Origin mismatch')
+  if (!state.task_id) {
+    if (!state.operation || !state.idempotency_key) throw new Error('Legacy state needs reconciliation; never resubmit')
+    const recovered = await client.json('GET', '/v1/media/tasks/recover?operation=' + encodeURIComponent(state.operation) + '&idempotency_key=' + encodeURIComponent(state.idempotency_key))
+    state.task_id = recovered.id
+    if (!state.task_id) throw new Error('Original task not found yet; retry resume, never submit')
+    await save(statePath, state)
+  }
   const deadline = Date.now() + maxWait * 1000
   const path = `/v1/tasks/${encodeURIComponent(state.task_id)}`
   while (Date.now() < deadline) {

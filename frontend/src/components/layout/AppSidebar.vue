@@ -837,7 +837,6 @@ const adminNavItems = computed((): NavItem[] => {
       ],
     },
     { path: '/docs/imagevideo', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
-    { path: '/admin/docs/imagevideo', label: t('nav.imagevideoDocsEditor'), icon: BatchImageIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

@@ -70,7 +70,7 @@ func CapabilityDefaults(c Capability) Capability {
 			m.MaxCount = &v
 		}
 		if len(m.Formats) == 0 {
-			m.Formats = []string{"file_png", "file_jpeg", "file_webp"}
+			m.Formats = []string{"file_png", "file_jpeg", "file_webp", "public_url_string", "public_url_object", "data_url", "data_url_in_url_object"}
 		}
 		c.Materials["image"] = m
 	}
@@ -90,6 +90,14 @@ func CapabilityDefaults(c Capability) Capability {
 	// Resolution labels are distinct from the pixel-size parameter.
 	if c.Adapter == "yunfei_gpt_images" && len(c.Sizes) == 0 {
 		c.Sizes = []string{"1024x1024", "1536x1024", "1024x1536"}
+	}
+	if c.Adapter == "yunfei_gpt_images" {
+		if c.Backgrounds == nil {
+			c.Backgrounds = []string{"transparent", "opaque", "auto"}
+		}
+		if c.OutputFormats == nil {
+			c.OutputFormats = []string{"png", "jpeg", "webp"}
+		}
 	}
 	return c
 }

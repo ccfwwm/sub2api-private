@@ -24,6 +24,8 @@ type PublicCapability struct {
 	Resolutions        []string            `json:"resolutions"`
 	AspectRatios       []string            `json:"aspect_ratios"`
 	Qualities          []string            `json:"qualities"`
+	Backgrounds        []string            `json:"backgrounds,omitempty"`
+	OutputFormats      []string            `json:"output_formats,omitempty"`
 	Formats            []string            `json:"formats"`
 	Materials          map[string]Material `json:"materials"`
 	PollSeconds        int                 `json:"poll_seconds"`
@@ -88,6 +90,8 @@ func (e *Engine) PublicCapabilities(ctx context.Context, groupID int64) ([]Publi
 			materials["mask"] = Material{Formats: []string{"file_png"}, MaxCount: &one, MaxFileBytes: cap.Materials["image"].MaxFileBytes}
 		}
 		out = append(out, PublicCapability{ProfileID: publicProfileID(cap), Version: cap.Version, Model: cap.Model, MediaType: cap.MediaType, Operations: ops, RequestFormat: format, ReferenceField: field, ReferenceShape: shape, Duration: duration, Sizes: cap.Sizes, Resolutions: cap.Resolutions, AspectRatios: cap.AspectRatios, Qualities: cap.Qualities, Formats: cap.Formats, Materials: materials, PollSeconds: cap.Delivery.PollSeconds, MaxRequestBytes: cap.Limits.MaxRequestBytes, ObservationSeconds: cap.Limits.ObservationSeconds})
+		out[len(out)-1].Backgrounds = cap.Backgrounds
+		out[len(out)-1].OutputFormats = cap.OutputFormats
 	}
 	return out, nil
 }

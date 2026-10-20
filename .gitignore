@@ -186,3 +186,5 @@ issues/
 # Private deployment Python cache
 __pycache__/
 *.pyc
+
+/frontend/public/media-docs/

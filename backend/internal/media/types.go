@@ -53,6 +53,8 @@ type Capability struct {
 	Sizes            []string            `json:"sizes,omitempty"`
 	AspectRatios     []string            `json:"aspect_ratios"`
 	Qualities        []string            `json:"qualities"`
+	Backgrounds      []string            `json:"backgrounds,omitempty"`
+	OutputFormats    []string            `json:"output_formats,omitempty"`
 	ResolutionPolicy string              `json:"resolution_policy"`
 	Materials        map[string]Material `json:"materials"`
 	FieldMapping     map[string]string   `json:"field_mapping"`
@@ -218,6 +220,10 @@ type Account struct {
 	ID                     int64
 	BaseURL, Key, Platform string
 	Allowed                bool
+	// TaskAPI is set only for the local durable gateway protocol, never guessed
+	// for supplier requests. These fields are not part of capability snapshots.
+	TaskAPI        bool
+	IdempotencyKey string
 }
 type AccountLookup func(id int64, groupID int64) (Account, error)
 type CacheInvalidate func(ctxIdentity Identity) error

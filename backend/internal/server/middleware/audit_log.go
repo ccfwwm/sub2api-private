@@ -109,6 +109,13 @@ func truncateAuditExtraString(value string, limit int) string {
 
 // auditSensitiveReads 需要审计的敏感 GET 读取（method+FullPath → 动作名）。
 var auditSensitiveReads = map[string]string{
+	"GET /api/v1/admin/media/tasks/:id":                          "admin.media.task.read",
+	"GET /api/v1/admin/media/tasks/:id/export":                   "admin.media.task.export",
+	"GET /api/v1/admin/media/tasks/:id/artifacts/:key/content":   "admin.media.artifact.read",
+	"HEAD /api/v1/admin/media/tasks/:id/artifacts/:key/content":  "admin.media.artifact.read",
+	"GET /api/v1/media/review/tasks/:id/artifacts/:key/content":  "admin.media.artifact.read",
+	"HEAD /api/v1/media/review/tasks/:id/artifacts/:key/content": "admin.media.artifact.read",
+
 	"GET /api/v1/admin/accounts/data":             "admin.accounts.export",
 	"GET /api/v1/admin/proxies/data":              "admin.proxies.export",
 	"GET /api/v1/admin/redeem-codes/export":       "admin.redeem_codes.export",
@@ -175,7 +182,7 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 			if v, ok := auditActionOverrides[routeKey]; ok {
 				action = v
 			}
-		case "GET":
+		case "GET", "HEAD":
 			if v, ok := auditSensitiveReads[routeKey]; ok {
 				record = true
 				action = v
@@ -342,7 +349,7 @@ func deriveAuditAction(method, fullPath string) string {
 		verb = "update"
 	case "DELETE":
 		verb = "delete"
-	case "GET":
+	case "GET", "HEAD":
 		verb = "read"
 	default:
 		verb = strings.ToLower(method)
