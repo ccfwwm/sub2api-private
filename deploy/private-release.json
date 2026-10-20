@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.12 adds durable async media monitor recovery, exact image model probes, complete HTTP 503 failure handling, versioned administrative status and net-charge review, scoped artifact streaming/export, shared material protocol validation and standalone static interactive media documentation. Accounting prices and historical migrations remain unchanged.",
+  "version_note": "Private release 1.2.13 fixes the first SPA-to-docs navigation by opening the independent document page, adds a media API Key creation shortcut and a dedicated image/audio/video group choice. Existing balance holds, settlement algorithms, prices, migrations and accounting records are unchanged.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

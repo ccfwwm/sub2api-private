@@ -487,7 +487,7 @@
 
         <fieldset v-if="!showEditModal" data-tour="key-form-provider">
           <legend class="input-label">{{ t('keys.providerLabel') }}</legend>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <label
               v-for="provider in createProviderOptions"
               :key="provider.value"
@@ -1201,12 +1201,15 @@
 <script setup lang="ts">
 	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -1528,6 +1531,7 @@ const groupOptions = computed(() =>
 )
 
 const createProvider = ref<KeyGroupProvider>('anthropic')
+const preferredCreateProvider = ref<KeyGroupProvider | null>(null)
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
@@ -1540,16 +1544,21 @@ const formGroupOptions = computed(() => showEditModal.value
 )
 
 const selectCreateProvider = (provider: KeyGroupProvider) => {
+  preferredCreateProvider.value = null
   if (createProvider.value === provider) return
   createProvider.value = provider
   formData.value.group_id = null
 }
 
 // Also handles groups arriving after the create dialog has already opened.
-watch([showCreateModal, createProviderOptions], ([isOpen, providers], [wasOpen]) => {
+watch([showCreateModal, createProviderOptions, preferredCreateProvider], ([isOpen, providers], [wasOpen]) => {
   if (!isOpen) return
-  if (!wasOpen || !providers.some((provider) => provider.value === createProvider.value && provider.count > 0)) {
-    selectCreateProvider(providers.find((provider) => provider.count > 0)?.value ?? 'anthropic')
+  const preferred = providers.find((provider) => provider.value === preferredCreateProvider.value && provider.count > 0)
+  if (preferred) {
+    selectCreateProvider(preferred.value)
+  } else if (!wasOpen || !providers.some((provider) => provider.value === createProvider.value && provider.count > 0)) {
+    createProvider.value = providers.find((provider) => provider.count > 0)?.value ?? 'anthropic'
+    formData.value.group_id = null
   }
   if (!formGroupOptions.value.some((group) => group.value === formData.value.group_id)) {
     formData.value.group_id = null
@@ -1920,6 +1929,7 @@ const handleDelete = async () => {
 }
 
 const closeModals = () => {
+  preferredCreateProvider.value = null
   showCreateModal.value = false
   showEditModal.value = false
   selectedKey.value = null
@@ -2077,6 +2087,16 @@ function formatResetTime(resetAt: string | null): string {
   if (hours > 0) return `${hours}h ${mins}m`
   return `${mins}m`
 }
+
+watch(() => route.query.create, (create) => {
+  if (create !== '1') return
+  preferredCreateProvider.value = route.query.platform === 'imagevideo' ? 'media' : null
+  showCreateModal.value = true
+  const query = { ...route.query }
+  delete query.create
+  delete query.platform
+  void router.replace({ query, hash: route.hash })
+}, { immediate: true })
 
 onMounted(() => {
   loadSavedColumns()

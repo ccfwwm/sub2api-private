@@ -33,7 +33,7 @@ createServer(async (request, response) => {
   if (pathname === '/api/v1/public-docs/imagevideo') {
     try {
       const sections=JSON.parse(await content())
-      const body=JSON.stringify({code:0,data:{slug:'imagevideo',version:12,content:sections}})
+      const body=JSON.stringify({code:0,data:{slug:'imagevideo',version:13,content:sections}})
       response.writeHead(200,{'content-type':mime['.json'],'cache-control':'no-cache','x-content-type-options':'nosniff'})
       response.end(request.method==='HEAD'?undefined:body)
     }catch{response.writeHead(503).end()}

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { ApiKey } from '@/types'
 import { keysAPI } from '@/api'
@@ -220,9 +221,16 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const mountView = async (path = '/keys') => {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/keys', component: KeysView }],
+  })
+  await router.push(path)
+  await router.isReady()
   const wrapper = mount(KeysView, {
     global: {
+      plugins: [router],
       stubs: {
         AppLayout: AppLayoutStub,
         TablePageLayout: TablePageLayoutStub,
@@ -561,7 +569,7 @@ describe('user KeysView column settings', () => {
   })
 
   describe('create provider selection', () => {
-    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe']
+    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe', 'imagevideo']
     const availableGroups = platforms.map((platform, index) => ({
       id: index + 1,
       // Deliberately ambiguous names: classification must follow the platform.
@@ -585,15 +593,45 @@ describe('user KeysView column settings', () => {
 
     it('classifies all configured platforms and retains the complete table filter', async () => {
       const wrapper = await openCreate()
-      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
+      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(5)
       expect(optionIds(wrapper)).toEqual([1])
       await chooseProvider(wrapper, 'openai')
       expect(optionIds(wrapper)).toEqual([2])
       await chooseProvider(wrapper, 'domestic')
       expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
+      await chooseProvider(wrapper, 'media')
+      expect(optionIds(wrapper)).toEqual([13])
       await chooseProvider(wrapper, 'other')
       expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11, 12])
-      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
+      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(15)
+    })
+
+    it('opens media key creation from the docs link, waits for groups, and submits the selected group', async () => {
+      let resolveGroups!: (value: typeof availableGroups) => void
+      getAvailableGroups.mockReturnValue(new Promise((resolve) => { resolveGroups = resolve }))
+      const wrapper = await mountView('/keys?create=1&platform=imagevideo&keep=yes#keys')
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      resolveGroups(availableGroups)
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[value="media"]').element.checked).toBe(true)
+      expect(optionIds(wrapper)).toEqual([13])
+      expect(wrapper.vm.$route.fullPath).toBe('/keys?keep=yes#keys')
+      await wrapper.get('[data-tour="key-form-name"]').setValue('Media API')
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 13)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 13 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['Media API', 13])
+      wrapper.unmount()
+    })
+
+    it('allows a manual provider choice after opening the media shortcut', async () => {
+      const wrapper = await mountView('/keys?create=1&platform=imagevideo')
+      await chooseProvider(wrapper, 'openai')
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[value="openai"]').element.checked).toBe(true)
+      expect(optionIds(wrapper)).toEqual([2])
+      wrapper.unmount()
     })
 
     it('clears the previous group on provider change and submits only the newly selected group', async () => {
@@ -651,7 +689,7 @@ describe('user KeysView column settings', () => {
       await wrapper.get('[data-test="close-dialog"]').trigger('click')
       await getButtonByText(wrapper, 'common.edit').trigger('click')
       expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
-      expect(optionIds(wrapper)).toHaveLength(12)
+      expect(optionIds(wrapper)).toHaveLength(13)
     })
   })
 })

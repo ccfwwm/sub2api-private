@@ -121,12 +121,14 @@ export default {
       anthropic: 'Anthropic',
       openai: 'OpenAI',
       domestic: '国产模型',
+      media: '图片音频视频',
       other: '其他'
     },
     providerHints: {
       anthropic: '选择 Anthropic / Claude 的可用分组',
       openai: '选择 OpenAI / GPT 的可用分组',
       domestic: '包含 DeepSeek、Kimi、智谱 GLM、MiniMax',
+      media: '选择图片、音频和视频接口使用的分组',
       other: '包含 Gemini、Grok、Antigravity、OpenCode 和混合分组'
     },
     selectGroup: '选择分组',

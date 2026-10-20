@@ -6,6 +6,7 @@ import { imagevideoMarkdown, imagevideoModels, imagevideoSections, sectionMarkdo
 describe('Public media docs', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     localStorage.removeItem('media-docs-theme')
   })
   it('uses 26 exact unique models and validates JSON and cURL JSON bodies', () => {
@@ -37,10 +38,15 @@ describe('Public media docs', () => {
     expect(groupMarkdown('GPT 图片')).toContain(sectionMarkdown(edit))
     expect(imagevideoSections.some(s => s.id === 'clients')).toBe(true)
   })
-  it('uses the standalone repository docs fallback without draft communication', () => {
+  it.each([true, false])('opens standalone docs as the top-level page (dev=%s), preserving links', (dev) => {
+    vi.stubEnv('DEV', dev)
+    const replace = vi.fn()
+    vi.stubGlobal('window', { location: { search: '?from=home', hash: '#gpt-edit', replace } })
     const w = mount(ImageVideoDocsView)
-    expect(w.get('iframe').attributes('src')).toBe('/media-docs/index.html')
-    expect(w.get('iframe').attributes('src')).not.toContain('preview')
+    const destination = (dev ? '/media-docs/index.html' : '/docs/imagevideo') + '?from=home#gpt-edit'
+    expect(w.find('iframe').exists()).toBe(false)
+    expect(replace).toHaveBeenCalledWith(destination)
+    expect(w.get('a').attributes('href')).toBe(destination)
     w.unmount()
   })
 })
