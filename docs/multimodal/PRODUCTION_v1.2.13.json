@@ -1,0 +1,70 @@
+{
+  "version": "v1.2.13",
+  "commit": "872453d2ff730768e8cb7e1d6b7359464329669d",
+  "verified_at": "2026-10-20T08:04:51.340883+00:00",
+  "runtime_version": "1.2.13",
+  "protected_containers_unchanged": true,
+  "domains": [
+    {
+      "domain": "https://code.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    },
+    {
+      "domain": "https://code.aicodeme.cn",
+      "checks": {
+        "/": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    },
+    {
+      "domain": "https://hkcode.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    }
+  ],
+  "authenticated_models": 30,
+  "migrations_unchanged": true,
+  "deployment": {
+    "id": "bddde2bdfaeb47a9a4c1cfde868d9e2a",
+    "status": "succeeded",
+    "backup_id": "7645fcedd10c486eba3ef1fe5ee13a03",
+    "active_image": "sha256:58eab34d4ac1d935d89c575b259dd7d922564b915bc7886c852bbcec26ea11d3",
+    "active_docs_image": "ghcr.io/ccfwwm/sub2api-private-docs@sha256:6d945e96739bd7ae2598f1cd902736ed627282f7684d0757331d1c913a11977f"
+  },
+  "browser": {
+    "first_spa_docs_click": "passed",
+    "iframe_count": 0,
+    "media_key_shortcut": "opens create dialog; media category checked; actual imagevideo group selectable",
+    "mobile_width": 390,
+    "mobile_overflow": false,
+    "dark_mode": "passed",
+    "docs_console_errors": 0
+  },
+  "verification": {
+    "frontend_targeted_tests": 34,
+    "docs_request_tests": 3,
+    "frontend_typecheck": "passed",
+    "frontend_build": "passed",
+    "backend_media_handler_service_tests": "passed",
+    "isolated_reservation_integration_tests": 3,
+    "paid_generation_added": false,
+    "billing_code_changed": false
+  }
+}
