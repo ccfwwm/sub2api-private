@@ -111,18 +111,11 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	}
 	// Also redact known credentials echoed inside otherwise permitted text fields.
 	secrets := []string{}
-	var key string
-	if err := h.Engine.Store.DB.QueryRowContext(c.Request.Context(), `SELECT key FROM api_keys WHERE id=$1`, t.Identity.KeyID).Scan(&key); err != nil {
+	var key, providerKey string
+	if err := h.Engine.Store.DB.QueryRowContext(c.Request.Context(), `SELECT k.key,coalesce(a.credentials->>'api_key','') FROM api_keys k LEFT JOIN accounts a ON a.id=$2 WHERE k.id=$1`, t.Identity.KeyID, t.AccountID).Scan(&key, &providerKey); err != nil {
 		return nil, err
 	}
-	secrets = append(secrets, key)
-	if h.Engine.Lookup != nil {
-		account, lookupErr := h.Engine.Lookup(t.AccountID, t.Identity.GroupID)
-		if lookupErr != nil {
-			return nil, lookupErr
-		}
-		secrets = append(secrets, account.Key)
-	}
+	secrets = append(secrets, key, providerKey)
 	raw, err := json.Marshal(result)
 	if err != nil {
 		return nil, err

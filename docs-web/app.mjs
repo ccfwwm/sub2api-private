@@ -33,7 +33,7 @@ export function buildRequest(cap, operation, fields, materials={}) {
       if(value.startsWith('data:')) {const m=value.match(/^data:([^;]+);base64,(.+)$/s);if(!m)throw Error('图片 data URL 格式错误');return {inlineData:{mimeType:m[1],data:m[2]}}}
       return {fileData:{fileUri:value}}
     })]
-    return {public_profile_id:cap.profile_id,async:true,contents:[{role:'user',parts}],generationConfig:{candidateCount:1,responseModalities:fields.modalities==='both'?['IMAGE','TEXT']:[fields.modalities||'TEXT'],imageConfig:{...(fields.ratio?{aspectRatio:fields.ratio}:{}),...(fields.size?{imageSize:fields.size}:{})}}}
+    return {public_profile_id:cap.profile_id,async:true,contents:[{role:'user',parts}],generationConfig:{candidateCount:1,responseModalities:(!fields.modalities||fields.modalities==='both')?['IMAGE','TEXT']:[fields.modalities],imageConfig:{...(fields.ratio?{aspectRatio:fields.ratio}:{}),...(fields.size?{imageSize:fields.size}:{})}}}
   }
   if(operation==='image_edit') {p.images=materials.image||[];if(materials.mask?.[0])p.mask=materials.mask[0]}
   else if(operation==='chat_music') {p.messages=[{role:'user',content:p.prompt}];delete p.prompt;if(materials.image?.length)p.reference_images=materials.image}
