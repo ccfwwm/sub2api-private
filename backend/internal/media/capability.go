@@ -154,11 +154,6 @@ func refString(v any) (string, string, error) {
 		if !ok || s == "" {
 			return "", "", fail(400, "invalid_reference", "Reference object requires url")
 		}
-		for k := range o {
-			if k != "url" && k != "b64_json" && k != "duration_seconds" && k != "role" {
-				return "", "", fail(400, "invalid_reference", "Unknown reference object field")
-			}
-		}
 		return s, "object", nil
 	}
 	return "", "", fail(400, "invalid_reference", "URL string or object required")
@@ -219,6 +214,8 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	if e := json.Unmarshal(b, &result.Parameters); e != nil {
 		return result, e
 	}
+	result.Incoming = map[string]any{}
+	_ = json.Unmarshal(b, &result.Incoming)
 	p = result.Parameters
 	if selected, ok := p["public_profile_id"]; ok {
 		if stringValue(selected) != publicProfileID(cap) {
@@ -226,41 +223,23 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		}
 		delete(p, "public_profile_id")
 	}
-	allowed := map[string]bool{}
-	allowed["background"], allowed["output_format"] = true, true
-	for _, k := range []string{"model", "prompt", "seconds", "duration", "ratio", "aspect_ratio", "resolution", "size", "quality", "n", "response_format", "image", "mask", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_images", "reference_videos", "reference_audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "generate_audio", "generateAudio", "negative_prompt", "negativePrompt", "metadata", "title", "lyrics", "instrumental", "bpm", "seed", "first_frame", "last_frame", "async", "audio_format", "contents", "generationConfig", "messages", "stream"} {
-		allowed[k] = true
-	}
-	for k := range p {
-		if !allowed[k] {
-			return result, fail(400, "unknown_parameter", "Unsupported field: "+k)
+	for _, field := range []string{"request_blob", "material_refs", "quantities", "conditions", "billing", "account_id", "user_id", "key_id"} {
+		if p[field] != nil {
+			return result, fail(400, "reserved_parameter", "Reserved gateway field: "+field)
 		}
 	}
 	if stringValue(p["model"]) != "" && stringValue(p["model"]) != cap.Model {
 		return result, fail(400, "model_conflict", "Request model conflicts with capability")
 	}
-	if cap.RequestFormat == "yunfei_multimodal" {
-		// The upstream selects the first present image alias, including [].
-		for _, field := range []string{"reference_images", "input_reference", "images"} {
-			if value, present := p[field]; present {
-				if _, ok := value.([]any); !ok {
-					value = []any{value}
-				}
-				p["images"] = value
-				break
-			}
-		}
-		delete(p, "reference_images")
-		delete(p, "input_reference")
-		if value, present := p["duration"]; present {
-			p["seconds"] = value
-			delete(p, "duration")
-		}
-	}
 	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" {
-		for _, field := range []string{"image", "image_url", "image_urls", "input_reference", "mask", "contents", "messages"} {
-			if p[field] != nil {
-				return result, fail(400, "unsupported_reference_field", "Use the selected protocol reference arrays")
+		for _, field := range []string{"image", "image_url", "image_urls", "input_reference"} {
+			if value, present := p[field]; present {
+				if _, array := value.([]any); !array {
+					p[field] = []any{value}
+				}
+				if err := alias(p, "images", field); err != nil {
+					return result, err
+				}
 			}
 		}
 	}
@@ -272,9 +251,6 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	}
 	for _, kind := range []string{"image", "video", "audio"} {
 		field := "reference_" + kind + "s"
-		if p[field] != nil && cap.RequestFormat != "yunfei_multimodal" && cap.RequestFormat != "v6k_url" && cap.Adapter != "yunfei_lyria" {
-			return result, fail(400, "unsupported_reference_field", "Select a multimodal request format")
-		}
 		if err := alias(p, kind+"s", field); err != nil {
 			return result, err
 		}
@@ -297,96 +273,71 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 		} else {
 			return result, fail(400, "seconds_required", "Choose a configured duration")
 		}
-		switch cap.Duration.Mode {
-		case "fixed", "enum":
-			found := false
-			for _, v := range cap.Duration.Values {
-				if v == seconds {
-					found = true
-				}
-			}
-			if !found {
-				return result, fail(400, "unsupported_duration", "Duration not supported by this model")
-			}
-		case "range":
-			if cap.Duration.Min == nil || cap.Duration.Max == nil || seconds < *cap.Duration.Min || seconds > *cap.Duration.Max {
-				return result, fail(400, "unsupported_duration", "Duration outside model limits")
-			}
-		default:
-			return result, fail(422, "duration_not_configured", "Configure model duration")
-		}
 		p["seconds"] = seconds
 		result.Duration = strconv.Itoa(seconds)
 		result.Quantities["request_duration"] = []string{result.Duration}
 		if cap.Duration.Mode == "fixed" {
-			result.Quantities["fixed_duration"] = []string{result.Duration}
+			// Fixed-price quantities remain server-owned even when a provider
+			// accepts a requested duration beyond its catalog hint.
+			fixed := seconds
+			if len(cap.Duration.Values) == 1 {
+				fixed = cap.Duration.Values[0]
+			}
+			result.Quantities["fixed_duration"] = []string{strconv.Itoa(fixed)}
 		}
+		// Retain the established size alias and pixel-to-resolution mapping.
+		// Unknown values pass through; catalog choices no longer veto them.
 		if pixels, ok := p["size"].(string); ok && strings.Contains(pixels, "x") {
-			dimensions := strings.Split(pixels, "x")
-			if len(dimensions) != 2 {
-				return result, fail(400, "invalid_size", "Invalid video pixel size")
-			}
-			w, we := strconv.Atoi(dimensions[0])
-			h, he := strconv.Atoi(dimensions[1])
-			if we != nil || he != nil || w <= 0 || h <= 0 {
-				return result, fail(400, "invalid_size", "Invalid video pixel size")
-			}
-			matched := ""
-			for _, ratio := range cap.AspectRatios {
-				var rw, rh int
-				if _, e := fmt.Sscanf(ratio, "%d:%d", &rw, &rh); e == nil && rw > 0 && rh > 0 {
-					difference := float64(w*rh)/float64(h*rw) - 1
-					if difference > -0.02 && difference < 0.02 {
-						matched = ratio
-						break
+			parts := strings.Split(pixels, "x")
+			if len(parts) == 2 {
+				w, we := strconv.Atoi(parts[0])
+				h, he := strconv.Atoi(parts[1])
+				if we == nil && he == nil && w > 0 && h > 0 && w <= 65536 && h <= 65536 {
+					matched := ""
+					for _, ratio := range cap.AspectRatios {
+						var rw, rh int
+						if _, err := fmt.Sscanf(ratio, "%d:%d", &rw, &rh); err == nil && rw > 0 && rh > 0 {
+							diff := float64(w)*float64(rh)/(float64(h)*float64(rw)) - 1
+							if diff > -0.02 && diff < 0.02 {
+								matched = ratio
+								break
+							}
+						}
 					}
+					if matched == "" {
+						a, b := w, h
+						for b != 0 {
+							a, b = b, a%b
+						}
+						matched = fmt.Sprintf("%d:%d", w/a, h/a)
+					}
+					if p["ratio"] == nil {
+						p["ratio"] = matched
+					}
+					edge := min(w, h)
+					if edge == 1088 {
+						edge = 1080
+					}
+					p["size"] = fmt.Sprintf("%dp", edge)
 				}
 			}
-			if matched == "" {
-				return result, fail(400, "unsupported_ratio", "Video size does not match a configured aspect ratio")
-			}
-			if ratio, present := p["ratio"]; present && ratio != matched {
-				return result, fail(400, "conflicting_ratio", "Video size conflicts with ratio")
-			}
-			p["ratio"] = matched
-			edge := min(w, h)
-			if edge == 1088 {
-				edge = 1080
-			}
-			p["size"] = fmt.Sprintf("%dp", edge)
 		}
-		if e := alias(p, "resolution", "size"); e != nil {
-			return result, e
+		if err := alias(p, "resolution", "size"); err != nil {
+			return result, err
 		}
 	}
-	for field, choices := range map[string][]string{"resolution": cap.Resolutions, "ratio": cap.AspectRatios, "quality": cap.Qualities} {
+	for _, field := range []string{"resolution", "ratio", "quality", "size"} {
 		if v, ok := p[field]; ok {
-			if field == "resolution" && cap.ResolutionPolicy == "omit" {
-				return result, fail(400, "unsupported_resolution", "Omit resolution for this model")
-			}
-			if len(choices) == 0 || !contains(choices, stringValue(v)) {
-				return result, fail(400, "unsupported_capability", "Unsupported "+field)
-			}
 			result.Conditions[field] = v
 		}
 	}
 	if cap.MediaType == "image" {
-		for field, choices := range map[string][]string{"background": cap.Backgrounds, "output_format": cap.OutputFormats} {
-			if v, ok := p[field]; ok && (cap.Adapter != "yunfei_gpt_images" || !contains(choices, stringValue(v))) {
-				return result, fail(400, "unsupported_parameter", "Unsupported "+field+" for selected model")
-			}
-		}
-		if p["background"] == "transparent" && p["output_format"] != nil && p["output_format"] != "png" && p["output_format"] != "webp" {
-			return result, fail(400, "transparent_format", "Transparent output requires PNG or WebP")
-		}
 		if v, ok := p["size"]; ok {
-			if len(cap.Sizes) > 0 && !contains(cap.Sizes, stringValue(v)) {
-				return result, fail(400, "unsupported_size", "Image pixel size is not configured")
-			}
 			result.Conditions["size_tier"] = v
 		}
+		// Multiple outputs remain blocked until billing can reserve them accurately.
 		if n, ok := p["n"]; ok && stringValue(n) != "1" {
-			return result, fail(400, "unsupported_output_count", "Configure output-count capability before requesting multiple outputs")
+			return result, fail(400, "unsupported_output_count", "Multiple-output billing is not configured")
 		}
 	}
 	refs := map[string][]any{"image": {}, "video": {}, "audio": {}}
@@ -454,8 +405,8 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 				return result, fail(400, "edit_endpoint_required", "Use image edits for reference images")
 			}
 		case "yunfei_omni":
-			if p["image_url"] != nil || p["image_urls"] != nil || p["negative_prompt"] != nil || p["generate_audio"] != nil {
-				return result, fail(400, "unsupported_parameter", "Omni uses image/images and has no audio/negative control")
+			if p["image_url"] != nil || p["image_urls"] != nil {
+				return result, fail(400, "wrong_image_field", "Omni uses image/images")
 			}
 			if p["image"] != nil {
 				if p["images"] != nil {
@@ -488,7 +439,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	if operation == "image_edit" && len(refs["image"]) == 0 {
 		return result, fail(400, "image_required", "Image editing needs a reference image")
 	}
-	if p["mask"] != nil {
+	if p["mask"] != nil && operation == "image_edit" {
 		if err := validateImageMask(cap, operation, p["mask"], refs["image"]); err != nil {
 			return result, err
 		}
@@ -499,7 +450,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 				return result, fail(400, "protected_metadata", "Metadata cannot override identity or billing")
 			}
 		}
-		if meta["content"] != nil {
+		if meta["content"] != nil && (cap.RequestFormat == "" || cap.RequestFormat == "legacy") {
 			if cap.RequestFormat != "" && cap.RequestFormat != "legacy" {
 				return result, fail(400, "reference_conflict", "Explicit video formats do not accept native metadata content")
 			}
@@ -534,20 +485,16 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	frameRoles := map[string]bool{}
 	ordinaryImages := 0
 	for kind, list := range refs {
-		material, ok := cap.Materials[kind]
-		if len(list) > 0 && (!ok || material.MaxCount == nil || len(list) > *material.MaxCount) {
-			return result, fail(400, "reference_limit", "Reference type/count is not configured or exceeded")
-		}
-		if cap.RequestFormat == "v6k_url" && kind != "image" && len(list) > 0 && cap.Materials[kind].ReferenceField == "" {
-			return result, fail(400, "unsupported_reference_type", "Configure the verified material field")
+		if len(list) > 16 {
+			return result, fail(413, "reference_limit", "Global reference limit exceeded")
 		}
 		for _, v := range list {
 			role := ""
 			if obj, ok := v.(map[string]any); ok && obj["role"] != nil {
 				role = stringValue(obj["role"])
 			}
-			if role != "" && role != "reference" && role != "reference_image" {
-				if cap.RequestFormat != "yunfei_multimodal" || kind != "image" || !contains([]string{"first_frame", "last_frame"}, role) || frameRoles[role] {
+			if role == "first_frame" || role == "last_frame" {
+				if kind != "image" || frameRoles[role] {
 					return result, fail(400, "invalid_reference_role", "Unsupported or duplicate frame role")
 				}
 				frameRoles[role] = true
@@ -562,14 +509,8 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			if e != nil {
 				return result, e
 			}
-			if cap.RequestFormat == "v6k_url" && (!strings.HasPrefix(f, "public_url") || role != "") {
+			if cap.RequestFormat == "v6k_url" && !strings.HasPrefix(f, "public_url") {
 				return result, fail(400, "reference_url_required", "Provide public HTTPS material URLs")
-			}
-			if !allowedFormat(material, f) {
-				return result, fail(400, "unsupported_reference_format", "Unsupported "+kind+" format")
-			}
-			if material.MaxFileBytes == nil && strings.Contains(f, "base64") || material.MaxFileBytes == nil && strings.HasPrefix(f, "data_url") {
-				return result, fail(422, "file_limit_not_configured", "Configure maximum decoded file size")
 			}
 			if !strings.HasPrefix(f, "public_url") {
 				encoded := raw
@@ -577,7 +518,7 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 					encoded = raw[pos+1:]
 				}
 				decoded, e := base64.StdEncoding.DecodeString(encoded)
-				if e != nil || material.MaxFileBytes == nil || int64(len(decoded)) > *material.MaxFileBytes {
+				if e != nil || int64(len(decoded)) > 50<<20 {
 					return result, fail(413, "file_too_large", "Decoded media exceeds configured file limit")
 				}
 			}
@@ -594,15 +535,6 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 	}
 	if len(frameRoles) > 0 && ordinaryImages > 0 {
 		return result, fail(400, "frame_reference_conflict", "Frame mode cannot mix ordinary image references")
-	}
-	if cap.Model == "video-QY" && len(refs["video"]) == 0 {
-		return result, fail(400, "video_reference_required", "Video editing requires a reference video")
-	}
-	if strings.HasSuffix(cap.Model, "-generate-preview-ref") && len(refs["image"]) > 0 && (result.Duration != "8" || stringValue(p["ratio"]) != "16:9") {
-		return result, fail(400, "reference_scenario_conflict", "Reference Veo requires 8 seconds and 16:9")
-	}
-	if cap.Adapter == "yunfei_grok" && len(refs["image"]) > 0 && p["ratio"] != nil {
-		return result, fail(400, "image_aspect_is_fixed", "Image video follows the reference aspect ratio; omit ratio")
 	}
 	if cap.MediaType == "audio" {
 		prompt := strings.TrimSpace(stringValue(p["prompt"]))
@@ -887,14 +819,8 @@ func geminiReferences(p map[string]any, cap Capability, conditions map[string]an
 		}
 		if image, ok := gc["imageConfig"].(map[string]any); ok {
 			if size := stringValue(image["imageSize"]); size != "" {
-				if !contains(cap.Resolutions, size) {
-					return refs, fail(400, "unsupported_resolution", "Unsupported Gemini image size")
-				}
 				conditions["resolution"] = size
 				conditions["size_tier"] = size
-			}
-			if ratio := stringValue(image["aspectRatio"]); ratio != "" && !contains(cap.AspectRatios, ratio) {
-				return refs, fail(400, "unsupported_ratio", "Unsupported Gemini aspect ratio")
 			}
 		}
 	}

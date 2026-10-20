@@ -28,7 +28,7 @@ func TestMappingCreatedImageEditSupportsSingleAndMultipleUploads(t *testing.T) {
 			require.NotContains(t, req.Parameters, "images")
 		}
 		_, err := NormalizeUploads(cap, "image_edit", map[string]any{"prompt": "edit"}, []Upload{upload, upload, upload})
-		require.Error(t, err)
+		require.NoError(t, err)
 		if materials != nil {
 			require.Nil(t, materials["image"].MaxCount)
 		}

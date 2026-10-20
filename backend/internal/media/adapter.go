@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -64,23 +65,23 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 			field := "reference_" + kind + "s"
 			values := []any{}
 			if cap.RequestFormat == "v6k_url" {
-				field = cap.Materials[kind].ReferenceField
-				if kind == "image" {
-					field = "images"
-				}
-				if field == "" {
-					return UpstreamResult{}, fail(400, "unsupported_reference_type", "Configure the verified material field")
-				}
+				field = kind + "s"
 			}
 			for _, ref := range refs {
 				raw, _, err := refString(ref)
 				if err != nil {
 					return UpstreamResult{}, err
 				}
-				if cap.RequestFormat == "v6k_url" {
+				if obj, ok := ref.(map[string]any); ok {
+					copy := map[string]any{}
+					for k, v := range obj {
+						copy[k] = v
+					}
+					copy["url"] = raw
+					delete(copy, "b64_json")
+					values = append(values, copy)
+				} else if cap.RequestFormat == "v6k_url" {
 					values = append(values, map[string]any{"url": raw})
-				} else if obj, ok := ref.(map[string]any); ok && (obj["role"] == "first_frame" || obj["role"] == "last_frame") {
-					values = append(values, map[string]any{"url": raw, "role": obj["role"]})
 				} else {
 					values = append(values, raw)
 				}
@@ -128,11 +129,29 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 					if err != nil {
 						return UpstreamResult{}, err
 					}
-					content = append(content, map[string]any{"type": kind + "_url", kind + "_url": map[string]any{"url": raw}})
+					part := map[string]any{}
+					if obj, ok := ref.(map[string]any); ok {
+						for k, v := range obj {
+							if k != "url" && k != "b64_json" {
+								part[k] = v
+							}
+						}
+					}
+					part["type"] = kind + "_url"
+					part[kind+"_url"] = map[string]any{"url": raw}
+					content = append(content, part)
 				}
 			}
 		}
-		native := map[string]any{"model": cap.UpstreamModel, "content": content}
+		native := map[string]any{}
+		for k, v := range p {
+			native[k] = v
+		}
+		for _, k := range []string{"prompt", "metadata", "seconds", "images", "videos", "audios"} {
+			delete(native, k)
+		}
+		native["model"] = cap.UpstreamModel
+		native["content"] = content
 		for _, key := range []string{"resolution", "ratio", "generate_audio", "seed"} {
 			if p[key] != nil {
 				native[key] = p[key]
@@ -195,6 +214,28 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 		}
 		body = bytes.NewReader(raw)
 	}
+	if account.ObserveSubmission != nil {
+		raw, readErr := io.ReadAll(body)
+		if readErr != nil {
+			return UpstreamResult{}, readErr
+		}
+		body = bytes.NewReader(raw)
+		submission := NewSubmission(path, raw, p, req.MaterialRefs, account.Key)
+		observe := account.ObserveSubmission
+		var receiptMu sync.Mutex
+		if err := observe(submission); err != nil {
+			return UpstreamResult{}, err
+		}
+		account.ObserveSubmission = func(update Submission) error {
+			receiptMu.Lock()
+			defer receiptMu.Unlock()
+			submission.Stage = update.Stage
+			if update.Response != nil {
+				submission.Response = update.Response
+			}
+			return observe(submission)
+		}
+	}
 	return a.call(ctx, account, cap, http.MethodPost, path, body, contentType, true)
 }
 func (a *Adapter) Poll(ctx context.Context, t StoredTask, account Account) (UpstreamResult, error) {
@@ -228,10 +269,15 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	var stage atomic.Value
 	stage.Store("连接")
 	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-		DNSStart:             func(httptrace.DNSStartInfo) { stage.Store("域名解析") },
-		ConnectStart:         func(string, string) { stage.Store("连接") },
-		TLSHandshakeStart:    func() { stage.Store("TLS 握手") },
-		WroteRequest:         func(httptrace.WroteRequestInfo) { stage.Store("等待响应头") },
+		DNSStart:          func(httptrace.DNSStartInfo) { stage.Store("域名解析") },
+		ConnectStart:      func(string, string) { stage.Store("连接") },
+		TLSHandshakeStart: func() { stage.Store("TLS 握手") },
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			stage.Store("等待响应头")
+			if info.Err == nil && account.ObserveSubmission != nil {
+				_ = account.ObserveSubmission(Submission{Stage: "attempted"})
+			}
+		},
 		GotFirstResponseByte: func() { stage.Store("读取响应") },
 	})
 	endpoint, e := url.Parse(path)
@@ -280,6 +326,15 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 		return UpstreamResult{}, fmt.Errorf("upstream query response incomplete")
 	}
+	if submission && account.ObserveSubmission != nil {
+		state := "attempted"
+
+		var object any
+		_ = json.Unmarshal(raw, &object)
+		if err := account.ObserveSubmission(Submission{Stage: state, Response: SafeReviewValue(object, []string{account.Key}, 0)}); err != nil {
+			return UpstreamResult{Status: "unknown", Diagnostic: "Submission receipt could not be persisted; reconcile original task"}, nil
+		}
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if !submission {
 			return UpstreamResult{}, fmt.Errorf("upstream query HTTP %d", response.StatusCode)
@@ -290,6 +345,15 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
 		}
 		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", response.StatusCode)
+		var rejectedDetail map[string]any
+		if len(raw) <= 8192 && json.Unmarshal(raw, &rejectedDetail) == nil {
+			if detail, ok := rejectedDetail["error"].(map[string]any); ok {
+				rejectedDetail = detail
+			}
+			code, _ := SafeReviewValue(rejectedDetail["code"], []string{account.Key}, 0).(string)
+			message, _ := SafeReviewValue(rejectedDetail["message"], []string{account.Key}, 0).(string)
+			diagnostic += ": " + code + " " + message
+		}
 		if response.StatusCode == 400 || response.StatusCode == 415 || response.StatusCode == 422 {
 			var rejected map[string]any
 			if len(raw) <= 8192 && json.Unmarshal(raw, &rejected) == nil {
@@ -311,6 +375,11 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		return UpstreamResult{Status: "unknown", Diagnostic: "Non-JSON successful response; acceptance requires reconciliation"}, nil
 	}
 	result := parseResult(object, cap)
+	if submission && result.Accepted && account.ObserveSubmission != nil {
+		if err := account.ObserveSubmission(Submission{Stage: "accepted"}); err != nil {
+			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: "Acceptance receipt unavailable; reconcile original task"}, nil
+		}
+	}
 	result.Response = raw
 	if result.Status == "unknown" {
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"

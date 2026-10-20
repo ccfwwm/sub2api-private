@@ -465,6 +465,7 @@ func (h *MediaHandler) writeTask(c *gin.Context, t media.StoredTask) {
 		mediaError(c, err)
 		return
 	}
+	public.Submission = h.Engine.ReadSubmission(t.ID)
 	code := 200
 	if c.Request.Method == http.MethodPost {
 		code = 202

@@ -41,9 +41,17 @@ func TestSD25FixedThirtySecondsAndOmittedResolution(t *testing.T) {
 	require.NoError(t, e)
 	require.Equal(t, "30", req.Duration)
 	require.Equal(t, []string{"30"}, req.Quantities["fixed_duration"])
-	for _, p := range []map[string]any{{"seconds": 15}, {"seconds": 30, "duration": 15}, {"resolution": "720p"}, {"_files": []any{}}, {"metadata": map[string]any{"price": "0"}}} {
-		p["prompt"] = "A peaceful valley"
-		_, e = Normalize(cap, "video", p)
+	for _, extra := range []map[string]any{{"seconds": 15}, {"resolution": "720p"}, {"future_option": map[string]any{"enabled": true}}} {
+		extra["prompt"] = "A peaceful valley"
+		req, e := Normalize(cap, "video", extra)
+		require.NoError(t, e)
+		for key, value := range extra {
+			require.EqualValues(t, value, req.Parameters[key])
+		}
+	}
+	for _, bad := range []map[string]any{{"seconds": 30, "duration": 15}, {"metadata": map[string]any{"price": "0"}}, {"billing": map[string]any{"price": "0"}}} {
+		bad["prompt"] = "A peaceful valley"
+		_, e := Normalize(cap, "video", bad)
 		require.Error(t, e)
 	}
 	images := []any{}
@@ -51,7 +59,7 @@ func TestSD25FixedThirtySecondsAndOmittedResolution(t *testing.T) {
 		images = append(images, map[string]any{"url": "https://example.com/image.png"})
 	}
 	_, e = Normalize(cap, "video", map[string]any{"prompt": "Animate these images", "images": images})
-	require.Error(t, e)
+	require.NoError(t, e)
 }
 
 func TestRequiredDurationCannotUseAnOptionalDefault(t *testing.T) {
@@ -90,4 +98,18 @@ func TestMusicHintDoesNotPretendToBeActualUsage(t *testing.T) {
 	require.NotContains(t, req.Parameters, "lyrics")
 	_, e = Normalize(cap, "audio", map[string]any{"prompt": "Music", "duration": 0})
 	require.Error(t, e)
+}
+
+func TestAdvisoryCatalogPreservesFixedBillingAndExistingSizeMapping(t *testing.T) {
+	cap := findProfile(t, "MinimaxH3-2K")
+	cap.Duration = Duration{Mode: "fixed", Values: []int{30}, Default: pointer(30)}
+	cap.Resolutions = []string{"2K"}
+	req, err := Normalize(cap, "video", map[string]any{"prompt": "animate", "seconds": 5, "size": "1280x720"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"30"}, req.Quantities["fixed_duration"])
+	require.Equal(t, []string{"5"}, req.Quantities["request_duration"])
+	require.Equal(t, "720p", req.Parameters["resolution"])
+	require.Equal(t, "16:9", req.Parameters["ratio"])
+	_, err = Normalize(cap, "video", map[string]any{"prompt": "animate", "seconds": 5, "size": "720p", "resolution": "2K"})
+	require.ErrorContains(t, err, "alias_conflict")
 }

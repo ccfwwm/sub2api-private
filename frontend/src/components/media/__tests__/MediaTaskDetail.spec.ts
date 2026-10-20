@@ -30,3 +30,14 @@ describe('Media administrative review',()=>{
   expect(api.review).toHaveBeenLastCalledWith('task-a','completed','0.2','核对已完成',8,expect.any(String));w.unmount()
  })
 })
+
+describe('Submission evidence', () => {
+ it.each([[null,'未记录'],['prepared','准备发送'],['attempted','已尝试发送'],['accepted','上游已受理']])('distinguishes %s from actual acceptance', async (stage,label) => {
+  api.detail.mockResolvedValueOnce({record,request:{images:['draft-only']},response:{},submission:stage?{stage,references:{image:4,video:1,audio:0},request_hash:'fixture-hash',request:{future_option:true}}:null})
+  const w=create();await flushPromises()
+  expect(w.get('[data-testid="submission-stage"]').text()).toContain(label)
+  if(stage)expect(w.get('[data-testid="submission-stage"]').text()).toContain('"video":1')
+  else expect(w.get('[data-testid="submission-stage"]').text()).not.toContain('上游已受理')
+  w.unmount()
+ })
+})

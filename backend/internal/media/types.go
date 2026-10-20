@@ -142,6 +142,7 @@ type Identity struct {
 	ImageOverride, VideoOverride           *string
 }
 type Request struct {
+	Incoming     map[string]any      `json:"incoming,omitempty"`
 	MaterialRefs map[string][]any    `json:"material_refs,omitempty"`
 	Uploads      []Upload            `json:"uploads,omitempty"`
 	Operation    string              `json:"operation"`
@@ -186,6 +187,7 @@ type Calculation struct {
 	Missing  []string `json:"missing_usage"`
 }
 type Task struct {
+	Submission  *Submission    `json:"submission,omitempty"`
 	ID          string         `json:"id"`
 	Object      string         `json:"object"`
 	Model       string         `json:"model"`
@@ -216,6 +218,7 @@ type UpstreamResult struct {
 	Accepted               bool
 }
 type Account struct {
+	ObserveSubmission      func(Submission) error `json:"-"`
 	CostMultiplier         string
 	ID                     int64
 	BaseURL, Key, Platform string

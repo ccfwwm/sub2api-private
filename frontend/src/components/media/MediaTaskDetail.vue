@@ -115,7 +115,8 @@ async function run(record: MediaTaskRecord) {
             <p class="text-xs text-gray-500">{{ tr('链接 5 分钟内有效；过期后可重新获取','Link expires in 5 minutes; renew after expiry') }}</p>
           </template>
         </div><p v-if="!admin" class="text-xs text-gray-500">{{ tr('下载需携带创建任务时的 API Key','Download with the API key that created this task') }}</p></div></div>
-        <details v-if="admin && review" class="rounded-lg border p-3 dark:border-dark-600"><summary>{{ tr('请求与响应摘要（已脱敏）','Sanitized request and response') }}</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify({request: review.request, response: review.response}, null, 2) }}</pre></details>
+        <p v-if="admin && review" data-testid="submission-stage">{{ tr('实际上游提交','Upstream submission') }}: {{ review.submission?.stage === 'accepted' ? tr('上游已受理','Accepted') : review.submission?.stage === 'attempted' ? tr('已尝试发送','Attempted') : review.submission?.stage === 'prepared' ? tr('准备发送','Prepared') : tr('未记录','Not recorded') }}<span v-if="review.submission"> · {{ JSON.stringify(review.submission.references) }}</span></p>
+        <details v-if="admin && review" class="rounded-lg border p-3 dark:border-dark-600"><summary>{{ tr('请求与响应摘要（已脱敏）','Sanitized request and response') }}</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify({incoming_request: review.incoming_request, normalized_request: review.request, submission: review.submission ?? "未记录", response: review.response}, null, 2) }}</pre></details>
       </div>
   </BaseDialog>
 </template>

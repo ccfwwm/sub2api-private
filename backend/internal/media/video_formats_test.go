@@ -58,7 +58,7 @@ func TestPrepareVideoRequestMeasuresRealMaterialsForQuotes(t *testing.T) {
 	m.MaxDuration = pointer("0.5")
 	cap.Materials["video"] = m
 	_, err = engine.PrepareRequest(context.Background(), cap, "video", p, nil)
-	require.ErrorContains(t, err, "material_duration_limit")
+	require.NoError(t, err)
 }
 
 func TestPrepareVideoRequestRejectsHTMLInsteadOfAnImage(t *testing.T) {
@@ -142,7 +142,7 @@ func TestExplicitFrameRolesAndURLOnlyReferences(t *testing.T) {
 	delete(p, "reference_images")
 	p["videos"] = []any{"https://media.example.com/video.mp4"}
 	_, err = Normalize(cap, "video", p)
-	require.ErrorContains(t, err, "unsupported_reference_type")
+	require.NoError(t, err)
 	m := cap.Materials["video"]
 	m.ReferenceField = "videos"
 	cap.Materials["video"] = m
@@ -159,16 +159,17 @@ func TestYunfeiOutputArrayIsDeduplicatedAndNormalized(t *testing.T) {
 
 func TestExplicitFormatsNeverDiscardReferenceFields(t *testing.T) {
 	cap := videoFormatCapability("yunfei_multimodal")
-	for _, field := range []string{"image", "image_url", "image_urls", "mask", "contents", "messages"} {
-		_, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, field: "https://example.com/a.png"})
-		require.ErrorContains(t, err, "unsupported_reference_field")
+	for _, field := range []string{"image", "image_url", "image_urls", "input_reference"} {
+		req, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, field: "https://example.com/a.png"})
+		require.NoError(t, err)
+		require.Len(t, req.MaterialRefs["image"], 1)
 	}
-	req, err := Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, "images": []any{}, "reference_images": []any{"https://example.com/a.png"}})
-	require.NoError(t, err)
-	require.Len(t, req.MaterialRefs["image"], 1)
-	req, err = Normalize(cap, "video", map[string]any{"prompt": "test", "duration": 5, "reference_images": []any{}, "input_reference": "https://example.com/a.png"})
-	require.NoError(t, err)
-	require.Empty(t, req.MaterialRefs["image"])
+	for _, fields := range []map[string]any{{"images": []any{}, "reference_images": []any{"https://example.com/a.png"}}, {"reference_images": []any{}, "input_reference": "https://example.com/a.png"}} {
+		fields["prompt"] = "test"
+		fields["duration"] = 5
+		_, err := Normalize(cap, "video", fields)
+		require.ErrorContains(t, err, "alias_conflict")
+	}
 	for _, u := range []string{"https://127.0.0.1/a", "https://10.0.0.1/a", "https://[::1]/a", "https://example.local/a", "https://example.com:8443/a", "https://[bad/a"} {
 		_, err := referenceFormat(u, "string")
 		require.Error(t, err)
@@ -179,12 +180,13 @@ func TestOnlyExplicitSubmissionFormatRejectionRequestsURL(t *testing.T) {
 	for _, status := range []int{400, 401, 403, 415, 422, 429, 500} {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(status)
-			_, _ = w.Write([]byte(`{"error":{"code":"base64_not_supported","message":"sensitive provider details"}}`))
+			_, _ = w.Write([]byte(`{"error":{"code":"base64_not_supported","message":"Bearer fixture-provider-key https://example.com/private?token=hidden"}}`))
 		}))
 		a := Adapter{Client: SafeClient(true)}
-		result, err := a.Submit(context.Background(), videoFormatCapability("yunfei_multimodal"), Request{Operation: "video", Parameters: map[string]any{"prompt": "x"}}, Account{BaseURL: srv.URL})
+		result, err := a.Submit(context.Background(), videoFormatCapability("yunfei_multimodal"), Request{Operation: "video", Parameters: map[string]any{"prompt": "x"}}, Account{BaseURL: srv.URL, Key: "fixture-provider-key"})
 		require.NoError(t, err)
-		require.NotContains(t, result.Diagnostic, "sensitive")
+		require.NotContains(t, result.Diagnostic, "fixture-provider-key")
+		require.NotContains(t, result.Diagnostic, "token=hidden")
 		require.Equal(t, status == 400 || status == 415 || status == 422, result.Diagnostic == "reference_url_required")
 		require.False(t, result.Accepted)
 		srv.Close()

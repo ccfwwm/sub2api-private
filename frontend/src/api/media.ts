@@ -59,7 +59,8 @@ export interface MediaTaskRecord {
   cost_amount?: string | null
   margin_amount?: string | null
 }
-export interface MediaTaskReview { record: MediaTaskRecord; request: Record<string, unknown>; response: Record<string, unknown> }
+export interface MediaSubmission { stage: 'prepared' | 'attempted' | 'accepted'; request_hash: string; path: string; request: Record<string, unknown>; references: Record<string, number>; response?: unknown }
+export interface MediaTaskReview { incoming_request?: Record<string, unknown>; submission?: MediaSubmission | null; submission_status?: string; record: MediaTaskRecord; request: Record<string, unknown>; response: Record<string, unknown> }
 export interface MediaTaskQuery {
   page?: number
   page_size?: number

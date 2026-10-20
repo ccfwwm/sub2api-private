@@ -275,6 +275,7 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 		return StoredTask{}, err
 	}
 	snapshot.Request.Parameters = map[string]any{"request_blob": path}
+	snapshot.Request.Incoming = nil
 	snapshot.Request.Uploads = nil
 	snapshot.Request.MaterialRefs = nil
 	task, err := e.Store.CreateTask(ctx, snapshot, accountID, idem, hash, id)
@@ -338,6 +339,7 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 		if err = e.Blobs.ReadJSON(path, &request); err != nil {
 			return e.deferTask(ctx, t, "Durable request unavailable; inspect storage")
 		}
+		account.ObserveSubmission = func(receipt Submission) error { _, err := e.Blobs.WriteJSON(t.ID, "submission", receipt); return err }
 		result, err = e.Adapter.Submit(ctx, t.Snapshot.Capability, request, account)
 	} else if result.Status == "completed" {
 		// A newer adapter may recognize a durable response without resubmitting.
@@ -646,10 +648,10 @@ func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request
 		if len(values) == 0 {
 			continue
 		}
-		material := cap.Materials[kind]
-		if material.MaxFileBytes == nil || (kind != "image" && material.MaxDuration == nil) {
-			return fail(422, "material_probe_limits_required", "Input media requires file and duration bounds")
-		}
+		// Probe under transport bounds, never stale per-model capability limits.
+		// Measurements used by pricing remain server-owned.
+		maxBytes := int64(50 << 20)
+		material := Material{MaxFileBytes: &maxBytes}
 		measured := []string{}
 		id := NewTaskID()
 		defer func() { _ = os.RemoveAll(e.Blobs.Root + string(os.PathSeparator) + id) }()
@@ -697,11 +699,6 @@ func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request
 			duration, err := probeMedia(ctx, path, kind)
 			if err != nil {
 				return fail(400, "invalid_material_duration", "Cannot measure input duration")
-			}
-			d, _ := number(duration)
-			max, _ := number(*material.MaxDuration)
-			if d.GreaterThan(max) {
-				return fail(400, "material_duration_limit", "Input duration exceeds configured maximum")
 			}
 			measured = append(measured, duration)
 		}

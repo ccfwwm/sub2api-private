@@ -56,8 +56,9 @@ func TestPublicSelectionCannotMixVariantsOrLeakSelector(t *testing.T) {
 		return []Capability{cap, large}, nil, nil
 	}}
 	p := map[string]any{"model": "chosen", "prompt": "tiny", "size": "2048x2048", "public_profile_id": publicProfileID(cap)}
-	_, err := engine.SelectCapability(context.Background(), "chosen", "image", p, nil, Identity{GroupID: 7})
-	require.Error(t, err)
+	explicit, err := engine.SelectCapability(context.Background(), "chosen", "image", p, nil, Identity{GroupID: 7})
+	require.NoError(t, err)
+	require.Equal(t, cap.ID, explicit.ID)
 	p["public_profile_id"] = publicProfileID(large)
 	selected, err := engine.SelectCapability(context.Background(), "chosen", "image", p, nil, Identity{GroupID: 7})
 	require.NoError(t, err)

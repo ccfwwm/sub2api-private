@@ -36,59 +36,8 @@ func requireMediaAdmin(c *gin.Context) bool {
 	return true
 }
 
-// Only an allowlisted summary crosses the administrative export boundary.
-func mediaReviewValue(value any, depth int) any {
-	if depth > 12 {
-		return "[nested content omitted]"
-	}
-	switch v := value.(type) {
-	case string:
-		if strings.HasPrefix(v, "data:") || len(v) > 4096 {
-			return "[encoded or long content omitted]"
-		}
-		if len(v) >= 64 {
-			if decoded, err := base64.StdEncoding.DecodeString(v); err == nil && !strings.HasPrefix(http.DetectContentType(decoded), "text/plain") {
-				return "[encoded content omitted]"
-			}
-		}
-		if u, err := url.Parse(v); err == nil && u.IsAbs() {
-			if u.Scheme != "https" && u.Scheme != "http" {
-				return "[location omitted]"
-			}
-			u.User = nil
-			u.RawQuery = ""
-			u.Fragment = ""
-			return u.String()
-		}
-		if (strings.HasPrefix(v, "/") && !strings.HasPrefix(v, "/v1/")) || strings.Contains(v, ":\\") {
-			return "[internal path omitted]"
-		}
-		return v
-	case map[string]any:
-		clean := map[string]any{}
-		allowed := map[string]bool{}
-		for _, k := range []string{"model", "prompt", "seconds", "duration", "size", "quality", "background", "output_format", "n", "response_format", "ratio", "aspect_ratio", "resolution", "generate_audio", "negative_prompt", "title", "lyrics", "instrumental", "bpm", "seed", "audio_format", "images", "videos", "audios", "image", "image_url", "image_urls", "input_reference", "reference_images", "reference_videos", "reference_audios", "first_frame", "last_frame", "contents", "parts", "text", "role", "messages", "content", "type", "url", "generationConfig", "candidateCount", "responseModalities", "imageConfig", "aspectRatio", "imageSize", "status", "progress", "created", "created_at", "completed_at", "usage", "usageMetadata", "total_tokens", "input_tokens", "output_tokens", "input_tokens_details", "image_tokens", "text_tokens", "promptTokenCount", "candidatesTokenCount", "totalTokenCount", "finishReason", "finish_reason", "data", "output", "candidates", "choices", "index", "message", "error", "code", "mimeType", "mime_type"} {
-			allowed[k] = true
-		}
-		for k, item := range v {
-			if allowed[k] {
-				clean[k] = mediaReviewValue(item, depth+1)
-			}
-		}
-		return clean
-	case []any:
-		out := []any{}
-		for i, item := range v {
-			if i >= 100 {
-				break
-			}
-			out = append(out, mediaReviewValue(item, depth+1))
-		}
-		return out
-	default:
-		return value
-	}
-}
+// Provider extension field names remain visible, with explicit redaction markers.
+func mediaReviewValue(value any, depth int) any { return media.SafeReviewValue(value, nil, depth) }
 
 func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	t, err := h.Engine.Store.GetTask(c.Request.Context(), c.Param("id"))
@@ -104,6 +53,16 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	path, _ := t.Snapshot.Request.Parameters["request_blob"].(string)
 	if path != "" && h.Engine.Blobs.ReadJSON(path, &request) == nil {
 		result["request"] = mediaReviewValue(request.Parameters, 0)
+		result["incoming_request"] = mediaReviewValue(request.Incoming, 0)
+	}
+	result["submission"] = nil
+	receipt := h.Engine.ReadSubmission(t.ID)
+	if receipt != nil {
+		result["submission"] = receipt
+	}
+	result["submission_status"] = "not_recorded"
+	if receipt != nil {
+		result["submission_status"] = receipt.Stage
 	}
 	var upstream map[string]any
 	if t.ResultPath != "" && h.Engine.Blobs.ReadJSON(t.ResultPath, &upstream) == nil {
