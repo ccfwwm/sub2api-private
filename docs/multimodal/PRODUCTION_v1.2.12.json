@@ -1,0 +1,149 @@
+{
+  "version": "v1.2.12",
+  "commit": "ab8fb5c966411b91ce1021d014298b288435a597",
+  "verified_at": "2026-10-20T07:03:03.498263+00:00",
+  "runtime_version": "1.2.12",
+  "confirmed_503_reviews": [
+    {
+      "task_id": "mt_5ec1196c-d37e-477c-9bf5-602081a7e2fa",
+      "status": "failed",
+      "released": "0.20000000",
+      "net_charge": "0.00000000",
+      "idempotent_replay": true,
+      "stale_version_http": 409,
+      "ledger_entries": 1
+    },
+    {
+      "task_id": "mt_2f339a7c-5275-4d08-8805-dca9090f6251",
+      "status": "failed",
+      "released": "2.00000000",
+      "net_charge": "0.00000000",
+      "idempotent_replay": true,
+      "stale_version_http": 409,
+      "ledger_entries": 1
+    },
+    {
+      "task_id": "mt_5473f54c-b2ed-40b4-8a83-c5e3431f7e5e",
+      "status": "failed",
+      "released": "2.00000000",
+      "net_charge": "0.00000000",
+      "idempotent_replay": true,
+      "stale_version_http": 409,
+      "ledger_entries": 1
+    }
+  ],
+  "admin_artifact": {
+    "task_id": "mt_72307cb8-1b86-4ddd-8fea-2b48f3224c3f",
+    "bytes": 181366,
+    "mime": "video/mp4",
+    "sha256": "3991dc054b621288b110c44278196cc6cf5f0109f9d9485bc9acdf34b60687eb",
+    "range_http": 206,
+    "head_http": 200,
+    "export": true,
+    "scoped_ticket": true
+  },
+  "capabilities_http": 200,
+  "domains": [
+    {
+      "domain": "https://code.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200,
+        "admin_ticket_range": 206
+      }
+    },
+    {
+      "domain": "https://code.aicodeme.cn",
+      "checks": {
+        "/": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200,
+        "admin_ticket_range": 206
+      }
+    },
+    {
+      "domain": "https://hkcode.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200,
+        "admin_ticket_range": 206
+      }
+    }
+  ],
+  "api_guards": {
+    "capability_profiles": 33,
+    "image_models_present": true,
+    "url_only_rejection_http": 400,
+    "url_only_error": "reference_url_required",
+    "created_tasks": 0,
+    "recovery_http": 200,
+    "recovered_task": "mt_4a67c4d1-94f8-4697-9064-9e7c67113c8b",
+    "verified_at": "2026-10-20T06:56:50.957764+00:00"
+  },
+  "real_image_generation": [
+    {
+      "model": "gpt-image-2",
+      "task_id": "mt_b8402d91-97cd-4e42-a141-98dd225bdf98",
+      "status": "completed",
+      "settlement": "settled",
+      "charge": "0.04000000",
+      "mime": "image/png",
+      "bytes": 984430,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "13c106d3c6ee0d9e306a7b371bab31698ceee6955e9b6e1e1b22daefd860fd9b"
+    },
+    {
+      "model": "gpt-image-2.5",
+      "task_id": "mt_aa9bb682-dd7e-4751-bd66-ee2f0589bb45",
+      "status": "completed",
+      "settlement": "settled",
+      "charge": "0.04000000",
+      "mime": "image/png",
+      "bytes": 991082,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "eeca4bb29eafaf4f8571fafb2b54c46137407f24eb0021dfc2e5be5d0594996d"
+    },
+    {
+      "model": "gpt-image-2",
+      "task_id": "mt_4a67c4d1-94f8-4697-9064-9e7c67113c8b",
+      "status": "completed",
+      "settlement": "settled",
+      "charge": "0.04000000",
+      "mime": "image/png",
+      "bytes": 963895,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "24bd4ff03d9c9d5e87fc336fc780f3d8c59d22a4cd0985586b7c299a7f8cbec3"
+    }
+  ],
+  "monitor_history": [
+    {
+      "model": "gpt-image-2",
+      "status": "operational",
+      "message": "generation: 已校验实际 image 文件；任务 mt_4a67c4d1-94f8-4697-9064-9e7c67113c8b；本轮已提交：generation: task in progress; 下次只查询原任务 mt_c715ea0f-2a0d-4eaa-babe-b2b669fc65b3",
+      "checked_at": "2026-10-20T15:00:22.147266+08:00"
+    },
+    {
+      "model": "gpt-image-2.5",
+      "status": "operational",
+      "message": "generation: 已校验实际 image 文件；任务 mt_aa9bb682-dd7e-4751-bd66-ee2f0589bb45；本轮已提交：generation: task in progress; 下次只查询原任务 mt_665d6172-5a45-4ec3-8b56-504c3ad6f4cf",
+      "checked_at": "2026-10-20T15:00:21.619862+08:00"
+    }
+  ]
+}
