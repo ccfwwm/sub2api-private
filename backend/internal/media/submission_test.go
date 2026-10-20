@@ -3,13 +3,14 @@ package media
 import (
 	"context"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestWebsiteReferencesAndExtensionsReachUpstreamDespiteCatalogLimits(t *testing.T) {

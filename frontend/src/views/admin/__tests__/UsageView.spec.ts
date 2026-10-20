@@ -720,8 +720,8 @@ describe('admin UsageView ranking tab', () => {
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(false)
 
     const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
-    expect(tabs).toHaveLength(3)
-    await tabs[2].trigger('click')
+    expect(tabs.map(tab => tab.text())).toEqual(['usage.tabs.usage', 'usage.tabs.errors', 'usage.tabs.media', 'usage.tabs.ranking'])
+    await tabs[3].trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(true)
 
