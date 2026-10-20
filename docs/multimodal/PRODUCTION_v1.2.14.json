@@ -1,0 +1,262 @@
+{
+  "version": "v1.2.14",
+  "commit": "f0d5fb9367cec40fd30ec16801d677b1ba1aa867",
+  "parent_head": "f860bf193f5148d9ff0a6ba6fec3f2d51711b180",
+  "verified_at": "2026-10-20T10:49:28.716327+00:00",
+  "images": {
+    "/sub2api": "sha256:493e74ac187d444f1cca625fc5f3e6dd64c9c42a99a8aae2941e7f8aac6dca12",
+    "/sub2api-docs-web": "ghcr.io/ccfwwm/sub2api-private-docs@sha256:a9168b691cb1341b50b0bb5d3c5f559acbdf399486bf4722b01336d47777c74e"
+  },
+  "protected_containers_unchanged": true,
+  "migrations_unchanged": true,
+  "domains": [
+    {
+      "domain": "https://code.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/health": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/docs/content.json": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    },
+    {
+      "domain": "https://code.aicodeme.cn",
+      "checks": {
+        "/": 200,
+        "/health": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/docs/content.json": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    },
+    {
+      "domain": "https://hkcode.aicodeme.xyz",
+      "checks": {
+        "/": 200,
+        "/health": 200,
+        "/keys": 200,
+        "/docs/imagevideo": 200,
+        "/docs/app.mjs": 200,
+        "/docs/content.json": 200,
+        "/api/v1/public-docs/imagevideo": 200,
+        "/api/v1/settings/public": 200
+      }
+    }
+  ],
+  "runtime_version": "1.2.14",
+  "authenticated_models": 30,
+  "deployment": {
+    "id": "8bf4acce65b44bdbba1c94f814dba7d3",
+    "status": "succeeded",
+    "backup_id": "53a679cf9a7b492f9ea84229db690125",
+    "active_image": "sha256:493e74ac187d444f1cca625fc5f3e6dd64c9c42a99a8aae2941e7f8aac6dca12",
+    "active_docs_image": "ghcr.io/ccfwwm/sub2api-private-docs@sha256:a9168b691cb1341b50b0bb5d3c5f559acbdf399486bf4722b01336d47777c74e"
+  },
+  "document_content_sha256": "3fe423b7f22c60723c70dfdf40307a4d5ad7df5a8704f86782a402faa48e9706",
+  "real_media_acceptance": {
+    "attempts": 2,
+    "limit_attempts": 3,
+    "seconds_per_attempt": 5,
+    "selected_model": "TTseadanco2.5-720",
+    "manifest_sha256": "0f8a636e2f76f80fdcbd285afa09b6deccf154f0fd7cde92cf242f54fc39e08e",
+    "all_five_urls_forwarded": true,
+    "actual_settled_usd": "0.00000000",
+    "generation_success": false,
+    "cases": [
+      {
+        "label": "pilot-tt-five-references",
+        "task_id": "mt_3f1f39a1-a990-4e4e-bdb7-da19506ebc10",
+        "request": {
+          "images": [
+            {
+              "media_type": "image/png",
+              "role": "reference",
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/zerowall-icon.png"
+            },
+            {
+              "media_type": "image/png",
+              "role": "reference",
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/01-medical-research-workspace.png"
+            },
+            {
+              "media_type": "image/png",
+              "role": "reference",
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/02-singlecell-virtual-knockout.png"
+            },
+            {
+              "media_type": "image/png",
+              "role": "reference",
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/03-genetics-brand-finale.png"
+            }
+          ],
+          "model": "TTseadanco2.5-720",
+          "prompt": "Create a 5-second promotional video for ZeroWall Science using all provided references. Match the visual style and scientific desktop interface in the reference video. Use the ZeroWall logo and the three research screenshots as the actual visual material: medical research workspace, single-cell virtual knockout, and genetics. Preserve the supplied brand and interface details. Smooth professional blue and cyan motion, finish with the provided genetics brand finale. No invented interfaces or unrelated scenery.",
+          "seconds": 5,
+          "videos": [
+            {
+              "media_type": "video/mp4",
+              "role": "reference",
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/zerowallsciencevideo.mp4"
+            }
+          ]
+        },
+        "forwarding": {
+          "recorded": true,
+          "stage": "attempted",
+          "references": {
+            "audio": 0,
+            "image": 4,
+            "video": 1
+          },
+          "request_hash": "81682087f8264eed90a63495364477b2cbef79703731f1c3d97b101c7f2c98ac",
+          "all_five_urls_present": true,
+          "model_preserved": true,
+          "seconds_preserved": true,
+          "plural_fields": true
+        },
+        "diagnostic": "Upstream rejected request: HTTP 400: invalid_request 请求参数不正确，请检查本站接口文档 (request id: 202610201050153491204148268d9d6Vou6sZye)",
+        "response": {
+          "error": {
+            "code": "invalid_request",
+            "message": "请求参数不正确，请检查本站接口文档 (request id: 202610201050153491204148268d9d6Vou6sZye)",
+            "param": "",
+            "type": "new_api_error"
+          }
+        },
+        "status": "failed",
+        "billing": {
+          "reserved": "3.00000000",
+          "accepted": "0.00000000",
+          "settled": "0.00000000",
+          "released": "3.00000000",
+          "state": "released"
+        },
+        "generation_seconds": 5,
+        "upstream_accepted": false,
+        "generated_artifact": false
+      },
+      {
+        "label": "pilot-tt-five-urls-only",
+        "task_id": "mt_15a957f6-ee08-46c0-afab-08a37495cabe",
+        "request": {
+          "images": [
+            {
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/zerowall-icon.png"
+            },
+            {
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/01-medical-research-workspace.png"
+            },
+            {
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/02-singlecell-virtual-knockout.png"
+            },
+            {
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/03-genetics-brand-finale.png"
+            }
+          ],
+          "model": "TTseadanco2.5-720",
+          "prompt": "Create a 5-second promotional video for ZeroWall Science using all provided references. Match the visual style and scientific desktop interface in the reference video. Use the ZeroWall logo and the three research screenshots as the actual visual material: medical research workspace, single-cell virtual knockout, and genetics. Preserve the supplied brand and interface details. Smooth professional blue and cyan motion, finish with the provided genetics brand finale. No invented interfaces or unrelated scenery.",
+          "seconds": 5,
+          "videos": [
+            {
+              "url": "https://zerowall.chengxunkeji.cn/webfiles/zerowallsciencevideo.mp4"
+            }
+          ]
+        },
+        "forwarding": {
+          "recorded": true,
+          "stage": "attempted",
+          "references": {
+            "audio": 0,
+            "image": 4,
+            "video": 1
+          },
+          "request_hash": "158ccb81745be2bf391aafe820a63ed1c93799b9d5791e587da4d2e6eeebbd15",
+          "all_five_urls_present": true,
+          "model_preserved": true,
+          "seconds_preserved": true,
+          "plural_fields": true
+        },
+        "diagnostic": "Upstream rejected request: HTTP 404: task_not_found 任务或文件不存在或已失效 (request id: 202610201100163267647528268d9d6h4OMJvZw)",
+        "response": {
+          "error": {
+            "code": "task_not_found",
+            "message": "任务或文件不存在或已失效 (request id: 202610201100163267647528268d9d6h4OMJvZw)",
+            "param": "",
+            "type": "new_api_error"
+          }
+        },
+        "status": "failed",
+        "billing": {
+          "reserved": "3.00000000",
+          "accepted": "0.00000000",
+          "settled": "0.00000000",
+          "released": "3.00000000",
+          "state": "released"
+        },
+        "generation_seconds": 5,
+        "upstream_accepted": false,
+        "generated_artifact": false
+      }
+    ]
+  },
+  "checks": {
+    "frontend": {
+      "files": 369,
+      "tests": 2829,
+      "passed": true
+    },
+    "postgres_media_integration": {
+      "tests": 57,
+      "passed": true
+    },
+    "deployment_tools": {
+      "tests": 58,
+      "passed": true
+    },
+    "public_docs": {
+      "tests": 3,
+      "passed": true
+    },
+    "spec_client_groups": 14,
+    "media_unit": true,
+    "media_handler_unit": true,
+    "frontend_production_build": true,
+    "media_go_vet": true,
+    "media_govulncheck": true,
+    "frontend_prod_audit_exceptions": "validated",
+    "fresh_image_smoke": true
+  },
+  "limitations": [
+    "GitHub hosted Actions did not start because of account billing/spending limits; local build and existing host manager used.",
+    "Full backend unit/lint/security scan and Go race were not rerun in this deployment turn; scoped checks and isolated media integration passed.",
+    "TT upstream rejected both complete five-reference requests; generated-content acceptance is not achieved. No model change, reference removal or text-only fallback.",
+    "User usage dashboard model statistics endpoint returned HTTP 500 before deployment; media task list and details work. This separate statistics issue is not included in media acceptance.",
+    "Ordinary user detail UI shows status, diagnostic and billing; sanitized outgoing receipt is exposed in the original API-key task endpoint and the administrator detail UI.",
+    "ZeroWall full Host/Electron acceptance and explicit old per-plugin rollback compatibility remain as recorded in plugin publication report; no installer rebuilt."
+  ],
+  "artifacts": {
+    "build_id": "media-v1214-f0d5fb936",
+    "application": {
+      "image": "ghcr.io/ccfwwm/sub2api-private:v1.2.14",
+      "digest": "sha256:493e74ac187d444f1cca625fc5f3e6dd64c9c42a99a8aae2941e7f8aac6dca12",
+      "local_size_bytes": 372010656
+    },
+    "docs": {
+      "image": "ghcr.io/ccfwwm/sub2api-private-docs:v1.2.14",
+      "digest": "sha256:a9168b691cb1341b50b0bb5d3c5f559acbdf399486bf4722b01336d47777c74e",
+      "local_size_bytes": 191945335
+    },
+    "deployment_manifest": {
+      "path": "output/media-v1214/deployment.json",
+      "bytes": 34750,
+      "sha256": "b13abdb051bebe4c25373057bfcf46bd00a7936c75e041c21876c2887ecac6c1"
+    }
+  }
+}
