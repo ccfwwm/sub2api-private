@@ -894,6 +894,7 @@
     "status": "enabled",
     "schema_version": 1,
     "name": "Gemini parts·图片/音频输出",
+    "description": "默认请求图片输出。音频请使用 Gemini parts·音频输出，或明确覆盖 generationConfig.responseModalities。",
     "media_types": [
       "image",
       "audio"
@@ -1015,6 +1016,74 @@
         "shape": "parts",
         "encoding": "base64"
       }
+    ],
+    "model_target": "-"
+  },
+  {
+    "id": "gemini-audio-parts",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "Gemini parts·音频输出",
+    "description": "明确请求 AUDIO 输出；模型、声音与其他 generationConfig 参数由管理员或请求指定。",
+    "media_types": ["audio"],
+    "operations": ["audio"],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "header",
+      "name": "x-goog-api-key"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": ["data[].id"],
+    "submit": {
+      "method": "POST",
+      "path": "/v1beta/models/{model}:generateContent",
+      "encoding": "json"
+    },
+    "response": {
+      "mime": "audio/wav",
+      "pcm_to_wav": {
+        "mime_types": ["audio/l16"],
+        "sample_format": "s16",
+        "endianness": "little",
+        "sample_rate": 24000,
+        "channels": 1,
+        "rate_parameter": "rate",
+        "channels_parameter": "channels"
+      },
+      "results": [
+        {
+          "path": "candidates[].content.parts[].inlineData",
+          "base64": "data",
+          "mime": "mimeType"
+        }
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "default",
+        "target": "generationConfig.responseModalities",
+        "value": ["AUDIO"]
+      },
+      {
+        "phase": "wire",
+        "op": "fixed",
+        "target": "contents",
+        "value": [
+          {"role": "user", "parts": [{"text": {"$input": "prompt"}}]}
+        ]
+      },
+      {"phase": "wire", "op": "remove", "source": "prompt"}
+    ],
+    "materials": [
+      {"kind": "image", "target": "contents[0].parts", "shape": "parts", "encoding": "base64"},
+      {"kind": "audio", "target": "contents[0].parts", "shape": "parts", "encoding": "base64"}
     ],
     "model_target": "-"
   },

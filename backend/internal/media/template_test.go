@@ -332,3 +332,50 @@ func TestTemplateUpgradeRejectsBindingsOutsidePublishedCapability(t *testing.T) 
 	binding.AccountID = 5
 	require.ErrorContains(t, validateTemplateBindingCompatibility(template, binding, capabilities), "binding_capability_missing")
 }
+
+func TestTemplateUpgradeValidatesAccountModeCapabilities(t *testing.T) {
+	template := ProtocolTemplate{MediaTypes: []string{"video"}, Operations: []string{"video"}}
+	binding := ModelBinding{GroupID: 9, Model: "public-video", AccountID: 4}
+	runtimeCapability := Capability{
+		Model: "public-video", MediaType: "video", Operations: []string{"video"},
+		GroupIDs: []int64{9}, AccountIDs: []int64{4}, Enabled: true, Status: "enabled",
+	}
+
+	store := &Store{RuntimeCapabilities: func(_ context.Context, groupID int64) ([]Capability, error) {
+		require.EqualValues(t, binding.GroupID, groupID)
+		return []Capability{runtimeCapability}, nil
+	}}
+	require.NoError(t, store.validateTemplateBindingCompatibility(context.Background(), template, binding, nil))
+
+	for _, tc := range []struct {
+		name string
+		caps []Capability
+	}{
+		{name: "missing model"},
+		{name: "disabled model", caps: []Capability{func() Capability {
+			capability := runtimeCapability
+			capability.Enabled = false
+			return capability
+		}()}},
+		{name: "different group", caps: []Capability{func() Capability {
+			capability := runtimeCapability
+			capability.GroupIDs = []int64{10}
+			return capability
+		}()}},
+		{name: "different model", caps: []Capability{func() Capability {
+			capability := runtimeCapability
+			capability.Model = "other-model"
+			return capability
+		}()}},
+		{name: "different account", caps: []Capability{func() Capability {
+			capability := runtimeCapability
+			capability.AccountIDs = []int64{5}
+			return capability
+		}()}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store.RuntimeCapabilities = func(context.Context, int64) ([]Capability, error) { return tc.caps, nil }
+			require.ErrorContains(t, store.validateTemplateBindingCompatibility(context.Background(), template, binding, nil), "binding_capability_missing")
+		})
+	}
+}

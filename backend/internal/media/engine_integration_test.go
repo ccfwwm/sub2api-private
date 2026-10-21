@@ -398,3 +398,69 @@ func TestExpiredSubmissionWithoutRecoveryEndpointRequiresManualReview(t *testing
 	require.NoError(t, engine.Process(ctx, current))
 	require.Zero(t, lookupCalls)
 }
+
+func TestAmbiguousSubmissionRecoveryPreservesEvidenceAndStopsAtDeadline(t *testing.T) {
+	db := testDB(t)
+	store := &media.Store{DB: db}
+	ctx := context.Background()
+	snap := fixture(t, db, "5")
+	snap.Capability.Limits.ObservationSeconds = ptr(3600)
+	snap.Capability.Template = &media.ProtocolTemplate{
+		ID: "bounded-recovery", Version: "1", Status: "enabled", SchemaVersion: 1,
+		MediaTypes: []string{"video"}, Operations: []string{"video"}, Mode: "async",
+		Submit:   media.TemplateEndpoint{Method: http.MethodPost, Path: "/jobs"},
+		Recover:  &media.TemplateEndpoint{Method: http.MethodGet, Path: "/recover/{idempotency_key}"},
+		Response: media.TemplateResponse{TaskID: []string{"id"}, Status: []string{"status"}},
+	}
+	blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("s", 32))
+	require.NoError(t, err)
+	id := media.NewTaskID()
+	requestPath, err := blobs.WriteJSON(id, "request", media.Request{
+		Operation: "video", Parameters: map[string]any{"prompt": "fixture"},
+		Wire: &media.PreparedMediaRequest{Method: http.MethodPost, Path: "/jobs", Encoding: "json", Body: map[string]any{"model": "fixture", "prompt": "fixture"}},
+	})
+	require.NoError(t, err)
+	snap.Request.Parameters = map[string]any{"request_blob": requestPath}
+	task, err := store.CreateTask(ctx, snap, snap.Capability.AccountIDs[0], "bounded-recovery", "hash", id)
+	require.NoError(t, err)
+	postCount, recoveryCount := 0, 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			postCount++
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":{"message":"receipt unavailable"}}`))
+			return
+		}
+		recoveryCount++
+		require.Equal(t, "/recover/"+id, r.URL.Path)
+		_, _ = w.Write([]byte(`{"status":"unknown","message":"still reconciling"}`))
+	}))
+	defer upstream.Close()
+	engine := media.NewEngine(store, blobs, func(account, group int64) (media.Account, error) {
+		return media.Account{ID: account, BaseURL: upstream.URL, Key: "fixture-key", Allowed: true}, nil
+	}, nil)
+	defer engine.Stop()
+	engine.Adapter.Client = media.SafeClient(true)
+	task.State, task.SubmissionClaim = "submitting", true
+	require.NoError(t, engine.Process(ctx, task))
+	current, err := store.GetTask(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "submitting", current.State)
+	require.Equal(t, "held", current.Settlement)
+	require.NotEmpty(t, current.ResultPath, "uncertain upstream response remains durable")
+	var receipt map[string]any
+	require.NoError(t, blobs.ReadJSON(current.ResultPath, &receipt))
+	require.Equal(t, "receipt unavailable", receipt["error"].(map[string]any)["message"])
+	_, err = db.Exec(`UPDATE media_tasks SET created_at=now()-interval '2 hours' WHERE id=$1`, id)
+	require.NoError(t, err)
+	current, err = store.GetTask(ctx, id)
+	require.NoError(t, err)
+	require.NoError(t, engine.Process(ctx, current))
+	current, err = store.GetTask(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "unknown", current.State)
+	require.Equal(t, "manual_review", current.Settlement)
+	require.Equal(t, 1, postCount)
+	require.Equal(t, 1, recoveryCount)
+}

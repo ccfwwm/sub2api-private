@@ -17,6 +17,11 @@ func TestProtocolVersionsPinUpgradeRollbackArchiveAndRestart(t *testing.T) {
 	ctx := context.Background()
 	store := &media.Store{DB: db}
 	snap := fixture(t, db, "20")
+	store.RuntimeCapabilities = func(context.Context, int64) ([]media.Capability, error) {
+		capability := snap.Capability
+		capability.Status, capability.Enabled, capability.Operations = "enabled", true, []string{"video"}
+		return []media.Capability{capability}, nil
+	}
 	require.NoError(t, store.EnsureBuiltinTemplates(ctx))
 	require.NoError(t, (&media.Store{DB: db}).EnsureBuiltinTemplates(ctx))
 	template := media.BuiltinTemplates()[0]
@@ -78,6 +83,11 @@ func TestProtocolConcurrentSelectorsCannotPublishTwice(t *testing.T) {
 	db := testDB(t)
 	store := &media.Store{DB: db}
 	snap := fixture(t, db, "20")
+	store.RuntimeCapabilities = func(context.Context, int64) ([]media.Capability, error) {
+		capability := snap.Capability
+		capability.Status, capability.Enabled, capability.Operations = "enabled", true, []string{"video"}
+		return []media.Capability{capability}, nil
+	}
 	ctx := context.Background()
 	require.NoError(t, store.EnsureBuiltinTemplates(ctx))
 	results := make(chan error, 2)
@@ -86,7 +96,7 @@ func TestProtocolConcurrentSelectorsCannotPublishTwice(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			b := media.ModelBinding{ID: media.NewTaskID(), GroupID: snap.Identity.GroupID, Model: "public", Template: &media.TemplateRef{ID: "video-arrays", Version: 1}}
+			b := media.ModelBinding{ID: media.NewTaskID(), GroupID: snap.Identity.GroupID, Model: snap.Capability.Model, Template: &media.TemplateRef{ID: "video-arrays", Version: 1}}
 			raw, _ := json.Marshal(b)
 			_, err := store.SaveProtocolConfig(ctx, "binding", b.ID, 0, snap.Identity.UserID, raw, true, nil)
 			results <- err
@@ -103,4 +113,46 @@ func TestProtocolConcurrentSelectorsCannotPublishTwice(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, success)
+}
+
+func TestTemplateUpgradeRollsBackInheritedRuleConflict(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	snap := fixture(t, db, "20")
+	store := &media.Store{DB: db, RuntimeCapabilities: func(context.Context, int64) ([]media.Capability, error) {
+		capability := snap.Capability
+		capability.Status, capability.Enabled, capability.Operations = "enabled", true, []string{"video"}
+		return []media.Capability{capability}, nil
+	}}
+	template := media.BuiltinTemplates()[0]
+	template.ID = media.NewTaskID()
+	raw, err := json.Marshal(template)
+	require.NoError(t, err)
+	first, err := store.SaveProtocolConfig(ctx, "template", template.ID, 0, snap.Identity.UserID, raw, true, nil)
+	require.NoError(t, err)
+	binding := media.ModelBinding{ID: media.NewTaskID(), GroupID: snap.Identity.GroupID, Model: snap.Capability.Model, AccountID: snap.Capability.AccountIDs[0], Template: &media.TemplateRef{ID: template.ID, Version: first.Version}}
+	raw, err = json.Marshal(binding)
+	require.NoError(t, err)
+	_, err = store.SaveProtocolConfig(ctx, "binding", binding.ID, 0, snap.Identity.UserID, raw, true, nil)
+	require.NoError(t, err)
+	group := media.ModelBinding{ID: media.NewTaskID(), GroupID: snap.Identity.GroupID, Rules: []media.ParameterRule{{Phase: "wire", Op: "fixed", Target: "request.flag", Value: true}}}
+	raw, err = json.Marshal(group)
+	require.NoError(t, err)
+	_, err = store.SaveProtocolConfig(ctx, "binding", group.ID, 0, snap.Identity.UserID, raw, true, nil)
+	require.NoError(t, err)
+
+	template.Rules = []media.ParameterRule{{Phase: "wire", Op: "fixed", Target: "request", Value: map[string]any{}}}
+	raw, err = json.Marshal(template)
+	require.NoError(t, err)
+	_, err = store.SaveProtocolConfig(ctx, "template", template.ID, first.Version, snap.Identity.UserID, raw, true, []string{binding.ID})
+	require.ErrorContains(t, err, "parameter_rule_conflict")
+	templateHistory, err := store.History(ctx, "template", template.ID)
+	require.NoError(t, err)
+	require.Len(t, templateHistory, 1)
+	bindingHistory, err := store.History(ctx, "binding", binding.ID)
+	require.NoError(t, err)
+	require.Len(t, bindingHistory, 1)
+	var original media.ModelBinding
+	require.NoError(t, json.Unmarshal(bindingHistory[0].Config, &original))
+	require.Equal(t, first.Version, original.Template.Version)
 }

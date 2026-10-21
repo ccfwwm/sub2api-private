@@ -11,6 +11,7 @@ func publicDiagnostic(t StoredTask) string {
 	if model := t.Snapshot.Capability.UpstreamModel; model != "" && model != t.Snapshot.Capability.Model {
 		text = strings.ReplaceAll(text, model, t.Snapshot.Capability.Model)
 	}
+	text, _ = SafeReviewValue(text, nil, 0).(string)
 	return inlineReviewURL.ReplaceAllString(text, "[upstream-url]")
 }
 

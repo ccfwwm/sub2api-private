@@ -245,9 +245,19 @@ func TestMediaMultiAccountRequestSelection(t *testing.T) {
 	}}
 	c, err := e.SelectCapability(context.Background(), a.Model, "video", map[string]any{"prompt": "test", "seconds": 30}, nil, media.Identity{GroupID: 1})
 	require.NoError(t, err)
-	require.Equal(t, []int64{2}, c.AccountIDs)
-	_, err = e.SelectCapability(context.Background(), a.Model, "video", map[string]any{"prompt": "test", "seconds": 15}, nil, media.Identity{GroupID: 1})
-	require.Error(t, err)
+	require.Equal(t, []int64{1}, c.AccountIDs, "catalog duration hints do not veto the first eligible account")
+	req, err := media.Normalize(*c, "video", map[string]any{"prompt": "test", "seconds": 30})
+	require.NoError(t, err)
+	require.Equal(t, []string{"30"}, req.Quantities["request_duration"])
+	c, err = e.SelectCapability(context.Background(), a.Model, "video", map[string]any{"prompt": "test", "seconds": 15}, nil, media.Identity{GroupID: 1})
+	require.NoError(t, err)
+	require.Equal(t, []int64{1}, c.AccountIDs)
+	a.Enabled = false
+	c, err = e.SelectCapability(context.Background(), a.Model, "video", map[string]any{"prompt": "test", "seconds": 30}, nil, media.Identity{GroupID: 1})
+	require.NoError(t, err)
+	require.Equal(t, []int64{2}, c.AccountIDs, "disabled accounts are still excluded")
+	_, err = e.SelectCapability(context.Background(), a.Model, "video", map[string]any{"prompt": "test", "seconds": 0}, nil, media.Identity{GroupID: 1})
+	require.ErrorContains(t, err, "invalid_seconds")
 	_, err = media.ResolvePrice(nil, a, media.Identity{GroupID: 1}, "video", false, 1, time.Now())
 	require.Error(t, err)
 }

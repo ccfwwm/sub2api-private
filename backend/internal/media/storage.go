@@ -143,6 +143,19 @@ func publicIP(ip net.IP) bool {
 	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() && !net.ParseIP("169.254.169.254").Equal(ip)
 }
 
+type mediaCredentialContextKey struct{}
+
+func protectMediaCredentials(req *http.Request, secret string) *http.Request {
+	if secret == "" {
+		return req
+	}
+	return req.WithContext(context.WithValue(req.Context(), mediaCredentialContextKey{}, secret))
+}
+
+func sameMediaOrigin(a, b *url.URL) bool {
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+}
+
 // Every redirect and DNS resolution is checked, including download domains.
 // Authorization is only supplied to the configured origin, never to a CDN.
 func SafeClient(allowPrivate bool) *http.Client {
@@ -177,9 +190,41 @@ func SafeClient(allowPrivate bool) *http.Client {
 		if req.URL.Scheme != "https" && !allowPrivate {
 			return fmt.Errorf("HTTPS required")
 		}
-		req.Header.Del("Authorization")
-		req.Header.Del("x-goog-api-key")
-		req.Header.Del("Cookie")
+		if len(via) > 0 && !sameMediaOrigin(req.URL, via[0].URL) {
+			req.Header.Del("Authorization")
+			req.Header.Del("x-goog-api-key")
+			req.Header.Del("Cookie")
+			if secret, _ := via[0].Context().Value(mediaCredentialContextKey{}).(string); secret != "" {
+				for name, values := range req.Header {
+					for _, value := range values {
+						if strings.Contains(value, secret) {
+							req.Header.Del(name)
+							break
+						}
+					}
+				}
+				query := req.URL.Query()
+				queryChanged := false
+				for name, values := range query {
+					clean := values[:0]
+					for _, value := range values {
+						if !strings.Contains(value, secret) {
+							clean = append(clean, value)
+						} else {
+							queryChanged = true
+						}
+					}
+					if len(clean) == 0 {
+						query.Del(name)
+					} else {
+						query[name] = clean
+					}
+				}
+				if queryChanged {
+					req.URL.RawQuery = query.Encode()
+				}
+			}
+		}
 		return nil
 	}}
 }
@@ -188,10 +233,15 @@ func originURL(account Account, path string) (string, error) {
 	if e != nil || base.Hostname() == "" || base.User != nil {
 		return "", fail(422, "invalid_origin", "Invalid channel origin")
 	}
+	relative, e := url.Parse(path)
+	if e != nil || relative.IsAbs() || relative.Host != "" || relative.User != nil || relative.Fragment != "" || !strings.HasPrefix(relative.Path, "/") {
+		return "", fail(422, "invalid_endpoint", "Relative channel endpoint required")
+	}
+	endpointPath := relative.EscapedPath()
 	// Configured origin may include a path prefix; never resolve task IDs as URLs.
-	escaped := strings.TrimRight(base.EscapedPath(), "/") + path
-	if strings.HasSuffix(strings.TrimRight(base.Path, "/"), "/v1") && strings.HasPrefix(path, "/v1/") {
-		escaped = strings.TrimRight(base.EscapedPath(), "/") + strings.TrimPrefix(path, "/v1")
+	escaped := strings.TrimRight(base.EscapedPath(), "/") + endpointPath
+	if strings.HasSuffix(strings.TrimRight(base.Path, "/"), "/v1") && strings.HasPrefix(endpointPath, "/v1/") {
+		escaped = strings.TrimRight(base.EscapedPath(), "/") + strings.TrimPrefix(endpointPath, "/v1")
 	}
 	decoded, err := url.PathUnescape(escaped)
 	if err != nil {
@@ -199,7 +249,7 @@ func originURL(account Account, path string) (string, error) {
 	}
 	base.Path = decoded
 	base.RawPath = escaped
-	base.RawQuery = ""
+	base.RawQuery = relative.RawQuery
 	base.Fragment = ""
 	return base.String(), nil
 }
@@ -225,7 +275,7 @@ func (b *BlobStore) Download(ctx context.Context, client *http.Client, t StoredT
 	if e != nil {
 		return a, "", "", e
 	}
-	if strings.EqualFold(target.Host, origin.Host) {
+	if sameMediaOrigin(target, origin) {
 		if template := t.Snapshot.Capability.Template; template != nil {
 			auth := template.Auth
 			if template.DownloadAuth != nil {
@@ -236,7 +286,7 @@ func (b *BlobStore) Download(ctx context.Context, client *http.Client, t StoredT
 			req.Header.Set("Authorization", "Bearer "+account.Key)
 		}
 	}
-	resp, e := client.Do(req)
+	resp, e := client.Do(protectMediaCredentials(req, account.Key))
 	if e != nil {
 		return a, "", "", fmt.Errorf("artifact fetch failed")
 	}
@@ -249,6 +299,9 @@ func (b *BlobStore) Download(ctx context.Context, client *http.Client, t StoredT
 		return a, "", "", fmt.Errorf("artifact missing or exceeds limit")
 	}
 	mime := strings.Split(resp.Header.Get("Content-Type"), ";")[0]
+	if template := t.Snapshot.Capability.Template; template != nil && pcmMIMEConfigured(template.Response.PCMToWAV, resp.Header.Get("Content-Type")) {
+		mime = resp.Header.Get("Content-Type")
+	}
 	if mime == "" || mime == "application/octet-stream" {
 		mime = http.DetectContentType(raw)
 	}

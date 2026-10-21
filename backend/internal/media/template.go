@@ -33,14 +33,15 @@ type TemplateEndpoint struct {
 	Encoding string            `json:"encoding,omitempty"` // json, multipart, form
 }
 type ParameterRule struct {
-	Phase  string         `json:"phase"` // semantic before pricing; wire after pricing
-	Op     string         `json:"op"`
-	Source string         `json:"source,omitempty"`
-	Target string         `json:"target,omitempty"`
-	Value  any            `json:"value,omitempty"`
-	Values map[string]any `json:"values,omitempty"`
-	Fields []string       `json:"fields,omitempty"`
-	Type   string         `json:"type,omitempty"`
+	Phase      string         `json:"phase"` // semantic before pricing; wire after pricing
+	Op         string         `json:"op"`
+	Source     string         `json:"source,omitempty"`
+	Target     string         `json:"target,omitempty"`
+	Value      any            `json:"value,omitempty"`
+	Values     map[string]any `json:"values,omitempty"`
+	OnUnmapped string         `json:"on_unmapped,omitempty"` // error (default), preserve
+	Fields     []string       `json:"fields,omitempty"`
+	Type       string         `json:"type,omitempty"`
 }
 type MaterialRule struct {
 	Kind     string         `json:"kind"`
@@ -53,6 +54,7 @@ type MaterialRule struct {
 	Wrapper  map[string]any `json:"wrapper,omitempty"`
 }
 type TemplateResponse struct {
+	PCMToWAV *PCMToWAVConfig      `json:"pcm_to_wav,omitempty"`
 	TaskID   []string             `json:"task_id,omitempty"`
 	Status   []string             `json:"status,omitempty"`
 	Progress []string             `json:"progress,omitempty"`
@@ -204,6 +206,9 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 		}
 	}
 	if err := ValidateParameterRules(t.Rules); err != nil {
+		return err
+	}
+	if err := validatePCMToWAV(t.Response.PCMToWAV); err != nil {
 		return err
 	}
 	if err := validateTemplateBody(t.Body); err != nil {
@@ -378,12 +383,25 @@ func ValidateParameterRules(rules []ParameterRule) error {
 		if r.Op != "allow" && r.Target == "" && r.Source == "" {
 			return fail(400, "invalid_parameter_rule", "A field is required")
 		}
-		if r.Target != "" {
-			key := r.Phase + ":" + r.Target
-			if targets[key] {
-				return fail(409, "parameter_rule_conflict", "Duplicate rule target")
+		target := r.Target
+		if target == "" {
+			target = r.Source
+		}
+		if r.Op == "allow" {
+			target = "*"
+		}
+		// Source-only rules also write a target. Treat array and dot notation
+		// identically, and reject parent/child writes before their order can
+		// silently replace an earlier rule's output.
+		key := r.Phase + ":" + strings.Join(pathParts(target), ".")
+		for previous := range targets {
+			if previous == key || strings.HasPrefix(previous, key+".") || strings.HasPrefix(key, previous+".") {
+				return fail(409, "parameter_rule_conflict", "Duplicate or overlapping rule targets")
 			}
-			targets[key] = true
+		}
+		targets[key] = true
+		if r.OnUnmapped != "" && (r.Op != "map" || !contains([]string{"error", "preserve"}, r.OnUnmapped)) {
+			return fail(400, "invalid_mapping_fallback", "on_unmapped must be error or preserve on a map rule")
 		}
 		if r.Phase == "wire" {
 			for _, p := range []string{r.Source, r.Target} {
@@ -397,7 +415,14 @@ func ValidateParameterRules(rules []ParameterRule) error {
 			if r.Source == "" || r.Target == "" {
 				return fail(400, "invalid_parameter_rule", "Rename requires source and target")
 			}
-			moves[r.Source] = r.Target
+			source := strings.Join(pathParts(r.Source), ".")
+			destination := strings.Join(pathParts(r.Target), ".")
+			if strings.HasPrefix(source, destination+".") || strings.HasPrefix(destination, source+".") {
+				return fail(409, "parameter_rule_conflict", "Rename source and target cannot contain one another")
+			}
+			if source != destination {
+				moves[r.Phase+":"+source] = r.Phase + ":" + destination
+			}
 		}
 		if r.Op == "convert" && !contains([]string{"string", "number", "integer", "boolean"}, r.Type) {
 			return fail(400, "invalid_conversion", "Unsupported conversion type")
@@ -622,6 +647,8 @@ func applyParameterRules(input map[string]any, rules []ParameterRule, phase stri
 		case "map":
 			if mapped, ok := r.Values[stringValue(value)]; ok {
 				value = mapped
+			} else if r.OnUnmapped != "preserve" {
+				return nil, fail(400, "parameter_value_unmapped", "No configured value mapping for field: "+target)
 			}
 		case "convert":
 			var err error
@@ -922,6 +949,7 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 	}
 	used := map[string]int{}
 	files := []Upload{}
+	sentMaterials := []any{}
 	for _, m := range t.Materials {
 		values := []any{}
 		for _, ref := range req.MaterialRefs[m.Kind] {
@@ -940,6 +968,7 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			if m.Role != "" && stringValue(props["role"]) != m.Role {
 				continue
 			}
+			attributes := cloneObject(props)
 			encoded, mime, e := encodeTemplateMaterial(ctx, client, raw, m.Encoding)
 			if e != nil {
 				return PreparedMediaRequest{}, e
@@ -1002,14 +1031,24 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 				props[m.Kind+"_url"] = map[string]any{"url": encoded}
 				value = props
 			}
+			for key, original := range attributes {
+				serialized, ok := value.(map[string]any)
+				if !ok || !reflect.DeepEqual(serialized[key], original) {
+					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "Material structure would replace reference attribute: "+key)
+				}
+			}
 			if m.Wrapper != nil {
 				wrapped, e := templateValue(m.Wrapper, map[string]any{"value": value}, vars)
 				if e != nil {
 					return PreparedMediaRequest{}, e
 				}
+				if !containsMaterialValue(wrapped, value) {
+					return PreparedMediaRequest{}, fail(400, "material_integrity_failed", "Material wrapper must retain the complete serialized reference")
+				}
 				value = wrapped
 			}
 			values = append(values, value)
+			sentMaterials = append(sentMaterials, value)
 			used[m.Kind]++
 		}
 		if m.MaxCount > 0 && len(values) > m.MaxCount || m.Single && len(values) > 1 {
@@ -1044,6 +1083,11 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			return PreparedMediaRequest{}, fail(400, "material_integrity_failed", "Template must preserve every "+kind+" reference")
 		}
 	}
+	for _, reference := range sentMaterials {
+		if !containsMaterialValue(p, reference) {
+			return PreparedMediaRequest{}, fail(400, "material_integrity_failed", "Material target mappings replaced a serialized reference")
+		}
+	}
 	if err := verifyBillingWire(t, req, p, rules); err != nil {
 		return PreparedMediaRequest{}, err
 	}
@@ -1056,6 +1100,29 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 		encoding = "json"
 	}
 	return PreparedMediaRequest{Method: endpoint.Method, Path: path, Encoding: encoding, Body: p, Files: files}, nil
+}
+
+// A wrapper may nest a serialized reference, but cannot count a consumed input
+// as sent after replacing its media or dropping its role and extra attributes.
+func containsMaterialValue(container, reference any) bool {
+	if reflect.DeepEqual(container, reference) {
+		return true
+	}
+	switch node := container.(type) {
+	case map[string]any:
+		for _, value := range node {
+			if containsMaterialValue(value, reference) {
+				return true
+			}
+		}
+	case []any:
+		for _, value := range node {
+			if containsMaterialValue(value, reference) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func ParseTemplateResponse(object map[string]any, cap Capability) UpstreamResult {

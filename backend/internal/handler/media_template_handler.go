@@ -30,7 +30,7 @@ func (h *MediaHandler) AdminProtocolEffective(c *gin.Context) {
 		mediaError(c, err)
 		return
 	}
-	response.Success(c, caps)
+	response.Success(c, media.SafeReviewValue(caps, nil, 0))
 }
 
 func protocolConfigKind(c *gin.Context) string {
@@ -85,11 +85,11 @@ func (h *MediaHandler) AdminProtocolHistory(c *gin.Context) {
 
 type protocolSaveBody struct {
 	ID              string          `json:"id"`
-	Expected        int64           `json:"expected_version"`
+	Expected        *int64          `json:"expected_version"`
 	Publish         bool            `json:"publish"`
 	Config          json.RawMessage `json:"config"`
 	UpgradeBindings []string        `json:"upgrade_bindings"`
-	SourceVersion   int64           `json:"source_version"`
+	SourceVersion   *int64          `json:"source_version"`
 }
 
 func (h *MediaHandler) AdminProtocolSave(c *gin.Context) {
@@ -107,13 +107,61 @@ func (h *MediaHandler) AdminProtocolSave(c *gin.Context) {
 		return
 	}
 	kind := protocolConfigKind(c)
-	if body.SourceVersion > 0 {
-		old, err := h.Engine.Store.ConfigVersion(c.Request.Context(), kind, body.ID, body.SourceVersion)
+	var expected int64
+	if body.Expected != nil {
+		expected = *body.Expected
+	}
+	if strings.TrimSpace(body.ID) == "" || expected < 0 {
+		response.BadRequest(c, "A configuration ID and a non-negative expected version are required")
+		return
+	}
+	switch {
+	case strings.HasSuffix(c.FullPath(), "/import"):
+		if body.Expected == nil || expected != 0 || body.Publish || body.SourceVersion != nil || body.UpgradeBindings != nil {
+			response.BadRequest(c, "Import requires a new configuration ID, expected_version 0 and an unpublished configuration")
+			return
+		}
+		// Expected version zero is checked under the store's transaction lock:
+		// importing an existing ID must never overwrite its draft or publication.
+		body.Publish = false
+	case strings.HasSuffix(c.FullPath(), "/publish"):
+		if expected <= 0 || body.SourceVersion != nil {
+			response.BadRequest(c, "Publish requires an existing expected version; use rollback for a historical source")
+			return
+		}
+		body.Publish = true
+		if len(body.Config) == 0 {
+			current, err := h.Engine.Store.ConfigVersion(c.Request.Context(), kind, body.ID, expected)
+			if err != nil {
+				mediaError(c, err)
+				return
+			}
+			body.Config = current.Config
+		}
+	case strings.HasSuffix(c.FullPath(), "/rollback"):
+		if expected <= 0 || body.SourceVersion == nil || *body.SourceVersion <= 0 || len(body.Config) != 0 {
+			response.BadRequest(c, "Rollback requires expected_version and source_version, without a configuration override")
+			return
+		}
+		old, err := h.Engine.Store.ConfigVersion(c.Request.Context(), kind, body.ID, *body.SourceVersion)
 		if err != nil {
 			mediaError(c, err)
 			return
 		}
 		body.Config = old.Config
+		// Rollback publishes historical bytes as a new version rather than moving
+		// the head backwards, preserving pinned versions and task snapshots.
+		body.Publish = true
+	default:
+		if body.SourceVersion != nil {
+			response.BadRequest(c, "Historical sources require the rollback endpoint")
+			return
+		}
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(body.Config, &object) != nil || object == nil {
+		response.BadRequest(c, "A configuration object is required")
+		return
 	}
 	if kind == "binding" && body.Publish {
 		var binding media.ModelBinding
@@ -129,7 +177,7 @@ func (h *MediaHandler) AdminProtocolSave(c *gin.Context) {
 			}
 		}
 	}
-	row, err := h.Engine.Store.SaveProtocolConfig(c.Request.Context(), kind, body.ID, body.Expected, subject.UserID, body.Config, body.Publish, body.UpgradeBindings)
+	row, err := h.Engine.Store.SaveProtocolConfig(c.Request.Context(), kind, body.ID, expected, subject.UserID, body.Config, body.Publish, body.UpgradeBindings)
 	if err != nil {
 		mediaError(c, err)
 		return
@@ -177,6 +225,10 @@ func (h *MediaHandler) AdminProtocolPreview(c *gin.Context) {
 		return
 	}
 	var body struct {
+		Mode          string                 `json:"mode"`
+		KeyID         int64                  `json:"api_key_id"`
+		GroupID       int64                  `json:"group_id"`
+		AccountID     int64                  `json:"account_id"`
 		Template      media.ProtocolTemplate `json:"template"`
 		Operation     string                 `json:"operation"`
 		Model         string                 `json:"model"`
@@ -188,6 +240,18 @@ func (h *MediaHandler) AdminProtocolPreview(c *gin.Context) {
 	}
 	if c.ShouldBindJSON(&body) != nil {
 		response.BadRequest(c, "Invalid preview input")
+		return
+	}
+	if body.Mode == "effective" {
+		if body.KeyID <= 0 || body.GroupID < 0 || body.AccountID < 0 || body.Request == nil || body.Operation == "" || body.Template.ID != "" || len(body.Rules) > 0 || body.UpstreamModel != "" {
+			response.BadRequest(c, "Effective preview requires an existing API key and request; draft overrides are not accepted")
+			return
+		}
+		h.adminEffectiveProtocolPreview(c, body.KeyID, body.GroupID, body.AccountID, body.Operation, body.Request, body.Measure)
+		return
+	}
+	if body.Mode != "" && body.Mode != "draft" {
+		response.BadRequest(c, "Preview mode must be draft or effective")
 		return
 	}
 	if err := media.ValidateTemplate(body.Template, false); err != nil {
@@ -279,8 +343,12 @@ func (h *MediaHandler) AdminProtocolTest(c *gin.Context) {
 		response.BadRequest(c, "Paid test requires explicit confirmation, an existing API key ID and an idempotency key")
 		return
 	}
+	if h.keys == nil {
+		response.Error(c, 503, "Media test identity is unavailable")
+		return
+	}
 	key, err := h.keys.GetByID(c.Request.Context(), body.KeyID)
-	if err != nil || !key.IsActive() || key.Group == nil || key.User == nil || !key.User.IsActive() {
+	if err != nil || !activeMediaAdminTestKey(key) {
 		response.BadRequest(c, "An active assigned API key is required")
 		return
 	}

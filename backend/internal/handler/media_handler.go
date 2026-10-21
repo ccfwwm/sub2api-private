@@ -90,6 +90,10 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 	accountTests.SetMediaTemplateStore(engine.Store)
 	monitors.SetMediaTemplateStore(engine.Store)
 	engine.Config = service.UnifiedMediaConfig(accounts, groups, channels)
+	engine.Store.RuntimeCapabilities = func(ctx context.Context, groupID int64) ([]media.Capability, error) {
+		capabilities, _, err := engine.Config(ctx, groupID)
+		return capabilities, err
+	}
 	var configured bool
 	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM accounts WHERE platform='imagevideo' AND deleted_at IS NULL)`).Scan(&configured); err != nil {
 		return nil, err

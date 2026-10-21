@@ -12,7 +12,7 @@ const scope = computed(() => props.config.scope as { kind: string; reference: st
 const reservation = computed(() => props.config.reservation as { maximum_charge: string | null; max_quantities: Record<string, string> })
 const units: Record<string, [string, string, string]> = {
   request: ['次', 'request', 'task_count'], output: ['产物', 'output', 'successful_outputs'], second: ['秒', 'second', 'request_duration'],
-  minute: ['分钟', 'minute', 'artifact_duration'], token: ['token', 'token', 'provider_tokens'], input_image: ['参考图', 'input image', 'accepted_input_images'],
+  minute: ['分钟', 'minute', 'artifact_duration'], token: ['token', 'token', 'provider_tokens'], input_character: ['输入字符', 'input character', 'input_characters'], input_image: ['参考图', 'input image', 'accepted_input_images'],
   input_video_second: ['输入视频秒', 'input video second', 'accepted_input_video_duration'], input_audio_second: ['输入音频秒', 'input audio second', 'accepted_input_audio_duration']
 }
 const sources = (unit: string) => unit === 'second' || unit === 'minute' ? ['request_duration', 'fixed_duration', 'artifact_duration', 'provider_duration'] : [units[unit]?.[2]]

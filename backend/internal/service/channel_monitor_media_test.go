@@ -45,17 +45,38 @@ func TestMediaMonitorConnectionNoGenerationAndModelVisibility(t *testing.T) {
 	require.NotContains(t, result[0].Message, "test-key")
 }
 
-func TestMediaMonitorNormalizesKnownProtocolsAndRejectsUnsafeParameters(t *testing.T) {
-	for _, model := range []string{"gpt-image-2", "omni-flash", "veo-3.1-lite", "lyria-3-pro"} {
+func monitorTestMediaModel(t *testing.T, model, preset, templateID string, parameters map[string]any) MonitorMediaModel {
+	t.Helper()
+	cap, ok := media.ModelPreset(preset)
+	require.True(t, ok)
+	for _, template := range media.BuiltinTemplates() {
+		if template.ID == templateID {
+			cap.Model, cap.UpstreamModel = model, model
+			cap.Template, cap.TemplateRef = &template, &media.TemplateRef{ID: templateID, Version: 1}
+			cap.Adapter, cap.RequestFormat = "template", "unified"
+			cap.Operations = []string{template.Operations[0]}
+			return MonitorMediaModel{Capability: &cap, Parameters: parameters}
+		}
+	}
+	t.Fatalf("missing template %s", templateID)
+	return MonitorMediaModel{}
+}
+
+func TestMediaMonitorNormalizesExplicitProtocolsAndRejectsUnsafeParameters(t *testing.T) {
+	for model, templateID := range map[string]string{"gpt-image-2": "image-json", "omni-flash": "video-arrays", "veo-3.1-lite": "video-arrays", "lyria-3-pro": "music-chat-json"} {
 		t.Run(model, func(t *testing.T) {
-			cap, req, err := normalizeMonitorMediaModel(model, MonitorMediaModel{Parameters: map[string]any{"prompt": "custom probe"}})
+			entry := monitorTestMediaModel(t, model, model, templateID, map[string]any{"prompt": "custom probe", "optional": true})
+			cap, req, err := normalizeMonitorMediaModel(model, entry)
 			require.NoError(t, err)
 			require.Equal(t, cap.UpstreamModel, req.Parameters["model"])
 			require.NotEmpty(t, req.Operation)
+			require.Equal(t, true, req.Parameters["optional"])
+			_, _, err = normalizeMonitorMediaModel(model, MonitorMediaModel{})
+			require.ErrorContains(t, err, "configure an exact media capability")
 		})
 	}
-	for _, params := range []map[string]any{{"n": 2}, {"unsupported": true}, {"messages": []any{}}, {"seconds": 1000}, {"model": "different"}} {
-		_, _, err := normalizeMonitorMediaModel("omni-flash", MonitorMediaModel{Parameters: params})
+	for _, params := range []map[string]any{{"n": 2}, {"messages": []any{}}, {"seconds": 3601}, {"seconds": 0}, {"seconds": 1.5}, {"model": "different"}, {"images": []any{}}, {"stream": false}} {
+		_, _, err := normalizeMonitorMediaModel("omni-flash", monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", params))
 		require.Error(t, err)
 	}
 	require.Error(t, validateMonitorMediaModels(MonitorProviderImageVideo, "unknown", nil, map[string]any{"media_monitor": map[string]any{"mode": "generation"}}))
@@ -93,7 +114,9 @@ func TestMediaMonitorAudioUsesChatAndAudioTaskQueries(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 8, Endpoint: server.URL, APIKey: "key", PrimaryModel: "lyria-3-pro", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"lyria-3-pro": {Parameters: map[string]any{"prompt": "custom music"}}}}}}
+	entry := monitorTestMediaModel(t, "lyria-3-pro", "lyria-3-pro", "music-chat-json", map[string]any{"prompt": "custom music"})
+	entry.Capability.Template.Query = &media.TemplateEndpoint{Method: "GET", Path: "/v1/audio/generations/{task_id}"}
+	m := &ChannelMonitor{ID: 8, Endpoint: server.URL, APIKey: "key", PrimaryModel: "lyria-3-pro", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"lyria-3-pro": entry}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	require.Equal(t, MonitorStatusPending, s.runMediaMonitor(context.Background(), m)[0].Status)
 	require.Equal(t, MonitorStatusPending, s.runMediaMonitor(context.Background(), m)[0].Status)
@@ -104,7 +127,7 @@ func TestMediaMonitorAudioUsesChatAndAudioTaskQueries(t *testing.T) {
 func TestMediaMonitorCreateReadUpdateAndDuplicatePreserveSnapshot(t *testing.T) {
 	repo := &duplicateChannelMonitorRepoStub{}
 	s := NewChannelMonitorService(repo, &duplicateChannelMonitorEncryptor{})
-	body := map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": {Parameters: map[string]any{"prompt": "saved prompt"}}}}}
+	body := map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", map[string]any{"prompt": "saved prompt"})}}}
 	m, err := s.Create(context.Background(), ChannelMonitorCreateParams{Name: "media", Provider: MonitorProviderImageVideo, Endpoint: "https://8.8.8.8", APIKey: "test-key", PrimaryModel: "omni-flash", IntervalSeconds: 60, BodyOverrideMode: "merge", BodyOverride: body})
 	require.NoError(t, err)
 	repo.source = repo.created[0]
@@ -131,7 +154,7 @@ func TestMediaMonitorAcceptedTaskSurvivesRestartAndFailureNeverResubmits(t *test
 			require.Equal(t, "/v1/videos", r.URL.Path)
 			var p map[string]any
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&p))
-			require.Equal(t, float64(4), p["duration"])
+			require.Equal(t, float64(4), p["seconds"])
 			require.Equal(t, "custom probe", p["prompt"])
 			_, _ = w.Write([]byte(`{"id":"accepted-task","status":"queued"}`))
 		} else {
@@ -141,7 +164,7 @@ func TestMediaMonitorAcceptedTaskSurvivesRestartAndFailureNeverResubmits(t *test
 		}
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 5, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": {Parameters: map[string]any{"prompt": "custom probe"}}}}}}
+	m := &ChannelMonitor{ID: 5, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", map[string]any{"prompt": "custom probe"})}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	result := s.runMediaMonitor(context.Background(), m)
 	require.Equal(t, MonitorStatusPending, result[0].Status)
@@ -173,7 +196,7 @@ func TestMediaMonitorRequiresValidArtifactAndRoutesImages(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"b64_json": output}}})
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 6, Endpoint: server.URL, APIKey: "key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}}
+	m := &ChannelMonitor{ID: 6, Endpoint: server.URL, APIKey: "key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	require.Equal(t, MonitorStatusOperational, s.runMediaMonitor(context.Background(), m)[0].Status)
 	output = base64.StdEncoding.EncodeToString([]byte("not an image"))
@@ -185,11 +208,11 @@ func TestMediaMonitorInterruptedSubmissionAndCorruptJournalNeverSubmit(t *testin
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	m := &ChannelMonitor{ID: 7, Endpoint: "https://invalid.invalid", APIKey: "key", PrimaryModel: "omni-flash"}
 	c := MonitorMediaConfig{Mode: "generation"}
-	cap, req, err := normalizeMonitorMediaModel(m.PrimaryModel, MonitorMediaModel{})
+	cap, req, err := normalizeMonitorMediaModel(m.PrimaryModel, monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil))
 	require.NoError(t, err)
 	raw, _ := json.Marshal([]any{m.Endpoint, m.APIKey, m.ExtraHeaders, cap, req, c.Revision})
 	path := s.monitorMediaStatePath(m.ID, m.PrimaryModel)
-	require.NoError(t, s.saveMonitorMediaTask(path, monitorMediaTask{Fingerprint: fmt.Sprintf("%x", sha256.Sum256(raw)), State: "submitting", Capability: cap}))
+	require.NoError(t, s.saveMonitorMediaTask(path, monitorMediaTask{Fingerprint: fmt.Sprintf("%x", sha256.Sum256(raw)), State: "submitting", Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}}))
 	res := s.runMonitorMediaGeneration(context.Background(), m, m.PrimaryModel, c, &http.Client{})
 	require.Contains(t, res.Message, "no resubmission")
 	require.NoError(t, os.WriteFile(path, []byte("corrupt"), 0600))
@@ -207,7 +230,7 @@ func TestMediaMonitorRejectionKeepsReasonAndFailedStatusWithoutResubmitting(t *t
 		_, _ = w.Write([]byte(`{"error":{"message":"Model gpt-image2.5 is not available for this group; private-key custom-secret"}}`))
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 18, Endpoint: server.URL, APIKey: "private-key", ExtraHeaders: map[string]string{"X-Secret": "custom-secret"}, PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}}
+	m := &ChannelMonitor{ID: 18, Endpoint: server.URL, APIKey: "private-key", ExtraHeaders: map[string]string{"X-Secret": "custom-secret"}, PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	first := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, MonitorStatusFailed, first.Status)
@@ -233,7 +256,7 @@ func TestMediaMonitorUnknownAcceptanceStaysBlocked(t *testing.T) {
 		w.WriteHeader(http.StatusGatewayTimeout)
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 19, Endpoint: server.URL, APIKey: "private-key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}}
+	m := &ChannelMonitor{ID: 19, Endpoint: server.URL, APIKey: "private-key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	first := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, MonitorStatusError, first.Status)
@@ -242,4 +265,31 @@ func TestMediaMonitorUnknownAcceptanceStaysBlocked(t *testing.T) {
 	next := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, first.Message, next.Message)
 	require.Equal(t, 1, posts)
+}
+
+func TestMediaMonitorNewProbeRequiresExplicitPublishedTemplate(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		_, _ = w.Write([]byte(`{"id":"unexpected","status":"queued"}`))
+	}))
+	defer server.Close()
+	legacy, ok := media.ModelPreset("gpt-image-2")
+	require.True(t, ok)
+	draft := monitorTestMediaModel(t, legacy.Model, legacy.Model, "image-json", nil)
+	draft.Capability.Template.Status = "draft"
+	for _, entry := range []MonitorMediaModel{{}, {Capability: &legacy}, draft} {
+		m := &ChannelMonitor{ID: 61, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: legacy.Model,
+			BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{legacy.Model: entry}}}}
+		s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+		result := s.runMediaMonitor(context.Background(), m)
+		require.Equal(t, MonitorStatusError, result[0].Status)
+		require.Contains(t, result[0].Message, "protocol template")
+	}
+	require.Zero(t, requests)
+	_, req, err := normalizeMonitorMediaModel("unlisted-model", monitorTestMediaModel(t, "unlisted-model", "gpt-image-2", "image-json", nil))
+	require.NoError(t, err)
+	require.Equal(t, "unlisted-model", req.Parameters["model"])
 }

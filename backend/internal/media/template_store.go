@@ -57,27 +57,104 @@ func (s *Store) ConfigVersion(ctx context.Context, kind, id string, version int6
 	}
 	return r, err
 }
-func validateBindingPublication(ctx context.Context, tx *sql.Tx, b ModelBinding) error {
-	if b.Template != nil {
-		var status string
-		if err := tx.QueryRowContext(ctx, `SELECT status FROM media_config_versions WHERE kind='template' AND id=$1 AND version=$2`, b.Template.ID, b.Template.Version).Scan(&status); err != nil || status != "enabled" {
-			return fail(422, "template_version_not_published", "Bind a published template version")
+func (s *Store) validateBindingPublication(ctx context.Context, tx *sql.Tx, b ModelBinding) error {
+	templates := map[TemplateRef]json.RawMessage{}
+	load := func(ref TemplateRef) (ProtocolTemplate, error) {
+		raw, ok := templates[ref]
+		if !ok {
+			var status string
+			if err := tx.QueryRowContext(ctx, `SELECT status,config FROM media_config_versions WHERE kind='template' AND id=$1 AND version=$2`, ref.ID, ref.Version).Scan(&status, &raw); err != nil || status != "enabled" {
+				return ProtocolTemplate{}, fail(422, "template_version_not_published", "Bind a published template version")
+			}
+			templates[ref] = raw
 		}
+		var template ProtocolTemplate
+		if err := json.Unmarshal(raw, &template); err != nil {
+			return template, err
+		}
+		return template, nil
 	}
-	records, err := configRecords(ctx, tx, "binding", true)
+	var selectedTemplate *ProtocolTemplate
+	if b.Template != nil {
+		template, err := load(*b.Template)
+		if err != nil {
+			return err
+		}
+		selectedTemplate = &template
+	}
+	records, err := configRecords(ctx, tx, "capability", true)
 	if err != nil {
 		return err
 	}
+	capabilities := make([]Capability, 0, len(records))
+	for _, record := range records {
+		var capability Capability
+		if err := json.Unmarshal(record.Config, &capability); err != nil {
+			return err
+		}
+		capabilities = append(capabilities, capability)
+	}
+	if s.RuntimeCapabilities != nil {
+		runtimeCapabilities, err := s.RuntimeCapabilities(ctx, b.GroupID)
+		if err != nil {
+			return err
+		}
+		capabilities = append(capabilities, runtimeCapabilities...)
+	}
+	if selectedTemplate != nil {
+		if err := validateTemplateBindingCompatibility(*selectedTemplate, b, capabilities); err != nil {
+			return err
+		}
+	}
+	records, err = configRecords(ctx, tx, "binding", true)
+	if err != nil {
+		return err
+	}
+	bindings := make([]ModelBinding, 0, len(records)+1)
 	for _, r := range records {
 		var other ModelBinding
-		_ = json.Unmarshal(r.Config, &other)
+		if err := json.Unmarshal(r.Config, &other); err != nil {
+			return err
+		}
 		if other.ID != b.ID && other.Status == "enabled" && other.GroupID == b.GroupID && other.Model == b.Model && other.AccountID == b.AccountID {
 			return fail(409, "binding_conflict", "A published binding already occupies this selector")
+		}
+		if other.ID != b.ID {
+			bindings = append(bindings, other)
+		}
+	}
+	bindings = append(bindings, b)
+	selected := []Capability{}
+	for _, capability := range capabilities {
+		if capability.Status != "enabled" || !capability.Enabled || !containsInt64(capability.GroupIDs, b.GroupID) || b.Model != "" && capability.Model != b.Model || b.AccountID > 0 && !containsInt64(capability.AccountIDs, b.AccountID) {
+			continue
+		}
+		// Validate only selectors affected by this publication. Other groups and
+		// accounts on a shared capability retain their current configuration.
+		capability.GroupIDs = []int64{b.GroupID}
+		if b.AccountID > 0 {
+			capability.AccountIDs = []int64{b.AccountID}
+		}
+		selected = append(selected, capability)
+	}
+	if len(selected) == 0 {
+		return fail(409, "binding_capability_missing", "No published capability matches the selected binding")
+	}
+	resolved, err := ResolveTemplateBindings(selected, bindings, load)
+	if err != nil {
+		return err
+	}
+	for _, capability := range resolved {
+		if capability.Template == nil {
+			return fail(409, "binding_template_missing", "Selected binding does not inherit a published protocol template")
+		}
+		if !capability.Enabled {
+			return fail(409, "binding_template_operation_conflict", "Effective template does not support every operation selected by this binding")
 		}
 	}
 	return nil
 }
-func upgradeTemplateBindings(ctx context.Context, tx *sql.Tx, id string, version, actor int64, selected []string) error {
+func (s *Store) upgradeTemplateBindings(ctx context.Context, tx *sql.Tx, id string, version, actor int64, selected []string) error {
 	var templateRaw []byte
 	if err := tx.QueryRowContext(ctx, `SELECT config FROM media_config_versions WHERE kind='template' AND id=$1 AND version=$2 AND status='enabled'`, id, version).Scan(&templateRaw); err != nil {
 		return err
@@ -121,11 +198,14 @@ func upgradeTemplateBindings(ctx context.Context, tx *sql.Tx, id string, version
 		if b.Template == nil || b.Template.ID != id || b.Status != "enabled" {
 			return fail(409, "binding_upgrade_conflict", "Selected binding does not use this template")
 		}
-		if err = validateTemplateBindingCompatibility(template, b, capabilities); err != nil {
+		if err = s.validateTemplateBindingCompatibility(ctx, template, b, capabilities); err != nil {
 			return err
 		}
 		b.Template.Version = version
 		b.Version = strconv.FormatInt(current+1, 10)
+		if err = s.validateBindingPublication(ctx, tx, b); err != nil {
+			return err
+		}
 		raw, err = json.Marshal(b)
 		if err != nil {
 			return err
@@ -138,6 +218,18 @@ func upgradeTemplateBindings(ctx context.Context, tx *sql.Tx, id string, version
 		}
 	}
 	return nil
+}
+
+func (s *Store) validateTemplateBindingCompatibility(ctx context.Context, template ProtocolTemplate, binding ModelBinding, persisted []Capability) error {
+	capabilities := append([]Capability(nil), persisted...)
+	if s.RuntimeCapabilities != nil {
+		runtimeCapabilities, err := s.RuntimeCapabilities(ctx, binding.GroupID)
+		if err != nil {
+			return err
+		}
+		capabilities = append(capabilities, runtimeCapabilities...)
+	}
+	return validateTemplateBindingCompatibility(template, binding, capabilities)
 }
 
 func validateTemplateBindingCompatibility(template ProtocolTemplate, binding ModelBinding, capabilities []Capability) error {

@@ -155,7 +155,7 @@ func (a *Adapter) DiscoverTemplate(ctx context.Context, t ProtocolTemplate, acco
 		return nil, err
 	}
 	applyTemplateAuth(req, t.Auth, account.Key)
-	resp, err := a.Client.Do(req)
+	resp, err := a.Client.Do(protectMediaCredentials(req, account.Key))
 	if err != nil {
 		return nil, fmt.Errorf("model discovery unavailable")
 	}

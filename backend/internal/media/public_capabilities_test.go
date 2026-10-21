@@ -17,6 +17,10 @@ func TestPublicCapabilitiesPreservesVariantsAndRedactsBindings(t *testing.T) {
 	cap := Capability{ID: "small", Version: "1", Model: "00sd2.5", MediaType: "video", Enabled: true, Status: "enabled", GroupIDs: []int64{1}, Operations: []string{"video"}, Sizes: []string{"1024x1024"}, AccountIDs: []int64{987}, UpstreamModel: "PRIVATE_MODEL", CostTemplates: []string{"PRIVATE_COST"}, ArtifactHosts: []string{"PRIVATE_HOST"}}
 	cap.Duration = Duration{Mode: "enum", Values: []int{5}, Scenarios: []map[string]any{{"private": "PRIVATE_SCENARIO"}}}
 	cap.RequestFormat = "v6k_url"
+	cap.TemplateRef = &TemplateRef{ID: "PRIVATE_TEMPLATE", Version: 3}
+	cap.Template = &ProtocolTemplate{ID: "PRIVATE_TEMPLATE", Auth: TemplateAuth{Mode: "header", Name: "PRIVATE_AUTH"}, Body: map[string]any{"private": "PRIVATE_BODY"}}
+	cap.BindingVersions = []TemplateRef{{ID: "PRIVATE_BINDING", Version: 4}}
+	cap.TemplateRules = []ParameterRule{{Op: "fixed", Target: "PRIVATE_TARGET", Value: "PRIVATE_VALUE"}}
 	cap.Materials = map[string]Material{"video": {ReferenceField: "videos"}}
 	large := cap
 	large.ID = "large"
@@ -42,7 +46,7 @@ func TestPublicCapabilitiesPreservesVariantsAndRedactsBindings(t *testing.T) {
 	require.Equal(t, []string{"1024x1024"}, entries[0].Sizes)
 	raw, err := json.Marshal(entries)
 	require.NoError(t, err)
-	for _, forbidden := range []string{"PRIVATE", "account_ids", "cost_templates", "upstream_model", "artifact_hosts", "channel_id"} {
+	for _, forbidden := range []string{"PRIVATE", "account_ids", "cost_templates", "upstream_model", "artifact_hosts", "channel_id", "template_ref", "binding_versions", "template_rules"} {
 		require.False(t, strings.Contains(string(raw), forbidden), forbidden)
 	}
 }

@@ -14,7 +14,19 @@ const tr = (zh: string, en: string) => (locale?.value ?? 'zh').startsWith('zh') 
 const candidates = ref<string[]>([]), error = ref(''), loading = ref(false), selected = ref('')
 const advanced = ref<number | null>(null), testingModel = ref<string | null>(null)
 const templates = ref<MediaConfigRecord[]>([])
-onMounted(async () => { try { templates.value = await mediaProtocolsAPI.list('templates') } catch (e) { error.value = (e as Error).message } })
+const pinnedTemplates = ref<Record<string, Record<string, unknown>>>({})
+onMounted(async () => {
+  try {
+    templates.value = await mediaProtocolsAPI.list('templates')
+    for (const capability of props.modelValue) {
+      const ref = capability.template_ref, row = templates.value.find(item => item.id === ref?.id)
+      if (!ref || row?.published_version === ref.version || pinnedTemplates.value[`${ref.id}:${ref.version}`]) continue
+      const history = await mediaProtocolsAPI.history('templates', ref.id)
+      const pinned = history.find(item => item.version === ref.version)
+      if (pinned) pinnedTemplates.value[`${ref.id}:${ref.version}`] = pinned.config
+    }
+  } catch (e) { error.value = (e as Error).message }
+})
 const val = (e: Event) => (e.target as HTMLInputElement).value
 const csv = (s: string) => s.split(/[,，\n]/).map(v => v.trim()).filter(Boolean)
 const saved = computed(() => props.account && accountMediaCapabilities(props.account.extra, props.account.credentials))
@@ -42,9 +54,34 @@ function chooseTemplate(c: MediaCapability, id: string) {
   if (!row?.published_version) return
   c.template_ref={id,version:row.published_version};c.adapter='template';c.request_format='unified'
   const published=row.published_config ?? row.config
-  c.media_type=(published.media_types as string[])[0] || ''
-  c.operations=[...(published.operations as string[])]
+  const mediaTypes = published.media_types as string[], operations = published.operations as string[]
+  c.media_type = mediaTypes.includes(c.media_type) ? c.media_type : mediaTypes.length === 1 ? mediaTypes[0] : ''
+  c.operations = c.operations.filter(operation => operations.includes(operation))
+  if (!c.operations.length && operations.length === 1) c.operations = [...operations]
   c.formats=['json','multipart'];c.duration.required=c.media_type==='video'
+}
+function selectedTemplate(c: MediaCapability): Record<string, unknown> | undefined {
+  const row = templates.value.find(item => item.id === c.template_ref?.id)
+  if (c.template_ref && row?.published_version !== c.template_ref.version) return pinnedTemplates.value[`${c.template_ref.id}:${c.template_ref.version}`]
+  return row?.published_config ?? row?.config
+}
+function templateOptions(c: MediaCapability, field: 'media_types' | 'operations'): string[] {
+  return (selectedTemplate(c)?.[field] as string[] | undefined) ?? []
+}
+function selectMediaType(c: MediaCapability, mediaType: string) {
+  if (!templateOptions(c, 'media_types').includes(mediaType)) return
+  c.media_type = mediaType; c.duration.required = mediaType === 'video'
+}
+function selectOperation(c: MediaCapability, operation: string, enabled: boolean) {
+  if (!templateOptions(c, 'operations').includes(operation)) return
+  c.operations = enabled ? [...new Set([...c.operations, operation])] : c.operations.filter(value => value !== operation)
+}
+function setRules(index: number, event: Event) {
+  try {
+    const rules = JSON.parse(val(event))
+    if (!Array.isArray(rules) || rules.some(rule => !rule || typeof rule !== 'object' || Array.isArray(rule))) throw new Error('invalid')
+    edit(index, c => { c.template_rules = rules }); error.value = ''
+  } catch { error.value = tr('模板规则需要 JSON 对象数组。','Template rules require a JSON array of objects.') }
 }
 function testStatus(c: MediaCapability) {
   const results = props.account?.extra?.media_test_results as Record<string, {status:string;started_at:string;test_kind?:string}> | undefined
@@ -66,7 +103,11 @@ function testStatus(c: MediaCapability) {
     <div v-else class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="text-xs text-gray-500"><th>{{ tr('模型名称','Model') }}</th><th>{{ tr('上游映射','Upstream mapping') }}</th><th>{{ tr('类型','Type') }}</th><th>{{ tr('启用','Enabled') }}</th><th>{{ tr('测试结果','Test result') }}</th><th>{{ tr('操作','Actions') }}</th></tr></thead><tbody><template v-for="(c,i) in modelValue" :key="i">
       <tr class="border-t dark:border-dark-600"><td class="py-2 pr-2"><input class="input min-w-36" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></td><td class="pr-2"><input class="input min-w-36" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event))" /></td><td class="pr-2">{{ c.media_type || tr('待选接口','Choose interface') }}</td><td class="pr-2"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" /></td><td class="pr-2 text-xs">{{ testStatus(c) }}</td><td class="whitespace-nowrap"><button type="button" class="mr-2 text-primary-600 disabled:opacity-40" :disabled="!canTest" @click="testingModel = c.model">{{ tr('测试 / 查看','Test / view') }}</button><button type="button" class="mr-2 text-primary-600" @click="advanced = advanced === i ? null : i">{{ tr('高级设置','Advanced') }}</button><button type="button" class="text-red-600" @click="emit('update:modelValue',modelValue.filter((_,index) => index !== i))">{{ tr('移除','Remove') }}</button></td></tr>
       <tr v-if="advanced === i || !c.adapter"><td colspan="6" class="bg-gray-50 p-3 dark:bg-dark-800"><div class="grid gap-3 sm:grid-cols-2">
-        <label class="text-xs">协议模板<select class="input mt-1" :value="c.template_ref?.id || ''" @change="edit(i,c => chooseTemplate(c,val($event)))"><option value="">请选择模板</option><option v-for="row in templates.filter(row => row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><a class="block text-primary-600" :href="'/admin/media?tab=bindings&account_id=' + (accountId || '')">编辑模板与分组绑定</a></label>
+        <label class="text-xs">协议模板<select class="input mt-1" aria-label="协议模板" :value="c.template_ref?.id || ''" @change="edit(i,c => chooseTemplate(c,val($event))); advanced = i"><option value="">请选择模板</option><option v-for="row in templates.filter(row => row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><a class="block text-primary-600" :href="'/admin/media?tab=bindings&account_id=' + (accountId || '')">编辑模板与分组绑定</a></label>
+        <p v-if="selectedTemplate(c)?.description" class="text-xs text-gray-500">{{ selectedTemplate(c)?.description }}</p>
+        <label v-if="c.template_ref" class="text-xs">{{ tr('输出媒体类型','Output media type') }}<select class="input mt-1" :aria-label="tr('输出媒体类型','Output media type')" :value="c.media_type" @change="edit(i,c => selectMediaType(c,val($event)))"><option value="">{{ tr('请选择输出媒体类型','Choose output media type') }}</option><option v-if="c.media_type && !templateOptions(c,'media_types').includes(c.media_type)" :value="c.media_type">{{ c.media_type }} · {{ tr('当前固定版本','Current pinned version') }}</option><option v-for="mediaType in templateOptions(c,'media_types')" :key="mediaType" :value="mediaType">{{ mediaType }}</option></select></label>
+        <fieldset v-if="c.template_ref" class="text-xs"><legend>{{ tr('启用操作','Enabled operations') }}</legend><label v-for="operation in templateOptions(c,'operations')" :key="operation" class="mr-3 inline-flex items-center gap-1"><input type="checkbox" :aria-label="tr('启用操作 ','Enable operation ') + operation" :checked="c.operations.includes(operation)" @change="edit(i,c => selectOperation(c,operation,($event.target as HTMLInputElement).checked))" />{{ operation }}</label><p v-if="!c.media_type || !c.operations.length" class="mt-1 text-amber-600">{{ tr('请明确选择输出媒体类型及至少一项操作。','Choose an output media type and at least one operation.') }}</p></fieldset>
+        <label v-if="c.template_ref" class="text-xs sm:col-span-2">{{ tr('账号模板规则覆盖（JSON）','Account template rule overrides (JSON)') }}<textarea class="input mt-1 w-full font-mono text-xs" :aria-label="tr('账号模板规则覆盖','Account template rule overrides')" :value="JSON.stringify(c.template_rules || [],null,2)" @change="setRules(i,$event)" /></label>
         <template v-if="c.media_type === 'video'"><label class="text-xs">{{ tr('时长规则','Duration rule') }}<select class="input" :value="c.duration.mode" @change="edit(i,c => c.duration.mode = val($event))"><option value="fixed">{{ tr('固定','Fixed') }}</option><option value="enum">{{ tr('档位','Options') }}</option><option value="range">{{ tr('范围','Range') }}</option><option value="unknown">{{ tr('未知','Unknown') }}</option></select></label><label v-if="['fixed','enum'].includes(c.duration.mode)" class="text-xs">{{ tr('秒数','Seconds') }}<input class="input" :value="c.duration.values.join(', ')" @change="edit(i,c => c.duration.values = csv(val($event)).map(Number))" /></label><template v-if="c.duration.mode === 'range'"><label class="text-xs">{{ tr('最短秒数','Minimum seconds') }}<input type="number" min="1" class="input" :value="c.duration.min" @change="edit(i,c => c.duration.min = Number(val($event)))" /></label><label class="text-xs">{{ tr('最长秒数','Maximum seconds') }}<input type="number" min="1" class="input" :value="c.duration.max" @change="edit(i,c => c.duration.max = Number(val($event)))" /></label></template><label class="text-xs">{{ tr('默认秒数','Default seconds') }}<input type="number" min="1" class="input" :value="c.duration.default" @change="edit(i,c => c.duration.default = val($event) ? Number(val($event)) : null)" /></label><label class="flex items-center gap-2 text-xs"><input type="checkbox" :checked="c.duration.required" @change="edit(i,c => c.duration.required = ($event.target as HTMLInputElement).checked)" />{{ tr('请求必须指定时长','Explicit duration required') }}</label></template>
         <label v-if="c.media_type === 'image'" class="text-xs">{{ tr('图片像素尺寸','Image sizes') }}<input class="input" :value="c.sizes.join(', ')" @change="edit(i,c => c.sizes = csv(val($event)))" /></label>
         <template v-if="c.media_type && c.media_type !== 'audio'"><label v-for="field in ['resolutions','aspect_ratios','qualities'] as const" :key="field" class="text-xs">{{ ({resolutions:tr('分辨率档位','Resolution tiers'),aspect_ratios:tr('宽高比','Aspect ratios'),qualities:tr('质量','Quality')})[field] }}<input class="input" :value="c[field]?.join(', ')" @change="edit(i,c => c[field] = csv(val($event)))" /></label><label class="text-xs">{{ tr('分辨率规则','Resolution policy') }}<select class="input" :value="c.resolution_policy" @change="edit(i,c => c.resolution_policy = val($event))"><option value="optional">{{ tr('可选','Optional') }}</option><option value="required">{{ tr('必填','Required') }}</option><option value="omit">{{ tr('省略','Omit') }}</option></select></label></template>

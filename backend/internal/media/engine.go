@@ -405,6 +405,15 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 			}
 		}
 	}
+	if result.Status == "unknown" && t.UpstreamID == "" && result.ID == "" && t.Snapshot.Capability.Template != nil && t.Snapshot.Capability.Template.Recover != nil {
+		// Preserve the response and leave an ambiguous submission eligible for
+		// its configured read-only lookup. Always allow one lookup after POST;
+		// subsequent unknown responses stop at the observation deadline.
+		observation := t.Snapshot.Capability.Limits.ObservationSeconds
+		if t.SubmissionClaim || observation != nil && time.Since(t.Created) < time.Duration(*observation)*time.Second {
+			result.Status = "submitting"
+		}
+	}
 	// Completion and its response persist before downloading; a crash resumes here.
 	if err = e.Store.Progress(ctx, t, result, path); err != nil {
 		return err
@@ -546,6 +555,10 @@ func (e *Engine) collectArtifacts(ctx context.Context, t StoredTask, artifacts [
 		} else {
 			artifact, path, hash, err = e.Blobs.Download(ctx, e.Adapter.Client, t, artifact, account, 512<<20)
 		}
+		var normalization *ArtifactNormalization
+		if err == nil {
+			artifact, hash, normalization, err = normalizeOutputArtifact(t.Snapshot.Capability, artifact, path, hash)
+		}
 		if err != nil {
 			if t.Snapshot.Sale.SuccessPolicy == "all_outputs" {
 				return err
@@ -561,6 +574,11 @@ func (e *Engine) collectArtifacts(ctx context.Context, t StoredTask, artifacts [
 				return err
 			}
 			continue
+		}
+		if normalization != nil {
+			if _, err = e.Blobs.WriteJSON(t.ID, "artifact-normalization-"+artifact.Key, normalization); err != nil {
+				return err
+			}
 		}
 		encrypted, err := e.Blobs.Seal([]byte(artifact.Source))
 		if err != nil {

@@ -91,7 +91,7 @@ def edit_body(payload, images):
 
 
 def submit(client, endpoint, payload, state_path, images=None):
-    operation = ("gemini_image" if endpoint.startswith("/v1beta/") else {"/v1/images/generations":"image", "/v1/images/edits":"image_edit", "/v1/videos":"video", "/v1/chat/completions":"chat_music"}.get(endpoint, "audio"))
+    operation = ("gemini_image" if endpoint.startswith("/v1beta/") else {"/v1/images/generations":"image", "/v1/images/edits":"image_edit", "/v1/videos":"video", "/v1/chat/completions":"chat_music", "/v1/audio/speech":"speech"}.get(endpoint, "audio"))
     payload = {**payload, "async": True}
     extra = {}
     if images:

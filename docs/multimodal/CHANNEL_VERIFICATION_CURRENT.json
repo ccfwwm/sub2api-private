@@ -1,20 +1,75 @@
 {
   "version": "v1.2.15",
   "status": "recorded",
-  "verified_at": "2026-10-20T14:16:54+00:00",
-  "environment": "Authenticated production discovery and direct upstream XX Base64 submission with the configured provider account; no claim of generation completion.",
+  "acceptance_state": "candidate-direct-evidence-audited-relay-pending",
+  "verified_at": "2026-10-21T03:53:19.167Z",
+  "environment": "Read-only audit of the existing direct-upstream ledger and downloaded artifacts. Production model discovery is separate historical evidence; candidate relay generation and gateway billing are not yet verified.",
+  "evidence": {
+    "report": "output/media-templates-v1215/audit-20261021/REPORT.md",
+    "details": "output/media-templates-v1215/audit-20261021/evidence.json",
+    "ledger": "output/media-templates-v1215/ledger.json",
+    "ledger_sha256": "dd12e47a645e241481df1fd3eeed382ef0d1af3f17576a7728b7dea227667729",
+    "new_network_requests_during_audit": 0
+  },
+  "budget": {
+    "limit": 16,
+    "started_attempts": 12,
+    "unique_request_hashes": 12,
+    "reused_records_excluded": 3,
+    "remaining_conservative": 4,
+    "counting": "All new started cases count, including failures, rejections and uncertain transport results. Historical reused records do not create new attempts."
+  },
+  "outcomes": {"completed": 6, "failed": 1, "uncertain": 2, "rejected": 3},
+  "billing": {
+    "scope": "direct-upstream",
+    "fee": "unverified",
+    "verified_cases": 0,
+    "gateway_reservation_settlement_refund": "unverified"
+  },
+  "artifact_audit": {
+    "verified_mp4_count": 6,
+    "byte_count_and_sha256_match": true,
+    "ffprobe": "All six: H.264 1280x720 24 fps, 192 frames / 8 seconds; AAC 48 kHz stereo.",
+    "full_decode": "All six decode without video/audio errors.",
+    "visual_sample": "Frames at 1, 4 and 7 seconds were checked for recognizable reference logo, changing framing and nonblank content. This is a sample, not a complete semantic or audio review."
+  },
+  "relay_acceptance": {
+    "status": "pending",
+    "scope": "Candidate gateway path after deployment; no direct-upstream result establishes relay compatibility or billing.",
+    "models": ["Veo", "XXsedanco2.5S", "Grok"],
+    "constraints": "Use only the remaining authorized budget; one submission per new case, no automatic retry, preserve original models, materials and duration. TT is excluded."
+  },
   "cases": [
     {
       "label": "production-model-discovery",
       "verification": "real_connection",
       "status": "completed",
-      "scope": "Authenticated gateway model list contains XXsedanco2.5S."
+      "scope": "Historical authenticated gateway model-list discovery contains XXsedanco2.5S; discovery does not verify generation."
     },
     {
       "label": "xx-five-reference-base64-submission",
       "verification": "real_connection",
+      "status": "historical-acceptance-only",
+      "scope": "Historical direct provider POST /v1/videos accepted 1 video and 4 image MIME Data URL strings, seconds 5, HTTP 200 with task id. This is not a verified downloadable XX artifact or a candidate relay acceptance."
+    },
+    {
+      "label": "yunfei-veo-existing-artifacts",
+      "verification": "existing_artifact_audit",
       "status": "completed",
-      "scope": "Direct provider POST /v1/videos accepted 1 video and 4 image MIME Data URL strings, seconds 5, HTTP 200 with task id. Same input was locally rejected by v1.2.14; corrected relay is verified after deployment."
+      "scope": "Direct-upstream gemini-veo-3.1-fast, 8 seconds: five successful Base64 forms plus one URL control produced the six audited MP4s. Data-URL string, Data-URL url object, raw string, raw url object and raw b64_json object succeeded; Data-URL b64_json object received HTTP 503."
+    },
+    {
+      "label": "v6k-xx-existing-attempts",
+      "verification": "existing_ledger_audit",
+      "status": "no-verified-downloadable-artifact",
+      "scope": "XXsedanco2.5S remains at five materials and 5 seconds. Current attempts include one final failure, two rejections and two uncertain transport results; no successful downloaded XX artifact is established. Reused URL completion had an artifact-download timeout."
+    },
+    {
+      "label": "uncertain-original-requests",
+      "verification": "existing_ledger_audit",
+      "status": "unresolved-no-resubmission",
+      "cases": ["v6k-data-url-b64-json-object", "v6k-raw-string"],
+      "scope": "Both transport failures have neither HTTP result nor task ID; original-task queries are unavailable. They were not resubmitted."
     }
   ]
 }

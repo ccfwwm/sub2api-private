@@ -141,8 +141,18 @@ func TestMediaUnifiedMappingRoundtripAndRemoval(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, creds["model_mapping"])
 	require.Empty(t, updated["media_models"])
-	_, _, err = NormalizeMediaAccountConfig(PlatformImageVideo, map[string]any{"model_mapping": map[string]any{"unknown": "unknown"}}, nil, true)
-	require.ErrorContains(t, err, "interface type")
+	creds, updated, err = NormalizeMediaAccountConfig(PlatformImageVideo, map[string]any{"model_mapping": map[string]any{"unknown": "provider-unknown"}}, nil, true)
+	require.NoError(t, err)
+	require.Equal(t, "provider-unknown", creds["model_mapping"].(map[string]any)["unknown"])
+	caps, err = accountMediaModels(updated)
+	require.NoError(t, err)
+	require.Len(t, caps, 1)
+	require.False(t, caps[0].Enabled)
+	require.Equal(t, "unknown", caps[0].Model)
+	require.Equal(t, "provider-unknown", caps[0].UpstreamModel)
+	require.Equal(t, "待配置协议模板", caps[0].ValidationStatus)
+	require.Empty(t, caps[0].Adapter)
+	require.Nil(t, caps[0].TemplateRef)
 }
 func TestMediaMinimumDurationAndParameterValidation(t *testing.T) {
 	for model, want := range map[string]int{"omni-flash": 4, "veo-3.1-lite": 8} {
@@ -152,8 +162,14 @@ func TestMediaMinimumDurationAndParameterValidation(t *testing.T) {
 		_, err := media.Normalize(cap, "video", p)
 		require.NoError(t, err)
 		p["untrusted"] = 1
-		_, err = media.Normalize(cap, "video", p)
-		require.ErrorContains(t, err, "unknown_parameter")
+		req, err := media.Normalize(cap, "video", p)
+		require.NoError(t, err)
+		require.Equal(t, float64(1), req.Parameters["untrusted"])
+		for _, seconds := range []any{0, -1, 1.5, 3601, "invalid"} {
+			p["seconds"] = seconds
+			_, err = media.Normalize(cap, "video", p)
+			require.ErrorContains(t, err, "invalid_seconds")
+		}
 	}
 }
 

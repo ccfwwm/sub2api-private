@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,6 +40,21 @@ type MonitorMediaModel struct {
 }
 
 func monitorMediaConfig(body map[string]any) (MonitorMediaConfig, error) {
+	c, err := parseMonitorMediaConfig(body)
+	if err != nil || c.Mode != "generation" {
+		return c, err
+	}
+	for model, entry := range c.Models {
+		if _, _, err := normalizeMonitorMediaModel(model, entry); err != nil {
+			return c, monitorMediaConfigError(model, err)
+		}
+	}
+	return c, nil
+}
+
+// Existing journals must remain readable even when their saved monitor settings
+// no longer satisfy the requirements for a new generation.
+func parseMonitorMediaConfig(body map[string]any) (MonitorMediaConfig, error) {
 	c := MonitorMediaConfig{Mode: "connection", Models: map[string]MonitorMediaModel{}}
 	if len(body) == 0 {
 		return c, nil
@@ -64,9 +78,6 @@ func monitorMediaConfig(body map[string]any) (MonitorMediaConfig, error) {
 			}
 			continue
 		}
-		if _, _, err := normalizeMonitorMediaModel(model, entry); err != nil {
-			return c, monitorMediaConfigError(model, err)
-		}
 	}
 	return c, nil
 }
@@ -76,13 +87,10 @@ func monitorMediaConfigError(model string, err error) error {
 }
 
 func normalizeMonitorMediaModel(model string, entry MonitorMediaModel) (media.Capability, media.Request, error) {
-	cap, known := media.ModelPreset(model)
-	if entry.Capability != nil {
-		cap, known = media.CapabilityDefaults(*entry.Capability), true
+	if entry.Capability == nil || entry.Capability.Model != model || strings.TrimSpace(entry.Capability.UpstreamModel) == "" {
+		return media.Capability{}, media.Request{}, fmt.Errorf("configure an exact media capability for model %s", model)
 	}
-	if !known || cap.Model != model {
-		return cap, media.Request{}, fmt.Errorf("configure an exact media capability for model %s", model)
-	}
+	cap := media.CapabilityDefaults(*entry.Capability)
 	if err := media.ValidateCapability(cap, false); err != nil {
 		return cap, media.Request{}, err
 	}
@@ -115,7 +123,7 @@ func normalizeMonitorMediaModel(model string, entry MonitorMediaModel) (media.Ca
 			return cap, media.Request{}, fmt.Errorf("audio monitor duration must be an integer between 1 and 600")
 		}
 	}
-	for _, key := range []string{"image", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "reference_images", "reference_videos", "reference_audios", "first_frame", "last_frame", "messages", "contents", "metadata", "generationConfig", "async", "stream"} {
+	for _, key := range []string{"image", "images", "image_url", "image_urls", "input_reference", "videos", "audios", "reference_image_urls", "reference_video_urls", "reference_audio_urls", "reference_images", "reference_videos", "reference_audios", "mask", "masks", "first_frame", "last_frame", "messages", "contents", "metadata", "generationConfig", "async", "stream"} {
 		if _, ok := entry.Parameters[key]; ok {
 			return cap, media.Request{}, fmt.Errorf("monitor parameter %s is not supported", key)
 		}
@@ -264,15 +272,8 @@ type monitorMediaTask struct {
 	Message        string           `json:"message,omitempty"`
 	Capability     media.Capability `json:"capability"`
 	Account        media.Account    `json:"account"`
+	Operation      string           `json:"operation,omitempty"`
 	IdempotencyKey string           `json:"idempotency_key,omitempty"`
-}
-
-func monitorTaskAPI(m *ChannelMonitor, c MonitorMediaConfig) bool {
-	u, err := url.Parse(m.Endpoint)
-	if err != nil {
-		return false
-	}
-	return c.TaskAPI || u.Hostname() == "code.aicodeme.xyz" || u.Hostname() == "code.aicodeme.cn" || u.Hostname() == "hkcode.aicodeme.xyz"
 }
 
 func (s *ChannelMonitorService) monitorMediaStatePath(id int64, model string) string {
@@ -333,7 +334,7 @@ func (s *ChannelMonitorService) runMediaMonitor(ctx context.Context, m *ChannelM
 		return []*CheckResult{{Model: m.PrimaryModel, Status: MonitorStatusPending, Message: "media: detection already running", CheckedAt: time.Now()}}
 	}
 	defer mu.Unlock()
-	c, err := monitorMediaConfig(m.BodyOverride)
+	c, err := parseMonitorMediaConfig(m.BodyOverride)
 	if err != nil {
 		return []*CheckResult{{Model: m.PrimaryModel, Status: MonitorStatusError, Message: "media: invalid configuration", CheckedAt: time.Now()}}
 	}
@@ -356,28 +357,8 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	res := &CheckResult{Model: model, Status: MonitorStatusError, CheckedAt: time.Now()}
 	start := time.Now()
 	defer func() { ms := int(time.Since(start).Milliseconds()); res.LatencyMs = &ms }()
-	entry := c.Models[model]
-	if s.mediaTemplateStore != nil {
-		if entry.Capability == nil {
-			res.Message = "generation: select an explicit protocol template; no submission"
-			return res
-		}
-		resolved, err := s.mediaTemplateStore.ResolveTemplates(ctx, []media.Capability{*entry.Capability})
-		if err != nil || resolved[0].Template == nil {
-			res.Message = "generation: published protocol template required; no submission"
-			return res
-		}
-		entry.Capability = &resolved[0]
-	}
-	cap, req, err := normalizeMonitorMediaModel(model, entry)
-	if err != nil {
-		res.Message = "generation: invalid model parameters"
-		return res
-	}
-	raw, _ := json.Marshal([]any{m.Endpoint, m.APIKey, m.ExtraHeaders, cap, req, c.Revision})
-	fingerprint := fmt.Sprintf("%x", sha256.Sum256(raw))
 	path := s.monitorMediaStatePath(m.ID, model)
-	task := monitorMediaTask{Fingerprint: fingerprint, StartedAt: start, State: "submitting", Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}}
+	var task monitorMediaTask
 	stored, readErr := os.ReadFile(path)
 	if readErr == nil {
 		plain, decryptErr := s.encryptor.Decrypt(string(stored))
@@ -385,33 +366,48 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message = "generation: task journal unreadable; no resubmission"
 			return res
 		}
-		if task.Fingerprint != fingerprint {
-			sameOwner := task.Account.BaseURL == m.Endpoint && task.Account.Key == m.APIKey
-			if task.State == "completed" {
-				task = monitorMediaTask{Fingerprint: fingerprint, Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}, Revision: c.Revision, State: "completed"}
-			} else if sameOwner && task.UpstreamID != "" && task.ResultStatus != MonitorStatusFailed {
-				// Updated defaults must not orphan the accepted original task.
-				task.Fingerprint = fingerprint
-			} else if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed {
-				task = monitorMediaTask{Fingerprint: fingerprint, Capability: cap, Account: media.Account{BaseURL: m.Endpoint, Key: m.APIKey}, Revision: c.Revision}
-				readErr = os.ErrNotExist
-			} else {
-				res.Message = "generation: 配置已变化，需核对原任务后恢复；no resubmission"
-				return res
-			}
+		if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed {
+			readErr = os.ErrNotExist
+		} else if task.State != "completed" && (task.Account.BaseURL != m.Endpoint || task.Account.Key != m.APIKey) {
+			res.Message = "generation: 配置已变化，需核对原任务后恢复；no resubmission"
+			return res
 		}
 	} else if !os.IsNotExist(readErr) {
 		res.Message = "generation: task journal unavailable; no submission"
 		return res
 	}
 	adapter := &media.Adapter{Client: client}
-	task.Account.TaskAPI = monitorTaskAPI(m, c)
 	wasPending := task.State != "completed" && !os.IsNotExist(readErr)
 	var upstream media.UpstreamResult
+	var err error
 	if os.IsNotExist(readErr) || task.State == "completed" {
-		task.StartedAt, task.State, task.UpstreamID, task.Revision = start, "submitting", "", c.Revision
-		task.Capability, task.Fingerprint = cap, fingerprint
-		task.IdempotencyKey = "monitor-" + uuid.NewString()
+		entry := c.Models[model]
+		if entry.Capability == nil {
+			res.Message = "generation: select an explicit protocol template; no submission"
+			return res
+		}
+		if s.mediaTemplateStore != nil {
+			resolved, resolveErr := s.mediaTemplateStore.ResolveTemplates(ctx, []media.Capability{*entry.Capability})
+			if resolveErr != nil || len(resolved) != 1 || resolved[0].Template == nil {
+				res.Message = "generation: published protocol template required; no submission"
+				return res
+			}
+			entry.Capability = &resolved[0]
+		}
+		if entry.Capability.Template == nil || entry.Capability.Template.Status != "enabled" {
+			res.Message = "generation: published protocol template required; no submission"
+			return res
+		}
+		cap, req, normalizeErr := normalizeMonitorMediaModel(model, entry)
+		if normalizeErr != nil {
+			res.Message = "generation: invalid model parameters"
+			return res
+		}
+		raw, _ := json.Marshal([]any{m.Endpoint, m.APIKey, m.ExtraHeaders, cap, req, c.Revision})
+		task = monitorMediaTask{StartedAt: start, State: "submitting", Revision: c.Revision, Capability: cap,
+			Fingerprint: fmt.Sprintf("%x", sha256.Sum256(raw)), Operation: string(req.Operation),
+			IdempotencyKey: "monitor-" + uuid.NewString(),
+			Account:        media.Account{BaseURL: m.Endpoint, Key: m.APIKey, TaskAPI: c.TaskAPI}}
 		task.Account.IdempotencyKey = task.IdempotencyKey
 		if s.saveMonitorMediaTask(path, task) != nil {
 			res.Message = "generation: cannot persist acceptance journal; no submission"
@@ -427,9 +423,10 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		}
 		upstream, err = adapter.Submit(ctx, cap, req, task.Account)
 	} else {
-		if task.UpstreamID == "" && task.Account.TaskAPI && task.IdempotencyKey != "" {
+		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
+		if task.UpstreamID == "" && canRecover && task.IdempotencyKey != "" {
 			task.Account.IdempotencyKey = task.IdempotencyKey
-			upstream, err = adapter.Recover(ctx, task.Account, task.Capability, string(req.Operation))
+			upstream, err = recoverMonitorMediaTask(ctx, adapter, task)
 			if err != nil || upstream.ID == "" {
 				res.Message = "generation: 正在核对原任务；未重新提交 (no resubmission)"
 				return res
@@ -499,6 +496,33 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	}
 	res.Message = truncateMessage(res.Message)
 	return res
+}
+
+func recoverMonitorMediaTask(ctx context.Context, adapter *media.Adapter, task monitorMediaTask) (media.UpstreamResult, error) {
+	cap := task.Capability
+	op := task.Operation
+	if op == "" && len(cap.Operations) == 1 {
+		op = cap.Operations[0]
+	}
+	if cap.Template == nil && task.Account.TaskAPI {
+		// Read-only compatibility for journals written before templates existed.
+		// This endpoint is never used to infer a protocol for a new submission.
+		if op == "" {
+			return media.UpstreamResult{Status: "unknown", Diagnostic: "Original operation was not recorded; no resubmission"}, nil
+		}
+		cap.Template = &media.ProtocolTemplate{Auth: media.TemplateAuth{Mode: "bearer"},
+			Recover: &media.TemplateEndpoint{Method: http.MethodGet, Path: "/v1/media/tasks/recover",
+				Query: map[string]string{"idempotency_key": "{idempotency_key}", "operation": op}},
+			Response: media.TemplateResponse{TaskID: []string{"id", "task_id"}, Status: []string{"status", "state"},
+				States: map[string]string{"queued": "in_progress", "pending": "in_progress", "running": "in_progress", "processing": "in_progress", "in_progress": "in_progress", "completed": "completed", "success": "completed", "succeeded": "completed", "failed": "failed", "error": "failed", "cancelled": "failed", "canceled": "failed"}}}
+	}
+	result, err := adapter.Recover(ctx, task.Account, cap, op)
+	if err == nil && task.Capability.Template == nil && result.ID != "" && result.Status == "completed" {
+		// The legacy recovery endpoint identifies the original task; fetch its
+		// complete result with the original parser before validating artifacts.
+		return adapter.Poll(ctx, media.StoredTask{UpstreamID: result.ID, Snapshot: media.Snapshot{Capability: task.Capability}}, task.Account)
+	}
+	return result, err
 }
 
 // Keep the upstream's actionable error instead of replacing a definite 4xx

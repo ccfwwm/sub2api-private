@@ -32,4 +32,14 @@ describe('MediaPriceEditor', () => {
     await wrapper.findAll('button').find(button => button.text().includes('Add composite'))!.trigger('click')
     expect((wrapper.emitted('update')!.at(-1)![0] as any).rules[0].charges).toHaveLength(2)
   })
+  it('allows speech pricing by measured Unicode input characters', async () => {
+    const wrapper = mount(MediaPriceEditor, { props: { config: config() }, global: { plugins: [i18n()] } })
+    await wrapper.findAll('label').find(label => label.text().includes('Billing unit'))!.find('select').setValue('input_character')
+    const changed = wrapper.emitted('update')!.at(-1)![0] as any
+    expect(changed.rules[0].charges[0]).toMatchObject({ unit: 'input_character', quantity_source: 'input_characters' })
+    await wrapper.setProps({ config: changed })
+    const source = wrapper.findAll('label').find(label => label.text().includes('Quantity source'))!.find('select')
+    expect(source.findAll('option').map(option => option.element.value)).toEqual(['input_characters'])
+    wrapper.unmount()
+  })
 })

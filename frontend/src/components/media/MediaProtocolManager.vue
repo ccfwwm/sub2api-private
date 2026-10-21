@@ -13,9 +13,10 @@ const selected = ref<MediaConfigRecord | null>(null), history = ref<MediaConfigR
 const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), result = ref<unknown>()
 const review = ref(false), upgrades = ref<string[]>([]), bulkModels = ref(''), builtinFields=ref<string[]>([])
 const builtinChanges=computed(()=>Object.keys(selected.value?.builtin_current ?? {}).filter(key=>!['id','version','status'].includes(key)&&JSON.stringify(selected.value?.builtin_current?.[key])!==JSON.stringify(draft.value?.[key])))
-function loadBuiltin(all=false) {if(!draft.value||!selected.value?.builtin_current)return;const next=structuredClone(draft.value);for(const key of all?Object.keys(selected.value.builtin_current):builtinFields.value) {if(!['id','version','status'].includes(key))next[key]=structuredClone(selected.value.builtin_current[key])};json.value=JSON.stringify(next,null,2)}
+function loadBuiltin(all=false) {if(!draft.value||!selected.value?.builtin_current)return;const next=structuredClone(draft.value);for(const key of all?Object.keys(selected.value.builtin_current):builtinFields.value) {if(!['id','version','status'].includes(key))next[key]=structuredClone(selected.value.builtin_current[key])}json.value=JSON.stringify(next,null,2)}
 const previewInput = ref('{"model":"preview","prompt":"参考素材测试","seconds":5,"images":[]}')
 const sample = ref('{}'), online = ref(false), operation = ref('video'), upstreamModel = ref('preview')
+const previewKeyID = ref(''), previewAccountID = ref('')
 const effectiveGroup=ref(String(route.query.group_id || '')), effectiveResult=ref<unknown>()
 const keyID = ref(''), paid = ref(false), discoveryAccount = ref(''), discoveryGroup = ref('')
 // Retain the key after a timeout: clicking again cannot create another paid task.
@@ -54,6 +55,32 @@ async function save(publish: boolean, sourceVersion?: number) {
   const row = await api.save(kind.value, { id, expected_version: selected.value?.id === id ? selected.value.version : 0, config: draft.value, publish, source_version: sourceVersion, upgrade_bindings: publish ? upgrades.value : [] })
   await refresh(); await select(row)
 }
+async function saveImported() {
+  if (!draft.value) throw new Error('需要有效 JSON')
+  const object = { ...draft.value, id: String(draft.value.id || '') }
+  if (!object.id) throw new Error('导入配置缺少 ID')
+  const row = await api.import(kind.value, { id: object.id, expected_version: 0, config: object, publish: false })
+  await refresh(); await select(row)
+}
+async function publishDraft() {
+  if (!draft.value) throw new Error('需要有效 JSON')
+  const id = String(draft.value.id || '')
+  if (!id) throw new Error('配置缺少 ID')
+  let current = selected.value?.id === id ? selected.value : null
+  if (!current) {
+    current = await api.save(kind.value, { id, expected_version: 0, config: draft.value, publish: false })
+    // Keep the saved draft if publication fails so retrying uses its version.
+    selected.value = current
+    json.value = JSON.stringify(current.config, null, 2)
+  }
+  const row = await api.publish(kind.value, { id, expected_version: current.version, config: draft.value, publish: true, upgrade_bindings: upgrades.value })
+  await refresh(); await select(row)
+}
+async function rollbackVersion(sourceVersion: number) {
+  if (!selected.value) return
+  const row = await api.rollback(kind.value, { id: selected.value.id, expected_version: selected.value.version, source_version: sourceVersion })
+  await refresh(); await select(row)
+}
 async function download() {
   if (!selected.value) return
   const data = await api.export(kind.value, selected.value.id), url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
@@ -65,7 +92,15 @@ async function upload(event: Event) {
   if (!object || typeof object !== 'object' || !object.id) throw new Error('无效的模板或绑定文件')
   json.value = JSON.stringify({ ...object, id: `${object.id}-import-${Date.now()}` }, null, 2); selected.value = null; history.value = []
 }
-async function preview() { result.value = await api.preview({ template: draft.value, operation: operation.value, upstream_model: upstreamModel.value, model: JSON.parse(previewInput.value).model || 'preview', request: JSON.parse(previewInput.value), rules: [], sample_response: JSON.parse(sample.value), measure_media: online.value }) }
+async function preview(effective = false) {
+  const request = JSON.parse(previewInput.value)
+  if (effective) {
+    if (!Number.isSafeInteger(Number(previewKeyID.value)) || Number(previewKeyID.value) <= 0) throw new Error('实际绑定预览需要有效的 API Key ID')
+    result.value = await api.preview({ mode: 'effective', api_key_id: Number(previewKeyID.value), ...(previewAccountID.value ? { account_id: Number(previewAccountID.value) } : {}), operation: operation.value, request, sample_response: JSON.parse(sample.value), measure_media: online.value })
+  } else {
+    result.value = await api.preview({ template: draft.value, operation: operation.value, upstream_model: upstreamModel.value, model: request.model || 'preview', request, rules: [], sample_response: JSON.parse(sample.value), measure_media: online.value })
+  }
+}
 function bindTemplate(id: string) { const row = templates.value.find(item => item.id === id); set('template', row ? { id, version: row.published_version } : null) }
 async function bulkBind() {
   if (!draft.value) return
@@ -121,11 +156,23 @@ onMounted(() => action(refresh))
           <p class="text-xs text-gray-500 sm:col-span-2">表单直接修改完整 JSON 对象；切换模式保留高级字段。服务端以同一版本 schema 校验。模板只引用账号密钥，不能填写真实密钥。</p>
         </div>
         <textarea v-if="mode === 'json' || !draft" v-model="json" class="input min-h-[460px] w-full font-mono text-xs" aria-label="完整协议配置 JSON" />
-        <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(() => save(false), true)">保存草稿</button><button class="btn btn-primary" :disabled="busy || !draft" @click="review = true">审阅并发布</button><button v-if="selected" class="btn btn-secondary" :disabled="busy" @click="action(async () => { await api.archive(kind, selected!.id, selected!.version); await refresh() }, true)">归档（保留固定版本）</button></div>
-        <div v-if="review" class="space-y-2 rounded border border-blue-300 p-3"><p>变更字段：{{ changes.join(', ') || '无' }}</p><div v-for="key in changes" :key="key" class="grid gap-2 sm:grid-cols-2"><pre class="overflow-auto text-xs">{{ key }} 之前：{{ JSON.stringify(selected?.config[key], null, 2) }}</pre><pre class="overflow-auto text-xs">之后：{{ JSON.stringify(draft?.[key], null, 2) }}</pre></div><p>在途任务与未选绑定继续使用原版本。</p><label v-for="row in affected" :key="row.id" class="block text-sm"><input v-model="upgrades" type="checkbox" :value="row.id" /> 同时升级 {{ row.id }}（{{ row.config.model || '分组默认' }}）</label><button class="btn btn-primary" :disabled="busy" @click="action(() => save(true), true)">发布不可变新版本</button></div>
+        <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(() => save(false), true)">保存草稿</button><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(saveImported, true)">作为新配置导入</button><button class="btn btn-primary" :disabled="busy || !draft" @click="review = true">审阅并发布</button><button v-if="selected" class="btn btn-secondary" :disabled="busy" @click="action(async () => { await api.archive(kind, selected!.id, selected!.version); await refresh() }, true)">归档（保留固定版本）</button></div>
+        <div v-if="review" class="space-y-2 rounded border border-blue-300 p-3"><p>变更字段：{{ changes.join(', ') || '无' }}</p><div v-for="key in changes" :key="key" class="grid gap-2 sm:grid-cols-2"><pre class="overflow-auto text-xs">{{ key }} 之前：{{ JSON.stringify(selected?.config[key], null, 2) }}</pre><pre class="overflow-auto text-xs">之后：{{ JSON.stringify(draft?.[key], null, 2) }}</pre></div><p>在途任务与未选绑定继续使用原版本。</p><label v-for="row in affected" :key="row.id" class="block text-sm"><input v-model="upgrades" type="checkbox" :value="row.id" /> 同时升级 {{ row.id }}（{{ row.config.model || '分组默认' }}）</label><button class="btn btn-primary" :disabled="busy" @click="action(publishDraft, true)">发布不可变新版本</button></div>
         <details v-if="selected?.builtin_current"><summary>随版本提供的内置模板差异</summary><p class="text-xs">管理员配置保持不变。选择字段载入编辑器，审阅发布后才产生新版本；未选择的绑定继续固定原版本。</p><label v-for="key in builtinChanges" :key="key" class="block text-sm"><input v-model="builtinFields" type="checkbox" :value="key" /> {{key}}<pre class="overflow-auto text-xs">{{JSON.stringify(selected.builtin_current[key],null,2)}}</pre></label><button class="btn btn-secondary" @click="loadBuiltin()">合并所选内置字段</button><button class="btn btn-secondary" @click="loadBuiltin(true)">载入内置原版并审阅</button></details>
-        <details v-if="history.length"><summary>历史、内置原版对比与回滚</summary><div v-for="row in history" :key="row.version" class="my-2 rounded border p-2"><p>v{{ row.version }} · {{ row.status }} · {{ row.config.builtin_revision ? '内置来源' : '管理员配置' }}</p><button class="btn btn-secondary" @click="json = JSON.stringify(row.config, null, 2)">载入此版本并比较</button><button class="btn btn-secondary" @click="action(() => save(true, row.version), true)">以新版本重新发布</button><details><summary>查看配置</summary><pre class="max-h-64 overflow-auto text-xs">{{ JSON.stringify(row.config, null, 2) }}</pre></details></div></details>
+        <details v-if="history.length"><summary>历史、内置原版对比与回滚</summary><div v-for="row in history" :key="row.version" class="my-2 rounded border p-2"><p>v{{ row.version }} · {{ row.status }} · {{ row.config.builtin_revision ? '内置来源' : '管理员配置' }}</p><button class="btn btn-secondary" @click="json = JSON.stringify(row.config, null, 2)">载入此版本并比较</button><button class="btn btn-secondary" @click="action(() => rollbackVersion(row.version), true)">以此版本回滚并发布</button><details><summary>查看配置</summary><pre class="max-h-64 overflow-auto text-xs">{{ JSON.stringify(row.config, null, 2) }}</pre></details></div></details>
         <details v-if="kind === 'bindings'"><summary>批量发布相同模板</summary><p class="text-xs">每行一个公开模型，默认上游映射为相同 ID。每项仍独立检查账号、版本及冲突；价格保持原设置。</p><textarea v-model="bulkModels" class="input min-h-24 w-full" /><button class="btn btn-primary" :disabled="busy || !draft" @click="action(bulkBind, true)">发布这些模型的绑定</button></details>
+        <details>
+          <summary>实际绑定、估价与发送摘要（只读）</summary>
+          <div class="space-y-3 py-3">
+            <p class="text-sm">按已有 API Key 的真实分组与价格解析已发布配置，展示覆盖差异、模板和绑定版本及准备发送的摘要。当前编辑中的草稿不参与；预览不预留额度、不创建任务、不调用生成接口。</p>
+            <label class="block">API Key ID<input v-model="previewKeyID" type="number" min="1" class="input" aria-label="预览 API Key ID" /></label>
+            <label class="block">限定候选账号 ID（可选）<input v-model="previewAccountID" type="number" min="1" class="input" aria-label="预览候选账号 ID" /></label>
+            <label class="block">操作<input v-model="operation" class="input" aria-label="实际绑定预览操作" /></label>
+            <label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" aria-label="实际绑定预览输入" /></label>
+            <label class="block text-sm"><input v-model="online" type="checkbox" /> 允许素材 GET 及可信测量；未勾选时需要测量的项目会明确列出，不推测价格。</label>
+            <button class="btn btn-secondary" :disabled="busy || !previewKeyID" @click="action(() => preview(true))">预览实际绑定与估价</button>
+          </div>
+        </details>
         <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览</button><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过正常任务和计费链路。草稿不会直接发送。</p><input v-model="keyID" class="input" placeholder="用于记账的 API Key ID" /><label class="block text-sm"><input v-model="paid" type="checkbox" /> 确认本次生成可能收费</label><p class="break-all text-xs">幂等 ID：{{ testKey }}</p><button class="btn btn-primary" :disabled="busy || !paid || !keyID" @click="action(async () => { result = await api.test({ api_key_id: Number(keyID), operation, request: JSON.parse(previewInput), confirm_paid_submission: paid }, testKey) }, true)">提交 / 查询原测试</button><button class="btn btn-secondary" @click="newTest">明确开始另一次测试</button></div></details>
         <pre v-if="result" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify(result, null, 2) }}</pre>
       </div>

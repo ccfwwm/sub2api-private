@@ -54,6 +54,9 @@ func (b *BlobStore) CaptureTestArtifact(ctx context.Context, client *http.Client
 		artifact, path, hash, err = b.Download(ctx, client, t, artifact, account, 256<<20)
 	}
 	if err == nil {
+		artifact, hash, _, err = normalizeOutputArtifact(cap, artifact, path, hash)
+	}
+	if err == nil {
 		err = validateArtifact(ctx, path, &artifact)
 	}
 	artifact.Available = err == nil

@@ -331,7 +331,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	if mime != "" {
 		req.Header.Set("Content-Type", mime)
 	}
-	response, e := a.Client.Do(req)
+	response, e := a.Client.Do(protectMediaCredentials(req, account.Key))
 	if e != nil {
 		if submission {
 			reason := "传输中断"
@@ -397,6 +397,9 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	}
 	if cap.Template != nil && cap.Template.Mode == "sync_binary" {
 		mime := strings.Split(response.Header.Get("Content-Type"), ";")[0]
+		if pcmMIMEConfigured(cap.Template.Response.PCMToWAV, response.Header.Get("Content-Type")) {
+			mime = response.Header.Get("Content-Type")
+		}
 		if !strings.HasPrefix(mime, cap.MediaType+"/") || len(raw) == 0 {
 			return UpstreamResult{Status: "unknown", Diagnostic: "Successful response was not the configured media type; do not resubmit"}, nil
 		}
@@ -410,6 +413,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		return UpstreamResult{Status: "unknown", Diagnostic: "Non-JSON successful response; acceptance requires reconciliation"}, nil
 	}
 	result := parseResult(object, cap)
+	result.Diagnostic, _ = SafeReviewValue(result.Diagnostic, []string{account.Key}, 0).(string)
 	if submission && result.Accepted && account.ObserveSubmission != nil {
 		if err := account.ObserveSubmission(Submission{Stage: "accepted"}); err != nil {
 			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: "Acceptance receipt unavailable; reconcile original task"}, nil

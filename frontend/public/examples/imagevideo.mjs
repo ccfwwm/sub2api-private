@@ -42,7 +42,7 @@ async function save(path, state, exclusive = false) {
 }
 
 export async function submit(client, endpoint, payload, statePath, images = []) {
-  const operation = endpoint.startsWith('/v1beta/') ? 'gemini_image' : ({ '/v1/images/generations':'image', '/v1/images/edits':'image_edit', '/v1/videos':'video', '/v1/chat/completions':'chat_music' }[endpoint] || 'audio')
+  const operation = endpoint.startsWith('/v1beta/') ? 'gemini_image' : ({ '/v1/images/generations':'image', '/v1/images/edits':'image_edit', '/v1/videos':'video', '/v1/chat/completions':'chat_music', '/v1/audio/speech':'speech' }[endpoint] || 'audio')
   payload = { ...payload, async: true }
   if (images.length) {
     if (endpoint !== '/v1/images/edits') throw new Error('Image uploads require /v1/images/edits with configured reference limits')

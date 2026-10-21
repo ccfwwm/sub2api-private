@@ -1,21 +1,95 @@
-import {describe,it,expect} from 'vitest'
+import {beforeEach,describe,it,expect,vi} from 'vitest'
+import {flushPromises,mount} from '@vue/test-utils'
 import {accountMediaCapabilities,newMediaCapability} from '@/types/media'
+import MediaAccountModelsEditor from '../MediaAccountModelsEditor.vue'
 
-describe('Unified media presets',()=>{
- it('loads Omni and Veo while unknown models require an explicit interface',()=>{
-  expect(newMediaCapability('omni-flash')).toMatchObject({adapter:'yunfei_omni',enabled:false,duration:{values:[4,6,8,10]}})
-  expect(newMediaCapability('veo-3.1-fast').duration.values).toEqual([8])
-  expect(newMediaCapability('unknown').adapter).toBe('')
+const templateAPI = vi.hoisted(() => ({list:vi.fn(),history:vi.fn()}))
+vi.mock('@/api/media-protocols',()=>({mediaProtocolsAPI:templateAPI}))
+vi.mock('@/api/admin',()=>({adminAPI:{accounts:{}}}))
+vi.mock('vue-i18n',async original=>({...await original<Record<string,unknown>>(),useI18n:()=>({locale:{value:'zh'}})}))
+
+describe('动态媒体模板配置',()=>{
+ it('does not infer a protocol from model names or upstream domains',()=>{
+  const named = newMediaCapability('veo-3.1-fast')
+  const renamed = newMediaCapability('veo-3.1-fast-copy')
+  expect(named.adapter).toBe(''); expect(renamed.adapter).toBe('')
+  expect(named.enabled).toBe(false); expect(named.duration.values).toEqual([])
+  expect(accountMediaCapabilities({media_models:[named]}, {base_url:'https://img.yunfei.best'})[0].adapter).toBe('')
  })
- it('preserves removal and legacy aliases',()=>{
-  expect(accountMediaCapabilities({media_models:[]},{model_mapping:{old:'omni-flash'}})).toEqual([])
-  expect(accountMediaCapabilities({}, {model_mapping:{alias:'omni-flash'}})[0]).toMatchObject({model:'alias',upstream_model:'omni-flash',adapter:'yunfei_omni'})
+ it('keeps explicit template references and user overrides unchanged',()=>{
+  const cap=newMediaCapability('public-video'); cap.adapter='admin_template'; cap.template_ref={id:'generic-video-array',version:3}; cap.enabled=true; cap.limits.max_concurrent_tasks=7
+  const [updated]=accountMediaCapabilities({media_models:[cap]}, {base_url:'https://another-upstream.invalid'})
+  expect(updated).toMatchObject({adapter:'admin_template',template_ref:{id:'generic-video-array',version:3},enabled:true})
+  expect(updated.limits.max_concurrent_tasks).toBe(7)
  })
- it('repairs only placeholders and preserves enabled flag and overrides',()=>{
-  const cap=newMediaCapability('unknown');cap.model=cap.upstream_model='omni-flash';cap.adapter='v6k_video_gateway';cap.media_type='video';cap.enabled=true;cap.limits.max_concurrent_tasks=7
-  const [updated]=accountMediaCapabilities({media_models:[cap]}, {base_url:'https://img.yunfei.best'})
-  expect(updated.adapter).toBe('yunfei_omni');expect(updated.enabled).toBe(true);expect(updated.limits.max_concurrent_tasks).toBe(7)
-  cap.duration.default=30
-  expect(accountMediaCapabilities({media_models:[cap]},{base_url:'https://img.yunfei.best'})[0].adapter).toBe('v6k_video_gateway')
+ it('preserves explicit model mappings without selecting a provider adapter',()=>{
+  expect(accountMediaCapabilities({media_models:[]},{model_mapping:{alias:'upstream-model'}})).toEqual([])
+  const [mapped]=accountMediaCapabilities({}, {model_mapping:{alias:'upstream-model'}})
+  expect(mapped).toMatchObject({model:'alias',upstream_model:'upstream-model',adapter:'',enabled:false})
+ })
+})
+
+describe('账号模板输出配置',()=>{
+ beforeEach(()=>{
+  templateAPI.history.mockResolvedValue([])
+  templateAPI.list.mockResolvedValue([
+   {id:'multi-parts',published_version:2,config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']},published_config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']}},
+   {id:'gemini-audio-parts',published_version:1,config:{name:'Audio parts',media_types:['audio'],operations:['audio']}}
+  ])
+ })
+ async function editor(cap=newMediaCapability('arbitrary-model')) {
+  const wrapper=mount(MediaAccountModelsEditor,{props:{modelValue:[cap],baseUrl:'https://example.invalid'},global:{stubs:{AccountTestModal:true}}})
+  await flushPromises()
+  return wrapper
+ }
+ it('requires explicit output type and operations for a multi-type template',async()=>{
+  const wrapper=await editor()
+  await wrapper.get('[aria-label="协议模板"]').setValue('multi-parts')
+  const selected=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(selected[0]).toMatchObject({media_type:'',operations:[],template_ref:{id:'multi-parts',version:2},enabled:false})
+  await wrapper.setProps({modelValue:selected})
+  await wrapper.get('[aria-label="输出媒体类型"]').setValue('audio')
+  const audio=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(audio[0].media_type).toBe('audio')
+  expect(audio[0].operations).toEqual([])
+  await wrapper.setProps({modelValue:audio})
+  await wrapper.get('[aria-label="启用操作 audio"]').setValue(true)
+  const enabled=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(enabled[0]).toMatchObject({media_type:'audio',operations:['audio'],model:'arbitrary-model',upstream_model:'arbitrary-model'})
+  expect(wrapper.find('[aria-label="启用操作 speech"]').exists()).toBe(false)
+  wrapper.unmount()
+ })
+ it('uses the explicit audio-only template and preserves administrator rules',async()=>{
+  const cap=newMediaCapability('looks-like-an-image-model')
+  cap.template_rules=[{phase:'wire',op:'default',target:'generationConfig.speechConfig',value:{voice:'chosen'}}]
+  const wrapper=await editor(cap)
+  await wrapper.get('[aria-label="协议模板"]').setValue('gemini-audio-parts')
+  const selected=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(selected[0]).toMatchObject({media_type:'audio',operations:['audio'],template_ref:{id:'gemini-audio-parts',version:1},template_rules:cap.template_rules})
+  await wrapper.setProps({modelValue:selected})
+  await wrapper.get('[aria-label="账号模板规则覆盖"]').setValue('[{"phase":"wire","op":"default","target":"optional","value":false}]')
+  const changed=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(changed[0].template_rules).toEqual([{phase:'wire',op:'default',target:'optional',value:false}])
+  wrapper.unmount()
+ })
+ it('retains compatible explicit selections when choosing another template',async()=>{
+  const cap=newMediaCapability('public')
+  cap.media_type='audio';cap.operations=['audio']
+  const wrapper=await editor(cap)
+  await wrapper.get('[aria-label="协议模板"]').setValue('multi-parts')
+  const selected=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(selected[0]).toMatchObject({media_type:'audio',operations:['audio']})
+  wrapper.unmount()
+ })
+ it('uses the pinned historical template choices instead of the latest published version',async()=>{
+  templateAPI.history.mockResolvedValue([{id:'multi-parts',version:1,config:{media_types:['audio'],operations:['speech']}}])
+  const cap=newMediaCapability('public');cap.adapter='template';cap.template_ref={id:'multi-parts',version:1};cap.media_type='audio';cap.operations=['speech']
+  const wrapper=await editor(cap)
+  await wrapper.findAll('button').find(button=>button.text()==='高级设置')!.trigger('click')
+  expect(templateAPI.history).toHaveBeenCalledWith('templates','multi-parts')
+  expect((wrapper.get('[aria-label="启用操作 speech"]').element as HTMLInputElement).checked).toBe(true)
+  expect(wrapper.find('[aria-label="启用操作 image"]').exists()).toBe(false)
+  expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  wrapper.unmount()
  })
 })

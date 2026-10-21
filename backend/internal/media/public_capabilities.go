@@ -60,7 +60,7 @@ func (e *Engine) PublicCapabilities(ctx context.Context, groupID int64) ([]Publi
 		materials := map[string]Material{}
 		for _, kind := range []string{"image", "video", "audio"} {
 			max := int64(50 << 20)
-			materials[kind] = Material{ReferenceField: kind + "s", Formats: []string{"public_url_string", "public_url_object", "data_url", "data_url_in_url_object", "base64", "base64_in_url_object"}, MaxFileBytes: &max}
+			materials[kind] = Material{ReferenceField: kind + "s", Formats: []string{"public_url_string", "public_url_object", "data_url", "data_url_in_url_object", "data_url_in_b64_json_object", "base64", "base64_in_url_object", "base64_in_b64_json_object"}, MaxFileBytes: &max}
 		}
 		out = append(out, PublicCapability{ProfileID: publicProfileID(cap), Version: publicProfileID(cap), Model: cap.Model, MediaType: cap.MediaType, Operations: ops, RequestFormat: format, ReferenceField: field, ReferenceShape: shape, Duration: duration, Sizes: cap.Sizes, Resolutions: cap.Resolutions, AspectRatios: cap.AspectRatios, Qualities: cap.Qualities, Formats: []string{"json", "multipart"}, Materials: materials, PollSeconds: cap.Delivery.PollSeconds, MaxRequestBytes: cap.Limits.MaxRequestBytes, ObservationSeconds: cap.Limits.ObservationSeconds})
 		out[len(out)-1].Backgrounds = cap.Backgrounds

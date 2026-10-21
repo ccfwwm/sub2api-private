@@ -15,14 +15,17 @@ type ConfigRecord struct {
 	PublishedVersion *int64          `json:"published_version"`
 	Status           string          `json:"status"`
 	Config           json.RawMessage `json:"config"`
- BuiltinCurrent json.RawMessage `json:"builtin_current,omitempty"`
- PublishedConfig json.RawMessage `json:"published_config,omitempty"`
+	BuiltinCurrent   json.RawMessage `json:"builtin_current,omitempty"`
+	PublishedConfig  json.RawMessage `json:"published_config,omitempty"`
 }
 type Store struct {
 	templateSeed      sync.Once
 	templateSeedError error
 	DB                *sql.DB
 	LegacyBalanceHeld func(context.Context, int64) (string, error)
+	// RuntimeCapabilities projects account-mode media capabilities for binding
+	// validation. Persisted capability profiles remain validated as well.
+	RuntimeCapabilities func(context.Context, int64) ([]Capability, error)
 }
 
 func (s *Store) Configs(ctx context.Context, kind string, published bool) ([]ConfigRecord, error) {
@@ -122,7 +125,7 @@ func (s *Store) saveConfig(ctx context.Context, kind, id string, expected, actor
 			return ConfigRecord{}, e
 		}
 		if publish {
-			if e = validateBindingPublication(ctx, tx, binding); e != nil {
+			if e = s.validateBindingPublication(ctx, tx, binding); e != nil {
 				return ConfigRecord{}, e
 			}
 		}
@@ -138,7 +141,7 @@ func (s *Store) saveConfig(ctx context.Context, kind, id string, expected, actor
 			return ConfigRecord{}, e
 		}
 	default:
-		return ConfigRecord{}, fail(400, "invalid_config_kind", "capability or price required")
+		return ConfigRecord{}, fail(400, "invalid_config_kind", "capability, price, template or binding required")
 	}
 	if publish && kind == "price" {
 		records, e := configRecords(ctx, tx, "price", true)
@@ -172,14 +175,14 @@ func (s *Store) saveConfig(ctx context.Context, kind, id string, expected, actor
 		return ConfigRecord{}, e
 	}
 	if publish && kind == "template" && len(upgrades) > 0 {
-		if e = upgradeTemplateBindings(ctx, tx, id, current+1, actor, upgrades); e != nil {
+		if e = s.upgradeTemplateBindings(ctx, tx, id, current+1, actor, upgrades); e != nil {
 			return ConfigRecord{}, e
 		}
 	}
 	if e = tx.Commit(); e != nil {
 		return ConfigRecord{}, e
 	}
-	return ConfigRecord{ID:id,Version:current+1,PublishedVersion:newPublished,Status:status,Config:data}, nil
+	return ConfigRecord{ID: id, Version: current + 1, PublishedVersion: newPublished, Status: status, Config: data}, nil
 }
 
 func decodeConfig(data []byte, target any) error {
