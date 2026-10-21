@@ -1,0 +1,49 @@
+{
+  "version": "v1.2.16",
+  "commit": "5625b929e19d4b27a638747f0bf230ca220073df",
+  "application_started_at": "2026-10-21T15:41:31.820055606Z",
+  "job_id": "17abb0b0faea4941a30dfae52644f65e",
+  "job_status": "succeeded",
+  "backup_id": "00c7a5494e624c45992536c5d32d1c01",
+  "cutover_mode": "immediate",
+  "app_digest": "sha256:a8715d8e2870ce55bd6ae8284a86364c88365a08d4577ab46b41196793e9305e",
+  "docs_digest": "sha256:027d9a11c79c9787c300c5700e83a34ad2c01611a3c833b81242ea917c9525eb",
+  "postgres_and_redis_unchanged": true,
+  "models": {
+    "checked_at": "2026-10-21T15:42:30.169Z",
+    "status": 200,
+    "count": 14,
+    "includes_xxsedanco2_5s": true,
+    "includes_ttseadanco2_5_720": false
+  },
+  "public_endpoints": {
+    "hosts": ["code.aicodeme.xyz", "code.aicodeme.cn", "hkcode.aicodeme.xyz"],
+    "health_status": 200,
+    "settings_status": 200,
+    "version": "1.2.16",
+    "media_docs_status": 200
+  },
+  "administrator_browser": {
+    "media_sidebar": true,
+    "account_deep_link": true,
+    "model_plaza_loaded": true,
+    "channel_prices_matched": true,
+    "discovery": {
+      "account_id": 2117,
+      "discovered": 40,
+      "added_unbound": 34,
+      "merged": 41,
+      "enabled": 7,
+      "draft_saved": false
+    }
+  },
+  "validation": {
+    "frontend_files": 375,
+    "frontend_tests_passed": 2857,
+    "fresh_database_tests_passed": 336,
+    "backend_unit_and_vet": "passed",
+    "github_ci_all_green": false,
+    "ci_limits": ["missing ffmpeg on integration runner", "17 existing golangci-lint findings"],
+    "new_production_media_generation_tests": 0
+  }
+}

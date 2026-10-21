@@ -1,6 +1,36 @@
 # 多模态生产发布记录
 
-## 当前生产：v1.1.2
+## 当前生产：v1.2.16
+
+北京时间 **2026-10-21 23:41:31** 已按用户授权完成立即切换。升级任务最终状态为 `succeeded`；公网 `/health` 和 `/api/v1/settings/public` 均返回 HTTP 200，版本为 `1.2.16`。
+
+- 应用提交及不可变标签：`5625b929e19d4b27a638747f0bf230ca220073df`、`v1.2.16`。
+- 应用镜像：`ghcr.io/ccfwwm/sub2api-private@sha256:a8715d8e2870ce55bd6ae8284a86364c88365a08d4577ab46b41196793e9305e`。
+- 文档镜像：`ghcr.io/ccfwwm/sub2api-private-docs@sha256:027d9a11c79c9787c300c5700e83a34ad2c01611a3c833b81242ea917c9525eb`。
+- [正式发布 v1.2.16](https://github.com/ccfwwm/sub2api-private/releases/tag/v1.2.16)：19 个资产，下载回读 SHA 校验通过。
+- 升级任务：`17abb0b0faea4941a30dfae52644f65e`；备份：`00c7a5494e624c45992536c5d32d1c01`。
+
+本次使用 `upgrade v1.2.16 --confirm UPGRADE --immediate`，跳过自然空闲和请求排空等待，保留备份、隔离恢复验证和失败回滚。PostgreSQL、Redis 的容器 ID、镜像、启动时间和健康状态与切换前一致；没有重启数据服务。
+
+### 生产验收
+
+- 使用测试 Key 请求 `/v1/models`：原 HTTP 409 已恢复为 HTTP 200，返回 14 个模型，包括 `XXsedanco2.5S`、`grok-imagine-video`、`grok-imagine-video-1.5`。
+- `code.aicodeme.xyz`、`code.aicodeme.cn`、`hkcode.aicodeme.xyz` 的健康和公共设置接口均为 HTTP 200、版本 `1.2.16`；`/docs/imagevideo` 正常。
+- 使用真实管理员浏览器会话验收：版本、媒体管理侧栏、五个页面分区和 `account_id=2139` 深链接均正确，模型广场正常加载。
+- 账号 2117 一键拉取发现 40 个模型，新增 34 个待绑定项，合并后共 41 个，启用数量保持 7 个；原有七个视频模型显示渠道定价匹配。验收草稿没有保存，已刷新清理。
+- 409 根因是账号 2093、数据库分组 66 的历史 `image → image.url` 素材映射被通用重命名校验拒绝；已增加兼容并隔离无效绑定及分组目录错误。界面错误中的标识 19 与数据库分组 ID 不是同一层标识。
+
+### 验证范围与剩余边界
+
+本地完整前端测试通过 375 个文件、2857 项用例，lint、typecheck 和生产构建通过；后端 `go test -tags unit ./...`、`go vet -tags unit ./...` 通过。全新隔离数据库的媒体与迁移测试 336 项全部通过。Linux/amd64 govulncheck 未发现可达漏洞，另有两个未调用模块漏洞。
+
+GitHub CI **未全绿**：集成任务缺少 ffmpeg，golangci-lint 报告 17 个既有问题；发布任务因正式 Release 已存在而拒绝重复发布，没有覆盖已部署镜像或版本标签。上述远端失败与本地通过记录均保留。
+
+本轮没有新增图片、视频、音频生成测试，不将模型列表和管理界面验收视为全部媒体生成或计费验收。`TTseadanco2.5-720` 未出现在本次 Key 的模型列表中，未标记为通过；历史未知任务仍须先核对再决定是否补测。
+
+脱敏摘要见 [production-v1.2.16-evidence.json](production-v1.2.16-evidence.json)。本次记录为发布后的文档同步，不修改 `v1.2.16` 标签及已发布产物。
+
+## 历史生产：v1.1.2
 
 北京时间 **2026-10-13 02:29** 已完成 v1.1.2 切换与验收。媒体平台 `imagevideo` 融入现有账号、分组和渠道模型定价；用户使用模型广场和使用记录，旧 `/admin/media` 跳转到渠道管理。价格手动配置，不同步供应商价格、不建立来源或模板。配置步骤见 [v1.1.2 配置说明](../MEDIA_PLATFORM_V112_CN.md)。
 
