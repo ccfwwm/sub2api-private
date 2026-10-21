@@ -15,18 +15,37 @@ function deferred<T>() {
 }
 
 import MonitorTemplateManagerDialog from '../MonitorTemplateManagerDialog.vue'
-const { list, showError } = vi.hoisted(() => ({ list: vi.fn(), showError: vi.fn() }))
-vi.mock('@/api/admin', () => ({ adminAPI: { channelMonitorTemplate: { list } } }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError }) }))
+const { list, create, showError, showSuccess } = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), showError: vi.fn(), showSuccess: vi.fn() }))
+vi.mock('@/api/admin', () => ({ adminAPI: { channelMonitorTemplate: { list, create } } }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess }) }))
 const response = (name: string) => ({ items: [{ id: 1, name, provider: 'anthropic', body_override_mode: 'off' }] })
 function mountDialog() {
   return shallowMount(MonitorTemplateManagerDialog, {
     props: { show: true },
-    global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } },
+    global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
   })
 }
 describe('monitor template list requests', () => {
   beforeEach(() => { vi.resetAllMocks() })
+  it('blocks media template saves while a published protocol selection is invalid', async () => {
+    list.mockResolvedValue({ items: [] })
+    create.mockResolvedValue({})
+    const wrapper = mountDialog()
+    await flushPromises()
+    const vm = wrapper.vm as any
+    vm.openCreateForm()
+    vm.form.provider = 'imagevideo'; vm.form.name = 'Explicit template'
+    await flushPromises()
+    const media = wrapper.findComponent({ name: 'MonitorMediaConfig' })
+    media.vm.$emit('validity', false)
+    await flushPromises()
+    await vm.handleSubmit()
+    expect(create).not.toHaveBeenCalled()
+    media.vm.$emit('validity', true)
+    await flushPromises()
+    await vm.handleSubmit()
+    expect(create).toHaveBeenCalledTimes(1)
+  })
   it.each(['resolve', 'reject'] as const)('ignores an old dialog request that %ss', async outcome => {
     const old = deferred<ReturnType<typeof response>>()
     list.mockReturnValueOnce(old.promise).mockResolvedValueOnce(response('current-template'))

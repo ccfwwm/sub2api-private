@@ -12,7 +12,7 @@
       },
       {
         "kind": "text",
-        "text": "参考素材按请求完整转发：URL 数组协议使用 images、videos、audios；多模态协议使用 reference_images、reference_videos、reference_audios，请按所选模型示例提交。能力目录的数量、格式、时长与可选参数枚举用于提示，不是供应商支持性的最终判断。未列出的供应商可选参数和素材对象附加字段会保留；鉴权、计费、请求体大小与公网访问安全边界继续生效。冲突的参数别名会明确报错，上游不支持时返回真实拒绝原因，不自动删除素材或切换模型。"
+        "text": "参考素材统一使用 images、videos、audios，按请求完整保留素材顺序、角色和附加属性。客户端按所选模型的公开输入提交，服务端使用管理员已发布的模板编译请求。能力目录的数量、格式、时长与可选参数枚举用于提示，最终支持情况以实际调用为准；鉴权、计费、请求体大小与公网访问安全边界继续生效。冲突的参数别名会明确报错，上游不支持时返回真实拒绝原因，不自动删除素材或切换模型。"
       },
       {
         "kind": "text",
@@ -2071,12 +2071,12 @@
           [
             "duration",
             "否",
-            "integer，生成时长，单位为秒，例如 8；与 seconds 同时传入时以 duration 为准"
+            "integer，生成时长兼容字段，单位为秒，例如 8；与 seconds 同时传入时数值必须一致，否则拒绝请求"
           ],
           [
             "seconds",
             "否",
-            "integer / string，时长兼容字段，例如 8 或 \"8\"；仅未提供 duration 时使用"
+            "integer / string，生成时长，单位秒，例如 8 或 \"8\"；须为正整数，按所选模型支持情况提交"
           ],
           [
             "resolution",
@@ -2089,22 +2089,22 @@
             "string，画面比例，例如 16:9、9:16、1:1"
           ],
           [
-            "reference_images",
+            "images",
             "否",
             "array，参考图片，用于人物、物体、场景或画面风格；首尾帧使用带 role 的图片对象"
           ],
           [
-            "input_reference / images",
+            "素材别名",
             "否",
-            "图片兼容字段，支持单张素材或数组；按 reference_images、input_reference、images 的顺序使用第一个已提供的字段，不合并；空数组也视为已提供"
+            "旧客户端的素材别名继续兼容；同类素材同时提供多个字段时内容必须一致，不合并或静默覆盖"
           ],
           [
-            "reference_audios",
+            "audios",
             "否",
             "array，参考音频，用于声音、音乐或节奏"
           ],
           [
-            "reference_videos",
+            "videos",
             "否",
             "array，参考视频，用于动作、运镜或画面内容"
           ]
@@ -2131,7 +2131,7 @@
           ],
           [
             "首尾帧",
-            "reference_images 中使用 {\"url\":\"…\",\"role\":\"first_frame\"} 和 {\"url\":\"…\",\"role\":\"last_frame\"}；普通参考的 role 可省略或填写 reference"
+            "images 中使用 {\"url\":\"…\",\"role\":\"first_frame\"} 和 {\"url\":\"…\",\"role\":\"last_frame\"}；普通参考的 role 可省略或填写 reference"
           ]
         ]
       },
@@ -2197,25 +2197,25 @@
       },
       {
         "kind": "heading",
-        "text": "两种视频素材协议"
+        "text": "统一视频素材输入"
       },
       {
         "kind": "table",
         "headers": [
-          "协议能力",
+          "公开字段",
           "素材格式",
           "提交前校验"
         ],
         "rows": [
           [
-            "支持编码素材的多媒体协议",
-            "reference_images / reference_videos / reference_audios；公网 URL、data URL、对象 {url} / {b64_json}，范围以能力为准",
-            "同类素材别名同时填写时须一致；时长别名冲突时拒绝，不覆盖素材或参数。"
+            "images / videos / audios",
+            "按素材类型提交数组，支持公网 URL、含 MIME 的 data URL、对象 {url} / {b64_json}",
+            "同类素材别名同时填写时须一致；时长别名冲突时拒绝，不覆盖素材或参数。所有素材保留原顺序和附加属性。"
           ],
           [
-            "V6K 视频协议（兼容 ID v6k_url）",
-            "images / videos / audios：公网 HTTPS URL、含 MIME 的 data URL 字符串或 {url} / {b64_json} 对象",
-            "Base64 对象规范为 data URL 字符串后转发；附加属性保留。真实媒体测量、解码大小和总请求限制仍生效；该适配暂不转换 multipart 文件。上游决定模型支持情况，失败不删素材。"
+            "images 中的 role",
+            "first_frame / last_frame 用于首尾帧；普通参考可省略 role 或使用 reference",
+            "真实媒体测量、解码大小和总请求限制仍生效。上游决定模型支持情况，失败不删素材。"
           ]
         ]
       },
@@ -2231,7 +2231,7 @@
         "kind": "code",
         "language": "json",
         "text": "{\n  \"model\": \"MinimaxH3-2K\",\n  \"prompt\": \"参考画面中的主体沿海岸缓慢行走\",\n  \"seconds\": 5,\n  \"ratio\": \"16:9\",\n  \"images\": [\n    {\n      \"url\": \"https://example.com/first-frame.png\"\n    }\n  ]\n}",
-        "label": "V6K URL 请求"
+        "label": "视频 URL 参考请求"
       },
       {
         "kind": "code",
@@ -2242,7 +2242,7 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"model\": \"YOUR_MULTIMODAL_MODEL\",\n  \"prompt\": \"从第一帧自然过渡到最后一帧\",\n  \"duration\": 5,\n  \"reference_images\": [\n    {\n      \"url\": \"https://example.com/first.png\",\n      \"role\": \"first_frame\"\n    },\n    {\n      \"url\": \"https://example.com/last.png\",\n      \"role\": \"last_frame\"\n    }\n  ]\n}",
+        "text": "{\n  \"model\": \"YOUR_MULTIMODAL_MODEL\",\n  \"prompt\": \"从第一帧自然过渡到最后一帧\",\n  \"seconds\": 5,\n  \"images\": [\n    {\n      \"url\": \"https://example.com/first.png\",\n      \"role\": \"first_frame\"\n    },\n    {\n      \"url\": \"https://example.com/last.png\",\n      \"role\": \"last_frame\"\n    }\n  ]\n}",
         "label": "首尾帧请求"
       },
       {
@@ -2385,7 +2385,7 @@
             "integer，目标节拍速度；正数作为创作提示"
           ],
           [
-            "reference_images",
+            "images",
             "否",
             "string[]，上传图片使用 Base64 data URL，也可填写 HTTP(S) 图片链接；单张最多 5 MiB"
           ],

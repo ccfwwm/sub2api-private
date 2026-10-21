@@ -82,10 +82,28 @@ describe('PricingEntryCard default price auto-fill', () => {
     const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(), platform: 'imagevideo' } })
     const select = wrapper.findComponent({ name: 'Select' })
     expect(select.props('options')).toEqual([
+      { value: 'characters', label: '语音输入字符（Unicode 码点）' },
       { value: 'token', label: 'admin.channels.billingMode.token' },
       { value: 'per_request', label: 'admin.channels.billingMode.perRequest' },
       { value: 'video', label: 'admin.channels.billingMode.video' },
     ])
+  })
+
+  it('selects character billing and preserves the entered per-code-point price', async () => {
+    const wrapper = shallowMount(PricingEntryCard, { props: { entry: createEntry(), platform: 'imagevideo' } })
+    wrapper.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'characters')
+    const selected = emittedEntries(wrapper).at(-1)!
+    expect(selected).toMatchObject({ billing_mode: 'characters', intervals: [], per_request_price: null })
+    await wrapper.setProps({ entry: selected })
+    const input = wrapper.findAll('label').find(label => label.text().includes('USD / Unicode 码点'))!.get('input')
+    await input.setValue('0.00002')
+    const priced = emittedEntries(wrapper).at(-1)!
+    expect(priced).toMatchObject({ billing_mode: 'characters', per_request_price: '0.00002' })
+    await wrapper.setProps({ entry: priced })
+    wrapper.findComponent({ name: 'ModelTagInput' }).vm.$emit('update:models', ['configured-speech-model'])
+    await flushPromises()
+    expect(getModelDefaultPricing).not.toHaveBeenCalled()
+    expect(emittedEntries(wrapper).at(-1)).toMatchObject({ billing_mode: 'characters', per_request_price: '0.00002' })
   })
 
   it('does not overwrite prices when appending a model to an entry that already has one', async () => {

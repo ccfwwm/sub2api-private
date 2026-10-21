@@ -255,12 +255,14 @@ describe('AccountTestModal', () => {
   })
   it('关闭且无售价的媒体模型支持自定义参数，并拒绝非对象 JSON', async () => {
     const cap=newMediaCapability('omni-flash')
+    cap.media_type='video';cap.operations=['video'];cap.adapter='template';cap.template_ref={id:'configured-video',version:2}
     getAvailableModels.mockResolvedValue([{id:cap.model,display_name:cap.model}])
     global.fetch=vi.fn().mockImplementation((_url,opts)=>opts?.method==='POST'
       ? Promise.resolve(createStreamResponse(['data: {"type":"test_complete","success":false,"error":"failed"}\n']))
       : Promise.resolve({ok:false,status:404})) as any
     const wrapper=mountModal({id:42,name:'Media',platform:'imagevideo',type:'apikey',status:'active',extra:{media_models:[cap]}})
     await wrapper.setProps({show:true});await flushPromises()
+    expect((wrapper.vm as any).testOperation).toBe('video')
     ;(wrapper.vm as any).testKind='custom';(wrapper.vm as any).customParameters='{"seconds":6}'
     await (wrapper.vm as any).startTest();await flushPromises()
     const post=(global.fetch as any).mock.calls.find((call:any[])=>call[1]?.method==='POST')

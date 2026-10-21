@@ -1,6 +1,6 @@
 # v1.2.15 候选状态与验收边界
 
-本文件记录 2026-10-21 候选实现与可复核证据，不作为已部署或公网生成成功的声明。桌面、插件和 Sub2API 分别版本化；本轮不重打 ZeroWall 桌面安装器。
+本文件记录 2026-10-21 候选实现与可复核证据，不作为已部署或公网生成成功的声明。桌面、插件和 Sub2API 分别版本化；本 Sub2API 候选不构建桌面，ZeroWall 8.4.5 由独立发布任务处理。
 
 ## 候选行为
 
@@ -32,9 +32,19 @@
 | 部署管理器及 SQL 门禁 | `deploy-python-with-pg-pcm-sourcefreeze-20261021T130131.log`：67 项通过，含真实 PostgreSQL SQL 门禁，14.232 秒，零跳过；临时库已精确删除并核验 |
 | 公开规范与客户端 | `spec-sourcefreeze-final.log` 的 14 组模拟通过，`clients-sourcefreeze-final.log` 四项客户端测试通过 |
 
-最终前端定向测试为 7 个文件、25 个测试通过，lint、类型检查、i18n 及生产构建通过；公开文档源码测试 5 项通过。Go 1.27.3 完整后端 unit 检查已通过，新增收尾代码另跑媒体与 handler、隔离 PostgreSQL 和迁移门禁。冻结源码后的精确日志与候选镜像隔离验收由构建收据补充。早期失败日志保留，不将中间编译态或旧断言失败抹去，也不将一次单测成功当成完整发布验收。
+前端最终完整 Vitest 为 372 个文件、2847 项全部通过；lint、类型检查、i18n 与生产构建均通过。首轮完整测试的 5 项失败均为已变更行为对应的旧断言或夹具，保留原失败日志并修正测试/文档，再次完整运行通过；相关测试补充了发布模板固定版本、输出类型与操作显式选择、保存门禁、素材配置保留以及字符计价覆盖。公开文档源码测试 5 项、规范模拟 14 组和公开客户端测试 4 项通过。完整审计报告有 19 条（info 0、low 4、moderate 13、high 2、critical 0），仅两个现存 `xlsx` high 使用原有、未过期豁免，严格检查器与其 9 项回归均通过；审计命令保留其因漏洞而返回的退出码 1。各项命令、耗时、退出码、报告摘要、锁文件 SHA-256 和首轮失败记录见 `output/media-templates-v1215/verification/frontend-security-final-receipt.json`。Go 1.27.3 完整后端 unit 检查已通过，新增收尾代码另跑媒体与 handler、隔离 PostgreSQL 和迁移门禁。早期失败日志保留，不将中间失败抹去，也不将一次单测成功当成完整发布验收。
 
 此前 Go 1.27.2 扫描发现标准库 `crypto/x509` 的可达漏洞 `GO-2026-6809`。本轮仅将 `backend/go.mod`、三个 Go 构建镜像入口和 CI 版本断言统一升级至修复版本 1.27.3，依赖及 `go.sum` 未变。工具链经 `goproxy.cn` 下载，保留 `sum.golang.org` 校验；扫描数据库更新时间为 2026-10-21 00:27:29 UTC。两次最终扫描仍各报告 2 项仅出现在所需模块中、未被调用的漏洞，未将其计作可达漏洞。候选生产镜像仍须实际使用 Go 1.27.3 构建并在发布收据中核验。
+
+## 前端依赖安全门禁修复
+
+此前 `frontend-audit.json` 实际为镜像源返回的 `ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS`，不能作为审计通过证据。旧检查器在缺少漏洞库存时仍返回成功；本轮改为拒绝审计错误、非法 JSON、缺失或格式错误的库存及摘要，并逐严重级别核对库存和摘要数量。CI 固定使用 `https://registry.npmjs.org` 获取完整生产依赖报告，省略会过滤库存的 `--audit-level`，由检查器执行 high/critical 的精确、未过期豁免策略。
+
+官方源发现 `axios@1.20.0` 传递依赖的 `follow-redirects@1.16.0` 命中 `GHSA-q3jh-wrc6-jgq8`、`GHSA-8r9p-f939-6h3c`。仅新增 `follow-redirects@<1.16.1: 1.16.1` 覆盖并更新其锁文件条目，保留其他依赖版本和既有豁免。
+
+2026-10-21 的完整官方报告为 `frontend-security-follow-redirects-20261021-audit.json`：没有顶层 `error`，19 条库存与摘要完全一致（info 0、low 4、moderate 13、high 2、critical 0），`follow-redirects` 漏洞为 0。剩余两个 high 均为 `xlsx@0.18.5` 的 `GHSA-4r6h-8v6p-xvw6`、`GHSA-5pgg-2g8v-p4x9`，匹配原有、截至 2027-01-06 有效的豁免；`.github/audit-exceptions.yml` 未修改。`pnpm audit --prod --registry=https://registry.npmjs.org --json` 因仍有漏洞退出 1，完整报告与豁免检查器退出 0；这不代表全部依赖零漏洞。
+
+审计守卫 9 项回归通过，包含端点错误、无效或截断报告、按级别过滤的不完整报告、两种库存格式和精确/到期豁免。`ab64a1e837c608a21d8a4a2a3381074fe3179d2f` 的旧镜像候选须在提交本次安全修复后重新构建，新的 SHA、镜像 digest 和验收结果由发布收据记录。
 
 ## 直连证据与预算
 

@@ -90,7 +90,9 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile
       - name: Check production frontend dependencies before packaging
         run: |
-          pnpm --dir frontend audit --prod --audit-level=high --json > frontend/audit.json || true
+          # Keep the complete inventory; the checker applies the high/critical policy.
+          pnpm --dir frontend audit --prod --registry=https://registry.npmjs.org --json > frontend/audit.json || true
+          python3 -m unittest discover -s tools -p 'test_check_pnpm_audit_exceptions.py' -v
           python3 tools/check_pnpm_audit_exceptions.py --audit frontend/audit.json --exceptions .github/audit-exceptions.yml
       - run: make test-frontend
       - run: make -C backend test-unit

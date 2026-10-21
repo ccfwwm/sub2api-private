@@ -9,7 +9,7 @@ describe('Public media docs', () => {
     vi.unstubAllEnvs()
     localStorage.removeItem('media-docs-theme')
   })
-  it('uses 26 exact unique models and validates JSON and cURL JSON bodies', () => {
+  it('uses 28 exact unique models and validates JSON and cURL JSON bodies', () => {
     expect(imagevideoModels).toHaveLength(28)
     expect(new Set(imagevideoModels.map(m => m.id)).size).toBe(28)
     expect(imagevideoModels.some(m => m.id === 'MinimaxH3-2K')).toBe(true)
@@ -37,6 +37,22 @@ describe('Public media docs', () => {
     expect(sectionMarkdown(edit)).toContain("-F 'image[]=@scene.png'")
     expect(groupMarkdown('GPT 图片')).toContain(sectionMarkdown(edit))
     expect(imagevideoSections.some(s => s.id === 'clients')).toBe(true)
+  })
+  it('documents canonical video materials without exposing supplier configuration', () => {
+    const video = imagevideoSections.find(section => section.id === 'video') ?? imagevideoSections.find(section => section.blocks.some(block => block.kind === 'code' && block.label === '视频 URL 参考请求'))!
+    const markdown = sectionMarkdown(video)
+    expect(markdown).toContain('images / videos / audios')
+    expect(markdown).not.toMatch(/yunfei|v6k|adapter|request_format|template_ref|reference_images|reference_videos|reference_audios/i)
+    const examples = video.blocks.filter(block => block.kind === 'code' && block.language === 'json')
+    expect(examples.length).toBeGreaterThan(2)
+    for (const block of examples) {
+      if (block.kind !== 'code') continue
+      const payload = JSON.parse(block.text)
+      expect(Object.keys(payload).some(key => /^(?:provider|adapter|request_format|template_ref|reference_)/.test(key))).toBe(false)
+    }
+    const frames = examples.find(block => block.kind === 'code' && block.label === '首尾帧请求')!
+    if (frames.kind !== 'code') throw new Error('Missing frame request')
+    expect(JSON.parse(frames.text).images.map((image: { role: string }) => image.role)).toEqual(['first_frame', 'last_frame'])
   })
   it.each([true, false])('opens standalone docs as the top-level page (dev=%s), preserving links', (dev) => {
     vi.stubEnv('DEV', dev)

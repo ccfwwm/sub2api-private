@@ -6,6 +6,7 @@ from datetime import date
 
 
 HIGH_SEVERITIES = {"high", "critical"}
+SEVERITIES = {"info", "low", "moderate", "high", "critical"}
 REQUIRED_FIELDS = {"package", "advisory", "severity", "mitigation", "expires_on"}
 
 
@@ -139,14 +140,84 @@ def parse_date(value: str) -> date | None:
         return None
 
 
+def validate_audit_report(data) -> list[str]:
+    # An endpoint/transport error is not evidence that dependencies are safe.
+    # Require an unfiltered report: pnpm's --audit-level filters advisories but
+    # leaves metadata counts unfiltered. CI omits it; severity policy is below.
+    if not isinstance(data, dict):
+        return ["expected a JSON object"]
+    if "error" in data:
+        return ["audit command returned an error"]
+    formats = [key for key in ("advisories", "vulnerabilities") if key in data]
+    if not formats:
+        return ["missing advisories or vulnerabilities inventory"]
+    metadata = data.get("metadata")
+    counts = metadata.get("vulnerabilities") if isinstance(metadata, dict) else None
+    if not isinstance(counts, dict) or any(
+        type(counts.get(severity)) is not int or counts[severity] < 0
+        for severity in SEVERITIES
+    ):
+        return ["missing or invalid vulnerability summary"]
+    errors = []
+    for format_name in formats:
+        entries = data[format_name]
+        if not isinstance(entries, dict):
+            errors.append(f"invalid {format_name} inventory")
+            continue
+        totals = dict.fromkeys(SEVERITIES, 0)
+        for entry in entries.values():
+            if not isinstance(entry, dict):
+                errors.append(f"invalid {format_name} entry")
+                continue
+            severity = entry.get("severity")
+            if not isinstance(severity, str) or severity.strip().lower() not in SEVERITIES:
+                errors.append("missing or invalid vulnerability severity")
+                continue
+            totals[severity.strip().lower()] += 1
+            if format_name == "advisories":
+                name = entry.get("module_name") or entry.get("name")
+                if not isinstance(name, str) or not name.strip():
+                    errors.append("missing vulnerability package name")
+                if not pick_advisory_id(entry):
+                    errors.append("missing vulnerability advisory identifier")
+            else:
+                via = entry.get("via")
+                items = [via] if isinstance(via, str) else via
+                if not isinstance(items, list) or not items:
+                    errors.append("missing vulnerability advisory references")
+                    continue
+                for item in items:
+                    if isinstance(item, str) and item.strip():
+                        continue
+                    if isinstance(item, dict) and (
+                        item.get("github_advisory_id") or item.get("url")
+                        or item.get("source") or item.get("title") or item.get("name")
+                    ):
+                        continue
+                    errors.append("invalid vulnerability advisory reference")
+        if any(totals[severity] != counts[severity] for severity in SEVERITIES):
+            errors.append(f"{format_name} inventory does not match vulnerability summary")
+        if format_name == "vulnerabilities" and any(not name.strip() for name in entries):
+            errors.append("missing vulnerability package name")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--audit", required=True)
     parser.add_argument("--exceptions", required=True)
     args = parser.parse_args()
 
-    with open(args.audit, "r", encoding="utf-8") as handle:
-        audit = json.load(handle)
+    try:
+        with open(args.audit, "r", encoding="utf-8") as handle:
+            audit = json.load(handle)
+    except (OSError, ValueError):
+        sys.stderr.write("Invalid audit report: cannot read valid JSON.\n")
+        return 1
+    report_errors = validate_audit_report(audit)
+    if report_errors:
+        sys.stderr.write("Invalid audit report: " + "; ".join(report_errors) + ".\n")
+        return 1
 
     # 读取异常清单并建立索引，便于快速匹配包名 + advisory。
     exceptions = parse_exceptions(args.exceptions)

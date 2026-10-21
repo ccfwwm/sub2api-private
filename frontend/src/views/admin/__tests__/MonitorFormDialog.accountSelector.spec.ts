@@ -119,6 +119,7 @@ function mountDialog(monitor: ChannelMonitor | null = null) {
         ModelTagInput: true,
         MonitorKeyPickerDialog: true,
         MonitorAdvancedRequestConfig: true,
+        MonitorMediaConfig: true,
       },
     },
   })
@@ -168,6 +169,25 @@ describe('MonitorFormDialog linked account selector', () => {
     accountsGetById.mockReset()
     monitorCreate.mockReset().mockResolvedValue({})
     monitorUpdate.mockReset().mockResolvedValue({})
+  })
+
+  it('blocks media monitor saves until the pinned template configuration is valid', async () => {
+    const body = { media_monitor: { mode: 'generation', models: {} } }
+    const wrapper = mountDialog(makeMonitor({ provider: 'imagevideo', primary_model: 'exact-model', body_override: body }))
+    await flushPromises()
+    const media = wrapper.findComponent({ name: 'MonitorMediaConfig' })
+    media.vm.$emit('validity', false)
+    await nextTick()
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(monitorUpdate).not.toHaveBeenCalled()
+    media.vm.$emit('validity', true)
+    await nextTick()
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledTimes(1)
+    expect(monitorUpdate.mock.calls[0][1].body_override).toEqual(body)
   })
 
   it('loads the first page of provider accounts when quota mode is enabled', async () => {

@@ -175,7 +175,7 @@
 
       <template v-if="form.provider === 'imagevideo'">
         <label class="input-label">{{ t('admin.channelMonitor.form.extraModels') }}<input v-model="mediaModels" class="input" placeholder="omni-flash, veo-3.1-lite" /></label>
-        <MonitorMediaConfig :models="mediaModels.split(',')" v-model="form.body_override" />
+        <MonitorMediaConfig :models="mediaModels.split(',')" v-model="form.body_override" @validity="mediaConfigValid = $event" />
       </template>
       <MonitorAdvancedRequestConfig v-else
         :provider="form.provider"
@@ -202,7 +202,7 @@
           <button class="btn btn-secondary" @click="$emit('close')">
             {{ t('common.close') }}
           </button>
-          <button v-if="editing" class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
+          <button v-if="editing" class="btn btn-primary" :disabled="submitting || (form.provider === 'imagevideo' && !mediaConfigValid)" @click="handleSubmit">
             {{ submitting ? t('common.submitting') : editing === 'new' ? t('common.create') : t('common.update') }}
           </button>
         </div>
@@ -319,6 +319,7 @@ interface TemplateForm {
 
 const editing = ref<null | 'new' | number>(null) // null = list view; 'new' = create; <id> = edit
 const submitting = ref(false)
+const mediaConfigValid = ref(true)
 const form = reactive<TemplateForm>(emptyForm(PROVIDER_ANTHROPIC))
 const mediaModels = ref('')
 
@@ -395,6 +396,7 @@ watch(
 // --- submit ---
 async function handleSubmit() {
   if (submitting.value) return
+  if (form.provider === 'imagevideo' && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.template.missingName'))
     return

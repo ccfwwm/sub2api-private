@@ -148,7 +148,7 @@
         />
       </div>
 
-      <MonitorMediaConfig v-if="form.provider === PROVIDER_IMAGEVIDEO" v-model="form.body_override" :models="[form.primary_model, ...form.extra_models]" />
+      <MonitorMediaConfig v-if="form.provider === PROVIDER_IMAGEVIDEO" v-model="form.body_override" :models="[form.primary_model, ...form.extra_models]" @validity="mediaConfigValid = $event" />
 
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.groupName') }}</label>
@@ -213,7 +213,7 @@
         <button
           type="submit"
           form="channel-monitor-form"
-          :disabled="submitting"
+          :disabled="submitting || (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid)"
           class="btn btn-primary"
         >
           {{ submitting
@@ -316,6 +316,7 @@ const systemDefaultInterval = computed<number>(() => {
 const editing = computed<ChannelMonitor | null>(() => props.monitor)
 
 const submitting = ref(false)
+const mediaConfigValid = ref(true)
 
 // API key picker
 const showKeyPicker = ref(false)
@@ -846,6 +847,7 @@ function buildPayload(): CreateParams {
 
 async function handleSubmit() {
   if (submitting.value) return
+  if (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.nameRequired'))
     return
