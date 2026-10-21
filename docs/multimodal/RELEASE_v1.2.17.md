@@ -22,4 +22,4 @@
 
 生产旧版本的连续免费测试中，同一视频模型 12 次能力查询出现两个 profile；6 次估价为 200 三次、400 一次、409 两次。本次发布后须重新验证 profile 稳定和估价结果，不将上述复现当成修复后结果。
 
-ZeroWall Science 的 videos 0.2.4、ai-cloud 0.1.33 与 media-create 技能同步适配 profile 更新和错误类型，保留模型、参数、参考素材及请求身份。它们是独立资源，本 Sub2API 发布不代表 ZeroWall 桌面安装器或资源目录已发布。
+ZeroWall Science 的 videos 0.2.6、ai-cloud 0.1.34 与 media-create 技能同步适配 profile 更新和错误类型，保留模型、参数、参考素材及请求身份。插件源代码已提交并生成带 SHA-256 的归档；它们是独立资源，本 Sub2API 发布不代表 ZeroWall 桌面运行实例已安装新插件，也不代表独立资源 feed 或桌面安装器已发布。

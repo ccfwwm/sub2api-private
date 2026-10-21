@@ -1,9 +1,9 @@
 {
   "version": "v1.2.17",
-  "status": "recorded",
-  "acceptance_state": "profile-instability-reproduced-source-fix-validated-production-rollout-pending",
-  "verified_at": "2026-10-21T17:17:56Z",
-  "environment": "Production v1.2.16 reproducibly returned changing XXsedanco2.5S capability profiles and intermittent estimate 400/409 responses. v1.2.17 source fixes deterministic field-mapping order; production deployment and post-cutover stability checks remain separately recorded.",
+  "status": "verified",
+  "acceptance_state": "production-v1.2.17-verified",
+  "verified_at": "2026-10-21T18:10:56Z",
+  "environment": "Production v1.2.17 is deployed and healthy on all three public relay hosts. The authenticated model list returns HTTP 200, repeated capability requests return one stable profile for XXsedanco2.5S, and image, audio and five-second video relay requests completed with readable artifacts.",
   "evidence": {
     "report": "output/media-templates-v1215/audit-20261021/REPORT.md",
     "details": "output/media-templates-v1215/audit-20261021/evidence.json",
@@ -12,16 +12,19 @@
     "new_network_requests_during_audit": 0,
     "production_model_inventory": "output/media-v1216/model-inventory.json",
     "production_model_list_diagnostic": "output/media-v1216/live-tests.json",
+    "production_public_acceptance": "output/media-v1217/public-acceptance.json",
+    "production_profile_stability": "output/media-v1217/profile-stability.json",
+    "production_image_acceptance": "output/media-v1217/acceptance-image.json",
+    "production_audio_acceptance": "output/media-v1217/acceptance-music.json",
+    "production_video_acceptance": "output/media-v1217/acceptance-video-five-seconds.json",
     "diagnosis": "The production proxy model-list returned HTTP 409 parameter_rule_conflict. Read-only database inspection identified account 2093 in database group 66 and legacy field_mapping image -> image.url on its Grok video capabilities; v1.2.16 excludes material fields from generic rename rules and normalizes the legacy URL leaf into the template material target.",
     "v1217_live_profile_check": {
-      "capability_requests": 12,
-      "capability_http_200": 12,
-      "distinct_profile_count_for_same_video_model": 2,
-      "estimate_requests": 6,
+      "capability_requests": 20,
+      "capability_http_200": 20,
+      "distinct_profile_count_for_same_video_model": 1,
+      "estimate_requests": 12,
       "estimate_http_status_counts": {
-        "200": 3,
-        "400": 1,
-        "409": 2
+        "200": 12
       },
       "paid_submissions": 0,
       "credentials_recorded": false
@@ -55,8 +58,8 @@
     "visual_sample": "Frames at 1, 4 and 7 seconds were checked for recognizable reference logo, changing framing and nonblank content. This is a sample, not a complete semantic or audio review."
   },
   "relay_acceptance": {
-    "status": "pending",
-    "scope": "After v1.2.17 cutover, verify public profile ID stability over repeated requests, estimate, preview, and one authorized video request with exact five-second duration; reconcile every returned task and artifact before any further submission. Confirm image/video/audio request serialization and account test fingerprint.",
+    "status": "completed",
+    "scope": "After v1.2.17 cutover, repeated capability and estimate requests were stable. One image, one audio and one exact-five-second XXsedanco2.5S video request completed through the relay; each task was reconciled and its artifact was read back. No additional paid submission was made for verification.",
     "models": [
       "XXsedanco2.5S",
       "gpt-image-2.5",
@@ -94,10 +97,11 @@
       "scope": "The database group ID is distinct from the UI failure label 19. No production data was changed."
     },
     {
-      "label": "v1.2.16-relay-post-deployment",
+      "label": "v1.2.17-relay-post-deployment",
       "verification": "real_connection",
-      "status": "pending",
-      "scope": "Recheck GET /v1/models, model plaza, administrator media configuration, then image/video/audio and task/artifact paths where supported."
+      "status": "completed",
+      "http": 200,
+      "scope": "GET /v1/models returned 14 models; the administrator model plaza and media page loaded; image, audio and video task/artifact paths completed through the relay."
     },
     {
       "label": "xx-five-reference-base64-submission",
@@ -128,7 +132,7 @@
       "scope": "Both transport failures have neither HTTP result nor task ID; original-task queries are unavailable. They were not resubmitted."
     },
     {
-      "label": "v1217-production-capability-profile-instability",
+      "label": "v1.2.16-production-capability-profile-instability",
       "verification": "real_connection",
       "status": "completed",
       "endpoint": "GET /v1/media/capabilities",
@@ -142,6 +146,34 @@
       },
       "paid_submissions": 0,
       "scope": "Live v1.2.16 reproduction for XXsedanco2.5S. Opaque profile IDs intentionally omitted; deterministic Go map-to-rule ordering is the source fix."
+    },
+    {
+      "label": "v1.2.17-production-media-acceptance",
+      "verification": "real_connection",
+      "status": "completed",
+      "models": [
+        "gpt-image-2.5",
+        "lyria-3.5",
+        "XXsedanco2.5S"
+      ],
+      "tasks": [
+        "mt_e313b4c4-f829-4f5c-b4f1-0e3d16973bcd",
+        "mt_da002bb6-1c4c-4674-a919-dc87a5685959",
+        "mt_0df979cb-aa94-486c-aed0-efea30ab4129"
+      ],
+      "artifact_checks": {
+        "image": "PNG readback and ffprobe passed",
+        "audio": "MP3 readback and ffprobe passed",
+        "video": "MP4 readback, SHA-256 match and full ffmpeg decode passed"
+      },
+      "video": {
+        "requested_seconds": 5,
+        "duration_seconds": 5.05,
+        "bytes": 16130426,
+        "sha256": "51ceac3ac0834b805e84264b2657fb1e2758d032cf2594ac796fdc6e604388fc",
+        "codecs": "H.264 1280x720 video with AAC stereo audio"
+      },
+      "scope": "The test used the existing authorized relay account and did not record credentials. TTseadanco2.5-720 was absent from the returned model list and remains unverified."
     }
   ]
 }
