@@ -1,19 +1,9 @@
-name: Formal Release Production Deployment
+name: Manual Production Deployment
 on:
-  workflow_call:
-    inputs:
-      version:
-        required: true
-        type: string
-    secrets:
-      DEPLOY_SSH_KEY:
-        required: true
-      DEPLOY_KNOWN_HOSTS:
-        required: true
   workflow_dispatch:
     inputs:
       version:
-        description: 'Existing formal release vMAJOR.MINOR.PATCH (immediate application cutover)'
+        description: 'Approved formal release vMAJOR.MINOR.PATCH (backup, restore rehearsal, drain, application cutover)'
         required: true
         type: string
 permissions:

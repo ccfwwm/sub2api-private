@@ -165,6 +165,29 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertEqual(job['status'], 'succeeded')
         cutover.assert_not_called()
 
+    def test_template_rehearsal_requires_exact_data_projection_and_does_not_claim_accounts_unchanged(self):
+        backup = self.root / 'fixture-backup'
+        backup.mkdir()
+        meta = {'runtime_image': 'captured-old-runtime', 'migrations': {'old.sql': 'a' * 64}}
+        reviewed = {'filename': 'media-protocol-templates', 'files': ['249_media_protocol_templates.sql',
+                    '250_migrate_legacy_media_template_refs.sql'], 'transaction': 'sealed', 'expected_migrations': {}}
+        def report(test, folder):
+            test.update(restore_verified=True, rollback_verified=True, additive_data_verified=True)
+        with patch.object(self.manager.c, 'rehearse', side_effect=report):
+            with self.assertRaisesRegex(ValueError, 'projection was not verified'):
+                self.manager.rehearse({'id': 'a' * 32}, backup, meta, 'candidate', 'v1.2.15', reviewed)
+        def verified(test, folder):
+            report(test, folder)
+            test['template_data_verified'] = True
+        job = {'id': 'b' * 32}
+        with patch.object(self.manager.c, 'rehearse', side_effect=verified):
+            self.manager.rehearse(job, backup, meta, 'candidate', 'v1.2.15', reviewed)
+        result = job['template_migration']
+        self.assertFalse(result['data_unchanged'])
+        self.assertTrue(result['exact_account_projection_verified'])
+        self.assertTrue(result['task_snapshots_and_other_business_data_unchanged'])
+        self.assertEqual(result['files'], reviewed['files'])
+
     def test_failed_drain_probe_restores_admission(self):
         with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
                 'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \
@@ -173,6 +196,44 @@ class ManagementSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'probe failed'):
                 self.manager.drain()
         self.assertFalse(self.manager.marker.exists())
+
+    def test_template_migration_runs_only_after_drain_and_before_application_switch(self):
+        events = []
+        job = {'id': 'a' * 32}
+        reviewed = {'filename': 'media-protocol-templates', 'transaction': 'sealed-template-sql',
+                    'expected_migrations': {'new.sql': 'b' * 64}}
+        before = {'old.sql': 'a' * 64}
+        target = {'services': {'sub2api': {'environment': {}}}}
+        state = {'Id': 'fixed', 'Image': 'image', 'State': {'StartedAt': 'fixed'}, 'Config': {}}
+        def check(manifest):
+            events.append('assert-old' if manifest['migrations'] == before else 'assert-new')
+        with patch('manage.inspect', return_value=state), \
+             patch.object(self.manager.c, 'inspect', return_value=state), \
+             patch.object(self.manager, 'docs_container', return_value=None), \
+             patch.object(self.manager, 'drain', side_effect=lambda _: events.append('drain')), \
+             patch.object(self.manager.c, 'assert_migrations', side_effect=check), \
+             patch.object(self.manager.c, 'apply_reviewed_media_migration', side_effect=lambda _: events.append('apply')), \
+             patch.object(self.manager, 'switch', side_effect=lambda _: events.append('switch')), \
+             patch.object(self.manager.c, 'wait_command'), \
+             patch('manage.run', return_value=b'{"data":{"version":"1.2.15"}}'):
+            self.manager.cutover(job, target, {}, 'v1.2.15', reviewed, before)
+        self.assertEqual(events, ['drain', 'assert-old', 'apply', 'assert-new', 'switch'])
+        self.assertEqual(job['status'], 'succeeded')
+
+    def test_failed_drain_or_immediate_mode_never_applies_template_data_migration(self):
+        reviewed = {'filename': 'media-protocol-templates', 'transaction': 'sealed', 'expected_migrations': {}}
+        state = {'Id': 'fixed', 'Image': 'image', 'State': {'StartedAt': 'fixed'}, 'Config': {}}
+        with patch('manage.inspect', return_value=state), \
+             patch.object(self.manager, 'docs_container', return_value=None), \
+             patch.object(self.manager, 'drain', side_effect=ValueError('busy')), \
+             patch.object(self.manager.c, 'apply_reviewed_media_migration') as apply, \
+             patch.object(self.manager, 'switch') as switch:
+            with self.assertRaisesRegex(ValueError, 'busy'):
+                self.manager.cutover({'id': 'b' * 32}, {}, {}, 'v1.2.15', reviewed, {})
+            with self.assertRaisesRegex(ValueError, 'drained'):
+                self.manager.cutover({'id': 'c' * 32, 'immediate': True}, {}, {}, 'v1.2.15', reviewed, {})
+            apply.assert_not_called()
+            switch.assert_not_called()
 
     def test_drain_timeout_requires_zero_active_and_restores_admission(self):
         with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [

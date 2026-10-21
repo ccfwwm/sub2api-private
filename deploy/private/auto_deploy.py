@@ -20,6 +20,8 @@ REVIEWED_MIGRATION_ASSETS = (
     '246_channel_monitor_imagevideo.sql',
     '247_media_task_list_indexes.sql',
     '248_public_imagevideo_docs.sql',
+    '249_media_protocol_templates.sql',
+    '250_migrate_legacy_media_template_refs.sql',
 )
 
 def stage_reviewed_migrations(assets, release):
@@ -181,7 +183,7 @@ def worker(job):
             launcher = Path('/root/sub2api-manage').read_text()
             manager_path = re.search(r'(/root/sub2api-ops/releases/[0-9a-f]+/manage.py)', launcher).group(1)
             job['manager_job'] = uuid.uuid4().hex
-            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':True, 'docs_image': docs_image}
+            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':False, 'docs_image': docs_image}
             save(job, phase='backup_restore_and_cutover')
             # Import the verified installed module in an isolated Python process;
             # execute directly because this worker already owns operations.lock.

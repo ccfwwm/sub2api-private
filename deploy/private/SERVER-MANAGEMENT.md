@@ -89,9 +89,9 @@ rehearse 做完整备份与隔离恢复，不改变生产 schema；必须验证�
 服务器管理代码为 `85d114fc794af996`，来源 `14f73edf0500547038b7c95a8bdad2ccbfe7a97e`。修复 SQL 整行注释导致的事务白名单误拒，保留原始文件校验值并生成两条固定允许语句；实际迁移文件回归与 30 项工具测试通过。历史失败任务保留，不代表最终升级失败；成功任务与备份 ID 见 [发布记录](../../docs/multimodal/PRODUCTION_ROLLOUT.md)。
 
 媒体配置改用原有账号、分组和渠道模型定价，价格手动设置，不导入来源或模板。查看状态：`/root/sub2api-manage status`；配置步骤见 [v1.1.2 说明](../../docs/MEDIA_PLATFORM_V112_CN.md)。
-# 正式 Release 自动部署（v1.2.0）
+# 正式 Release 与独立部署（v1.2.15 起）
 
-GitHub 的 `deploy-production.yml` 通过专用受限 SSH Key 调用
+发布工作流只构建和发布制品，不调用生产部署。管理员独立手动触发 GitHub 的 `deploy-production.yml`，通过专用受限 SSH Key 调用
 `/root/sub2api-auto-deploy`。固定主机公钥，只允许 `deploy vMAJOR.MINOR.PATCH`
 和 `status JOB_ID`；不允许任意 shell 命令。
 
@@ -99,14 +99,22 @@ GitHub 的 `deploy-production.yml` 通过专用受限 SSH Key 调用
 本次真实渠道验证记录以及固定 digest 镜像，复用管理器的真实备份、隔离恢复演练、
 迁移检查和回滚。普通提交、候选镜像和预发布不会切换生产。
 
-自动部署使用用户授权的立即切换模式，只替换应用容器，不等待请求排空。
-手动 `upgrade` 仍默认等待排空；显式 `--immediate` 才直接切换。
+独立部署工作流和手动 `upgrade` 都默认等待请求排空。
+其他维护操作仍允许显式 `--immediate`；本次模板配置迁移拒绝该模式。
 两种模式都会核对 PostgreSQL、Redis 和定价服务容器未被替换。
 内外网健康、版本、镜像最终核验失败会回滚应用，并向 Actions 返回失败。
 
 任务、日志和清单在 `/root/sub2api-ops/state/automatic` 持久保存；
 GitHub 必须查询到最终 `succeeded` 才报告上线成功。
 重复版本复核当前镜像与健康，旧版本不能覆盖新版本。
+
+## v1.2.15 媒体模板与旧配置迁移
+
+Release 必须包含 `249_media_protocol_templates.sql`、`250_migrate_legacy_media_template_refs.sql` 及校验值。先安装同一提交的管理代码，再登记本次精确镜像与清单。使用 `prepare v1.2.15 --confirm PREPARE` 完成备份副本演练，通过后才执行 `upgrade v1.2.15 --confirm UPGRADE`；不另行手工执行 SQL。
+
+249 为固定配置类型扩展和制品文件名加列；250 会在账号 `extra.media_models` 保存等价模板引用或待配置状态。门禁以固定受审 SQL 正文摘要限制变换，不接受任意 UPDATE。隔离副本中的完整账号行必须与预先计算的批准变换结果相等，其他业务表、历史任务快照、账务、制品旧列和配置版本必须保持原值；再次变换应幂等。候选应用及捕获的真实旧程序均需在迁移后的副本启动通过。
+
+正式升级先备份并演练，再等待闲置和请求排空；249/250 的事务在排空成功后、应用容器切换前执行。排空失败时不修改生产配置。回退使用本次捕获的旧镜像与原配置，不覆盖生产数据库；普通 rollback 仍拒绝未经证明的迁移清单差异。
 
 ## v1.2.4 媒体任务分页索引
 

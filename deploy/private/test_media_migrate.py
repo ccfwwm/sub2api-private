@@ -7,9 +7,83 @@ from media_migrate import reviewed_transaction, tracked_operation, unified_trans
 from media_migrate import monitor_transaction, validate_monitor_transaction, reviewed_monitor_upgrade, MONITOR_FILE
 from media_migrate import task_index_transaction, validate_task_index_transaction, reviewed_upgrade, TASK_INDEX_FILE
 from media_migrate import docs_transaction, validate_docs_transaction, reviewed_docs_upgrade, DOCS_FILE
+from media_migrate import (TEMPLATE_FILES, TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE, TEMPLATE_UPGRADE,
+                          template_transaction, template_transaction_files, validate_template_transaction,
+                          legacy_accounts_fingerprint_sql)
 import tempfile
 
 class MediaMigrationGateTests(unittest.TestCase):
+    @staticmethod
+    def template_files():
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        files = {}
+        for name in TEMPLATE_FILES:
+            sql = (root / name).read_text(encoding='utf-8').strip()
+            files[name] = (sql, hashlib.sha256(sql.encode()).hexdigest())
+        return files
+
+    def test_media_template_upgrade_requires_exact_statements_not_release_provided_checksums_alone(self):
+        files = self.template_files()
+        transaction = template_transaction(files)
+        self.assertTrue(validate_template_transaction(transaction))
+        self.assertEqual(set(template_transaction_files(transaction)), set(TEMPLATE_FILES))
+        self.assertFalse(validate_template_transaction(transaction + 'DROP TABLE users;'))
+        self.assertFalse(validate_template_transaction(transaction.replace(' COMMIT;', ' DELETE FROM accounts; COMMIT;')))
+        for name, (sql, _) in files.items():
+            for bad in (sql + ' UPDATE users SET balance=0;', sql.replace('media_models', 'credentials'),
+                        sql.replace("'template','binding'", "'template','binding','unsafe'")):
+                if bad == sql:
+                    continue
+                modified = dict(files)
+                modified[name] = (bad, hashlib.sha256(bad.encode()).hexdigest())
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    template_transaction(modified)
+        projection = legacy_accounts_fingerprint_sql(files[LEGACY_TEMPLATE_FILE][0])
+        self.assertIn('jsonb_populate_record(NULL::accounts', projection)
+        self.assertIn('LEFT JOIN migrated ON a.id = migrated.id', projection)
+        self.assertNotIn('UPDATE accounts', projection)
+        with self.assertRaises(ValueError):
+            legacy_accounts_fingerprint_sql(files[LEGACY_TEMPLATE_FILE][0] + 'DELETE FROM users;')
+
+    def test_media_template_inventory_preserves_old_checksums_and_supports_partial_and_repeated_upgrade(self):
+        files, before = self.template_files(), {'old.sql': 'b' * 64}
+        target = {**before, **{name: checksum for name, (_, checksum) in files.items()}}
+        with tempfile.TemporaryDirectory() as folder:
+            for name, (sql, _) in files.items():
+                Path(folder, name).write_text(sql, encoding='utf-8')
+            result = reviewed_upgrade(before, target, folder)
+            self.assertEqual(result['filename'], TEMPLATE_UPGRADE)
+            self.assertEqual(result['files'], list(TEMPLATE_FILES))
+            self.assertEqual(result['expected_migrations'], target)
+            self.assertIsNone(reviewed_upgrade(target, target, folder))
+            schema_only = {**before, TEMPLATE_SCHEMA_FILE: target[TEMPLATE_SCHEMA_FILE]}
+            self.assertEqual(reviewed_upgrade(before, schema_only, folder)['files'], [TEMPLATE_SCHEMA_FILE])
+            self.assertEqual(reviewed_upgrade(schema_only, target, folder)['files'], [LEGACY_TEMPLATE_FILE])
+            for bad in ({**target, 'old.sql': 'c' * 64}, {**target, 'unexpected.sql': 'c' * 64},
+                        {**target, LEGACY_TEMPLATE_FILE: 'c' * 64},
+                        {**before, LEGACY_TEMPLATE_FILE: target[LEGACY_TEMPLATE_FILE]}):
+                with self.subTest(target=bad), self.assertRaises(ValueError):
+                    reviewed_upgrade(before, bad, folder)
+
+    def test_old_worker_template_assets_require_matching_version_manifest_and_exact_sql(self):
+        files, before = self.template_files(), {'old.sql': 'b' * 64}
+        target = {**before, **{name: checksum for name, (_, checksum) in files.items()}}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release, assets = state / 'releases/v1.2.15', state / 'automatic/receipt-assets'
+            release.mkdir(parents=True)
+            assets.mkdir(parents=True)
+            for name, (sql, _) in files.items():
+                (assets / name).write_text(sql, encoding='utf-8')
+            manifest = {'version': 'v1.2.15', 'migrations': target}
+            (assets / 'deployment.json').write_text(json.dumps(manifest))
+            self.assertTrue(validate_template_transaction(reviewed_upgrade(before, target, release)['transaction']))
+            (assets / LEGACY_TEMPLATE_FILE).write_text(files[LEGACY_TEMPLATE_FILE][0] + ' DROP TABLE users;', encoding='utf-8')
+            with self.assertRaises(ValueError): reviewed_upgrade(before, target, release)
+            manifest['version'] = 'v1.2.14'
+            (assets / 'deployment.json').write_text(json.dumps(manifest))
+            with self.assertRaises(FileNotFoundError): reviewed_upgrade(before, target, release)
+
     def test_public_documentation_migration_is_exact_and_additive(self):
         sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / DOCS_FILE).read_text().strip()
         checksum = hashlib.sha256(sql.encode()).hexdigest()

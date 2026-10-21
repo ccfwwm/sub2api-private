@@ -62,6 +62,14 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'separate migration'):
                 self.controller.assert_migrations(self.manifest)
 
+    def test_reviewed_template_gate_cannot_be_bypassed_by_mentioning_legacy_filename(self):
+        transaction = ("BEGIN; SET LOCAL lock_timeout='3s'; "
+                       "SELECT '243_media_tasks_and_pricing.sql'; DELETE FROM accounts; COMMIT;")
+        with patch('controller.run') as command:
+            with self.assertRaisesRegex(ValueError, 'reviewed atomic'):
+                self.controller.apply_reviewed_media_migration(transaction)
+            command.assert_not_called()
+
     def test_task_index_rehearsal_can_fingerprint_media_but_not_arbitrary_tables(self):
         for table in ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):
             self.assertIn('"' + table + '"', self.controller.fingerprint_sql(table))

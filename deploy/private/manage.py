@@ -323,11 +323,17 @@ class Manager:
         if reviewed:
             if not all(test.get(k) for k in ('restore_verified', 'rollback_verified', 'additive_data_verified')):
                 raise ValueError('incomplete additive migration rehearsal')
+            if reviewed['filename'] == 'media-protocol-templates' and not test.get('template_data_verified'):
+                raise ValueError('exact media template account projection was not verified')
             field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
                      else 'monitor_migration' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
+                     else 'template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'docs_migration')
             job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
-                                        'rollback_verified': True, 'data_unchanged': True}
+                          'rollback_verified': True, 'data_unchanged': reviewed['filename'] != 'media-protocol-templates'}
+            if reviewed['filename'] == 'media-protocol-templates':
+                job[field].update(files=reviewed['files'], exact_account_projection_verified=True,
+                                  task_snapshots_and_other_business_data_unchanged=True)
         # The controller adds an evidence file; retain the original backup seal.
         (folder / 'restored-fingerprints.json').unlink(missing_ok=True)
 
@@ -540,7 +546,10 @@ class Manager:
                 run(['systemctl', 'reload', 'nginx'], timeout=30)
             raise
 
-    def cutover(self, job, target, rescue, version=''):
+    def cutover(self, job, target, rescue, version='', reviewed=None, original_migrations=None):
+        if reviewed and (reviewed.get('filename') != 'media-protocol-templates' or
+                         job.get('immediate') or original_migrations is None):
+            raise ValueError('media template migration requires drained reviewed cutover')
         self.save(job, 'preparing_cutover')
         # Record the rescue target before setting a persistent drain marker, so
         # a host failure during drain can also be recovered from the CLI.
@@ -560,6 +569,11 @@ class Manager:
                 target['services']['sub2api']['environment']['SERVER_SHUTDOWN_TIMEOUT_SECONDS'] = '1'
             else:
                 self.drain(job)
+            if reviewed:
+                self.c.assert_migrations({'migrations': original_migrations})
+                self.save(job, 'applying_reviewed_media_template_migration')
+                self.c.apply_reviewed_media_migration(reviewed['transaction'])
+                self.c.assert_migrations({'migrations': reviewed['expected_migrations']})
             self.save(job, 'switching')
             switched = True
             self.switch(target)
@@ -722,14 +736,20 @@ class Manager:
         if run(['docker', 'exec', 'sub2api', 'sha256sum', '/app/sub2api']).decode().split()[0] != meta['binary_sha256']:
             raise ValueError('production runtime changed during preparation')
         self.c.assert_migrations({'migrations': meta['migrations']})
-        if reviewed:
+        template_cutover = reviewed and reviewed['filename'] == 'media-protocol-templates'
+        if reviewed and not template_cutover:
             phase = ('applying_reviewed_task_indexes' if reviewed['filename'] == '247_media_task_list_indexes.sql'
                      else 'applying_reviewed_monitor_enum_expansion' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
+                     else 'applying_reviewed_media_template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'applying_reviewed_public_documentation_migration')
             self.save(job, phase)
             self.c.apply_reviewed_media_migration(reviewed['transaction'])
             self.c.assert_migrations(manifest)
-        self.cutover(job, target, rescue, arg if action == 'upgrade' else '')
+        if template_cutover:
+            self.cutover(job, target, rescue, arg if action == 'upgrade' else '',
+                         reviewed=reviewed, original_migrations=meta['migrations'])
+        else:
+            self.cutover(job, target, rescue, arg if action == 'upgrade' else '')
 
 
 def main():

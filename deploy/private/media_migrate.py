@@ -30,7 +30,125 @@ UNIFIED_FILES = {
 MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
 TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
 DOCS_FILE = '248_public_imagevideo_docs.sql'
+TEMPLATE_SCHEMA_FILE = '249_media_protocol_templates.sql'
+LEGACY_TEMPLATE_FILE = '250_migrate_legacy_media_template_refs.sql'
+TEMPLATE_FILES = (TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE)
+TEMPLATE_UPGRADE = 'media-protocol-templates'
+# Exact reviewed statements, after removing line comments and normalizing space.
+# Changing the data migration requires reviewing its expected-account projection
+# and this seal together; a checksum supplied by a release is not authorization.
+LEGACY_TEMPLATE_BODY_SHA256 = '992c628510b7864cb54cdd16bb3fea41702579b46482bb6ea4321c62278a9475'
 MONITOR_PROVIDERS = "'openai', 'anthropic', 'gemini', 'grok', 'antigravity', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'imagevideo'"
+
+
+def normalized_sql(sql):
+    import re
+    return ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+
+
+def template_schema_statements():
+    return ("ALTER TABLE media_config_versions DROP CONSTRAINT IF EXISTS media_config_versions_kind_check; "
+            "ALTER TABLE media_config_versions ADD CONSTRAINT media_config_versions_kind_check "
+            "CHECK(kind IN ('capability','price','template','binding')); "
+            "ALTER TABLE media_artifacts ADD COLUMN IF NOT EXISTS filename text NOT NULL DEFAULT '';")
+
+
+def template_transaction(files):
+    import re
+    if not files or set(files) - set(TEMPLATE_FILES):
+        raise ValueError('outside reviewed media template migration inventory')
+    statements = []
+    for name in TEMPLATE_FILES:
+        if name not in files:
+            continue
+        sql, checksum = files[name]
+        body = normalized_sql(sql)
+        if not re.fullmatch(r'[0-9a-f]{64}', checksum):
+            raise ValueError('invalid media template migration checksum')
+        if name == TEMPLATE_SCHEMA_FILE:
+            accepted = body == template_schema_statements()
+        else:
+            accepted = hashlib.sha256(body.encode()).hexdigest() == LEGACY_TEMPLATE_BODY_SHA256
+        if not accepted:
+            raise ValueError('outside exact reviewed media template statements')
+        statements.append(body + f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{name}','{checksum}');")
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            'SELECT pg_advisory_xact_lock(694208311321144027);\n' + '\n'.join(statements) + ' COMMIT;')
+
+
+def template_transaction_files(transaction):
+    import re
+    prefix = ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+              'SELECT pg_advisory_xact_lock(694208311321144027);\n')
+    if not transaction.startswith(prefix) or not transaction.endswith(' COMMIT;'):
+        raise ValueError('invalid media template transaction envelope')
+    body = transaction[len(prefix):-len(' COMMIT;')]
+    files, cursor = {}, 0
+    for match in re.finditer(r"\nINSERT INTO schema_migrations\(filename,checksum\) VALUES\('([^']+)','([0-9a-f]{64})'\);", body):
+        name, checksum = match.groups()
+        if name in files:
+            raise ValueError('duplicate media template migration')
+        files[name] = (body[cursor:match.start()].lstrip('\n'), checksum)
+        cursor = match.end()
+    if cursor != len(body) or template_transaction(files) != transaction:
+        raise ValueError('unreviewed media template transaction')
+    return files
+
+
+def validate_template_transaction(transaction):
+    try:
+        template_transaction_files(transaction)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def legacy_accounts_fingerprint_sql(sql):
+    body = normalized_sql(sql)
+    if hashlib.sha256(body.encode()).hexdigest() != LEGACY_TEMPLATE_BODY_SHA256:
+        raise ValueError('unreviewed legacy account projection')
+    ctes = body.split(' UPDATE accounts a SET extra = ', 1)[0]
+    # Only the approved media_models transformation can differ. Populate the
+    # original row type to keep every account column and its JSON key order.
+    return (ctes + " SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) "
+            "FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT "
+            "(jsonb_populate_record(NULL::accounts, to_jsonb(a) || jsonb_build_object('extra', "
+            "CASE WHEN migrated.id IS NULL THEN a.extra ELSE "
+            "jsonb_set(COALESCE(a.extra, '{}'::jsonb), '{media_models}', migrated.models, true) END))).* "
+            "FROM accounts a LEFT JOIN migrated ON a.id = migrated.id) t) fingerprint_rows;")
+
+
+def reviewed_template_upgrade(before, target, folder):
+    pending = set(target) - set(before)
+    if not pending or pending - set(TEMPLATE_FILES) or {k: v for k, v in target.items() if k not in pending} != before:
+        raise ValueError('migration inventory differs outside reviewed media template upgrade')
+    if LEGACY_TEMPLATE_FILE in pending and TEMPLATE_SCHEMA_FILE not in target:
+        raise ValueError('template schema migration is required before account migration')
+    if TEMPLATE_SCHEMA_FILE in pending and LEGACY_TEMPLATE_FILE in before:
+        raise ValueError('invalid template migration order')
+    folder, files = Path(folder), {}
+    for name in TEMPLATE_FILES:
+        if name not in pending:
+            continue
+        source = folder / name
+        if not source.is_file():
+            # Older workers stage only the previous allowlist. Reuse a file
+            # solely from the checksum-verified assets of this exact release.
+            for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+                manifest_path = candidate / 'deployment.json'
+                if not manifest_path.is_file() or not (candidate / name).is_file():
+                    continue
+                manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+                if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                    source = candidate / name
+                    break
+        sql = source.read_text(encoding='utf-8').replace('\r\n', '\n').strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        if checksum != target[name]:
+            raise ValueError('media template migration checksum differs')
+        files[name] = (sql, checksum)
+    return {'filename': TEMPLATE_UPGRADE, 'files': list(files),
+            'transaction': template_transaction(files), 'expected_migrations': target}
 
 
 def task_index_statements():
@@ -120,6 +238,8 @@ def reviewed_docs_upgrade(before, target, folder):
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
+    if (set(target) - set(before)) & set(TEMPLATE_FILES):
+        return reviewed_template_upgrade(before, target, folder)
     if set(target) - set(before) != {TASK_INDEX_FILE}:
         if set(target) - set(before) == {MONITOR_FILE}:
             return reviewed_monitor_upgrade(before, target, folder)
@@ -268,6 +388,19 @@ def reviewed_transaction(sql, checksum):
     return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
             "SELECT pg_advisory_xact_lock(694208311321144027);\n" + statements +
             "\nINSERT INTO schema_migrations(filename,checksum) VALUES('" + FILENAME + "','" + checksum + "'); COMMIT;")
+
+
+def validate_legacy_transaction(transaction):
+    import re
+    prefix = ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+              'SELECT pg_advisory_xact_lock(694208311321144027);\n')
+    match = re.fullmatch(re.escape(prefix) + r"([\s\S]*)\nINSERT INTO schema_migrations\(filename,checksum\) VALUES\('243_media_tasks_and_pricing\.sql','([0-9a-f]{64})'\); COMMIT;", transaction)
+    if not match:
+        return False
+    try:
+        return reviewed_transaction(*match.groups()) == transaction
+    except ValueError:
+        return False
 
 
 def execute(args):

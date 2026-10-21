@@ -14,6 +14,16 @@ from auto_deploy import check_order, dispatch, release_assets, stage_reviewed_mi
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
+ def test_publishing_cannot_call_production_workflow_and_manual_deploy_drains(self):
+  root=Path(__file__).resolve().parents[2]
+  release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
+  deploy=(root/'.github/workflows/deploy-production.yml').read_text(encoding='utf-8')
+  source=(root/'deploy/private/auto_deploy.py').read_text(encoding='utf-8')
+  self.assertNotIn('uses: ./.github/workflows/deploy-production.yml',release)
+  self.assertNotIn('  workflow_call:',deploy)
+  self.assertIn('  workflow_dispatch:',deploy)
+  self.assertIn("'immediate':False",source)
+  self.assertNotIn("'immediate':True",source)
  def test_release_assets_downloads_docs_receipt_before_checksum_validation(self):
   version='v1.2.7'; commit='a'*40; docs_name='docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
   verification=json.dumps({'version':version,'status':'recorded'}).encode()
@@ -68,6 +78,8 @@ class AutomaticDeployTests(unittest.TestCase):
    staged = stage_reviewed_migrations(assets, release)
    self.assertEqual(staged, list(REVIEWED_MIGRATION_ASSETS))
    self.assertEqual((release / '248_public_imagevideo_docs.sql').read_text(), '248_public_imagevideo_docs.sql')
+   for name in ('249_media_protocol_templates.sql', '250_migrate_legacy_media_template_refs.sql'):
+    self.assertEqual((release / name).read_text(), name)
 
  def test_online_verification_requires_all_production_domains(self):
   with patch('auto_deploy.run',return_value=b'{"data":{"version":"1.2.1"}}') as run,patch('auto_deploy.inspect',return_value={'Image':'fixed-image'}):
