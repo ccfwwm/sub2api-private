@@ -230,6 +230,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/media-tasks',
+    name: 'MediaTasks',
+    component: () => import('@/views/user/MediaTasksView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Media Tasks',
+      titleKey: 'nav.mediaTasks'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -486,7 +497,8 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Media management'
+      title: 'Media management',
+      titleKey: 'nav.mediaManagement'
     }
   },
   {

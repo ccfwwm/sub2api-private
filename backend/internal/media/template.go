@@ -450,7 +450,7 @@ func pathParts(path string) []string {
 	return strings.Split(strings.ReplaceAll(strings.ReplaceAll(path, "[", "."), "]", ""), ".")
 }
 func readPath(in any, path string) (any, bool) {
-	var v any = in
+	v := in
 	for _, p := range pathParts(path) {
 		switch node := v.(type) {
 		case map[string]any:
@@ -982,7 +982,7 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "Multipart file cannot express reference attributes")
 				}
 				if strings.HasPrefix(encoded, "https://") {
-					encoded, mime, e = encodeTemplateMaterial(ctx, client, encoded, "data_url")
+					encoded, _, e = encodeTemplateMaterial(ctx, client, encoded, "data_url")
 					if e != nil {
 						return PreparedMediaRequest{}, e
 					}

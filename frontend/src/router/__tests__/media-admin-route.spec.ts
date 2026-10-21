@@ -9,6 +9,13 @@ vi.mock('@/composables/useRoutePrefetch', () => ({ useRoutePrefetch: () => ({ tr
 vi.mock('@/api/setup', () => ({ getSetupStatus: vi.fn() }))
 
 describe('admin media route', () => {
+  it('makes personal media history available to authenticated ordinary users', async () => {
+    const { default: router } = await import('@/router')
+    const route = router.getRoutes().find(record => record.name === 'MediaTasks')
+    expect(route?.path).toBe('/media-tasks')
+    expect(route?.meta.requiresAuth).toBe(true)
+    expect(route?.meta.requiresAdmin).toBe(false)
+  })
   it('opens the media management view and remains administrator-only', async () => {
     const { default: router } = await import('@/router')
     const route = router.getRoutes().find((record) => record.name === 'AdminMedia')

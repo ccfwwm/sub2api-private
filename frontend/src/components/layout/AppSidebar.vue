@@ -68,7 +68,7 @@
                   :key="child.path"
                   :to="child.path"
                   class="sidebar-link mb-0.5 py-1.5 text-sm"
-                  :class="{ 'sidebar-link-active': route.path === child.path }"
+                  :class="{ 'sidebar-link-active': isActive(child.path) }"
                   @click="handleMenuItemClick(child.path)"
                 >
                   <component :is="child.icon" class="h-4 w-4 flex-shrink-0" />
@@ -727,6 +727,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/docs/imagevideo', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
+    { path: '/media-tasks', label: t('nav.mediaTasks'), icon: BatchImageIcon },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
@@ -794,7 +795,17 @@ const adminNavItems = computed((): NavItem[] => {
     // 「仅充值」站点连管理端的「订阅管理」入口也一并收起（路由本身不拦截）。
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
-    { path: '/admin/media', label: t('nav.mediaManagement'), icon: GlobeIcon },
+    {
+      path: '/admin/media?tab=accounts',
+      label: t('nav.mediaManagement'),
+      icon: GlobeIcon,
+      children: [
+        { path: '/admin/media?tab=accounts', label: t('nav.mediaAccounts'), icon: GlobeIcon },
+        { path: '/admin/media?tab=templates', label: t('nav.mediaTemplates'), icon: GlobeIcon },
+        { path: '/admin/media?tab=diagnostics', label: t('nav.mediaDiagnostics'), icon: GlobeIcon },
+        { path: '/admin/media?tab=tasks', label: t('nav.mediaTasks'), icon: GlobeIcon },
+      ],
+    },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
@@ -897,12 +908,20 @@ function handleMenuItemClick(itemPath: string) {
 }
 
 function isActive(path: string): boolean {
-  return route.path === path || route.path.startsWith(path + '/')
+  const [pathname, queryString] = path.split('?', 2)
+  if (!(route.path === pathname || route.path.startsWith(pathname + '/'))) return false
+  if (!queryString) return true
+  const expected = new URLSearchParams(queryString)
+  for (const [key, value] of expected) {
+    const current = key === 'tab' && (!route.query.tab || route.query.tab === 'bindings') ? 'accounts' : String(route.query[key] ?? '')
+    if (current !== value) return false
+  }
+  return true
 }
 
 function isGroupActive(item: NavItem): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(child => isActive(child.path))
 }
 
 function isGroupExpanded(item: NavItem): boolean {

@@ -56,6 +56,7 @@
       </div>
       <div v-if="savedTest" class="space-y-1 rounded-lg border p-3 text-xs">
         <div>{{ savedTest.test_kind }} · {{ savedTest.model }} · {{ savedTest.operation }} · {{ savedTest.status }}</div>
+        <div class="break-all font-mono text-gray-500">{{ tr('测试记录 ID', 'Test record ID') }}: {{ savedTest.test_id }}</div>
         <div>{{ tr('开始时间', 'Started') }}: {{ new Date(savedTest.started_at).toLocaleString() }} · {{ Math.max(0, Math.round((new Date(savedTest.completed_at || Date.now()).getTime() - new Date(savedTest.started_at).getTime()) / 1000)) }} s</div>
         <div v-if="savedTest.upstream_task_id">{{ tr('上游任务', 'Upstream task') }}: {{ savedTest.upstream_task_id }} · {{ savedTest.upstream_status }}</div>
         <div>{{ JSON.stringify(savedTest.request) }}</div>
@@ -253,7 +254,7 @@
         <div class="flex flex-wrap justify-center gap-3">
           <div
             v-for="(image, index) in generatedImages"
-            :key="`${image.url}-${index}`"
+            :key="`${image.source || image.url}-${index}`"
             class="group/img relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:border-primary-300 hover:shadow-md dark:border-dark-500 dark:bg-dark-700"
             @click="previewImageUrl = image.url"
           >
@@ -261,12 +262,17 @@
               :src="image.url"
               :alt="t('admin.accounts.imagePreviewAlt', { index: index + 1 })"
               class="max-h-[360px] w-full object-contain"
+              @error="previewErrors[image.source || image.url] = true"
+              @load="delete previewErrors[image.source || image.url]"
             />
             <div class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/img:bg-black/20">
               <Icon name="eye" size="lg" class="text-white opacity-0 drop-shadow-lg transition-opacity group-hover/img:opacity-100" :stroke-width="2" />
             </div>
             <div class="border-t border-gray-100 px-3 py-1.5 text-xs text-gray-500 dark:border-dark-500 dark:text-gray-300">
               {{ image.mimeType || 'image/*' }}
+              <p v-if="previewErrors[image.source || image.url]" role="alert" class="mt-2 text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
+              <button v-if="previewErrors[image.source || image.url]" type="button" class="mr-3 text-primary-500" @click.stop="retryPreview('image', image)">{{ tr('重试预览', 'Retry preview') }}</button>
+              <a v-if="previewErrors[image.source || image.url]" :href="image.url" :download="`test-image-${index + 1}`" class="text-primary-500">{{ tr('下载图片', 'Download image') }}</a>
             </div>
           </div>
         </div>
@@ -281,10 +287,11 @@
           :key="`audio-${index}`"
           class="rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-500 dark:bg-dark-700"
         >
-          <audio :src="audio.url" controls preload="metadata" class="w-full" @error="previewErrors[audio.url] = true" @loadedmetadata="delete previewErrors[audio.url]" />
+          <audio :src="audio.url" controls preload="metadata" class="w-full" @error="previewErrors[audio.source || audio.url] = true" @loadedmetadata="delete previewErrors[audio.source || audio.url]" />
           <div class="mt-1 text-xs text-gray-500 dark:text-gray-300">{{ audio.mimeType || 'audio/*' }}</div>
-          <p v-if="previewErrors[audio.url]" role="alert" class="mt-2 text-xs text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
-          <a v-if="previewErrors[audio.url]" :href="audio.url" :download="`test-audio-${index + 1}`" class="text-xs text-primary-500">{{ tr('下载音频', 'Download audio') }}</a>
+          <p v-if="previewErrors[audio.source || audio.url]" role="alert" class="mt-2 text-xs text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
+          <button v-if="previewErrors[audio.source || audio.url]" type="button" class="mr-3 text-xs text-primary-500" @click="retryPreview('audio', audio)">{{ tr('重试预览', 'Retry preview') }}</button>
+          <a v-if="previewErrors[audio.source || audio.url]" :href="audio.url" :download="`test-audio-${index + 1}`" class="text-xs text-primary-500">{{ tr('下载音频', 'Download audio') }}</a>
         </div>
       </div>
 
@@ -297,11 +304,12 @@
           :key="`video-${index}`"
           class="overflow-hidden rounded-xl border border-gray-200 bg-black dark:border-dark-500"
         >
-          <video :src="video.url" controls preload="metadata" class="max-h-[360px] w-full" @error="previewErrors[video.url] = true" @loadedmetadata="delete previewErrors[video.url]" />
+          <video :src="video.url" controls preload="metadata" class="max-h-[360px] w-full" @error="previewErrors[video.source || video.url] = true" @loadedmetadata="delete previewErrors[video.source || video.url]" />
           <div class="border-t border-gray-100 bg-white px-3 py-1.5 text-xs text-gray-500 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-300">
             {{ video.mimeType || 'video/*' }}
-            <p v-if="previewErrors[video.url]" role="alert" class="mt-2 text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
-            <a v-if="previewErrors[video.url]" :href="video.url" :download="`test-video-${index + 1}`" class="text-primary-500">{{ tr('下载视频', 'Download video') }}</a>
+            <p v-if="previewErrors[video.source || video.url]" role="alert" class="mt-2 text-orange-600 dark:text-orange-300">{{ previewErrorHint }}</p>
+            <button v-if="previewErrors[video.source || video.url]" type="button" class="mr-3 text-primary-500" @click="retryPreview('video', video)">{{ tr('重试预览', 'Retry preview') }}</button>
+            <a v-if="previewErrors[video.source || video.url]" :href="video.url" :download="`test-video-${index + 1}`" class="text-primary-500">{{ tr('下载视频', 'Download video') }}</a>
           </div>
         </div>
       </div>
@@ -400,6 +408,7 @@ import TextArea from '@/components/common/TextArea.vue'
 import { Icon } from '@/components/icons'
 import { useClipboard } from '@/composables/useClipboard'
 import { buildApiUrl } from '@/api/client'
+import { getAPIBaseURL } from '@/api/url'
 import { ADMIN_UI_REQUEST_HEADER } from '@/api/adminUIRequest'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
@@ -415,6 +424,7 @@ interface OutputLine {
 
 interface PreviewMedia {
   url: string
+  source?: string
   mimeType?: string
 }
 
@@ -454,21 +464,70 @@ const resetPrompt = () => { testPrompt.value = defaultPrompt.value }
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 const previewURLs = new Set<string>()
 const previewSources = new Set<string>()
+let previewGeneration = 0
 const previewErrors = ref<Record<string, boolean>>({})
 const previewErrorHint = computed(() => tr('产物已生成，但浏览器无法播放。请刷新页面后重新查看记录，或下载文件播放；不会重新生成。', 'The artifact was generated, but this browser cannot play it. Refresh and reopen the record, or download the file; no new generation is submitted.'))
-const clearPreviews = () => { for (const url of previewURLs) URL.revokeObjectURL(url); previewURLs.clear(); previewSources.clear(); previewErrors.value = {} }
+const clearPreviews = () => { ++previewGeneration; for (const url of previewURLs) URL.revokeObjectURL(url); previewURLs.clear(); previewSources.clear(); previewErrors.value = {} }
 const stopPolling = () => { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined }
 async function addPreview(type: string, url: string, mimeType?: string) {
-  if (previewSources.has(url)) return
-  let preview = url
-  if (url.startsWith('/api/v1/admin/accounts/')) {
-    const response = await fetch(buildApiUrl(url.replace('/api/v1', '')), { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}`, [ADMIN_UI_REQUEST_HEADER]: '1' } })
-    if (!response.ok) throw new Error(tr('产物预览读取失败', 'Failed to read preview'))
-    preview = URL.createObjectURL(await response.blob()); previewURLs.add(preview)
-  }
+  const generation = previewGeneration
+  const source = String(url || '').trim()
+  if (previewSources.has(source)) return
   const target = type === 'image' ? generatedImages : type === 'video' ? generatedVideos : generatedAudios
-  previewSources.add(url)
-  target.value.push({url:preview, mimeType})
+  if (!source) {
+    const placeholder = `data:text/plain,${encodeURIComponent(tr('产物地址为空', 'The artifact URL is empty'))}`
+    target.value.push({ url: placeholder, source: placeholder, mimeType })
+    previewErrors.value[placeholder] = true
+    return
+  }
+  let preview = source
+  let parsed: URL | null = null
+  let apiBase: URL | null = null
+  try {
+    apiBase = new URL(getAPIBaseURL(), window.location.origin)
+    parsed = new URL(source, apiBase)
+  } catch { parsed = null }
+  const isAccountArtifact = parsed && apiBase && parsed.origin === apiBase.origin && (/^\/api\/v1\/admin\/accounts\//.test(parsed.pathname) || /^\/admin\/accounts\//.test(parsed.pathname))
+  try {
+    if (isAccountArtifact && parsed) {
+      const path = `${parsed.pathname}${parsed.search}`
+      const apiPath = path.startsWith('/api/v1') ? path.slice('/api/v1'.length) : path
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = { [ADMIN_UI_REQUEST_HEADER]: '1' }
+      if (token) headers.Authorization = `Bearer ${token}`
+      const response = await fetch(buildApiUrl(apiPath), { credentials: 'include', headers })
+      if (!response.ok) throw new Error(tr('产物预览读取失败', 'Failed to read preview'))
+      const blob = await response.blob()
+      if (generation !== previewGeneration) return
+      preview = URL.createObjectURL(blob); previewURLs.add(preview)
+    }
+    const index = target.value.findIndex(item => (item.source || item.url) === source)
+    const item = {url:preview, source, mimeType}
+    if (index >= 0) target.value.splice(index, 1, item)
+    else target.value.push(item)
+    previewSources.add(source)
+    delete previewErrors.value[source]
+  } catch {
+    if (generation !== previewGeneration) return
+    // Keep a visible artifact row when a protected preview cannot be fetched;
+    // the browser error state explains the problem without resubmitting a test.
+    const index = target.value.findIndex(item => (item.source || item.url) === source)
+    const item = {url:source, source, mimeType}
+    if (index >= 0) target.value.splice(index, 1, item)
+    else target.value.push(item)
+    previewErrors.value[source] = true
+  }
+}
+async function retryPreview(type: string, item: PreviewMedia) {
+  const source = item.source || item.url
+  if (previewURLs.delete(item.url)) URL.revokeObjectURL(item.url)
+  if (previewImageUrl.value === item.url) previewImageUrl.value = ''
+  const target = type === 'image' ? generatedImages : type === 'video' ? generatedVideos : generatedAudios
+  const index = target.value.findIndex(candidate => (candidate.source || candidate.url) === source)
+  if (index >= 0) target.value.splice(index, 1)
+  previewSources.delete(source)
+  delete previewErrors.value[source]
+  await addPreview(type, source, item.mimeType)
 }
 async function applySavedTest(result: SavedTest) {
   savedTest.value = result

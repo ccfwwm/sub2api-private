@@ -130,7 +130,7 @@ func (s *AccountTestService) resolveAccountTestTemplate(ctx context.Context, cap
 	}
 	cap = resolved[0]
 	if cap.Template == nil {
-		return cap, fmt.Errorf("Configure a published protocol template in Media management before generation")
+		return cap, fmt.Errorf("configure a published protocol template in Media management before generation")
 	}
 	return cap, nil
 }

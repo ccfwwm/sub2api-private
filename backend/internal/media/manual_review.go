@@ -35,7 +35,7 @@ func (s *Store) ReviewTask(ctx context.Context, id, idem string, input ManualRev
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	t, err := lockTask(ctx, tx, id)
 	if err != nil {
 		return err
@@ -131,13 +131,15 @@ func reviewQuota(ctx context.Context, tx *sql.Tx, id string, held, delta decimal
 	for rows.Next() {
 		var h hold
 		if err = rows.Scan(&h.kind, &h.source, &h.window, &h.remaining); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		holds = append(holds, h)
 	}
 	err = rows.Err()
-	rows.Close()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ import javascriptClient from '../../public/examples/imagevideo.mjs?raw'
 /** Public media documentation metadata. The reviewed JSON is the single source
  * used by the independent docs container and the frontend fallback. */
 export const docsTitle = '词元互联图片、视频与音乐接口文档'
-export const docsVersion = 'v1.2.17 · 2026-10-22'
+export const docsVersion = 'v1.2.18 · 2026-10-22'
 export const apiOrigin = 'https://code.aicodeme.xyz'
 
 export type DocBlock =

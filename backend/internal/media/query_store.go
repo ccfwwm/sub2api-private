@@ -179,7 +179,7 @@ func (s *Store) DisableConfig(ctx context.Context, kind, id string, expected, ac
 		return ConfigRecord{}, e
 	}
 	version := current + 1
-	return ConfigRecord{ID:id,Version:version,PublishedVersion:&version,Status:"disabled",Config:raw}, nil
+	return ConfigRecord{ID: id, Version: version, PublishedVersion: &version, Status: "disabled", Config: raw}, nil
 }
 func (s *Store) Reconcile(ctx context.Context, id, upstreamID, decision, evidence string, version, actor int64) error {
 	if evidence == "" || len(evidence) > 2000 {

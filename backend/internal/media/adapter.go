@@ -341,7 +341,8 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			} else if errors.Is(e, context.DeadlineExceeded) || (errors.As(e, &network) && network.Timeout()) {
 				reason = "超时"
 			}
-			return UpstreamResult{Status: "unknown", Diagnostic: "提交失败：" + stage.Load().(string) + reason + "；受理状态待核对，请勿重复提交"}, nil
+			currentStage, _ := stage.Load().(string)
+			return UpstreamResult{Status: "unknown", Diagnostic: "提交失败：" + currentStage + reason + "；受理状态待核对，请勿重复提交"}, nil
 		}
 		return UpstreamResult{}, fmt.Errorf("upstream query unavailable")
 	}

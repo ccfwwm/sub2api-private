@@ -211,18 +211,6 @@ func referenceFormat(raw, form string) (string, error) {
 	}
 	return "", fail(400, "invalid_reference", "HTTPS URL, validated Data URL or Base64 required")
 }
-func allowedFormat(m Material, f string) bool {
-	if contains(m.Formats, f) {
-		return true
-	}
-	if f == "public_url_string" && contains(m.Formats, "url_string") {
-		return true
-	}
-	if f == "public_url_object" && contains(m.Formats, "url_object") {
-		return true
-	}
-	return false
-}
 
 // Normalize rejects billing-sensitive mistakes before price resolution or holds.
 func Normalize(cap Capability, operation string, p map[string]any) (Request, error) {

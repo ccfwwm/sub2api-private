@@ -49,6 +49,16 @@ describe('AppSidebar collapsible groups', () => {
     expect(componentSource).toContain('const groupExpandOverrides = ref<Map<string, boolean>>(new Map())')
     expect(componentSource).not.toContain('expandedGroups.value.has(item.path) || isGroupActive(item)')
   })
+
+  it('exposes media models, templates, diagnostics, and tasks from the admin sidebar', () => {
+    expect(componentSource).toContain("label: t('nav.mediaManagement')")
+    expect(componentSource).toContain("label: t('nav.mediaAccounts')")
+    expect(componentSource).toContain("path: '/admin/media?tab=templates'")
+    expect(componentSource).toContain("path: '/admin/media?tab=diagnostics'")
+    expect(componentSource).toContain("path: '/admin/media?tab=tasks'")
+    expect(componentSource).toContain("path: '/media-tasks', label: t('nav.mediaTasks')")
+    expect(componentSource).toContain('item.children.some(child => isActive(child.path))')
+  })
 })
 
 describe('AppSidebar header styles', () => {

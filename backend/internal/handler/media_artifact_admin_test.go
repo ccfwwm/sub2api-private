@@ -35,7 +35,7 @@ func TestArtifactTicketScopeExpiryAndRevocation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("s", 32))
 			require.NoError(t, err)
 			h := &MediaHandler{Engine: &media.Engine{Store: &media.Store{DB: db}, Blobs: blobs}}
@@ -80,7 +80,7 @@ func TestArtifactRangeHeadAndGone(t *testing.T) {
 		t.Run(method, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			path := filepath.Join(t.TempDir(), "movie.mp4")
 			require.NoError(t, os.WriteFile(path, []byte("0123456789"), 0600))
 			mock.ExpectQuery(`SELECT file_path,mime_type,content_hash,available FROM media_artifacts`).WithArgs("task-a", "video").WillReturnRows(sqlmock.NewRows([]string{"file_path", "mime_type", "content_hash", "available"}).AddRow(path, "video/mp4", "fixture-hash", true))

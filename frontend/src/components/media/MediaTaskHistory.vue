@@ -49,8 +49,11 @@ async function refresh() {
   const version = ++requestVersion; loading.value = true; error.value = ''
   const query: MediaTaskQuery = { page: page.value, page_size: pageSize.value, sort_by: 'created_at', sort_order: sortOrder.value }
   for (const [key,value] of Object.entries(filters)) if (value) (query as Record<string,unknown>)[key] = key.endsWith('_id') && key !== 'task_id' ? Number(value) : value
-  if (props.startDate) query.start_time = new Date(props.startDate+'T00:00:00').toISOString()
-  if (props.endDate) { const end = new Date(props.endDate+'T00:00:00'); end.setDate(end.getDate()+1); query.end_time = end.toISOString() }
+  // The administrator usage page owns the date filter. User media history is
+  // intentionally independent so the default 24-hour usage range cannot hide
+  // older media tasks that still belong to the user.
+  if (props.admin && props.startDate) query.start_time = new Date(props.startDate+'T00:00:00').toISOString()
+  if (props.admin && props.endDate) { const end = new Date(props.endDate+'T00:00:00'); end.setDate(end.getDate()+1); query.end_time = end.toISOString() }
   try {
     const result = await mediaAPI.taskPage(props.admin,query)
     if (version !== requestVersion) return
@@ -80,7 +83,7 @@ function onSearch(kind: 'user' | 'key' | 'account') {
   if (props.admin) { clearTimeout(searchTimer); searchTimer = setTimeout(() => void search(kind),250) }
 }
 function handleSort(key: string, order: 'asc' | 'desc') { if (key === 'created_at') { sortOrder.value = order; apply() } }
-watch(() => [props.startDate,props.endDate],apply)
+watch(() => props.admin ? [props.startDate,props.endDate] : [], apply)
 onMounted(async () => {
   void refresh()
   try {

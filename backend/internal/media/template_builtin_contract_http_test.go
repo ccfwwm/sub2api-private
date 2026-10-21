@@ -165,11 +165,12 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 				case r.Method == http.MethodGet && tc.query != "" && r.URL.Path == tc.query:
 					// The slash belongs to the task ID and must be escaped on the wire.
 					assert.Contains(t, r.RequestURI, "job%2Fa")
-					if tc.id == "media-content-blocks" {
+					switch tc.id {
+					case "media-content-blocks":
 						writeJSON(map[string]any{"id": "job/a", "status": "succeeded", "progress": 100, "output": map[string]any{"video_url": "/generated/contract"}})
-					} else if tc.id == "audio-async" {
+					case "audio-async":
 						writeJSON(map[string]any{"id": "job/a", "status": "completed", "progress": 100, "data": map[string]any{"url": "/generated/contract"}})
-					} else {
+					default:
 						// No URL: exercise the shipped /content endpoint fallback.
 						writeJSON(map[string]any{"id": "job/a", "status": "completed", "progress": 100})
 					}

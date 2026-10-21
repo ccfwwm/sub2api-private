@@ -15,6 +15,8 @@ const tabs = computed(() => [
   { id: 'diagnostics', name: tr('联调检测', 'Diagnostics') },
   { id: 'tasks', name: tr('任务记录', 'Tasks') }
 ])
+// Keep legacy group/account links working. Binding stays in the account model
+// editor so administrators do not get a second, conflicting binding surface.
 const tab = computed(() => route.query.tab === 'bindings' ? 'accounts' : tabs.value.some(item => item.id === route.query.tab) ? String(route.query.tab) : 'accounts')
 function navigate(id: string) { void router.replace({ query: { ...route.query, tab: id } }) }
 </script>

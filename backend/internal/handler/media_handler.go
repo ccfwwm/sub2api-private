@@ -502,7 +502,7 @@ func (h *MediaHandler) writeSynchronous(c *gin.Context, t media.StoredTask, oper
 			mediaError(c, err)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		info, statErr := file.Stat()
 		if statErr != nil {
 			mediaError(c, statErr)

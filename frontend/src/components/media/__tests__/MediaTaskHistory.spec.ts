@@ -44,12 +44,20 @@ describe('Media task table', () => {
     expect(w.findComponent(Pagination).exists()).toBe(false)
     w.unmount()
   })
-  it('keeps regular user Key search local and dates use an exclusive end', async () => {
+  it('keeps user media history independent of the usage date range', async () => {
     const w = create(); await flushPromises()
     await w.get('input[list="media-keys"]').setValue('自己的 Key #3'); await flushPromises()
     expect(api.page.mock.lastCall?.[1].api_key_id).toBe(3)
     await w.get('input[list="media-keys"]').setValue('other key'); await flushPromises()
     expect(api.searchKey).not.toHaveBeenCalled(); expect(api.searchUser).not.toHaveBeenCalled()
+    await w.setProps({ endDate: '2026-10-15' }); await flushPromises()
+    const q = api.page.mock.lastCall?.[1]
+    expect(q).not.toHaveProperty('start_time')
+    expect(q).not.toHaveProperty('end_time')
+    w.unmount()
+  })
+  it('keeps the administrator media task date filter inclusive of the selected end date', async () => {
+    const w = create(true); await flushPromises()
     await w.setProps({ endDate: '2026-10-15' }); await flushPromises()
     const q = api.page.mock.lastCall?.[1]
     expect(new Date(q.end_time).getTime()-new Date(q.start_time).getTime()).toBe(2*86400000)

@@ -211,7 +211,7 @@
         @update:pageSize="onErrorPageSize"
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
       />
-        <MediaTaskHistory v-if="mediaMounted" v-show="activeTab === 'media'" :start-date="startDate" :end-date="endDate" />
+        <MediaTaskHistory v-if="mediaMounted" v-show="activeTab === 'media'" />
       </div>
     </div>
   </AppLayout>

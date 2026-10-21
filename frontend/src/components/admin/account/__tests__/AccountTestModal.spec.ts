@@ -274,11 +274,14 @@ describe('AccountTestModal', () => {
   })
 
   it.each([
+    { type: 'image', model: 'gpt-image-2.5', mime: 'image/png' },
     { type: 'video', model: 'omni-flash', mime: 'video/mp4' },
     { type: 'audio', model: 'lyria-3-pro', mime: 'audio/mp4' }
   ])('$type 持久产物经过认证加载，播放错误明确提示且不会重新生成', async ({ type, model, mime }) => {
     const cap = newMediaCapability(model)
-    const source = '/api/v1/admin/accounts/42/tests/mt_saved/artifacts/media1'
+    const source = type === 'image'
+      ? `${window.location.origin}/api/v1/admin/accounts/42/tests/mt_saved/artifacts/media1`
+      : '/api/v1/admin/accounts/42/tests/mt_saved/artifacts/media1'
     getAvailableModels.mockResolvedValue([{ id: model, display_name: model }])
     const objectURL = `blob:saved-${type}`
     const createObjectURL = vi.fn(() => objectURL)
@@ -296,7 +299,7 @@ describe('AccountTestModal', () => {
     const wrapper = mountModal({ id: 42, name: 'Media', platform: 'imagevideo', type: 'apikey', status: 'active', extra: { media_models: [cap] } })
     await wrapper.setProps({ show: true })
     await flushPromises()
-    const player = wrapper.find(type)
+    const player = type === 'image' ? wrapper.get('img[alt="test-image-1"]') : wrapper.find(type)
     expect(player.attributes('src')).toBe(objectURL)
     const artifactCall = (global.fetch as any).mock.calls.find((call: any[]) => call[0].includes('/artifacts/'))
     expect(artifactCall[1].headers.Authorization).toBe('Bearer test-token')
@@ -304,10 +307,88 @@ describe('AccountTestModal', () => {
     expect(wrapper.find('[role="alert"]').text()).toContain('浏览器无法播放')
     expect(wrapper.find('a[download]').attributes('href')).toBe(objectURL)
     expect((global.fetch as any).mock.calls.every((call: any[]) => !call[1]?.method)).toBe(true)
-    await player.trigger('loadedmetadata')
+    await player.trigger(type === 'image' ? 'load' : 'loadedmetadata')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
     expect(revokeObjectURL).toHaveBeenCalledWith(objectURL)
+  })
+
+  it('does not send administrator credentials to external artifact hosts', async () => {
+    const cap = newMediaCapability('gpt-image-2.5')
+    getAvailableModels.mockResolvedValue([{ id: cap.model, display_name: cap.model }])
+    const result = {
+      test_id: 'mt_external', model: cap.model, status: 'completed', test_kind: 'minimal', operation: 'image',
+      started_at: new Date().toISOString(), config_changed: false, request: {},
+      artifacts: [{ type: 'image', content_url: 'https://media.example.test/result.png', mime_type: 'image/png', available: true }]
+    }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: result }) }) as any
+    const wrapper = mountModal({ id: 42, name: 'Media', platform: 'imagevideo', type: 'apikey', status: 'active', extra: { media_models: [cap] } })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.get('img[alt="test-image-1"]').attributes('src')).toBe('https://media.example.test/result.png')
+    expect((global.fetch as any).mock.calls).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('discards artifact reads that finish after the dialog closes', async () => {
+    const cap = newMediaCapability('gpt-image-2.5')
+    getAvailableModels.mockResolvedValue([{ id: cap.model, display_name: cap.model }])
+    let finishBlob!: (blob: Blob) => void
+    const pendingBlob = new Promise<Blob>(resolve => { finishBlob = resolve })
+    const createObjectURL = vi.fn(() => 'blob:stale')
+    const OriginalURL = globalThis.URL
+    vi.stubGlobal('URL', Object.assign(class extends OriginalURL {}, { createObjectURL, revokeObjectURL: vi.fn() }))
+    const result = {
+      test_id: 'mt_closed', model: cap.model, status: 'completed', test_kind: 'minimal', operation: 'image',
+      started_at: new Date().toISOString(), config_changed: false, request: {},
+      artifacts: [{ type: 'image', content_url: '/api/v1/admin/accounts/42/tests/mt_closed/artifacts/media1', available: true }]
+    }
+    global.fetch = vi.fn().mockImplementation(url => Promise.resolve(url.includes('/artifacts/')
+      ? { ok: true, blob: () => pendingBlob }
+      : { ok: true, status: 200, json: async () => ({ data: result }) })) as any
+    const wrapper = mountModal({ id: 42, name: 'Media', platform: 'imagevideo', type: 'apikey', status: 'active', extra: { media_models: [cap] } })
+    void wrapper.setProps({ show: true })
+    await flushPromises()
+    await wrapper.setProps({ show: false })
+    finishBlob(new Blob(['image'], { type: 'image/png' }))
+    await flushPromises()
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(wrapper.find('img[alt="test-image-1"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('retains the completed test when artifact retrieval fails and retries only the read', async () => {
+    const cap = newMediaCapability('gpt-image-2.5')
+    const source = '/api/v1/admin/accounts/42/tests/mt_retry/artifacts/media1'
+    getAvailableModels.mockResolvedValue([{ id: cap.model, display_name: cap.model }])
+    const result = {
+      test_id: 'mt_retry', model: cap.model, status: 'completed', test_kind: 'minimal', operation: 'image',
+      started_at: new Date().toISOString(), config_changed: false, request: {},
+      artifacts: [{ type: 'image', content_url: source, mime_type: 'image/png', available: true }]
+    }
+    const objectURL = 'blob:retry-image'
+    const OriginalURL = globalThis.URL
+    vi.stubGlobal('URL', Object.assign(class extends OriginalURL {}, { createObjectURL: vi.fn(() => objectURL), revokeObjectURL: vi.fn() }))
+    let reads = 0
+    global.fetch = vi.fn().mockImplementation(url => {
+      if (url.includes('/artifacts/')) {
+        reads++
+        return Promise.resolve(reads === 1 ? { ok: false } : { ok: true, blob: async () => new Blob(['image'], { type: 'image/png' }) })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ data: result }) })
+    }) as any
+    const wrapper = mountModal({ id: 42, name: 'Media', platform: 'imagevideo', type: 'apikey', status: 'active', extra: { media_models: [cap] } })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.text()).toContain('mt_retry')
+    expect(wrapper.find('[role="alert"]').text()).toContain('浏览器无法播放')
+    await wrapper.findAll('button').find(button => button.text() === '重试预览')!.trigger('click')
+    await flushPromises()
+    expect(reads).toBe(2)
+    expect(wrapper.get('img[alt="test-image-1"]').attributes('src')).toBe(objectURL)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect((global.fetch as any).mock.calls.every((call: any[]) => !call[1]?.method)).toBe(true)
+    wrapper.unmount()
   })
 
 })
