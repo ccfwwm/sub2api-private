@@ -1,6 +1,36 @@
 # 多模态生产发布记录
 
-## 当前生产：v1.2.17
+## 当前生产：v1.2.18
+
+北京时间 **2026-10-22 04:50:25** 已按用户授权完成立即切换。升级任务为 `succeeded`，应用容器 healthy；三个公网入口均返回版本 `1.2.18`。
+
+- 发布提交及不可变标签：`072e3731bb66fe71222238e1f285afe384ec7e8b`、`v1.2.18`。
+- 应用镜像：`ghcr.io/ccfwwm/sub2api-private@sha256:7f67f14294358029ab67a5c979950890df5051ca54c89448eb9c315517f4cabf`。
+- 文档镜像：`ghcr.io/ccfwwm/sub2api-private-docs@sha256:4e5e3444085111a23d94790974c42ef4ce02c199d371ad7f0997315c20600d8e`。
+- 升级任务：`abd5e287b7914977b5c8204e5b50395e`；备份：`68b4602a7fa040d18503d9652fc7ce11`。
+- [正式发布](https://github.com/ccfwwm/sub2api-private/releases/tag/v1.2.18)；修复内容见 [RELEASE_v1.2.18.md](RELEASE_v1.2.18.md)。
+
+本次立即替换应用和文档容器，不等待自然空闲。没有新增数据库迁移；PostgreSQL、Redis 的容器身份、镜像、启动时间与发布前相同。生产备份与升级回退记录保留，回滚须使用对应备份及历史发布清单，不以数据库恢复覆盖当前业务数据。
+
+### 生产浏览器与公网验收
+
+- `code.aicodeme.xyz`、`code.aicodeme.cn`、`hkcode.aicodeme.xyz` 的 `/health`、公共设置、`/docs/imagevideo`、`/media-tasks` 均为 HTTP 200；公共版本为 `1.2.18`。未登录访问管理员模板接口均为 HTTP 401。
+- 在真实管理员会话中确认“媒体能力”侧栏含账号模型、协议模板、联调检测、媒体任务四个入口；协议模板加载 19 项，图片生成模板的编辑表单可打开，验收未修改生产模板。
+- 账号 2114 的 `gpt-image-2-1k` 仅提交一次新图片测试，记录 `mt_a4e9aa70aab04f8d91004ba538bd9ad7` 为 completed，耗时 15 秒。图片通过同源认证读取为 blob，浏览器实际解码为 PNG 1254×1254，并在测试弹窗显示。
+- 个人 `/media-tasks` 显示当前登录用户的 194 条历史记录、10 页；末页成功加载，最早可见记录为北京时间 2026-10-14 22:24:51，图片、音频和视频历史均保留。管理员任务入口加载 245 条记录。个人历史不再受用量页默认最近一天日期范围遮挡。
+- 本轮浏览器验收使用管理员会话的个人任务页；普通用户的权限隔离由自动化测试覆盖，没有宣称现场切换普通账号验收。页面日志仅见切换时刻的一次用户信息自动刷新失败，未见此次验收产生的新错误。
+
+本轮新提交的付费验收为上述图片任务；音频和视频沿用下方 v1.2.17 的历史实测结果，本轮未重新提交音视频生成任务。原失败任务仍保留失败及已释放状态，不改写历史为成功。
+
+### 自动化与产物校验
+
+前端全量测试 377 个文件、2867 项通过；最后补充用例后，相关 5 个文件、31 项定向回归通过，lint、typecheck 和生产构建通过。Go 媒体、服务和处理器单元测试及 vet 通过，golangci-lint v2.14.0 为 0 issues；全新隔离 PostgreSQL 的媒体与迁移测试 337 项通过、0 失败、0 跳过。部署工具测试 67 项通过、1 项跳过。正式 digest 的隔离启动、登录、16 个内置模板、权限隔离、模板生命周期和 Base64 映射验收通过。
+
+发布提交的 [main CI](https://github.com/ccfwwm/sub2api-private/actions/runs/39671965980) 与 [标签 CI](https://github.com/ccfwwm/sub2api-private/actions/runs/39672855579) 的六个任务均成功；[main 安全扫描](https://github.com/ccfwwm/sub2api-private/actions/runs/39671965644) 与 [标签安全扫描](https://github.com/ccfwwm/sub2api-private/actions/runs/39672855612) 均成功。重复触发的 [Private Release](https://github.com/ccfwwm/sub2api-private/actions/runs/39672855493) 因正式 Release 已存在，在 validate 门禁拒绝，未构建或覆盖正式镜像。
+
+脱敏摘要见 [production-v1.2.18-evidence.json](production-v1.2.18-evidence.json)，本地原始验收日志与截图保留于 `output/media-v1218/`。本段为发布后证据同步，不移动 `v1.2.18` 标签、不重新构建或再次部署。
+
+## 历史生产：v1.2.17
 
 北京时间 **2026-10-22 01:52:51** 已按用户授权完成立即切换。升级任务最终状态为 `succeeded`；三个公网入口的 `/health` 和 `/api/v1/settings/public` 均返回 HTTP 200，版本为 `1.2.17`。
 
