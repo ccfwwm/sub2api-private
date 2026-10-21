@@ -661,6 +661,7 @@ export default {
     loading: 'Loading...',
     empty: 'No groups to display',
     loadFailed: 'Failed to load model plaza',
+    partialUnavailable: 'Some media models are temporarily unavailable. Other available models are shown. Please try again later.',
     noSearchResult: 'No matching models',
     anonymousHint: 'Sign in to see your exclusive groups and personal rates',
     filters: {

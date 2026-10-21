@@ -8,11 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/shopspring/decimal"
 	_ "golang.org/x/image/webp"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,6 +20,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/shopspring/decimal"
 )
 
 type Engine struct {
@@ -72,7 +75,9 @@ func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability
 	if e.Config != nil {
 		caps, cards, err := e.Config(ctx, groupID)
 		if err == nil && e.Store != nil {
-			caps, err = e.Store.ResolveTemplates(ctx, caps)
+			var issues []TemplateResolutionIssue
+			caps, issues, err = e.Store.ResolveTemplatesIsolated(ctx, caps)
+			logTemplateResolutionIssues(ctx, issues)
 		}
 		for _, cap := range caps {
 			if cap.Enabled {
@@ -84,9 +89,25 @@ func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability
 	}
 	caps, cards, err := e.Store.Published(ctx)
 	if err == nil {
-		caps, err = e.Store.ResolveTemplates(ctx, caps)
+		var issues []TemplateResolutionIssue
+		caps, issues, err = e.Store.ResolveTemplatesIsolated(ctx, caps)
+		logTemplateResolutionIssues(ctx, issues)
 	}
 	return caps, cards, err
+}
+
+func logTemplateResolutionIssues(ctx context.Context, issues []TemplateResolutionIssue) {
+	for _, issue := range issues {
+		slog.Error("media_template_resolution_failed",
+			"group_id", issue.GroupID,
+			"account_id", issue.AccountID,
+			"model", issue.Model,
+			"binding_ids", issue.BindingIDs,
+			"request_id", ctx.Value(ctxkey.RequestID),
+			"client_request_id", ctx.Value(ctxkey.ClientRequestID),
+			"error", issue.Err,
+		)
+	}
 }
 func (e *Engine) Capability(ctx context.Context, model, operation string, identity Identity) (*Capability, error) {
 	caps, _, err := e.configuration(ctx, identity.GroupID)

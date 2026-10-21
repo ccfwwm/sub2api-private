@@ -6,11 +6,20 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+type TemplateResolutionIssue struct {
+	GroupID    int64
+	AccountID  int64
+	Model      string
+	BindingIDs []string
+	Err        error
+}
 
 //go:embed templates.json
 var builtinTemplateJSON []byte
@@ -310,22 +319,7 @@ func mergeRuleLayers(rules []ParameterRule) []ParameterRule {
 func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load func(TemplateRef) (ProtocolTemplate, error)) ([]Capability, error) {
 	ordered := append([]ModelBinding{}, bindings...)
 	sort.SliceStable(ordered, func(i, j int) bool { return bindingRank(ordered[i]) < bindingRank(ordered[j]) })
-	expanded := []Capability{}
-	for _, cap := range caps {
-		if len(cap.GroupIDs) > 1 || len(cap.AccountIDs) > 1 {
-			for _, group := range cap.GroupIDs {
-				for _, account := range cap.AccountIDs {
-					candidate := cap
-					candidate.GroupIDs = []int64{group}
-					candidate.AccountIDs = []int64{account}
-					candidate.ID = fmt.Sprintf("%s:g%d:a%d", cap.ID, group, account)
-					expanded = append(expanded, candidate)
-				}
-			}
-		} else {
-			expanded = append(expanded, cap)
-		}
-	}
+	expanded := expandCapabilitySelectors(caps)
 	out := make([]Capability, 0, len(expanded))
 	for _, original := range expanded {
 		cap := original
@@ -334,7 +328,7 @@ func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load fu
 		// Preserve explicit legacy field overrides. Protocol selection itself is
 		// pinned by a persisted template_ref or an administrator binding.
 		for source, target := range cap.FieldMapping {
-			if source != target && source != "model" && !contains([]string{"images", "videos", "audios", "masks"}, source) && target != "" && configPath.MatchString(target) && !strings.ContainsAny(target, ":[") {
+			if source != target && source != "model" && !contains([]string{"image", "video", "audio", "mask", "images", "videos", "audios", "masks"}, source) && target != "" && configPath.MatchString(target) && !strings.ContainsAny(target, ":[") {
 				cap.TemplateRules = append(cap.TemplateRules, ParameterRule{Phase: "wire", Op: "rename", Source: source, Target: target})
 			}
 		}
@@ -369,7 +363,17 @@ func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load fu
 			return nil, err
 		}
 		for i, m := range t.Materials {
-			if target := original.FieldMapping[m.Kind+"s"]; target != "" && configPath.MatchString(target) && !strings.ContainsAny(target, ":[") {
+			target := original.FieldMapping[m.Kind+"s"]
+			if target == "" {
+				target = original.FieldMapping[m.Kind]
+				// Legacy single-material paths include the serialized URL leaf.
+				// The explicit template already supplies that envelope; applying a
+				// rename would reject image -> image.url or wrap the URL twice.
+				if m.Shape == "url" && strings.HasSuffix(target, ".url") {
+					target = strings.TrimSuffix(target, ".url")
+				}
+			}
+			if target != "" && configPath.MatchString(target) && !strings.ContainsAny(target, ":[") {
 				t.Materials[i].Target = target
 			}
 		}
@@ -405,6 +409,63 @@ func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load fu
 		out = append(out, cap)
 	}
 	return out, nil
+}
+
+func expandCapabilitySelectors(caps []Capability) []Capability {
+	expanded := []Capability{}
+	for _, cap := range caps {
+		if len(cap.GroupIDs) > 1 || len(cap.AccountIDs) > 1 {
+			for _, group := range cap.GroupIDs {
+				for _, account := range cap.AccountIDs {
+					candidate := cap
+					candidate.GroupIDs = []int64{group}
+					candidate.AccountIDs = []int64{account}
+					candidate.ID = fmt.Sprintf("%s:g%d:a%d", cap.ID, group, account)
+					expanded = append(expanded, candidate)
+				}
+			}
+		} else {
+			expanded = append(expanded, cap)
+		}
+	}
+	return expanded
+}
+
+// ResolveTemplateBindingsIsolated retains disabled selectors so failed profiles
+// cannot fall back to legacy routing. Infrastructure errors still fail the read.
+func ResolveTemplateBindingsIsolated(caps []Capability, bindings []ModelBinding, load func(TemplateRef) (ProtocolTemplate, error)) ([]Capability, []TemplateResolutionIssue, error) {
+	expanded := expandCapabilitySelectors(caps)
+	resolved := make([]Capability, 0, len(expanded))
+	issues := []TemplateResolutionIssue{}
+	for _, candidate := range expanded {
+		items, err := ResolveTemplateBindings([]Capability{candidate}, bindings, load)
+		if err == nil {
+			resolved = append(resolved, items...)
+			continue
+		}
+		var configError *Error
+		if !errors.As(err, &configError) || configError.Status >= 500 {
+			return nil, issues, err
+		}
+
+		candidate.Enabled = false
+		candidate.ValidationStatus = "协议绑定配置错误: " + err.Error()
+		resolved = append(resolved, candidate)
+		issue := TemplateResolutionIssue{Model: candidate.Model, Err: err}
+		if len(candidate.GroupIDs) > 0 {
+			issue.GroupID = candidate.GroupIDs[0]
+		}
+		if len(candidate.AccountIDs) > 0 {
+			issue.AccountID = candidate.AccountIDs[0]
+		}
+		for _, binding := range bindings {
+			if binding.Status == "enabled" && containsInt64(candidate.GroupIDs, binding.GroupID) && (binding.Model == "" || binding.Model == candidate.Model) && (binding.AccountID == 0 || containsInt64(candidate.AccountIDs, binding.AccountID)) {
+				issue.BindingIDs = append(issue.BindingIDs, binding.ID)
+			}
+		}
+		issues = append(issues, issue)
+	}
+	return resolved, issues, nil
 }
 func configurationDigest(values ...any) string {
 	raw, _ := json.Marshal(values)
@@ -443,4 +504,41 @@ func (s *Store) ResolveTemplates(ctx context.Context, caps []Capability) ([]Capa
 		err = json.Unmarshal(r.Config, &t)
 		return t, err
 	})
+}
+
+func (s *Store) ResolveTemplatesIsolated(ctx context.Context, caps []Capability) ([]Capability, []TemplateResolutionIssue, error) {
+	if err := s.EnsureBuiltinTemplates(ctx); err != nil {
+		return nil, nil, err
+	}
+	records, err := s.Configs(ctx, "binding", true)
+	if err != nil {
+		return nil, nil, err
+	}
+	bindings := make([]ModelBinding, 0, len(records))
+	for _, record := range records {
+		var binding ModelBinding
+		if err := json.Unmarshal(record.Config, &binding); err != nil {
+			// A malformed selector cannot be safely scoped to an account/model.
+			return nil, nil, fmt.Errorf("binding %s: %w", record.ID, err)
+		}
+		bindings = append(bindings, binding)
+	}
+	cache := map[TemplateRef]json.RawMessage{}
+	load := func(ref TemplateRef) (ProtocolTemplate, error) {
+		raw, ok := cache[ref]
+		if !ok {
+			record, err := s.ConfigVersion(ctx, "template", ref.ID, ref.Version)
+			if err != nil {
+				return ProtocolTemplate{}, err
+			}
+			raw = record.Config
+			cache[ref] = raw
+		}
+		var template ProtocolTemplate
+		if err := json.Unmarshal(raw, &template); err != nil {
+			return ProtocolTemplate{}, fail(422, "invalid_template_config", "Pinned template has invalid fields")
+		}
+		return template, nil
+	}
+	return ResolveTemplateBindingsIsolated(caps, bindings, load)
 }

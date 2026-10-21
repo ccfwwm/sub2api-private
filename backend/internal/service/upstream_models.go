@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -144,10 +145,11 @@ const (
 
 // UpstreamModelSyncError keeps internal failure details wrapped while exposing a safe client message.
 type UpstreamModelSyncError struct {
-	Kind       UpstreamModelSyncErrorKind
-	Message    string
-	StatusCode int
-	Err        error
+	Kind              UpstreamModelSyncErrorKind
+	Message           string
+	StatusCode        int
+	RetryAfterSeconds int
+	Err               error
 }
 
 func (e *UpstreamModelSyncError) Error() string {
@@ -766,11 +768,16 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		retryAfterSeconds := 0
+		if resp.StatusCode == http.StatusTooManyRequests {
+			retryAfterSeconds = upstreamModelRetryAfterSeconds(resp.Header, time.Now())
+		}
 		return nil, nil, &UpstreamModelSyncError{
-			Kind:       UpstreamModelSyncErrorUpstream,
-			Message:    fmt.Sprintf("Upstream model list request failed with HTTP %d", resp.StatusCode),
-			StatusCode: resp.StatusCode,
-			Err:        fmt.Errorf("upstream model list returned HTTP %d", resp.StatusCode),
+			Kind:              UpstreamModelSyncErrorUpstream,
+			Message:           fmt.Sprintf("Upstream model list request failed with HTTP %d", resp.StatusCode),
+			StatusCode:        resp.StatusCode,
+			RetryAfterSeconds: retryAfterSeconds,
+			Err:               fmt.Errorf("upstream model list returned HTTP %d", resp.StatusCode),
 		}
 	}
 
@@ -787,6 +794,39 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 	}
 
 	return models, body, nil
+}
+
+func upstreamModelRetryAfterSeconds(header http.Header, now time.Time) int {
+	const maxRetryAfterSeconds = 24 * 60 * 60
+	raw := strings.TrimSpace(header.Get("Retry-After"))
+	if raw == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds <= 0 {
+			return 0
+		}
+		if seconds > maxRetryAfterSeconds {
+			return maxRetryAfterSeconds
+		}
+		return seconds
+	}
+	when, err := http.ParseTime(raw)
+	if err != nil {
+		return 0
+	}
+	delay := when.Sub(now)
+	if delay <= 0 {
+		return 0
+	}
+	seconds := int(delay / time.Second)
+	if delay%time.Second != 0 {
+		seconds++
+	}
+	if seconds > maxRetryAfterSeconds {
+		return maxRetryAfterSeconds
+	}
+	return seconds
 }
 
 func (s *AccountTestService) buildUpstreamModelsRequest(ctx context.Context, account *Account) (*http.Request, error) {

@@ -3094,6 +3094,10 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 	if err != nil {
 		var syncErr *service.UpstreamModelSyncError
 		if errors.As(err, &syncErr) {
+			if syncErr.Kind == service.UpstreamModelSyncErrorUpstream && syncErr.StatusCode == http.StatusTooManyRequests {
+				respondUpstreamModelSyncRateLimit(c, syncErr, "account", accountID)
+				return
+			}
 			switch syncErr.Kind {
 			case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
 				response.BadRequest(c, syncErr.SafeMessage())
@@ -3152,6 +3156,10 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 	if err != nil {
 		var syncErr *service.UpstreamModelSyncError
 		if errors.As(err, &syncErr) {
+			if syncErr.Kind == service.UpstreamModelSyncErrorUpstream && syncErr.StatusCode == http.StatusTooManyRequests {
+				respondUpstreamModelSyncRateLimit(c, syncErr, "preview", 0)
+				return
+			}
 			switch syncErr.Kind {
 			case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
 				response.BadRequest(c, syncErr.SafeMessage())
@@ -3170,6 +3178,22 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 	}
 
 	response.Success(c, catalog)
+}
+
+func respondUpstreamModelSyncRateLimit(c *gin.Context, syncErr *service.UpstreamModelSyncError, scope string, accountID int64) {
+	metadata := map[string]string{"upstream_status_code": strconv.Itoa(syncErr.StatusCode)}
+	if syncErr.RetryAfterSeconds > 0 {
+		c.Header("Retry-After", strconv.Itoa(syncErr.RetryAfterSeconds))
+		metadata["retry_after_seconds"] = strconv.Itoa(syncErr.RetryAfterSeconds)
+	}
+	slog.Warn("upstream_model_sync_rate_limited",
+		"scope", scope,
+		"account_id", accountID,
+		"retry_after_seconds", syncErr.RetryAfterSeconds,
+	)
+	response.ErrorWithDetails(c, http.StatusBadGateway,
+		"Upstream rate-limited model discovery; wait before trying again",
+		"UPSTREAM_RATE_LIMITED", metadata)
 }
 
 // SetPrivacy handles setting privacy for a single OpenAI/Antigravity OAuth account

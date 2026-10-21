@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.14 preserves media references and provider extension parameters, maps V6K images/videos/audios, and exposes sanitized actual upstream submission receipts in task details. Existing balance holds, settlement algorithms, prices, migrations and accounting records are unchanged.",
+  "version_note": "Private release 1.2.16 fixes legacy single-material mappings, isolates invalid media bindings and group catalogs, and adds administrator model discovery, template forms and read-only channel pricing status. Production cutover remains a separate manual operation.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

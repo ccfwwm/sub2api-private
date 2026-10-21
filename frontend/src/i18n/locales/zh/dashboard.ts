@@ -666,6 +666,7 @@ export default {
     loading: '加载中...',
     empty: '暂无可展示的分组',
     loadFailed: '加载模型广场失败',
+    partialUnavailable: '部分媒体模型暂时无法加载，其他可用模型仍可查看。请稍后重试。',
     noSearchResult: '没有匹配的模型',
     anonymousHint: '登录后可查看你的专属分组与专属倍率',
     filters: {

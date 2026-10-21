@@ -595,6 +595,33 @@ func TestSyncUpstreamModelCatalogDoesNotUseConfiguredModelsForRealUpstreamFailur
 	}
 }
 
+func TestSyncUpstreamModelCatalogPreservesBoundedRetryAfterOn429(t *testing.T) {
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{"73"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":"private upstream details"}`)),
+	}}
+	svc := &AccountTestService{httpUpstream: upstream, cfg: upstreamModelSyncTestConfig()}
+
+	_, err := svc.SyncUpstreamModelCatalog(context.Background(), &Account{
+		ID: 98, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "key", "base_url": "https://provider.example/v1"},
+	})
+
+	var syncErr *UpstreamModelSyncError
+	require.ErrorAs(t, err, &syncErr)
+	require.Equal(t, UpstreamModelSyncErrorUpstream, syncErr.Kind)
+	require.Equal(t, http.StatusTooManyRequests, syncErr.StatusCode)
+	require.Equal(t, 73, syncErr.RetryAfterSeconds)
+	require.NotContains(t, syncErr.Error(), "private upstream details")
+}
+
+func TestUpstreamModelRetryAfterSecondsRejectsInvalidAndBoundsLargeValues(t *testing.T) {
+	require.Zero(t, upstreamModelRetryAfterSeconds(http.Header{"Retry-After": []string{"token=secret"}}, time.Now()))
+	require.Equal(t, 24*60*60, upstreamModelRetryAfterSeconds(http.Header{"Retry-After": []string{"999999999999"}}, time.Now()))
+	require.Equal(t, 0, upstreamModelRetryAfterSeconds(http.Header{"Retry-After": []string{"-1"}}, time.Now()))
+}
+
 func TestSyncUpstreamModelCatalogRequiresConfiguredModelsForUnsupportedListEndpoint(t *testing.T) {
 	upstream := &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusMethodNotAllowed,

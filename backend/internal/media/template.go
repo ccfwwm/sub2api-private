@@ -367,7 +367,7 @@ func equivalentBillingValue(a, b any) bool {
 func ValidateParameterRules(rules []ParameterRule) error {
 	targets := map[string]bool{}
 	moves := map[string]string{}
-	for _, r := range rules {
+	for index, r := range rules {
 		if !contains([]string{"semantic", "wire"}, r.Phase) || !contains([]string{"default", "fixed", "rename", "copy", "map", "convert", "wrap", "remove", "allow"}, r.Op) {
 			return fail(400, "invalid_parameter_rule", "Unknown phase or operation")
 		}
@@ -396,7 +396,7 @@ func ValidateParameterRules(rules []ParameterRule) error {
 		key := r.Phase + ":" + strings.Join(pathParts(target), ".")
 		for previous := range targets {
 			if previous == key || strings.HasPrefix(previous, key+".") || strings.HasPrefix(key, previous+".") {
-				return fail(409, "parameter_rule_conflict", "Duplicate or overlapping rule targets")
+				return fail(409, "parameter_rule_conflict", fmt.Sprintf("Rule %d (%s %s): target %q overlaps %q", index+1, r.Phase, r.Op, target, strings.TrimPrefix(previous, r.Phase+":")))
 			}
 		}
 		targets[key] = true
@@ -418,7 +418,7 @@ func ValidateParameterRules(rules []ParameterRule) error {
 			source := strings.Join(pathParts(r.Source), ".")
 			destination := strings.Join(pathParts(r.Target), ".")
 			if strings.HasPrefix(source, destination+".") || strings.HasPrefix(destination, source+".") {
-				return fail(409, "parameter_rule_conflict", "Rename source and target cannot contain one another")
+				return fail(409, "parameter_rule_conflict", fmt.Sprintf("Rule %d (%s rename): source %q and target %q cannot contain one another", index+1, r.Phase, r.Source, r.Target))
 			}
 			if source != destination {
 				moves[r.Phase+":"+source] = r.Phase + ":" + destination

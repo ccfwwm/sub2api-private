@@ -33,6 +33,7 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
+      <p v-if="response?.notices?.includes('media_catalog_partial_unavailable')" role="status" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">{{ t('modelPlaza.partialUnavailable') }}</p>
       <!-- 筛选区:平台 → 分组 → 倍率 -->
       <PlazaFilterBar
         :platforms="platforms"

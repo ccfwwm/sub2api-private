@@ -486,7 +486,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Media models and billing'
+      title: 'Media management'
     }
   },
   {

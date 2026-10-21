@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { mediaProtocolsAPI } from '@/api/media-protocols'
 import type { MediaConfigRecord } from '@/api/media'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
-import { accountMediaCapabilities, newMediaCapability, type MediaCapability } from '@/types/media'
+import MediaParameterRulesEditor from '@/components/media/MediaParameterRulesEditor.vue'
+import { accountMediaCapabilities, mergeDiscoveredMediaModels, newMediaCapability, type MediaCapability } from '@/types/media'
 import type { Account } from '@/types'
 const props = defineProps<{ modelValue: MediaCapability[]; accountId?: number; account?: Account; baseUrl: string; apiKey?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [MediaCapability[]] }>()
 const { locale } = useI18n()
 const tr = (zh: string, en: string) => (locale?.value ?? 'zh').startsWith('zh') ? zh : en
 const candidates = ref<string[]>([]), error = ref(''), loading = ref(false), selected = ref('')
-const advanced = ref<number | null>(null), testingModel = ref<string | null>(null)
+const retryAfterRemaining = ref(0)
+let retryTimer: ReturnType<typeof setInterval> | undefined
+const advanced = ref<number | null>(props.modelValue[0]?.adapter ? null : 0), testingModel = ref<string | null>(null)
 const templates = ref<MediaConfigRecord[]>([])
+const importNotice = ref(''), bulkTemplate = ref(''), selectedModels = ref<string[]>([])
 const pinnedTemplates = ref<Record<string, Record<string, unknown>>>({})
 onMounted(async () => {
   try {
@@ -27,6 +31,7 @@ onMounted(async () => {
     }
   } catch (e) { error.value = (e as Error).message }
 })
+onUnmounted(() => { if (retryTimer) clearInterval(retryTimer) })
 const val = (e: Event) => (e.target as HTMLInputElement).value
 const csv = (s: string) => s.split(/[,，\n]/).map(v => v.trim()).filter(Boolean)
 const saved = computed(() => props.account && accountMediaCapabilities(props.account.extra, props.account.credentials))
@@ -46,7 +51,35 @@ async function sync() {
   try {
     const result = props.accountId && !props.apiKey && props.baseUrl === String(props.account?.credentials?.base_url || '') ? await adminAPI.accounts.syncUpstreamModels(props.accountId) : await adminAPI.accounts.syncUpstreamModelsPreview({platform:'imagevideo',type:'apikey',base_url:props.baseUrl,api_key:props.apiKey || String(props.account?.credentials?.api_key || '')})
     candidates.value = result.models
-  } catch (e) { error.value = (e as {message?:string}).message || tr('同步失败','Sync failed') }
+    const merged = mergeDiscoveredMediaModels(props.modelValue, result.models)
+    importNotice.value = tr(`发现 ${result.models.length} 个模型，新增 ${merged.length - props.modelValue.length} 个待绑定模型。保存账号后生效。`, `Found ${result.models.length} models; added ${merged.length - props.modelValue.length} unbound models. Save the account to apply.`)
+    emit('update:modelValue', merged)
+  } catch (e) {
+    const failure = e as { status?: number; code?: string | number; reason?: string; retryAfterSeconds?: number; message?: string }
+    const retrySeconds = Math.max(0, Math.min(24 * 60 * 60, Number(failure.retryAfterSeconds) || 0))
+    if (retrySeconds > 0) {
+      retryAfterRemaining.value = retrySeconds
+      if (retryTimer) clearInterval(retryTimer)
+      retryTimer = setInterval(() => {
+        retryAfterRemaining.value = Math.max(0, retryAfterRemaining.value - 1)
+        if (retryAfterRemaining.value === 0 && retryTimer) {
+          clearInterval(retryTimer)
+          retryTimer = undefined
+        }
+      }, 1000)
+    }
+    if (failure.reason === 'UPSTREAM_RATE_LIMITED') {
+      error.value = retrySeconds > 0
+        ? tr(`上游模型列表接口触发 429 限流，请 ${retrySeconds} 秒后手动重试。未自动重试。`, `The upstream model-list endpoint returned 429. Retry manually in ${retrySeconds} seconds; no automatic retry was sent.`)
+        : tr('上游模型列表接口触发 429 限流，请稍后手动重试。未自动重试。', 'The upstream model-list endpoint returned 429. Retry manually later; no automatic retry was sent.')
+    } else if (failure.code === 'RATE_LIMITED') {
+      error.value = retrySeconds > 0
+        ? tr(`Sub2API 管理接口触发限流，请 ${retrySeconds} 秒后重试。`, `Sub2API admin API is rate-limited. Retry in ${retrySeconds} seconds.`)
+        : tr('Sub2API 管理接口触发限流，请稍后重试。', 'Sub2API admin API is rate-limited. Retry later.')
+    } else {
+      error.value = failure.message || tr('同步失败','Sync failed')
+    }
+  }
   finally { loading.value = false }
 }
 function chooseTemplate(c: MediaCapability, id: string) {
@@ -59,6 +92,11 @@ function chooseTemplate(c: MediaCapability, id: string) {
   c.operations = c.operations.filter(operation => operations.includes(operation))
   if (!c.operations.length && operations.length === 1) c.operations = [...operations]
   c.formats=['json','multipart'];c.duration.required=c.media_type==='video'
+}
+function bindSelected() {
+  const all: MediaCapability[] = JSON.parse(JSON.stringify(props.modelValue))
+  for (const cap of all) if (selectedModels.value.includes(cap.model)) { chooseTemplate(cap, bulkTemplate.value); cap.enabled = false }
+  emit('update:modelValue', all)
 }
 function selectedTemplate(c: MediaCapability): Record<string, unknown> | undefined {
   const row = templates.value.find(item => item.id === c.template_ref?.id)
@@ -93,21 +131,24 @@ function testStatus(c: MediaCapability) {
 </script>
 <template>
   <section class="space-y-3 rounded-xl border p-4 dark:border-dark-600">
-    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold">{{ tr('模型配置','Model configuration') }}</h3><div class="flex gap-2"><button class="btn btn-secondary" type="button" :disabled="loading" @click="sync">{{ loading ? tr('同步中…','Syncing…') : tr('同步候选模型','Discover models') }}</button><button class="btn btn-secondary" type="button" @click="add()">{{ tr('手动添加','Add manually') }}</button></div></div>
+    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold">{{ tr('模型配置','Model configuration') }}</h3><div class="flex gap-2"><button class="btn btn-secondary" type="button" :disabled="loading || retryAfterRemaining > 0" @click="sync">{{ loading ? tr('同步中…','Syncing…') : retryAfterRemaining > 0 ? `${tr('等待','Wait')} ${retryAfterRemaining}s` : tr('一键拉取全部模型','Import all models') }}</button><button class="btn btn-secondary" type="button" @click="add()">{{ tr('手动添加','Add manually') }}</button></div></div>
     <p class="text-xs text-gray-500">{{ tr('模型需明确选择协议模板后启用。可在媒体管理中编辑、复制模板与配置分组覆盖。同步只发现候选模型，业务调用需要分组或渠道定价。','Choose a protocol template explicitly before enabling a model. Edit templates and group bindings in media administration. Discovery and template selection do not change pricing.') }}</p>
     <p v-if="mappingConflict" class="text-xs text-amber-600">{{ tr('旧映射与媒体能力不一致：当前按本表路由，保存后统一映射。','Legacy mappings differ from capabilities. This table determines routing; saving reconciles mappings.') }}</p>
     <p v-if="!canTest" class="text-xs text-gray-500">{{ tr('测试使用已保存的账号配置，请先保存新账号或配置修改。','Tests use saved settings. Save new accounts or changes first.') }}</p>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
+    <p v-if="importNotice" role="status" class="text-sm text-green-700">{{ importNotice }}</p>
+    <div v-if="modelValue.length" class="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-3 dark:bg-dark-800"><label class="text-sm"><input type="checkbox" :checked="selectedModels.length === modelValue.length" @change="selectedModels = ($event.target as HTMLInputElement).checked ? modelValue.map(c=>c.model) : []" /> 全选模型</label><select v-model="bulkTemplate" class="input" aria-label="批量协议模板"><option value="">选择批量绑定模板</option><option v-for="row in templates.filter(row=>row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><button type="button" class="btn btn-secondary" :disabled="!selectedModels.length || !bulkTemplate" @click="bindSelected">绑定所选（{{ selectedModels.length }}）</button><span class="text-xs text-gray-500">批量绑定后请检查请求能力，模型保持停用。</span></div>
     <div v-if="candidates.length" class="flex flex-wrap gap-2"><select v-model="selected" class="input max-w-md"><option value="">{{ tr('选择候选模型','Select a model') }}</option><option v-for="m in candidates" :key="m">{{ m }}</option></select><button type="button" class="btn btn-secondary" :disabled="!selected" @click="add(selected)">{{ tr('添加到账号','Add to account') }}</button></div>
     <p v-if="!modelValue.length" class="text-sm text-gray-500">{{ tr('先同步候选模型或手动添加。','Discover models or add one manually.') }}</p>
     <div v-else class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="text-xs text-gray-500"><th>{{ tr('模型名称','Model') }}</th><th>{{ tr('上游映射','Upstream mapping') }}</th><th>{{ tr('类型','Type') }}</th><th>{{ tr('启用','Enabled') }}</th><th>{{ tr('测试结果','Test result') }}</th><th>{{ tr('操作','Actions') }}</th></tr></thead><tbody><template v-for="(c,i) in modelValue" :key="i">
-      <tr class="border-t dark:border-dark-600"><td class="py-2 pr-2"><input class="input min-w-36" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></td><td class="pr-2"><input class="input min-w-36" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event))" /></td><td class="pr-2">{{ c.media_type || tr('待选接口','Choose interface') }}</td><td class="pr-2"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" /></td><td class="pr-2 text-xs">{{ testStatus(c) }}</td><td class="whitespace-nowrap"><button type="button" class="mr-2 text-primary-600 disabled:opacity-40" :disabled="!canTest" @click="testingModel = c.model">{{ tr('测试 / 查看','Test / view') }}</button><button type="button" class="mr-2 text-primary-600" @click="advanced = advanced === i ? null : i">{{ tr('高级设置','Advanced') }}</button><button type="button" class="text-red-600" @click="emit('update:modelValue',modelValue.filter((_,index) => index !== i))">{{ tr('移除','Remove') }}</button></td></tr>
-      <tr v-if="advanced === i || !c.adapter"><td colspan="6" class="bg-gray-50 p-3 dark:bg-dark-800"><div class="grid gap-3 sm:grid-cols-2">
+      <tr class="border-t dark:border-dark-600"><td class="py-2 pr-2"><input v-model="selectedModels" type="checkbox" :value="c.model" :aria-label="'选择模型 ' + c.model" class="mr-2" /><input class="input min-w-36" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></td><td class="pr-2"><input class="input min-w-36" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event))" /></td><td class="pr-2">{{ c.media_type || tr('待选接口','Choose interface') }}</td><td class="pr-2"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" :disabled="!c.template_ref || !c.media_type || !c.operations.length" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" /></td><td class="pr-2 text-xs">{{ testStatus(c) }}</td><td class="whitespace-nowrap"><button type="button" class="mr-2 text-primary-600 disabled:opacity-40" :disabled="!canTest" @click="testingModel = c.model">{{ tr('测试 / 查看','Test / view') }}</button><button type="button" class="mr-2 text-primary-600" @click="advanced = advanced === i ? null : i">{{ tr('配置请求能力','Configure capabilities') }}</button><button type="button" class="text-red-600" @click="emit('update:modelValue',modelValue.filter((_,index) => index !== i))">{{ tr('移除','Remove') }}</button></td></tr>
+      <tr v-if="advanced === i"><td colspan="6" class="bg-gray-50 p-3 dark:bg-dark-800"><div class="grid gap-3 sm:grid-cols-2">
         <label class="text-xs">协议模板<select class="input mt-1" aria-label="协议模板" :value="c.template_ref?.id || ''" @change="edit(i,c => chooseTemplate(c,val($event))); advanced = i"><option value="">请选择模板</option><option v-for="row in templates.filter(row => row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><a class="block text-primary-600" :href="'/admin/media?tab=bindings&account_id=' + (accountId || '')">编辑模板与分组绑定</a></label>
         <p v-if="selectedTemplate(c)?.description" class="text-xs text-gray-500">{{ selectedTemplate(c)?.description }}</p>
         <label v-if="c.template_ref" class="text-xs">{{ tr('输出媒体类型','Output media type') }}<select class="input mt-1" :aria-label="tr('输出媒体类型','Output media type')" :value="c.media_type" @change="edit(i,c => selectMediaType(c,val($event)))"><option value="">{{ tr('请选择输出媒体类型','Choose output media type') }}</option><option v-if="c.media_type && !templateOptions(c,'media_types').includes(c.media_type)" :value="c.media_type">{{ c.media_type }} · {{ tr('当前固定版本','Current pinned version') }}</option><option v-for="mediaType in templateOptions(c,'media_types')" :key="mediaType" :value="mediaType">{{ mediaType }}</option></select></label>
         <fieldset v-if="c.template_ref" class="text-xs"><legend>{{ tr('启用操作','Enabled operations') }}</legend><label v-for="operation in templateOptions(c,'operations')" :key="operation" class="mr-3 inline-flex items-center gap-1"><input type="checkbox" :aria-label="tr('启用操作 ','Enable operation ') + operation" :checked="c.operations.includes(operation)" @change="edit(i,c => selectOperation(c,operation,($event.target as HTMLInputElement).checked))" />{{ operation }}</label><p v-if="!c.media_type || !c.operations.length" class="mt-1 text-amber-600">{{ tr('请明确选择输出媒体类型及至少一项操作。','Choose an output media type and at least one operation.') }}</p></fieldset>
-        <label v-if="c.template_ref" class="text-xs sm:col-span-2">{{ tr('账号模板规则覆盖（JSON）','Account template rule overrides (JSON)') }}<textarea class="input mt-1 w-full font-mono text-xs" :aria-label="tr('账号模板规则覆盖','Account template rule overrides')" :value="JSON.stringify(c.template_rules || [],null,2)" @change="setRules(i,$event)" /></label>
+        <MediaParameterRulesEditor v-if="c.template_ref" class="sm:col-span-2" :model-value="c.template_rules || []" @update:model-value="rules => edit(i,c=>c.template_rules=rules)" />
+        <label v-if="c.template_ref" class="text-xs sm:col-span-2">{{ tr('高级规则 JSON','Advanced rules JSON') }}<textarea class="input mt-1 w-full font-mono text-xs" :aria-label="tr('账号模板规则覆盖','Account template rule overrides')" :value="JSON.stringify(c.template_rules || [],null,2)" @change="setRules(i,$event)" /></label>
         <template v-if="c.media_type === 'video'"><label class="text-xs">{{ tr('时长规则','Duration rule') }}<select class="input" :value="c.duration.mode" @change="edit(i,c => c.duration.mode = val($event))"><option value="fixed">{{ tr('固定','Fixed') }}</option><option value="enum">{{ tr('档位','Options') }}</option><option value="range">{{ tr('范围','Range') }}</option><option value="unknown">{{ tr('未知','Unknown') }}</option></select></label><label v-if="['fixed','enum'].includes(c.duration.mode)" class="text-xs">{{ tr('秒数','Seconds') }}<input class="input" :value="c.duration.values.join(', ')" @change="edit(i,c => c.duration.values = csv(val($event)).map(Number))" /></label><template v-if="c.duration.mode === 'range'"><label class="text-xs">{{ tr('最短秒数','Minimum seconds') }}<input type="number" min="1" class="input" :value="c.duration.min" @change="edit(i,c => c.duration.min = Number(val($event)))" /></label><label class="text-xs">{{ tr('最长秒数','Maximum seconds') }}<input type="number" min="1" class="input" :value="c.duration.max" @change="edit(i,c => c.duration.max = Number(val($event)))" /></label></template><label class="text-xs">{{ tr('默认秒数','Default seconds') }}<input type="number" min="1" class="input" :value="c.duration.default" @change="edit(i,c => c.duration.default = val($event) ? Number(val($event)) : null)" /></label><label class="flex items-center gap-2 text-xs"><input type="checkbox" :checked="c.duration.required" @change="edit(i,c => c.duration.required = ($event.target as HTMLInputElement).checked)" />{{ tr('请求必须指定时长','Explicit duration required') }}</label></template>
         <label v-if="c.media_type === 'image'" class="text-xs">{{ tr('图片像素尺寸','Image sizes') }}<input class="input" :value="c.sizes.join(', ')" @change="edit(i,c => c.sizes = csv(val($event)))" /></label>
         <template v-if="c.media_type && c.media_type !== 'audio'"><label v-for="field in ['resolutions','aspect_ratios','qualities'] as const" :key="field" class="text-xs">{{ ({resolutions:tr('分辨率档位','Resolution tiers'),aspect_ratios:tr('宽高比','Aspect ratios'),qualities:tr('质量','Quality')})[field] }}<input class="input" :value="c[field]?.join(', ')" @change="edit(i,c => c[field] = csv(val($event)))" /></label><label class="text-xs">{{ tr('分辨率规则','Resolution policy') }}<select class="input" :value="c.resolution_policy" @change="edit(i,c => c.resolution_policy = val($event))"><option value="optional">{{ tr('可选','Optional') }}</option><option value="required">{{ tr('必填','Required') }}</option><option value="omit">{{ tr('省略','Omit') }}</option></select></label></template>

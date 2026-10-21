@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import MediaParameterRulesEditor from './MediaParameterRulesEditor.vue'
 import { mediaProtocolsAPI as api, type ProtocolKind } from '@/api/media-protocols'
 import type { MediaConfigRecord } from '@/api/media'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
@@ -13,7 +14,7 @@ const selected = ref<MediaConfigRecord | null>(null), history = ref<MediaConfigR
 const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), result = ref<unknown>()
 const review = ref(false), upgrades = ref<string[]>([]), bulkModels = ref(''), builtinFields=ref<string[]>([])
 const builtinChanges=computed(()=>Object.keys(selected.value?.builtin_current ?? {}).filter(key=>!['id','version','status'].includes(key)&&JSON.stringify(selected.value?.builtin_current?.[key])!==JSON.stringify(draft.value?.[key])))
-function loadBuiltin(all=false) {if(!draft.value||!selected.value?.builtin_current)return;const next=structuredClone(draft.value);for(const key of all?Object.keys(selected.value.builtin_current):builtinFields.value) {if(!['id','version','status'].includes(key))next[key]=structuredClone(selected.value.builtin_current[key])}json.value=JSON.stringify(next,null,2)}
+function loadBuiltin(all=false) {if(!draft.value||!selected.value?.builtin_current)return;const next=JSON.parse(JSON.stringify(draft.value));for(const key of all?Object.keys(selected.value.builtin_current):builtinFields.value) {if(!['id','version','status'].includes(key))next[key]=JSON.parse(JSON.stringify(selected.value.builtin_current[key]))}json.value=JSON.stringify(next,null,2)}
 const previewInput = ref('{"model":"preview","prompt":"参考素材测试","seconds":5,"images":[]}')
 const sample = ref('{}'), online = ref(false), operation = ref('video'), upstreamModel = ref('preview')
 const previewKeyID = ref(''), previewAccountID = ref('')
@@ -22,7 +23,10 @@ const keyID = ref(''), paid = ref(false), discoveryAccount = ref(''), discoveryG
 // Retain the key after a timeout: clicking again cannot create another paid task.
 const testKey = ref(crypto.randomUUID())
 const draft = computed<Record<string, unknown> | null>(() => { try { const value = JSON.parse(json.value); return value && !Array.isArray(value) && typeof value === 'object' ? value : null } catch { return null } })
-const rows = computed(() => kind.value === 'templates' ? templates.value : bindings.value)
+const accountFilter = ref(String(route.query.account_id || '')), groupFilter = ref(String(route.query.group_id || ''))
+const rows = computed(() => kind.value === 'templates' ? templates.value : bindings.value.filter(row => (!accountFilter.value || String(row.config.account_id) === accountFilter.value || (groupFilter.value && !Number(row.config.account_id))) && (!groupFilter.value || String(row.config.group_id) === groupFilter.value)))
+watch(() => route.query.account_id, value => { accountFilter.value = String(value || ''); selected.value = null; json.value = '' })
+watch(() => route.query.group_id, value => { groupFilter.value = String(value || ''); effectiveGroup.value = String(value || '') })
 const affected = computed(() => bindings.value.filter(row => (row.config.template as { id?: string } | undefined)?.id === selected.value?.id && row.published_version))
 const changes = computed(() => [...new Set([...Object.keys(selected.value?.config ?? {}), ...Object.keys(draft.value ?? {})])].filter(key => JSON.stringify(selected.value?.config[key]) !== JSON.stringify(draft.value?.[key])))
 const publishedTemplates = computed(() => templates.value.filter(row => row.published_version))
@@ -39,12 +43,18 @@ async function action(run: () => Promise<void>, mutation = false) {
   busy.value = true; error.value = ''
   try { if (mutation) await stepUp.run(run); else await run() } catch (cause) { if (!isStepUpCancelled(cause)) error.value = (cause as Error).message || String(cause) } finally { busy.value = false }
 }
-async function refresh() { [templates.value, bindings.value] = await Promise.all([api.list('templates'), api.list('bindings')]) }
+async function refresh() {
+  const results = await Promise.allSettled([api.list('templates'), api.list('bindings')])
+  const failures: string[] = []
+  if (results[0].status === 'fulfilled') templates.value = results[0].value; else failures.push('模板：' + String(results[0].reason?.message || results[0].reason))
+  if (results[1].status === 'fulfilled') bindings.value = results[1].value; else failures.push('绑定：' + String(results[1].reason?.message || results[1].reason))
+  error.value = failures.join('；')
+}
 async function select(row: MediaConfigRecord) { selected.value = row; json.value = JSON.stringify(row.config, null, 2); history.value = await api.history(kind.value, row.id); review.value = false; upgrades.value = [] }
 function switchKind(next: ProtocolKind) { kind.value = next; selected.value = null; json.value = ''; history.value = []; review.value = false }
 function create() {
   selected.value = null; history.value = []; review.value = false
-  const object = kind.value === 'templates' ? { id: `custom-${Date.now()}`, name: '自定义模板', version: '1', status: 'draft', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${Date.now()}`, version: '1', status: 'draft', group_id: Number(route.query.group_id || 0), account_id: Number(route.query.account_id || 0), model: '', upstream_model: '', rules: [] }
+  const object = kind.value === 'templates' ? { id: `custom-${Date.now()}`, name: '自定义模板', version: '1', status: 'draft', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${Date.now()}`, version: '1', status: 'draft', group_id: Number(groupFilter.value || 0), account_id: Number(accountFilter.value || 0), model: '', upstream_model: '', rules: [] }
   json.value = JSON.stringify(object, null, 2)
 }
 function newTest() { testKey.value=crypto.randomUUID();paid.value=false }
@@ -119,10 +129,11 @@ onMounted(() => action(refresh))
     <h2 class="text-xl font-semibold">协议模板与模型绑定</h2>
     <p class="text-sm text-gray-500">选择格式模板并固定版本。账号保存启用模型与基础映射，分组绑定覆盖请求参数。普通用户只使用 images、videos、audios；模板不会自动调整价格。</p>
     <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" @click="switchKind('templates')">协议模板</button><button class="btn btn-secondary" @click="switchKind('bindings')">模型绑定</button><button class="btn btn-secondary" @click="create">新建</button><label class="btn btn-secondary cursor-pointer">导入<input type="file" accept="application/json,.json" class="hidden" @change="action(() => upload($event))" /></label><button class="btn btn-secondary" @click="action(refresh)">刷新</button></div>
+    <div v-if="kind === 'bindings'" class="flex flex-wrap items-end gap-3"><label class="text-sm">账号筛选<input v-model="accountFilter" type="number" min="1" class="input block" aria-label="绑定账号筛选" /></label><label class="text-sm">分组筛选<input v-model="groupFilter" type="number" min="1" class="input block" /></label><RouterLink v-if="accountFilter" class="text-sm text-primary-600" :to="{path:'/admin/media',query:{tab:'accounts',account_id:accountFilter}}">编辑账号 #{{ accountFilter }} 的模型</RouterLink></div>
     <p v-if="error" role="alert" class="text-red-600">{{ error }}</p>
     <details v-if="kind === 'bindings'"><summary>查看分组实际继承配置</summary><input v-model="effectiveGroup" type="number" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" @click="action(async()=>{effectiveResult=await api.effective(Number(effectiveGroup))})">解析当前绑定</button><pre class="max-h-96 overflow-auto text-xs">{{JSON.stringify(effectiveResult,null,2)}}</pre></details>
     <div class="grid gap-4 lg:grid-cols-[260px_1fr]">
-      <aside class="max-h-[650px] space-y-2 overflow-auto"><button v-for="row in rows" :key="row.id" class="block w-full rounded-lg border p-3 text-left text-sm" @click="action(() => select(row))"><strong>{{ row.config.name || row.config.model || row.id }}</strong><p>{{ row.id }}</p><p>{{ row.status }} · 草稿 v{{ row.version }} · 发布 v{{ row.published_version || '—' }}</p><p v-if="kind === 'bindings'">分组 {{ row.config.group_id }} · 账号 {{ row.config.account_id || '全部' }} · {{ row.config.template }}</p></button></aside>
+      <aside class="max-h-[650px] space-y-2 overflow-auto"><p v-if="!rows.length" class="rounded-lg border border-dashed p-3 text-sm text-gray-500">{{ kind === 'bindings' ? '当前筛选没有独立绑定。账号内可直接绑定模板；如需分组覆盖，请点击新建。' : '暂无协议模板。' }}</p><button v-for="row in rows" :key="row.id" class="block w-full rounded-lg border p-3 text-left text-sm" @click="action(() => select(row))"><strong>{{ row.config.name || row.config.model || row.id }}</strong><p>{{ row.id }}</p><p>{{ row.status }} · 草稿 v{{ row.version }} · 发布 v{{ row.published_version || '—' }}</p><p v-if="kind === 'bindings'">分组 {{ row.config.group_id }} · 账号 {{ row.config.account_id || '全部' }} · {{ row.config.template }}</p></button></aside>
       <div v-if="json" class="space-y-3">
         <div class="flex gap-2"><button class="btn btn-secondary" @click="mode = 'form'">表单</button><button class="btn btn-secondary" @click="mode = 'json'">JSON</button><button class="btn btn-secondary" @click="copy">复制</button><button v-if="selected" class="btn btn-secondary" @click="action(download)">导出全部历史</button></div>
         <div v-if="mode === 'form' && draft" class="grid gap-3 sm:grid-cols-2">
@@ -139,7 +150,8 @@ onMounted(() => action(refresh))
             <label class="text-sm">认证头 / 查询参数名称<input class="input w-full" :value="field('auth.name')" @change="set('auth.name', value($event))" /></label>
             <label class="text-sm">认证前缀<input class="input w-full" :value="field('auth.prefix')" @change="set('auth.prefix', value($event))" /></label>
             <label class="text-sm">轮询秒数<input type="number" min="1" max="300" class="input w-full" :value="field('poll_seconds')" @change="set('poll_seconds', Number(value($event)))" /></label>
-            <label v-for="path in ['materials','rules','response','query','discovery','model_ids','artifact_list','download_auth','recover','body','operation_submit']" :key="path" class="text-sm">{{ path }}<textarea class="input min-h-24 w-full font-mono text-xs" :value="JSON.stringify(field(path) ?? null, null, 2)" @change="jsonField(path, $event)" /></label>
+            <label v-for="path in ['materials','response','query','discovery','model_ids','artifact_list','download_auth','recover','body','operation_submit']" :key="path" class="text-sm">{{ path }}<textarea class="input min-h-24 w-full font-mono text-xs" :value="JSON.stringify(field(path) ?? null, null, 2)" @change="jsonField(path, $event)" /></label>
+            <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <label class="text-sm">模型写入目标（- 为仅路径）<input class="input w-full" :value="field('model_target')" @change="set('model_target', value($event))" /></label>
             <label class="text-sm">固定内容接口<input class="input w-full" :value="field('content_path')" @change="set('content_path', value($event))" /></label>
           </template>
@@ -150,7 +162,7 @@ onMounted(() => action(refresh))
             <label class="text-sm">上游模型<input class="input w-full" :value="field('upstream_model')" @change="set('upstream_model', value($event))" /></label>
             <label class="text-sm">协议模板<select class="input w-full" :value="field('template.id')" @change="bindTemplate(value($event))"><option value="">继承账号模板</option><option v-for="row in publishedTemplates" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select></label>
             <label class="text-sm">固定模板版本<input type="number" min="1" class="input w-full" :value="field('template.version')" @change="set('template.version', Number(value($event)))" /></label>
-            <label class="text-sm sm:col-span-2">参数覆盖规则<textarea class="input min-h-32 w-full font-mono text-xs" :value="JSON.stringify(field('rules') ?? [], null, 2)" @change="jsonField('rules', $event)" /></label>
+            <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <p class="text-xs text-gray-500 sm:col-span-2">继承顺序：模板 → 账号模型 → 分组默认 → 分组精确模型 → 分组精确模型与账号。相同选择器冲突时禁止发布。</p>
           </template>
           <p class="text-xs text-gray-500 sm:col-span-2">表单直接修改完整 JSON 对象；切换模式保留高级字段。服务端以同一版本 schema 校验。模板只引用账号密钥，不能填写真实密钥。</p>

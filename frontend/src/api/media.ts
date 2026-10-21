@@ -87,7 +87,11 @@ export interface MediaTaskPage {
   page_size: number
   pages: number
 }
+export interface MediaPricingStatus {
+  model: string; operation: string; group_id: number; matched: boolean; reason: string; price_id?: string; version?: string
+}
 export const mediaAPI = {
+  async pricingStatus(group_id: number, account_id: number) { return (await apiClient.get<MediaPricingStatus[]>('/admin/media/pricing-status', { params: { group_id, account_id } })).data },
   async review(id: string, status: string, target_charge: string, reason: string, expected_version: number, key: string) {
     return (await apiClient.post(`/admin/media/tasks/${encodeURIComponent(id)}/review`, { status, target_charge, reason, expected_version }, { headers: { 'Idempotency-Key': key } })).data
   },

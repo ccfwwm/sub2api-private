@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -24,13 +25,58 @@ func (h *MediaHandler) AdminProtocolEffective(c *gin.Context) {
 	}
 	caps, _, err := h.Engine.Config(c.Request.Context(), group)
 	if err == nil {
-		caps, err = h.Engine.Store.ResolveTemplates(c.Request.Context(), caps)
+		caps, _, err = h.Engine.Store.ResolveTemplatesIsolated(c.Request.Context(), caps)
 	}
 	if err != nil {
 		mediaError(c, err)
 		return
 	}
 	response.Success(c, media.SafeReviewValue(caps, nil, 0))
+}
+
+// AdminPricingStatus uses the same price resolver as submissions; media setup
+// only displays the result and never writes a separate price card.
+func (h *MediaHandler) AdminPricingStatus(c *gin.Context) {
+	if !requireMediaAdmin(c) {
+		return
+	}
+	group, err := strconv.ParseInt(c.Query("group_id"), 10, 64)
+	if err != nil || group < 1 {
+		response.BadRequest(c, "A group ID is required")
+		return
+	}
+	account, err := strconv.ParseInt(c.Query("account_id"), 10, 64)
+	if err != nil || account < 1 {
+		response.BadRequest(c, "An account ID is required")
+		return
+	}
+	caps, cards, err := h.Engine.Config(c.Request.Context(), group)
+	if err != nil {
+		mediaError(c, err)
+		return
+	}
+	rows := []gin.H{}
+	for _, cap := range caps {
+		selected := false
+		for _, id := range cap.AccountIDs {
+			selected = selected || id == account
+		}
+		if !selected {
+			continue
+		}
+		for _, operation := range cap.Operations {
+			row := gin.H{"model": cap.Model, "operation": operation, "group_id": group, "matched": false, "reason": "price_not_configured"}
+			price, resolveErr := media.ResolvePrice(cards, cap, media.Identity{GroupID: group}, operation, false, account, time.Now())
+			if resolveErr == nil && len(price.Rules) > 0 {
+				row["matched"], row["reason"] = true, ""
+				row["price_id"], row["version"], row["rules"] = price.ID, price.Version, price.Rules
+			} else if failure, ok := resolveErr.(*media.Error); ok {
+				row["reason"] = failure.Code
+			}
+			rows = append(rows, row)
+		}
+	}
+	response.Success(c, rows)
 }
 
 func protocolConfigKind(c *gin.Context) string {

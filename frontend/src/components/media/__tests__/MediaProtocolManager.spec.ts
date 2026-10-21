@@ -3,8 +3,9 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import MediaProtocolManager from '../MediaProtocolManager.vue'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), history: vi.fn(), save: vi.fn(), publish: vi.fn(), preview: vi.fn() }))
+const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
 vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: api }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
+vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/composables/useStepUp', () => ({
   useStepUp: () => ({ run: (action: () => Promise<void>) => action() }),
   isStepUpCancelled: () => false
@@ -20,6 +21,7 @@ async function click(wrapper: VueWrapper, label: string) {
 describe('media protocol publication', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    route.query = {}
     api.list.mockResolvedValue([])
     api.history.mockResolvedValue([])
     api.save.mockImplementation(async (_kind, body) => ({
@@ -30,6 +32,28 @@ describe('media protocol publication', () => {
       id: body.id, version: 2, published_version: 2, status: 'enabled',
       config: { ...body.config, version: '2', status: 'enabled' }
     }))
+  })
+
+  it('filters account deep links while preserving binding data when templates fail', async () => {
+    route.query = { tab: 'bindings', account_id: '2139', group_id: '19' }
+    api.list.mockImplementation(async kind => {
+      if (kind === 'templates') throw new Error('Template list unavailable')
+      return [
+        { id: 'desired', config: { account_id: 2139, group_id: 19 } },
+        { id: 'other-account', config: { account_id: 2140, group_id: 19 } },
+        { id: 'inherited', config: { account_id: 0, group_id: 19 } },
+        { id: 'other-group', config: { account_id: 2139, group_id: 20 } }
+      ]
+    })
+    const wrapper = mount(MediaProtocolManager, { global: { stubs: { TotpStepUpDialog: true, RouterLink: true } } })
+    await flushPromises()
+    expect(wrapper.get('[aria-label="绑定账号筛选"]').element).toHaveProperty('value', '2139')
+    expect(wrapper.text()).toContain('desired')
+    expect(wrapper.text()).toContain('inherited')
+    expect(wrapper.text()).not.toContain('other-account')
+    expect(wrapper.text()).not.toContain('other-group')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Template list unavailable')
+    wrapper.unmount()
   })
 
   async function newDraft() {

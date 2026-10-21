@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAttachModelPlazaMediaCatalogIsolatesFailedGroup(t *testing.T) {
+	groups, partial := attachModelPlazaMediaCatalog(context.Background(), []modelPlazaGroup{{ID: 19}, {ID: 20}}, func(_ context.Context, id int64) ([]media.CatalogEntry, error) {
+		if id == 19 {
+			return nil, &media.Error{Status: 409, Code: "parameter_rule_conflict", Message: "private binding details"}
+		}
+		return []media.CatalogEntry{{Model: "healthy-video", MediaType: "video"}}, nil
+	}, "request-123", "client-123")
+	require.True(t, partial)
+	require.Empty(t, groups[0].MediaModels)
+	require.Len(t, groups[1].MediaModels, 1)
+	require.Equal(t, "healthy-video", groups[1].MediaModels[0].Model)
+	raw, err := json.Marshal(modelPlazaResponse{Groups: groups, Notices: []string{modelPlazaPartialMediaNotice}})
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "private binding details")
+}
 
 func plazaGroups() []service.PlazaGroup {
 	return []service.PlazaGroup{

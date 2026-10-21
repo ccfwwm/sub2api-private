@@ -113,6 +113,7 @@ export interface PlazaMediaModel {
 }
 
 export interface ModelPlazaResponse {
+  notices?: string[]
   /** 管理员配置的全局价格说明（Markdown）。 */
   description: string
   groups: ModelPlazaGroup[]

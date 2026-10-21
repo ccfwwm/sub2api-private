@@ -32,6 +32,21 @@ func pngFixture(t *testing.T) []byte {
 	return b.Bytes()
 }
 
+func TestTemplateLegacySingleMaterialMappingDoesNotBecomeRename(t *testing.T) {
+	cap := Capability{ID: "account-2093", Model: "public-video", UpstreamModel: "provider-video", MediaType: "video", Operations: []string{"video"}, GroupIDs: []int64{19}, AccountIDs: []int64{2093}, Enabled: true, Status: "enabled", TemplateRef: &TemplateRef{ID: "video-single-image", Version: 1}, FieldMapping: map[string]string{"image": "image.url", "seconds": "duration", "resolution": "resolution"}}
+	resolved, err := ResolveTemplateBindings([]Capability{cap}, nil, func(ref TemplateRef) (ProtocolTemplate, error) { return templateFixture(t, ref.ID), nil })
+	require.NoError(t, err)
+	require.Len(t, resolved, 1)
+	require.True(t, resolved[0].Enabled)
+	require.Equal(t, "image", resolved[0].Template.Materials[0].Target)
+	require.Equal(t, []ParameterRule{{Phase: "wire", Op: "rename", Source: "seconds", Target: "duration"}}, resolved[0].TemplateRules)
+	request, err := BuildTemplateRequest(context.Background(), nil, resolved[0], Request{Operation: "video", Model: cap.Model, Parameters: map[string]any{"model": cap.Model, "prompt": "lake", "seconds": 5}, MaterialRefs: map[string][]any{"image": {"https://example.org/reference.png"}}})
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"url": "https://example.org/reference.png"}, request.Body["image"])
+	require.EqualValues(t, 5, request.Body["duration"])
+	require.NotContains(t, request.Body, "seconds")
+}
+
 // Exercises every shipped template through actual HTTP serialization, response
 // parsing, polling when configured, authenticated download and byte comparison.
 func TestBuiltinTemplatesCompleteHTTP(t *testing.T) {
@@ -285,6 +300,42 @@ func TestTemplateBindingPriorityAndNoNameGuess(t *testing.T) {
 	bindings = append(bindings, bindings[0])
 	_, err = ResolveTemplateBindings([]Capability{cap}, bindings, load)
 	require.ErrorContains(t, err, "binding_conflict")
+}
+
+func TestTemplateBindingResolutionIsolatesInvalidModelBinding(t *testing.T) {
+	bad := Capability{ID: "bad-cap", Model: "bad-model", Version: "1", MediaType: "video", Operations: []string{"video"}, GroupIDs: []int64{9}, AccountIDs: []int64{4}, Enabled: true, Status: "enabled", TemplateRef: &TemplateRef{ID: "video-arrays", Version: 1}}
+	good := bad
+	good.ID, good.Model = "good-cap", "good-model"
+	bindings := []ModelBinding{{
+		ID: "broken-binding", Version: "2", Status: "enabled", GroupID: 9, Model: bad.Model, AccountID: 4,
+		Rules: []ParameterRule{{Phase: "wire", Op: "rename", Source: "payload", Target: "payload.nested"}},
+	}}
+	load := func(ref TemplateRef) (ProtocolTemplate, error) { return templateFixture(t, ref.ID), nil }
+
+	resolved, issues, err := ResolveTemplateBindingsIsolated([]Capability{bad, good}, bindings, load)
+	require.NoError(t, err)
+	require.Len(t, resolved, 2)
+	require.False(t, resolved[0].Enabled)
+	require.Contains(t, resolved[0].ValidationStatus, "协议绑定配置错误")
+	require.True(t, resolved[1].Enabled)
+	require.NotNil(t, resolved[1].Template)
+	require.Len(t, issues, 1)
+	require.Equal(t, int64(9), issues[0].GroupID)
+	require.Equal(t, int64(4), issues[0].AccountID)
+	require.Equal(t, "bad-model", issues[0].Model)
+	require.Equal(t, []string{"broken-binding"}, issues[0].BindingIDs)
+	require.ErrorContains(t, issues[0].Err, "parameter_rule_conflict")
+
+	price := testCard(baseCharge("second", "request_duration", "0.04"))
+	price.ModelMatch.Value = good.Model
+	price.Scope.Reference = "9"
+	engine := &Engine{Config: func(context.Context, int64) ([]Capability, []PriceCard, error) {
+		return resolved, []PriceCard{price}, nil
+	}}
+	catalog, err := engine.Catalog(context.Background(), 9)
+	require.NoError(t, err)
+	require.Len(t, catalog, 1)
+	require.Equal(t, good.Model, catalog[0].Model)
 }
 
 func TestTemplateResolutionRequiresPersistedReferenceOrAdminBinding(t *testing.T) {

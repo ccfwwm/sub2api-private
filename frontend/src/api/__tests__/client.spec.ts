@@ -225,6 +225,23 @@ describe('API Client', () => {
     })
   })
 
+  it('preserves a safe Retry-After value on failed requests', async () => {
+    apiClient.defaults.adapter = vi.fn().mockRejectedValueOnce({
+      response: {
+        status: 502,
+        data: { code: 502, reason: 'UPSTREAM_RATE_LIMITED', message: 'Upstream rate limited' },
+        headers: { 'retry-after': '27' },
+      },
+      config: { url: '/admin/accounts/1/models/sync-upstream' },
+    })
+
+    await expect(apiClient.post('/admin/accounts/1/models/sync-upstream')).rejects.toMatchObject({
+      status: 502,
+      reason: 'UPSTREAM_RATE_LIMITED',
+      retryAfterSeconds: 27,
+    })
+  })
+
   // --- 响应拦截器 ---
 
   describe('响应拦截器', () => {

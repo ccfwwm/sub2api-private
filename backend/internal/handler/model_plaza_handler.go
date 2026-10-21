@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -149,6 +151,33 @@ func toModelPlazaMediaModels(entries []media.CatalogEntry, group modelPlazaGroup
 type modelPlazaResponse struct {
 	Description string            `json:"description"`
 	Groups      []modelPlazaGroup `json:"groups"`
+	Notices     []string          `json:"notices,omitempty"`
+}
+
+const modelPlazaPartialMediaNotice = "media_catalog_partial_unavailable"
+
+func attachModelPlazaMediaCatalog(
+	ctx context.Context,
+	groups []modelPlazaGroup,
+	load func(context.Context, int64) ([]media.CatalogEntry, error),
+	requestID, clientRequestID string,
+) ([]modelPlazaGroup, bool) {
+	partial := false
+	for i := range groups {
+		catalog, err := load(ctx, groups[i].ID)
+		if err != nil {
+			partial = true
+			slog.Error("model_plaza_media_catalog_failed",
+				"group_id", groups[i].ID,
+				"request_id", requestID,
+				"client_request_id", clientRequestID,
+				"error", err,
+			)
+			continue
+		}
+		groups[i].MediaModels = toModelPlazaMediaModels(catalog, groups[i])
+	}
+	return groups, partial
 }
 
 // Get 返回模型广场数据。
@@ -218,23 +247,30 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
-		dto := toModelPlazaGroupDTO(&visible[i], userRates)
-		if h.media != nil {
-			catalog, err := h.media.Engine.Catalog(c.Request.Context(), dto.ID)
-			if err != nil {
-				response.ErrorFrom(c, err)
-				return
-			}
-			dto.MediaModels = toModelPlazaMediaModels(catalog, dto)
+		out = append(out, toModelPlazaGroupDTO(&visible[i], userRates))
+	}
+	var notices []string
+	if h.media != nil {
+		requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string)
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+		var partial bool
+		out, partial = attachModelPlazaMediaCatalog(c.Request.Context(), out, h.media.Engine.Catalog, requestID, clientRequestID)
+		if partial {
+			notices = []string{modelPlazaPartialMediaNotice}
 		}
+	}
+	filtered := out[:0]
+	for i := range visible {
+		dto := out[i]
 		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {
 			continue
 		}
-		out = append(out, dto)
+		filtered = append(filtered, dto)
 	}
 	response.Success(c, modelPlazaResponse{
 		Description: rt.Description,
-		Groups:      out,
+		Groups:      filtered,
+		Notices:     notices,
 	})
 }
 

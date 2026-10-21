@@ -1,14 +1,24 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest'
 import {flushPromises,mount} from '@vue/test-utils'
-import {accountMediaCapabilities,newMediaCapability} from '@/types/media'
+import {accountMediaCapabilities,mergeDiscoveredMediaModels,newMediaCapability} from '@/types/media'
 import MediaAccountModelsEditor from '../MediaAccountModelsEditor.vue'
 
 const templateAPI = vi.hoisted(() => ({list:vi.fn(),history:vi.fn()}))
 vi.mock('@/api/media-protocols',()=>({mediaProtocolsAPI:templateAPI}))
-vi.mock('@/api/admin',()=>({adminAPI:{accounts:{}}}))
+const accountAPI = vi.hoisted(() => ({ syncUpstreamModels: vi.fn(), syncUpstreamModelsPreview: vi.fn() }))
+vi.mock('@/api/admin',()=>({adminAPI:{accounts:accountAPI}}))
 vi.mock('vue-i18n',async original=>({...await original<Record<string,unknown>>(),useI18n:()=>({locale:{value:'zh'}})}))
 
 describe('动态媒体模板配置',()=>{
+ it('merges every discovered model idempotently and preserves existing settings',()=>{
+  const existing = newMediaCapability('public'); existing.template_ref={id:'pinned',version:3};existing.enabled=true;existing.operations=['video'];existing.template_rules=[{phase:'semantic',op:'fixed',target:'quality',value:0}]
+  const merged=mergeDiscoveredMediaModels([existing],['public',' new ','new','','NEW'])
+  expect(merged).toHaveLength(3)
+  expect(merged[0]).toEqual(existing)
+  expect(merged[1]).toMatchObject({model:'new',enabled:false,adapter:'',operations:[]})
+  expect(merged[1].template_ref).toBeUndefined()
+  expect(mergeDiscoveredMediaModels(merged,['new','public','NEW'])).toEqual(merged)
+ })
  it('does not infer a protocol from model names or upstream domains',()=>{
   const named = newMediaCapability('veo-3.1-fast')
   const renamed = newMediaCapability('veo-3.1-fast-copy')
@@ -85,11 +95,24 @@ describe('账号模板输出配置',()=>{
   templateAPI.history.mockResolvedValue([{id:'multi-parts',version:1,config:{media_types:['audio'],operations:['speech']}}])
   const cap=newMediaCapability('public');cap.adapter='template';cap.template_ref={id:'multi-parts',version:1};cap.media_type='audio';cap.operations=['speech']
   const wrapper=await editor(cap)
-  await wrapper.findAll('button').find(button=>button.text()==='高级设置')!.trigger('click')
+  await wrapper.findAll('button').find(button=>button.text()==='配置请求能力')!.trigger('click')
   expect(templateAPI.history).toHaveBeenCalledWith('templates','multi-parts')
   expect((wrapper.get('[aria-label="启用操作 speech"]').element as HTMLInputElement).checked).toBe(true)
   expect(wrapper.find('[aria-label="启用操作 image"]').exists()).toBe(false)
   expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  wrapper.unmount()
+ })
+ it('imports all discovered models in one action without replacing existing bindings',async()=>{
+  accountAPI.syncUpstreamModelsPreview.mockResolvedValue({models:['arbitrary-model','new-video','new-image','new-video']})
+  const cap=newMediaCapability('arbitrary-model');cap.template_ref={id:'multi-parts',version:2};cap.enabled=true
+  const wrapper=await editor(cap)
+  await wrapper.findAll('button').find(button=>button.text()==='一键拉取全部模型')!.trigger('click')
+  await flushPromises()
+  const merged=wrapper.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof newMediaCapability>[]
+  expect(merged.map(item=>item.model)).toEqual(['arbitrary-model','new-video','new-image'])
+  expect(merged[0]).toEqual(cap)
+  expect(merged.slice(1).every(item=>!item.enabled && !item.template_ref)).toBe(true)
+  expect(wrapper.get('[role="status"]').text()).toContain('新增 2 个')
   wrapper.unmount()
  })
 })

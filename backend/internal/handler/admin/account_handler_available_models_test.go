@@ -522,6 +522,32 @@ func TestAccountHandlerSyncUpstreamModels_UpstreamErrorDoesNotExposeBody(t *test
 	require.NotContains(t, rec.Body.String(), "SECRET_TOKEN")
 }
 
+func TestAccountHandlerSyncUpstreamModels_Upstream429PreservesRetryAfterAndSource(t *testing.T) {
+	svc := &availableModelsAdminService{
+		stubAdminService: newStubAdminService(),
+		account: service.Account{
+			ID: 49, Name: "rate-limited-upstream", Platform: service.PlatformOpenAI,
+			Type: service.AccountTypeAPIKey, Status: service.StatusActive,
+			Credentials: map[string]any{"api_key": "key", "base_url": "https://provider.example/v1"},
+		},
+	}
+	upstream := &syncUpstreamHTTPUpstream{resp: &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{"41"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":"SECRET_TOKEN"}`)),
+	}}
+	router := setupSyncUpstreamModelsRouter(svc, upstream)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/49/models/sync-upstream", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.Equal(t, "41", rec.Header().Get("Retry-After"))
+	require.Contains(t, rec.Body.String(), `"reason":"UPSTREAM_RATE_LIMITED"`)
+	require.Contains(t, rec.Body.String(), `"retry_after_seconds":"41"`)
+	require.NotContains(t, rec.Body.String(), "SECRET_TOKEN")
+}
+
 // Scenario: 能力补全失败显示部分成功。
 func TestAccountHandlerSyncUpstreamModels_MetadataEnrichmentFailureReturnsWarning(t *testing.T) {
 	svc := &availableModelsAdminService{

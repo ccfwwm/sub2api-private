@@ -54,6 +54,7 @@ func RegisterAdminRoutes(
 			}
 			admin.POST("/media/templates/preview", h.Media.AdminProtocolPreview)
 			admin.GET("/media/bindings/effective", h.Media.AdminProtocolEffective)
+			admin.GET("/media/pricing-status", h.Media.AdminPricingStatus)
 			admin.POST("/media/templates/discover", h.Media.AdminProtocolDiscover)
 			admin.POST("/media/templates/test", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolTest)
 			admin.GET("/media/tasks", h.Media.AdminTasks)

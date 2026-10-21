@@ -1,15 +1,18 @@
 {
-  "version": "v1.2.15",
+  "version": "v1.2.16",
   "status": "recorded",
-  "acceptance_state": "candidate-direct-evidence-audited-relay-pending",
-  "verified_at": "2026-10-21T03:53:19.167Z",
-  "environment": "Read-only audit of the existing direct-upstream ledger and downloaded artifacts. Production model discovery is separate historical evidence; candidate relay generation and gateway billing are not yet verified.",
+  "acceptance_state": "candidate-direct-evidence-audited-relay-pending-deployment",
+  "verified_at": "2026-10-21T14:26:30.030Z",
+  "environment": "Carries the existing direct-upstream media audit and the v1.2.15 production model-list failure. The v1.2.16 fix is source-tested but was not yet deployed when this record was created; post-deployment relay checks remain pending.",
   "evidence": {
     "report": "output/media-templates-v1215/audit-20261021/REPORT.md",
     "details": "output/media-templates-v1215/audit-20261021/evidence.json",
     "ledger": "output/media-templates-v1215/ledger.json",
     "ledger_sha256": "dd12e47a645e241481df1fd3eeed382ef0d1af3f17576a7728b7dea227667729",
-    "new_network_requests_during_audit": 0
+    "new_network_requests_during_audit": 0,
+    "production_model_inventory": "output/media-v1216/model-inventory.json",
+    "production_model_list_diagnostic": "output/media-v1216/live-tests.json",
+    "diagnosis": "The production proxy model-list returned HTTP 409 parameter_rule_conflict. Read-only database inspection identified account 2093 in database group 66 and legacy field_mapping image -> image.url on its Grok video capabilities; v1.2.16 excludes material fields from generic rename rules and normalizes the legacy URL leaf into the template material target."
   },
   "budget": {
     "limit": 16,
@@ -35,7 +38,7 @@
   },
   "relay_acceptance": {
     "status": "pending",
-    "scope": "Candidate gateway path after deployment; no direct-upstream result establishes relay compatibility or billing.",
+    "scope": "Run the authenticated model-list request and compare direct versus relay image, video and audio paths after v1.2.16 deployment. Source tests do not establish production behavior or billing.",
     "models": ["Veo", "XXsedanco2.5S", "Grok"],
     "constraints": "Use only the remaining authorized budget; one submission per new case, no automatic retry, preserve original models, materials and duration. TT is excluded."
   },
@@ -44,7 +47,32 @@
       "label": "production-model-discovery",
       "verification": "real_connection",
       "status": "completed",
-      "scope": "Historical authenticated gateway model-list discovery contains XXsedanco2.5S; discovery does not verify generation."
+      "http": 200,
+      "scope": "Existing v6k upstream model discovery returned HTTP 200 with 40 models, including XXsedanco2.5S; discovery does not verify generation."
+    },
+    {
+      "label": "production-relay-model-list-v1.2.15",
+      "verification": "real_connection",
+      "status": "failed",
+      "http": 409,
+      "error_code": "parameter_rule_conflict",
+      "scope": "Existing authenticated relay model-list request failed before deployment of the candidate fix. No credential is included in this record."
+    },
+    {
+      "label": "production-binding-diagnosis",
+      "verification": "read_only_configuration_audit",
+      "status": "completed",
+      "account_id": 2093,
+      "database_group_id": 66,
+      "models": ["grok-imagine-video", "grok-imagine-video-1.5"],
+      "legacy_material_mapping": "image -> image.url",
+      "scope": "The database group ID is distinct from the UI failure label 19. No production data was changed."
+    },
+    {
+      "label": "v1.2.16-relay-post-deployment",
+      "verification": "real_connection",
+      "status": "pending",
+      "scope": "Recheck GET /v1/models, model plaza, administrator media configuration, then image/video/audio and task/artifact paths where supported."
     },
     {
       "label": "xx-five-reference-base64-submission",

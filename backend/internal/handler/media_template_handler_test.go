@@ -20,7 +20,7 @@ import (
 func TestProtocolEndpointsDenyMissingAdministratorBeforeAccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := &MediaHandler{}
-	for _, handler := range []gin.HandlerFunc{h.AdminProtocolList, h.AdminProtocolHistory, h.AdminProtocolSave, h.AdminProtocolExport, h.AdminProtocolArchive, h.AdminProtocolPreview, h.AdminProtocolDiscover, h.AdminProtocolTest, h.AdminProtocolEffective} {
+	for _, handler := range []gin.HandlerFunc{h.AdminProtocolList, h.AdminProtocolHistory, h.AdminProtocolSave, h.AdminProtocolExport, h.AdminProtocolArchive, h.AdminProtocolPreview, h.AdminProtocolDiscover, h.AdminProtocolTest, h.AdminProtocolEffective, h.AdminPricingStatus} {
 		for _, identity := range []struct {
 			name   string
 			role   string
