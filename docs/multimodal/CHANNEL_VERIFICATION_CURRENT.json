@@ -12,11 +12,7 @@
     "new_network_requests_during_audit": 0,
     "production_model_inventory": "output/media-v1216/model-inventory.json",
     "production_model_list_diagnostic": "output/media-v1216/live-tests.json",
-    "production_public_acceptance": "output/media-v1217/public-acceptance.json",
-    "production_profile_stability": "output/media-v1217/profile-stability.json",
-    "production_image_acceptance": "output/media-v1217/acceptance-image.json",
-    "production_audio_acceptance": "output/media-v1217/acceptance-music.json",
-    "production_video_acceptance": "output/media-v1217/acceptance-video-five-seconds.json",
+    "production_acceptance_report": "docs/multimodal/production-v1.2.17-evidence.json",
     "diagnosis": "The production proxy model-list returned HTTP 409 parameter_rule_conflict. Read-only database inspection identified account 2093 in database group 66 and legacy field_mapping image -> image.url on its Grok video capabilities; v1.2.16 excludes material fields from generic rename rules and normalizes the legacy URL leaf into the template material target.",
     "v1217_live_profile_check": {
       "capability_requests": 20,

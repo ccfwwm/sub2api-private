@@ -29,7 +29,7 @@ GitHub CI **未全绿**：集成任务缺少 ffmpeg，golangci-lint 报告 17 �
 
 `TTseadanco2.5-720` 未出现在本次 Key 的模型列表中，未标记为通过；历史未知任务仍须先核对再决定是否补测。完整证据见 [CHANNEL_VERIFICATION_CURRENT.json](CHANNEL_VERIFICATION_CURRENT.json) 和 `output/media-v1217/`。
 
-脱敏摘要见 [output/media-v1217/public-acceptance.json](../../output/media-v1217/public-acceptance.json)、[output/media-v1217/profile-stability.json](../../output/media-v1217/profile-stability.json) 和 [CHANNEL_VERIFICATION_CURRENT.json](CHANNEL_VERIFICATION_CURRENT.json)。本次记录为发布后的文档同步，不修改 `v1.2.17` 标签及已发布产物。
+脱敏摘要见 [production-v1.2.17-evidence.json](production-v1.2.17-evidence.json) 和 [CHANNEL_VERIFICATION_CURRENT.json](CHANNEL_VERIFICATION_CURRENT.json)。本次记录为发布后的文档同步，不修改 `v1.2.17` 标签及已发布产物。
 
 ## 历史生产：v1.1.2
 

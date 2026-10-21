@@ -1,0 +1,90 @@
+{
+  "version": "v1.2.17",
+  "commit": "954b72e1984ccdf51c1e83cf179e80ee4ab6f7a4",
+  "application_started_at": "2026-10-21T17:49:32.390950334Z",
+  "job_id": "158217e4f15f49f88cec2b199d47de97",
+  "job_status": "succeeded",
+  "backup_id": "7f077929466a4891b57dbac7967a22be",
+  "cutover_mode": "immediate",
+  "app_digest": "sha256:3aac8d7fb1fcd1675638dfe25eb6dfe94e0fed458dcf88cf0e7b68dbb2135c8a",
+  "docs_digest": "sha256:6d395bd6bcdf87ec930d0a86e1177c65ae2264ac9d9dfd572ae62663d0ebd1c6",
+  "postgres_and_redis_unchanged": true,
+  "models": {
+    "checked_at": "2026-10-21T18:08:05.873Z",
+    "status": 200,
+    "count": 14,
+    "includes_xxsedanco2_5s": true,
+    "includes_ttseadanco2_5_720": false
+  },
+  "public_endpoints": {
+    "hosts": ["code.aicodeme.xyz", "code.aicodeme.cn", "hkcode.aicodeme.xyz"],
+    "health_status": 200,
+    "settings_status": 200,
+    "version": "1.2.17",
+    "media_docs_status": 200
+  },
+  "administrator_browser": {
+    "media_sidebar": true,
+    "account_deep_link": true,
+    "model_plaza_loaded": true,
+    "channel_prices_matched": true,
+    "discovery": {
+      "account_id": 2117,
+      "discovered": 40,
+      "added_unbound": 34,
+      "merged": 41,
+      "enabled": 7,
+      "draft_saved": false
+    }
+  },
+  "profile_and_estimate_stability": {
+    "capability_requests": 20,
+    "capability_http_200": 20,
+    "distinct_profiles_for_xxsedanco2_5s": 1,
+    "estimate_requests": 12,
+    "estimate_http_200": 12,
+    "paid_submissions_for_stability_check": 0
+  },
+  "media_acceptance": {
+    "image": {
+      "model": "gpt-image-2.5",
+      "task_id": "mt_e313b4c4-f829-4f5c-b4f1-0e3d16973bcd",
+      "status": "completed",
+      "artifact_readback": "passed",
+      "probe": "PNG"
+    },
+    "audio": {
+      "model": "lyria-3.5",
+      "task_id": "mt_da002bb6-1c4c-4674-a919-dc87a5685959",
+      "status": "completed",
+      "artifact_readback": "passed",
+      "probe": "MP3"
+    },
+    "video": {
+      "model": "XXsedanco2.5S",
+      "task_id": "mt_0df979cb-aa94-486c-aed0-efea30ab4129",
+      "requested_seconds": 5,
+      "status": "completed",
+      "artifact_readback": "passed",
+      "full_decode": "passed",
+      "bytes": 16130426,
+      "sha256": "51ceac3ac0834b805e84264b2657fb1e2758d032cf2594ac796fdc6e604388fc",
+      "format": "MP4 H.264 1280x720 with AAC stereo audio",
+      "duration_seconds": 5.05
+    }
+  },
+  "validation": {
+    "frontend_files": 375,
+    "frontend_tests_passed": 2857,
+    "fresh_database_tests_passed": 336,
+    "backend_unit_and_vet": "passed",
+    "github_ci_all_green": false,
+    "ci_limits": ["missing ffmpeg on integration runner", "17 existing golangci-lint findings"],
+    "credentials_recorded": false
+  },
+  "boundaries": [
+    "TTseadanco2.5-720 was absent from the authenticated model list and remains unverified.",
+    "No automatic resubmission was made for uncertain historical tasks.",
+    "The evidence records Sub2API production only; ZeroWall plugin installation is tracked separately."
+  ]
+}
