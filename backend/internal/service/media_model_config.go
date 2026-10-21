@@ -55,7 +55,7 @@ func mediaTypeForOperation(operation string) string {
 	switch operation {
 	case "image", "image_edit", "gemini_image":
 		return "image"
-	case "audio", "chat_music":
+	case "audio", "chat_music", "speech":
 		return "audio"
 	default:
 		return "video"
@@ -94,6 +94,10 @@ func standardMediaCard(p ChannelModelPricing, model, operation, scope, reference
 	charges := []media.Charge{}
 	tokenMode := p.BillingMode == BillingModeToken || p.BillingMode == ""
 	switch p.BillingMode {
+	case BillingModeCharacters:
+		if ch, ok := mediaCharge("speech_characters", "input_character", "input_characters", p.PerRequestPrice); ok {
+			charges = append(charges, ch)
+		}
 	case BillingModeVideo:
 		if ch, ok := mediaCharge("generation", "second", "request_duration", p.PerRequestPrice); ok {
 			charges = append(charges, ch)
@@ -119,7 +123,7 @@ func standardMediaCard(p ChannelModelPricing, model, operation, scope, reference
 	}
 	priority := 0
 	for _, iv := range p.Intervals {
-		if tokenMode {
+		if tokenMode || p.BillingMode == BillingModeCharacters {
 			continue
 		}
 		if iv.PerRequestPrice == nil || iv.TierLabel == "" {
@@ -196,10 +200,7 @@ func NormalizeMediaAccountConfig(platform string, credentials, extra map[string]
 			}
 			cap, exists := byModel[model]
 			if !exists {
-				cap, exists = media.ModelPreset(mapping[model])
-				if !exists {
-					return nil, nil, infraerrors.BadRequest("MEDIA_ADAPTER_REQUIRED", "Choose the interface type for model "+model)
-				}
+				cap = media.CapabilityDefaults(media.Capability{Model: model, UpstreamModel: mapping[model], ValidationStatus: "待配置协议模板"})
 				cap.Enabled = false
 			}
 			cap.Model, cap.UpstreamModel = model, mapping[model]
@@ -208,9 +209,6 @@ func NormalizeMediaAccountConfig(platform string, credentials, extra map[string]
 	}
 	projected := map[string]any{}
 	for i, cap := range caps {
-		if strings.Contains(strings.ToLower(fmt.Sprint(credentials["base_url"])), "yunfei.best") {
-			cap = media.RepairManualPlaceholder(cap)
-		}
 		caps[i] = media.CapabilityDefaults(cap)
 		projected[cap.Model] = caps[i].UpstreamModel
 	}
@@ -332,9 +330,6 @@ func UnifiedMediaConfig(accounts AccountRepository, groups GroupRepository, chan
 				return nil, nil, err
 			}
 			for _, cap := range models {
-				if strings.Contains(strings.ToLower(account.GetCredential("base_url")), "yunfei.best") {
-					cap = media.RepairManualPlaceholder(cap)
-				}
 				cap.Status = "enabled"
 				cap.ID = fmt.Sprintf("account:%d:%s", account.ID, cap.Model)
 				cap.Version = mediaVersion(cap)

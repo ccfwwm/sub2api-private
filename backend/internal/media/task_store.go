@@ -23,6 +23,8 @@ type StoredTask struct {
 	Version, Epoch                                            int64
 	Created                                                   time.Time
 	Completed                                                 *time.Time
+	SubmissionClaim                                           bool `json:"-"`
+	RecoveryClaim                                             bool `json:"-"`
 }
 
 const taskSelect = `id,state,settlement_state,coalesce(upstream_id,''),coalesce(result_path,''),diagnostic,user_id,api_key_id,group_id,coalesce(subscription_id,0),account_id,snapshot,quantities,reserved::text,accepted::text,captured::text,released::text,refunded::text,version,lease_epoch,created_at,completed_at`
@@ -416,7 +418,19 @@ func (s *Store) Claim(ctx context.Context) (*StoredTask, error) {
 		return nil, e
 	}
 	if t.State == "submitting" {
-		_, e = tx.ExecContext(ctx, `UPDATE media_tasks SET state='unknown',settlement_state='manual_review',diagnostic='Submission interrupted; acceptance requires reconciliation',version=version+1 WHERE id=$1`, t.ID)
+		if t.Snapshot.Capability.Template != nil && t.Snapshot.Capability.Template.Recover != nil {
+			_, e = tx.ExecContext(ctx, `UPDATE media_tasks SET lease_until=now()+interval '4 minutes',lease_epoch=lease_epoch+1,version=version+1 WHERE id=$1`, t.ID)
+			if e != nil {
+				return nil, e
+			}
+			t.Epoch++
+			t.RecoveryClaim = true
+			if e = tx.Commit(); e != nil {
+				return nil, e
+			}
+			return &t, nil
+		}
+		_, e = tx.ExecContext(ctx, `UPDATE media_tasks SET state='unknown',settlement_state='manual_review',diagnostic='Submission interrupted; acceptance requires reconciliation',lease_until=NULL,version=version+1 WHERE id=$1`, t.ID)
 		if e != nil {
 			return nil, e
 		}
@@ -432,6 +446,7 @@ func (s *Store) Claim(ctx context.Context) (*StoredTask, error) {
 	t.Epoch++
 	if t.State == "queued" {
 		t.State = "submitting"
+		t.SubmissionClaim = true
 	}
 	if e = tx.Commit(); e != nil {
 		return nil, e

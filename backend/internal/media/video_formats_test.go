@@ -126,7 +126,7 @@ func TestExplicitVideoProtocols(t *testing.T) {
 	}
 }
 
-func TestExplicitFrameRolesAndURLOnlyReferences(t *testing.T) {
+func TestExplicitFrameRolesAndEncodedReferences(t *testing.T) {
 	cap := videoFormatCapability("yunfei_multimodal")
 	p := map[string]any{"prompt": "transition", "duration": 5, "reference_images": []any{map[string]any{"url": "https://media.example.com/first.png", "role": "first_frame"}, map[string]any{"url": "https://media.example.com/last.png", "role": "last_frame"}}}
 	req, err := Normalize(cap, "video", p)
@@ -138,7 +138,7 @@ func TestExplicitFrameRolesAndURLOnlyReferences(t *testing.T) {
 	cap.RequestFormat = "v6k_url"
 	p["reference_images"] = []any{"data:image/png;base64," + base64.StdEncoding.EncodeToString(tinyPNG(t))}
 	_, err = Normalize(cap, "video", p)
-	require.ErrorContains(t, err, "reference_url_required")
+	require.NoError(t, err)
 	delete(p, "reference_images")
 	p["videos"] = []any{"https://media.example.com/video.mp4"}
 	_, err = Normalize(cap, "video", p)

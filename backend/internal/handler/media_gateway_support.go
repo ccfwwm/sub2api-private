@@ -30,6 +30,8 @@ func (h *MediaHandler) MarkBillingDelegate(c *gin.Context) {
 		operation = "chat_music"
 	case strings.HasPrefix(path, "/v1beta/models/") && strings.HasSuffix(path, ":generateContent"):
 		operation = "gemini_image"
+	case path == "/v1/audio/speech":
+		operation = "speech"
 	case path == "/v1/audio/generations" || path == "/v1/music/generations":
 		operation = "audio"
 	}

@@ -72,6 +72,32 @@ func TestSubmissionReceiptRedactsExtensionsAndDoesNotInventHistory(t *testing.T)
 	require.Nil(t, e.ReadSubmission("mt_history"))
 }
 
+func TestPublicTaskProjectionOmitsSubmissionAndPrivateRuntimeData(t *testing.T) {
+	const rawURL = "https://media.example.com/reference.png?signature=private"
+	const encoded = "data:image/png;base64,cHJpdmF0ZS1pbmxpbmU="
+	internal := StoredTask{
+		ID: "mt_public_projection", State: "in_progress", Settlement: "held",
+		Snapshot: Snapshot{
+			Capability: Capability{
+				Model: "public-model", UpstreamModel: "private-upstream-model",
+				Template: &ProtocolTemplate{ID: "private-template-id", Auth: TemplateAuth{Mode: "header", Name: "X-Private-Auth"}},
+			},
+			Request: Request{MaterialRefs: map[string][]any{"image": {map[string]any{"url": rawURL}}}},
+		},
+	}
+	public := publicTaskValue(internal, []Artifact{{Key: "image1", Type: "image", MIME: "image/png", Source: rawURL}})
+	public.Submission = &Submission{
+		Path: "/private/submit", Request: map[string]any{"images": []any{encoded}, "credential": "private-credential"},
+	}
+	raw, err := json.Marshal(public)
+	require.NoError(t, err)
+	body := string(raw)
+	for _, forbidden := range []string{rawURL, encoded, "private-upstream-model", "private-template-id", "X-Private-Auth", "private-credential", "/private/submit"} {
+		require.NotContains(t, body, forbidden)
+	}
+	require.Contains(t, body, "public-model")
+}
+
 func TestNativeArkPreservesReferenceAttributesAndOptionalParameters(t *testing.T) {
 	cap := videoFormatCapability("legacy")
 	cap.Adapter = "ark_native"

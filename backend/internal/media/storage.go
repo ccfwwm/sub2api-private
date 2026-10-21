@@ -226,7 +226,15 @@ func (b *BlobStore) Download(ctx context.Context, client *http.Client, t StoredT
 		return a, "", "", e
 	}
 	if strings.EqualFold(target.Host, origin.Host) {
-		req.Header.Set("Authorization", "Bearer "+account.Key)
+		if template := t.Snapshot.Capability.Template; template != nil {
+			auth := template.Auth
+			if template.DownloadAuth != nil {
+				auth = *template.DownloadAuth
+			}
+			applyTemplateAuth(req, auth, account.Key)
+		} else {
+			req.Header.Set("Authorization", "Bearer "+account.Key)
+		}
 	}
 	resp, e := client.Do(req)
 	if e != nil {

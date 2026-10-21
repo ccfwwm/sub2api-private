@@ -34,7 +34,7 @@ func TestPublicCapabilitiesPreservesVariantsAndRedactsBindings(t *testing.T) {
 	entries, err := engine.PublicCapabilities(context.Background(), 1)
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
-	require.Equal(t, "v6k_url", entries[0].RequestFormat)
+	require.Equal(t, "unified", entries[0].RequestFormat)
 	require.Equal(t, "images", entries[0].ReferenceField)
 	require.Equal(t, "videos", entries[0].Materials["video"].ReferenceField)
 	require.Equal(t, []int{5}, entries[0].Duration.Values)

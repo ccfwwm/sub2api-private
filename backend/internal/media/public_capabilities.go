@@ -52,44 +52,17 @@ func (e *Engine) PublicCapabilities(ctx context.Context, groupID int64) ([]Publi
 		if len(ops) == 0 {
 			continue
 		}
-		field, shape := "images", "array"
-		switch cap.Adapter {
-		case "yunfei_gpt_images":
-			field = "image"
-		case "yunfei_grok":
-			field, shape = "image", "url_object"
-		case "yunfei_omni":
-			field, shape = "image", "single"
-		case "yunfei_veo_preview":
-			field = "image_urls"
-		case "yunfei_gemini_native":
-			field, shape = "contents", "gemini_parts"
-		case "ark_native", "v6k_video_gateway":
-			field, shape = "metadata", "native_content"
-		}
-		format := cap.RequestFormat
-		if format == "" {
-			format = "legacy"
-		}
-		if format == "yunfei_multimodal" {
-			field, shape = "reference_images", "array"
-		}
-		if format == "v6k_url" {
-			field, shape = "images", "url_object_array"
-		}
+		field, shape, format := "images", "array", "unified"
 		// Duration scenarios contain configuration-specific arbitrary maps. Only
 		// the typed scalar bounds are public; no internal maps cross this boundary.
 		duration := cap.Duration
 		duration.Scenarios = nil
 		materials := map[string]Material{}
-		for kind, material := range cap.Materials {
-			materials[kind] = material
+		for _, kind := range []string{"image", "video", "audio"} {
+			max := int64(50 << 20)
+			materials[kind] = Material{ReferenceField: kind + "s", Formats: []string{"public_url_string", "public_url_object", "data_url", "data_url_in_url_object", "base64", "base64_in_url_object"}, MaxFileBytes: &max}
 		}
-		if cap.Adapter == "yunfei_gpt_images" && contains(ops, "image_edit") && contains(cap.Formats, "multipart") {
-			one := 1
-			materials["mask"] = Material{Formats: []string{"file_png"}, MaxCount: &one, MaxFileBytes: cap.Materials["image"].MaxFileBytes}
-		}
-		out = append(out, PublicCapability{ProfileID: publicProfileID(cap), Version: cap.Version, Model: cap.Model, MediaType: cap.MediaType, Operations: ops, RequestFormat: format, ReferenceField: field, ReferenceShape: shape, Duration: duration, Sizes: cap.Sizes, Resolutions: cap.Resolutions, AspectRatios: cap.AspectRatios, Qualities: cap.Qualities, Formats: cap.Formats, Materials: materials, PollSeconds: cap.Delivery.PollSeconds, MaxRequestBytes: cap.Limits.MaxRequestBytes, ObservationSeconds: cap.Limits.ObservationSeconds})
+		out = append(out, PublicCapability{ProfileID: publicProfileID(cap), Version: publicProfileID(cap), Model: cap.Model, MediaType: cap.MediaType, Operations: ops, RequestFormat: format, ReferenceField: field, ReferenceShape: shape, Duration: duration, Sizes: cap.Sizes, Resolutions: cap.Resolutions, AspectRatios: cap.AspectRatios, Qualities: cap.Qualities, Formats: []string{"json", "multipart"}, Materials: materials, PollSeconds: cap.Delivery.PollSeconds, MaxRequestBytes: cap.Limits.MaxRequestBytes, ObservationSeconds: cap.Limits.ObservationSeconds})
 		out[len(out)-1].Backgrounds = cap.Backgrounds
 		out[len(out)-1].OutputFormats = cap.OutputFormats
 	}

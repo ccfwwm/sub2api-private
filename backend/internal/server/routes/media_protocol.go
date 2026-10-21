@@ -21,7 +21,7 @@ func mediaProtocolGuard(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodPost:
 		switch path {
-		case "/images/generations", "/images/edits", "/videos", "/videos/generations", "/chat/completions", "/audio/generations", "/music/generations", "/sub2api/estimates":
+		case "/images/generations", "/images/edits", "/videos", "/videos/generations", "/chat/completions", "/audio/generations", "/music/generations", "/audio/speech", "/sub2api/estimates":
 			allowed = true
 		case "/v1beta/models/*modelAction":
 			allowed = strings.HasSuffix(c.Param("modelAction"), ":generateContent")

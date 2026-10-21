@@ -7,6 +7,8 @@ export interface MediaConfigRecord {
   published_version: number | null
   status: string
   config: Record<string, unknown>
+  published_config?: Record<string, unknown>
+  builtin_current?: Record<string, unknown>
 }
 export interface MediaArtifact {
   key: string

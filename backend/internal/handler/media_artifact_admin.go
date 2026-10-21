@@ -223,7 +223,11 @@ func (h *MediaHandler) serveArtifact(c *gin.Context, t media.StoredTask) {
 		if len(extensions) > 0 {
 			extension = extensions[0]
 		}
-		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": "artifact" + extension}))
+		name := h.Engine.Store.ArtifactFilename(c.Request.Context(), t.ID, c.Param("key"))
+		if name == "" {
+			name = "artifact" + extension
+		}
+		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	}
 	http.ServeContent(c.Writer, c.Request, "artifact", info.ModTime(), file)
 }

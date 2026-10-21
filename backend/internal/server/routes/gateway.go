@@ -317,6 +317,7 @@ func RegisterGatewayRoutes(
 			gateway.GET("/media/tasks/recover", h.Media.Recover)
 			gateway.HEAD("/videos/:request_id/content", videoContentHandler)
 			gateway.POST("/audio/generations", h.Media.SubmitAudio)
+			gateway.POST("/audio/speech", h.Media.SubmitSpeech)
 			gateway.POST("/music/generations", h.Media.SubmitAudio)
 			gateway.GET("/audio/generations/:id", h.Media.Get)
 			gateway.GET("/audio/generations/:id/content", h.Media.Content)

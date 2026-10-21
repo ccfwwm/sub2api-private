@@ -1,1 +1,20 @@
-{"version": "v1.2.14", "status": "recorded", "verified_at": "2026-10-20T10:29:44.507535+00:00", "environment": "Production authenticated media model discovery before cutover. No paid generation in this connection check; five-reference generation acceptance is recorded separately after deployment.", "cases": [{"label": "production-model-discovery-before-cutover", "verification": "real_connection", "status": "completed", "models": 30, "scope": "Authenticated gateway and availability of the exact TTseadanco2.5-720 model; does not claim provider reference support."}]}
+{
+  "version": "v1.2.15",
+  "status": "recorded",
+  "verified_at": "2026-10-20T14:16:54+00:00",
+  "environment": "Authenticated production discovery and direct upstream XX Base64 submission with the configured provider account; no claim of generation completion.",
+  "cases": [
+    {
+      "label": "production-model-discovery",
+      "verification": "real_connection",
+      "status": "completed",
+      "scope": "Authenticated gateway model list contains XXsedanco2.5S."
+    },
+    {
+      "label": "xx-five-reference-base64-submission",
+      "verification": "real_connection",
+      "status": "completed",
+      "scope": "Direct provider POST /v1/videos accepted 1 video and 4 image MIME Data URL strings, seconds 5, HTTP 200 with task id. Same input was locally rejected by v1.2.14; corrected relay is verified after deployment."
+    }
+  ]
+}

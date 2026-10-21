@@ -30,6 +30,10 @@ type MonitorMediaConfig struct {
 	TaskAPI  bool                         `json:"task_api,omitempty"`
 }
 
+func (s *ChannelMonitorService) SetMediaTemplateStore(store *media.Store) {
+	s.mediaTemplateStore = store
+}
+
 type MonitorMediaModel struct {
 	Capability *media.Capability `json:"capability,omitempty"`
 	Operation  string            `json:"operation,omitempty"`
@@ -116,12 +120,12 @@ func normalizeMonitorMediaModel(model string, entry MonitorMediaModel) (media.Ca
 			return cap, media.Request{}, fmt.Errorf("monitor parameter %s is not supported", key)
 		}
 	}
-	if op == "gemini_image" {
+	if op == "gemini_image" && cap.Template == nil {
 		p["contents"] = []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": p["prompt"]}}}}
 		delete(p, "prompt")
 		delete(p, "n")
 	}
-	if op == "chat_music" {
+	if op == "chat_music" && cap.Template == nil {
 		p["messages"] = []any{map[string]any{"role": "user", "content": p["prompt"]}}
 	}
 	raw, _ := json.Marshal(p)
@@ -352,7 +356,20 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	res := &CheckResult{Model: model, Status: MonitorStatusError, CheckedAt: time.Now()}
 	start := time.Now()
 	defer func() { ms := int(time.Since(start).Milliseconds()); res.LatencyMs = &ms }()
-	cap, req, err := normalizeMonitorMediaModel(model, c.Models[model])
+	entry := c.Models[model]
+	if s.mediaTemplateStore != nil {
+		if entry.Capability == nil {
+			res.Message = "generation: select an explicit protocol template; no submission"
+			return res
+		}
+		resolved, err := s.mediaTemplateStore.ResolveTemplates(ctx, []media.Capability{*entry.Capability})
+		if err != nil || resolved[0].Template == nil {
+			res.Message = "generation: published protocol template required; no submission"
+			return res
+		}
+		entry.Capability = &resolved[0]
+	}
+	cap, req, err := normalizeMonitorMediaModel(model, entry)
 	if err != nil {
 		res.Message = "generation: invalid model parameters"
 		return res
@@ -399,6 +416,14 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		if s.saveMonitorMediaTask(path, task) != nil {
 			res.Message = "generation: cannot persist acceptance journal; no submission"
 			return res
+		}
+		if cap.Template != nil {
+			wire, e := media.BuildTemplateRequest(ctx, client, cap, req)
+			if e != nil {
+				res.Message = "generation: template request invalid; no submission"
+				return res
+			}
+			req.Wire = &wire
 		}
 		upstream, err = adapter.Submit(ctx, cap, req, task.Account)
 	} else {

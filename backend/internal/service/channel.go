@@ -14,13 +14,14 @@ type BillingMode string
 const (
 	BillingModeToken      BillingMode = "token"       // 按 token 区间计费
 	BillingModePerRequest BillingMode = "per_request" // 按次计费（支持上下文窗口分层）
-	BillingModeVideo      BillingMode = "video"       // 视频生成计费（按秒）
+	BillingModeCharacters BillingMode = "characters"
+	BillingModeVideo      BillingMode = "video" // 视频生成计费（按秒）
 )
 
 // IsValid 检查 BillingMode 是否为合法值
 func (m BillingMode) IsValid() bool {
 	switch m {
-	case BillingModeToken, BillingModePerRequest, BillingModeVideo, "":
+	case BillingModeToken, BillingModePerRequest, BillingModeVideo, BillingModeCharacters, "":
 		return true
 	}
 	return false
@@ -29,7 +30,7 @@ func (m BillingMode) IsValid() bool {
 // IsValidUsageFilter 检查 BillingMode 是否可用于使用记录筛选。
 func (m BillingMode) IsValidUsageFilter() bool {
 	switch m {
-	case BillingModeToken, BillingModePerRequest, BillingModeVideo, "":
+	case BillingModeToken, BillingModePerRequest, BillingModeVideo, BillingModeCharacters, "":
 		return true
 	}
 	return false

@@ -71,6 +71,9 @@ func (e *Engine) Stop() { e.cancel(); e.wg.Wait() }
 func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability, []PriceCard, error) {
 	if e.Config != nil {
 		caps, cards, err := e.Config(ctx, groupID)
+		if err == nil && e.Store != nil {
+			caps, err = e.Store.ResolveTemplates(ctx, caps)
+		}
 		for _, cap := range caps {
 			if cap.Enabled {
 				e.PlatformActive.Store(true)
@@ -79,7 +82,11 @@ func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability
 		}
 		return caps, cards, err
 	}
-	return e.Store.Published(ctx)
+	caps, cards, err := e.Store.Published(ctx)
+	if err == nil {
+		caps, err = e.Store.ResolveTemplates(ctx, caps)
+	}
+	return caps, cards, err
 }
 func (e *Engine) Capability(ctx context.Context, model, operation string, identity Identity) (*Capability, error) {
 	caps, _, err := e.configuration(ctx, identity.GroupID)
@@ -89,7 +96,7 @@ func (e *Engine) Capability(ctx context.Context, model, operation string, identi
 	var found *Capability
 	for _, c := range caps {
 		if c.Matches(model, operation, identity.GroupID) {
-			if found != nil && e.Config == nil {
+			if found != nil && e.Config == nil && c.Template == nil {
 				return nil, fail(409, "capability_conflict", "Multiple active profiles cover this request")
 			}
 			if found == nil {
@@ -104,9 +111,6 @@ func (e *Engine) Capability(ctx context.Context, model, operation string, identi
 // SelectCapability keeps each account's limits and protocol together. A request
 // may use a second account when the first profile does not support its parameters.
 func (e *Engine) SelectCapability(ctx context.Context, model, operation string, p map[string]any, uploads []Upload, identity Identity) (*Capability, error) {
-	if e.Config == nil && p["public_profile_id"] == nil {
-		return e.Capability(ctx, model, operation, identity)
-	}
 	caps, _, err := e.configuration(ctx, identity.GroupID)
 	if err != nil {
 		return nil, err
@@ -158,9 +162,21 @@ func (e *Engine) ManagedModels(ctx context.Context, groupID int64, operation str
 	return models, nil
 }
 func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, identity Identity) (Snapshot, int64, Calculation, error) {
-	_, cards, err := e.configuration(ctx, identity.GroupID)
+	currentCaps, cards, err := e.configuration(ctx, identity.GroupID)
 	if err != nil {
 		return Snapshot{}, 0, Calculation{}, err
+	}
+	if cap.Template != nil {
+		fresh := false
+		for _, current := range currentCaps {
+			if current.ID == cap.ID && current.Version == cap.Version && current.Enabled {
+				fresh = true
+				break
+			}
+		}
+		if !fresh {
+			return Snapshot{}, 0, Calculation{}, fail(409, "estimate_configuration_changed", "Template, binding or account configuration changed; refresh estimate")
+		}
 	}
 	identity.Multiplier = EffectiveMultiplier(cap, identity)
 	var account Account
@@ -238,6 +254,13 @@ func (e *Engine) PrepareRequest(ctx context.Context, cap Capability, operation s
 		return req, err
 	}
 	req.Quantities["task_count"] = []string{"1"}
+	if cap.Template != nil {
+		wire, err := BuildTemplateRequest(ctx, e.Adapter.Client, cap, req)
+		if err != nil {
+			return req, err
+		}
+		req.Wire = &wire
+	}
 	return req, nil
 }
 
@@ -274,10 +297,12 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	if err != nil {
 		return StoredTask{}, err
 	}
+	snapshot.Inputs = InputSummary(req)
 	snapshot.Request.Parameters = map[string]any{"request_blob": path}
 	snapshot.Request.Incoming = nil
 	snapshot.Request.Uploads = nil
 	snapshot.Request.MaterialRefs = nil
+	snapshot.Request.Wire = nil
 	task, err := e.Store.CreateTask(ctx, snapshot, accountID, idem, hash, id)
 	if err != nil {
 		return StoredTask{}, err
@@ -287,6 +312,9 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	return task, nil
 }
 func (e *Engine) Process(ctx context.Context, t StoredTask) error {
+	if t.Settlement == "manual_review" {
+		return nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	// Downloads and multi-output processing can outlast one lease interval.
@@ -322,6 +350,9 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 	if account.Key == "" {
 		return e.deferTask(ctx, t, "Bound account credentials unavailable")
 	}
+	// The task ID is durable and unique across worker restarts. Reuse it for the
+	// upstream submission and the read-only recovery lookup.
+	account.IdempotencyKey = t.ID
 	var result UpstreamResult
 	if t.State != "submitting" && t.ResultPath != "" {
 		var object map[string]any
@@ -333,7 +364,7 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 			}
 		}
 	}
-	if t.State == "submitting" {
+	if t.State == "submitting" && t.SubmissionClaim && !t.RecoveryClaim {
 		var request Request
 		path := stringValue(t.Snapshot.Request.Parameters["request_blob"])
 		if err = e.Blobs.ReadJSON(path, &request); err != nil {
@@ -341,6 +372,11 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 		}
 		account.ObserveSubmission = func(receipt Submission) error { _, err := e.Blobs.WriteJSON(t.ID, "submission", receipt); return err }
 		result, err = e.Adapter.Submit(ctx, t.Snapshot.Capability, request, account)
+	} else if t.State == "submitting" || (t.State == "unknown" && t.UpstreamID == "") {
+		if t.Snapshot.Capability.Template == nil || t.Snapshot.Capability.Template.Recover == nil {
+			return e.deferTask(ctx, t, "No read-only recovery endpoint configured; acceptance requires manual reconciliation")
+		}
+		result, err = e.Adapter.Recover(ctx, account, t.Snapshot.Capability, t.Snapshot.Request.Operation)
 	} else if result.Status == "completed" {
 		// A newer adapter may recognize a durable response without resubmitting.
 	} else if t.State == "completed" && t.ResultPath != "" {
@@ -432,8 +468,15 @@ func (e *Engine) settleTask(ctx context.Context, t StoredTask, event string) err
 }
 func (e *Engine) deferTask(ctx context.Context, t StoredTask, diagnostic string) error {
 	manual := time.Since(t.Created) > time.Duration(*t.Snapshot.Capability.Limits.ObservationSeconds)*time.Second
-	if t.State == "submitting" && t.UpstreamID == "" {
-		manual = true
+	if (t.State == "submitting" || t.State == "unknown") && t.UpstreamID == "" {
+		recoveryConfigured := t.Snapshot.Capability.Template != nil && t.Snapshot.Capability.Template.Recover != nil
+		if !recoveryConfigured {
+			manual = true
+		} else if t.SubmissionClaim {
+			// A failed POST may still have been accepted. Allow a read-only
+			// reconciliation request before the observation deadline can park it.
+			manual = false
+		}
 	}
 	_, err := e.Store.DB.ExecContext(ctx, `UPDATE media_tasks SET diagnostic=$1,lease_until=NULL,next_poll_at=now()+interval '30 seconds',settlement_state=CASE WHEN $2 THEN 'manual_review' ELSE settlement_state END,state=CASE WHEN $2 THEN 'unknown' ELSE state END WHERE id=$3 AND lease_epoch=$4 AND settlement_state IN ('held','pending_usage')`, diagnostic, manual, t.ID, t.Epoch)
 	return err
@@ -523,7 +566,7 @@ func (e *Engine) collectArtifacts(ctx context.Context, t StoredTask, artifacts [
 		if err != nil {
 			return err
 		}
-		r, err := e.Store.DB.ExecContext(ctx, `INSERT INTO media_artifacts(task_id,key,media_type,mime_type,size_bytes,duration_seconds,content_hash,source_encrypted,file_path,available) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,true FROM media_tasks WHERE id=$1 AND lease_epoch=$10 AND settlement_state IN ('held','pending_usage') ON CONFLICT(task_id,content_hash) DO UPDATE SET available=true`, t.ID, publicKey, artifact.Type, artifact.MIME, artifact.Size, artifact.Duration, hash, encrypted, path, t.Epoch)
+		r, err := e.Store.DB.ExecContext(ctx, `INSERT INTO media_artifacts(task_id,key,media_type,mime_type,size_bytes,duration_seconds,content_hash,source_encrypted,file_path,available,filename) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,true,$11 FROM media_tasks WHERE id=$1 AND lease_epoch=$10 AND settlement_state IN ('held','pending_usage') ON CONFLICT(task_id,content_hash) DO UPDATE SET available=true`, t.ID, publicKey, artifact.Type, artifact.MIME, artifact.Size, artifact.Duration, hash, encrypted, path, t.Epoch, safeArtifactFilename(artifact.Filename))
 		if err = requireOne(r, err); err != nil {
 			return err
 		}
@@ -640,7 +683,7 @@ func (b *limitedBuffer) String() string { return string(b.raw) }
 func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request) error {
 	// Input video/audio billing is never sourced from caller duration metadata.
 	kinds := []string{"video", "audio"}
-	if cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" || cap.Adapter == "yunfei_gpt_images" || cap.Adapter == "yunfei_gemini_native" || cap.Adapter == "yunfei_lyria" {
+	if cap.Template != nil || cap.RequestFormat == "yunfei_multimodal" || cap.RequestFormat == "v6k_url" || cap.Adapter == "yunfei_gpt_images" || cap.Adapter == "yunfei_gemini_native" || cap.Adapter == "yunfei_lyria" {
 		kinds = append(kinds, "image")
 	}
 	for _, kind := range kinds {
@@ -707,6 +750,9 @@ func (e *Engine) measureInputs(ctx context.Context, cap Capability, req *Request
 	return nil
 }
 func NormalizeUploads(cap Capability, operation string, p map[string]any, uploads []Upload) (Request, error) {
+	if cap.Template != nil {
+		return normalizeTemplate(cap, operation, p, uploads)
+	}
 	if len(uploads) == 0 {
 		return Normalize(cap, operation, p)
 	}

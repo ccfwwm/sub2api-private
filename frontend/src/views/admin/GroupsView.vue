@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <a class="mb-3 block text-sm text-primary-600" href="/admin/media?tab=bindings">管理媒体协议模板与分组模型绑定</a>
     <TablePageLayout>
       <template #filters>
         <div
@@ -3115,6 +3116,7 @@
           </div>
         </div>
 
+        <a v-if="editingGroup && editForm.platform === 'imagevideo'" class="text-sm text-primary-600" :href="'/admin/media?tab=bindings&group_id='+editingGroup.id">配置本分组的媒体模型绑定与继承</a>
         <!-- 固定账号获取 Codex Model Manifest（仅 openai 平台，仅编辑对话框） -->
         <CodexManifestAccountsField
           v-if="editForm.platform === 'openai' && editingGroup"

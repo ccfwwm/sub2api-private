@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -33,7 +34,7 @@ func (s *Store) TaskList(ctx context.Context, userID int64, limit int, cursor ..
 	return list, rows.Err()
 }
 func (s *Store) Artifacts(ctx context.Context, id string) ([]Artifact, error) {
-	rows, e := s.DB.QueryContext(ctx, `SELECT key,media_type,mime_type,size_bytes,duration_seconds::text,available FROM media_artifacts WHERE task_id=$1 ORDER BY key`, id)
+	rows, e := s.DB.QueryContext(ctx, `SELECT key,media_type,mime_type,size_bytes,duration_seconds::text,available,filename FROM media_artifacts WHERE task_id=$1 ORDER BY key`, id)
 	if e != nil {
 		return nil, e
 	}
@@ -41,13 +42,19 @@ func (s *Store) Artifacts(ctx context.Context, id string) ([]Artifact, error) {
 	list := []Artifact{}
 	for rows.Next() {
 		var a Artifact
-		if e = rows.Scan(&a.Key, &a.Type, &a.MIME, &a.Size, &a.Duration, &a.Available); e != nil {
+		if e = rows.Scan(&a.Key, &a.Type, &a.MIME, &a.Size, &a.Duration, &a.Available, &a.Filename); e != nil {
 			return nil, e
 		}
 		a.ContentURL = fmt.Sprintf("/v1/tasks/%s/artifacts/%s/content", id, a.Key)
 		list = append(list, a)
 	}
 	return list, rows.Err()
+}
+
+func (s *Store) ArtifactFilename(ctx context.Context, id, key string) string {
+	var name string
+	_ = s.DB.QueryRowContext(ctx, `SELECT filename FROM media_artifacts WHERE task_id=$1 AND ($2='' OR key=$2) ORDER BY key LIMIT 1`, id, key).Scan(&name)
+	return safeArtifactFilename(name)
 }
 func (s *Store) ArtifactFile(ctx context.Context, id, key string) (*os.File, string, string, error) {
 	var path, mime, hash string
@@ -97,10 +104,20 @@ func publicTaskValue(t StoredTask, artifacts []Artifact) Task {
 		status = "queued"
 	}
 	progress := 0
+	if values := t.Quantities["upstream_progress"]; len(values) > 0 {
+		if n, err := strconv.Atoi(values[0]); err == nil && n >= 0 && n <= 100 {
+			progress = n
+		}
+	}
 	if status == "completed" {
 		progress = 100
 	}
-	public := Task{ID: t.ID, Object: Object(t.Snapshot.Capability.MediaType), Model: t.Snapshot.Capability.Model, Status: status, CreatedAt: t.Created.Unix(), Progress: progress, Artifacts: artifacts, Diagnostic: t.Diagnostic, Billing: map[string]any{"currency": "USD", "reserved": t.Reserved, "accepted": t.Accepted, "settled": t.Captured, "released": t.Released, "refunded": t.Refunded, "maximum_charge": t.Snapshot.Maximum, "price_version": t.Snapshot.Sale.Version, "multiplier": t.Identity.Multiplier, "time_multiplier": t.Identity.TimeMultiplier, "state": t.Settlement, "quantities": t.Quantities, "version": t.Version}}
+	public := Task{ID: t.ID, Object: Object(t.Snapshot.Capability.MediaType), Model: t.Snapshot.Capability.Model, Status: status, CreatedAt: t.Created.Unix(), Progress: progress, Artifacts: artifacts, Diagnostic: publicDiagnostic(t), Billing: map[string]any{"currency": "USD", "reserved": t.Reserved, "accepted": t.Accepted, "settled": t.Captured, "released": t.Released, "refunded": t.Refunded, "maximum_charge": t.Snapshot.Maximum, "price_version": t.Snapshot.Sale.Version, "multiplier": t.Identity.Multiplier, "time_multiplier": t.Identity.TimeMultiplier, "state": t.Settlement, "quantities": t.Quantities, "version": t.Version}}
+	if t.Snapshot.Inputs != nil {
+		copy := *t.Snapshot.Inputs
+		copy.Stage = "unrecorded"
+		public.Inputs = &copy
+	}
 	if t.Completed != nil {
 		unix := t.Completed.Unix()
 		public.CompletedAt = &unix
@@ -142,7 +159,9 @@ func (s *Store) DisableConfig(ctx context.Context, kind, id string, expected, ac
 	var object map[string]any
 	_ = json.Unmarshal(raw, &object)
 	object["status"] = "disabled"
-	object["enabled"] = false
+	if kind == "capability" {
+		object["enabled"] = false
+	}
 	object["version"] = fmt.Sprint(current + 1)
 	raw, e = json.Marshal(object)
 	if e != nil {
@@ -160,7 +179,7 @@ func (s *Store) DisableConfig(ctx context.Context, kind, id string, expected, ac
 		return ConfigRecord{}, e
 	}
 	version := current + 1
-	return ConfigRecord{id, version, &version, "disabled", raw}, nil
+	return ConfigRecord{ID:id,Version:version,PublishedVersion:&version,Status:"disabled",Config:raw}, nil
 }
 func (s *Store) Reconcile(ctx context.Context, id, upstreamID, decision, evidence string, version, actor int64) error {
 	if evidence == "" || len(evidence) > 2000 {

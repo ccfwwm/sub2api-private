@@ -24,6 +24,9 @@ import (
 type Adapter struct{ Client *http.Client }
 
 func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, account Account) (UpstreamResult, error) {
+	if cap.Template != nil {
+		return a.submitTemplate(ctx, cap, req, account)
+	}
 	p := map[string]any{}
 	for k, v := range req.Parameters {
 		p[k] = v
@@ -72,6 +75,13 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 				if err != nil {
 					return UpstreamResult{}, err
 				}
+				if cap.RequestFormat == "v6k_url" && !strings.HasPrefix(raw, "https://") && !strings.HasPrefix(raw, "data:") {
+					decoded, err := base64.StdEncoding.DecodeString(raw)
+					if err != nil {
+						return UpstreamResult{}, fail(400, "invalid_reference", "Invalid Base64")
+					}
+					raw = "data:" + http.DetectContentType(decoded) + ";base64," + raw
+				}
 				if obj, ok := ref.(map[string]any); ok {
 					copy := map[string]any{}
 					for k, v := range obj {
@@ -79,9 +89,19 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 					}
 					copy["url"] = raw
 					delete(copy, "b64_json")
-					values = append(values, copy)
+					// V6K accepts Data URL strings. Canonicalize source-only Base64
+					// objects while retaining role/weight and future object attributes.
+					if cap.RequestFormat == "v6k_url" && strings.HasPrefix(raw, "data:") && len(copy) == 1 {
+						values = append(values, raw)
+					} else {
+						values = append(values, copy)
+					}
 				} else if cap.RequestFormat == "v6k_url" {
-					values = append(values, map[string]any{"url": raw})
+					if strings.HasPrefix(raw, "data:") {
+						values = append(values, raw)
+					} else {
+						values = append(values, map[string]any{"url": raw})
+					}
 				} else {
 					values = append(values, raw)
 				}
@@ -239,6 +259,9 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 	return a.call(ctx, account, cap, http.MethodPost, path, body, contentType, true)
 }
 func (a *Adapter) Poll(ctx context.Context, t StoredTask, account Account) (UpstreamResult, error) {
+	if t.Snapshot.Capability.Template != nil {
+		return a.pollTemplate(ctx, t, account)
+	}
 	path := "/v1/videos/" + url.PathEscape(t.UpstreamID)
 	if account.TaskAPI {
 		return a.call(ctx, account, t.Snapshot.Capability, http.MethodGet, "/v1/tasks/"+url.PathEscape(t.UpstreamID), nil, "", false)
@@ -295,7 +318,11 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	if e != nil {
 		return UpstreamResult{}, e
 	}
-	req.Header.Set("Authorization", "Bearer "+account.Key)
+	if cap.Template != nil {
+		applyTemplateAuth(req, cap.Template.Auth, account.Key)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+account.Key)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Sub2API-media/1")
 	if submission && account.IdempotencyKey != "" {
@@ -368,6 +395,14 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic}, nil
 	}
+	if cap.Template != nil && cap.Template.Mode == "sync_binary" {
+		mime := strings.Split(response.Header.Get("Content-Type"), ";")[0]
+		if !strings.HasPrefix(mime, cap.MediaType+"/") || len(raw) == 0 {
+			return UpstreamResult{Status: "unknown", Diagnostic: "Successful response was not the configured media type; do not resubmit"}, nil
+		}
+		payload, _ := json.Marshal(map[string]any{"_media_binary": map[string]any{"mime": mime, "data": base64String(raw)}})
+		return UpstreamResult{Status: "completed", Accepted: true, Response: payload, Artifacts: []Artifact{{Key: cap.MediaType + "1", Type: cap.MediaType, MIME: mime, Source: "data:" + mime + ";base64," + base64String(raw)}}}, nil
+	}
 	var object map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -389,10 +424,19 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 
 // Recover performs a read only lookup; a missing response never triggers POST.
 func (a *Adapter) Recover(ctx context.Context, account Account, cap Capability, operation string) (UpstreamResult, error) {
-	path := "/v1/media/tasks/recover?operation=" + url.QueryEscape(operation) + "&idempotency_key=" + url.QueryEscape(account.IdempotencyKey)
+	if cap.Template == nil || cap.Template.Recover == nil {
+		return UpstreamResult{Status: "unknown", Diagnostic: "No read-only recovery endpoint configured; do not resubmit"}, nil
+	}
+	path, err := expandTemplateEndpoint(*cap.Template.Recover, map[string]string{"model": cap.UpstreamModel, "idempotency_key": account.IdempotencyKey})
+	if err != nil {
+		return UpstreamResult{}, err
+	}
 	return a.call(ctx, account, cap, http.MethodGet, path, nil, "", false)
 }
 func parseResult(p map[string]any, cap Capability) UpstreamResult {
+	if cap.Template != nil {
+		return ParseTemplateResponse(p, cap)
+	}
 	result := UpstreamResult{ID: stringValue(p["id"]), Status: "unknown", Quantities: map[string][]string{}}
 	if result.ID == "" {
 		result.ID = stringValue(p["task_id"])

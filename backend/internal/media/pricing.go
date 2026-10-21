@@ -33,8 +33,8 @@ func price(s *string) (decimal.Decimal, error) {
 	return d, e
 }
 
-var units = map[string]bool{"request": true, "output": true, "second": true, "minute": true, "token": true, "input_image": true, "input_video_second": true, "input_audio_second": true}
-var sources = map[string]string{"task_count": "request", "successful_outputs": "output", "request_duration": "time", "fixed_duration": "time", "artifact_duration": "time", "provider_duration": "time", "provider_tokens": "token", "accepted_input_images": "input_image", "accepted_input_video_duration": "input_video_second", "accepted_input_audio_duration": "input_audio_second"}
+var units = map[string]bool{"request": true, "output": true, "second": true, "minute": true, "token": true, "input_character": true, "input_image": true, "input_video_second": true, "input_audio_second": true}
+var sources = map[string]string{"input_characters": "input_character", "task_count": "request", "successful_outputs": "output", "request_duration": "time", "fixed_duration": "time", "artifact_duration": "time", "provider_duration": "time", "provider_tokens": "token", "accepted_input_images": "input_image", "accepted_input_video_duration": "input_video_second", "accepted_input_audio_duration": "input_audio_second"}
 
 func ValidatePriceCard(c PriceCard, publish bool) error {
 	if c.ID == "" || c.Version == "" || c.ModelMatch.Value == "" || c.Scope.Reference == "" || c.Operation == "" {
@@ -43,7 +43,7 @@ func ValidatePriceCard(c PriceCard, publish bool) error {
 	if c.Currency != "USD" || (c.Purpose != "sale" && c.Purpose != "cost") {
 		return fail(400, "invalid_price_card", "USD and sale/cost purpose are required")
 	}
-	if !contains([]string{"image", "video", "audio"}, c.MediaType) || !contains([]string{"image", "image_edit", "gemini_image", "video", "audio", "chat_music"}, c.Operation) {
+	if !contains([]string{"image", "video", "audio"}, c.MediaType) || !contains([]string{"image", "image_edit", "gemini_image", "video", "audio", "chat_music", "speech"}, c.Operation) {
 		return fail(400, "invalid_price_operation", "Media type and operation are required")
 	}
 	if c.SuccessPolicy != "any_output" && c.SuccessPolicy != "all_outputs" {

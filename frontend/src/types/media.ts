@@ -1,4 +1,3 @@
-import presets from '@/data/media-capabilities.json'
 
 export interface MediaCharge {
   name: string
@@ -22,7 +21,9 @@ export interface MediaPricing {
 }
 export interface MediaCapability {
   profile_id: string; version: string; model: string; upstream_model: string
-  request_format?: 'legacy' | 'yunfei_multimodal' | 'v6k_url'
+  request_format?: 'legacy' | 'yunfei_multimodal' | 'v6k_url' | 'unified'
+  template_ref?: { id: string; version: number }
+  template_rules?: Record<string, unknown>[]
   provider: string; adapter: string; media_type: string; enabled: boolean; status: string
   validation_status: string; verification_evidence: string
   operations: string[]; formats: string[]; scenarios: string[]
@@ -36,23 +37,22 @@ export interface MediaCapability {
   [key: string]: unknown
 }
 
-export const mediaUnits = ['request', 'output', 'second', 'minute', 'token', 'input_image', 'input_video_second', 'input_audio_second']
-export const quantitySources = ['task_count', 'successful_outputs', 'request_duration', 'fixed_duration', 'artifact_duration', 'provider_duration', 'provider_tokens', 'accepted_input_images', 'accepted_input_video_duration', 'accepted_input_audio_duration']
+export const mediaUnits = ['request', 'output', 'second', 'minute', 'token', 'input_character', 'input_image', 'input_video_second', 'input_audio_second']
+export const quantitySources = ['input_characters', 'task_count', 'successful_outputs', 'request_duration', 'fixed_duration', 'artifact_duration', 'provider_duration', 'provider_tokens', 'accepted_input_images', 'accepted_input_video_duration', 'accepted_input_audio_duration']
 export const unitNames: Record<string, [string, string]> = {
   request: ['次', 'request'], output: ['产物', 'output'], second: ['秒', 'second'], minute: ['分钟', 'minute'],
-  token: ['token', 'token'], input_image: ['参考图', 'input image'], input_video_second: ['参考视频秒', 'input video second'], input_audio_second: ['参考音频秒', 'input audio second']
+  input_character: ['输入字符', 'input character'], token: ['token', 'token'], input_image: ['参考图', 'input image'], input_video_second: ['参考视频秒', 'input video second'], input_audio_second: ['参考音频秒', 'input audio second']
 }
 export function newMediaCharge(unit = 'request'): MediaCharge {
-  const sources: Record<string, string> = { request: 'task_count', output: 'successful_outputs', token: 'provider_tokens', input_image: 'accepted_input_images', input_video_second: 'accepted_input_video_duration', input_audio_second: 'accepted_input_audio_duration' }
+  const sources: Record<string, string> = { input_character: 'input_characters', request: 'task_count', output: 'successful_outputs', token: 'provider_tokens', input_image: 'accepted_input_images', input_video_second: 'accepted_input_video_duration', input_audio_second: 'accepted_input_audio_duration' }
   return { name: 'generation', unit, unit_price: null, quantity_source: sources[unit] || 'request_duration', fallback_source: null, usage_field: unit === 'token' ? 'total_tokens' : null, trigger: 'success', refundable: true, rounding: { mode: 'none', step: '1', minimum: '0', scope: 'per_output' }, method: 'linear', package_quantity: null, tiers: [] }
 }
 export function newMediaPricing(): MediaPricing {
   return { media_type: 'video', rules: [{ priority: 0, when: {}, charges: [newMediaCharge()] }], reservation: { maximum_charge: null, max_quantities: {}, overrun: 'cap_user_charge' }, success_policy: 'any_output' }
 }
 export function newMediaCapability(model = ''): MediaCapability {
-  const preset = presets.find(p => p.model === model)
   const base: MediaCapability = { profile_id: `manual:${model || Date.now()}`, version: '1', model, upstream_model: model, provider: 'manual', adapter: '', media_type: '', enabled: false, status: 'enabled', validation_status: '待渠道验证', verification_evidence: '', operations: [], formats: ['json'], scenarios: [], duration: { mode: 'unknown', values: [], min: null, max: null, default: null, required: false }, resolutions: [], sizes: [], aspect_ratios: [], qualities: [], resolution_policy: 'optional', materials: {}, delivery: { poll_seconds: 10, head: true, range: true, refresh: false }, limits: { max_request_bytes: 33554432, max_concurrent_tasks: 2, observation_seconds: 3600 }, artifact_hosts: [], usage_fields: {} }
-  return mediaDefaults(preset ? JSON.parse(JSON.stringify(preset)) : base)
+  return mediaDefaults(base)
 }
 export function mediaDefaults(c: MediaCapability): MediaCapability {
   c.upstream_model ||= c.model
@@ -83,16 +83,7 @@ export function accountMediaCapabilities(extra: Record<string, unknown> | undefi
       const c = newMediaCapability(upstream); c.model = model; c.upstream_model = upstream; caps.push(c)
     }
   }
-  return caps.map(c => {
-    if (String(credentials?.base_url || '').includes('yunfei.best') && c.provider === 'manual' && c.adapter === 'v6k_video_gateway' && c.duration.mode === 'unknown' && !c.duration.values.length && c.duration.min == null && c.duration.max == null && c.duration.default == null && !c.duration.required && !c.resolutions.length && !c.sizes?.length && !c.qualities.length && !Object.keys(c.materials || {}).length) {
-      const preset = newMediaCapability(c.upstream_model)
-      if (preset.adapter) {
-        const overrides = Object.fromEntries(['aspect_ratios','artifact_hosts','usage_fields','field_mapping','constraints','scenarios','source'].filter(k => c[k] && (typeof c[k] === 'string' || Object.keys(c[k] as object).length)).map(k => [k,c[k]]))
-        c = { ...preset, ...overrides, model:c.model, upstream_model:c.upstream_model, profile_id:c.profile_id, enabled:c.enabled, validation_status:c.validation_status, verification_evidence:c.verification_evidence, limits:c.limits, delivery:c.delivery }
-      }
-    }
-    return mediaDefaults(c)
-  })
+  return caps.map(mediaDefaults)
 }
 export function validateMediaPricing(value?: MediaPricing): string | null {
   if (!value || !value.rules.length) return '请配置媒体模型价格 / Configure model pricing'

@@ -93,9 +93,10 @@ jobs:
           sha256sum deployment.json docs-image-inspect.json > checksums.txt
           cp backend/migrations/24{3,4,5,6,7}_*.sql .
           cp backend/migrations/248_public_imagevideo_docs.sql .
-          sha256sum 243_media_tasks_and_pricing.sql 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql 247_media_task_list_indexes.sql 248_public_imagevideo_docs.sql >> checksums.txt
+          cp backend/migrations/249_media_protocol_templates.sql .
+          sha256sum 243_media_tasks_and_pricing.sql 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql 247_media_task_list_indexes.sql 248_public_imagevideo_docs.sql 249_media_protocol_templates.sql >> checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json docs-image-inspect.json checksums.txt 24{3,4,5,6,7,8}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact application and independently replaceable docs images validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
+          gh release create "$VERSION" deployment.json docs-image-inspect.json checksums.txt 24{3,4,5,6,7,8,9}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact application and independently replaceable docs images validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
 
 
   deploy:

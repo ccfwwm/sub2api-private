@@ -33,6 +33,10 @@ type Material struct {
 	MaxDuration    *string  `json:"max_duration_seconds"`
 }
 type Capability struct {
+	TemplateRef      *TemplateRef        `json:"template_ref,omitempty"`
+	Template         *ProtocolTemplate   `json:"execution_template,omitempty"`
+	TemplateRules    []ParameterRule     `json:"template_rules,omitempty"`
+	BindingVersions  []TemplateRef       `json:"binding_versions,omitempty"`
 	ID               string              `json:"profile_id"`
 	Version          string              `json:"version"`
 	Model            string              `json:"model"`
@@ -142,16 +146,17 @@ type Identity struct {
 	ImageOverride, VideoOverride           *string
 }
 type Request struct {
-	Incoming     map[string]any      `json:"incoming,omitempty"`
-	MaterialRefs map[string][]any    `json:"material_refs,omitempty"`
-	Uploads      []Upload            `json:"uploads,omitempty"`
-	Operation    string              `json:"operation"`
-	Parameters   map[string]any      `json:"request"`
-	Model        string              `json:"model"`
-	Duration     string              `json:"duration"`
-	Conditions   map[string]any      `json:"conditions"`
-	Quantities   map[string][]string `json:"quantities"`
-	InputImages  int                 `json:"input_images"`
+	Wire         *PreparedMediaRequest `json:"wire,omitempty"`
+	Incoming     map[string]any        `json:"incoming,omitempty"`
+	MaterialRefs map[string][]any      `json:"material_refs,omitempty"`
+	Uploads      []Upload              `json:"uploads,omitempty"`
+	Operation    string                `json:"operation"`
+	Parameters   map[string]any        `json:"request"`
+	Model        string                `json:"model"`
+	Duration     string                `json:"duration"`
+	Conditions   map[string]any        `json:"conditions"`
+	Quantities   map[string][]string   `json:"quantities"`
+	InputImages  int                   `json:"input_images"`
 }
 type Upload struct {
 	Field string `json:"field"`
@@ -160,15 +165,16 @@ type Upload struct {
 	Data  []byte `json:"data"`
 }
 type Snapshot struct {
-	CostMultiplier string     `json:"cost_multiplier"`
-	Capability     Capability `json:"capability"`
-	Sale           PriceCard  `json:"sale"`
-	Cost           *PriceCard `json:"cost"`
-	SaleRule       Rule       `json:"sale_rule"`
-	CostRule       *Rule      `json:"cost_rule"`
-	Identity       Identity   `json:"identity"`
-	Request        Request    `json:"normalized"`
-	Maximum        string     `json:"maximum"`
+	Inputs         *PublicInputSummary `json:"inputs,omitempty"`
+	CostMultiplier string              `json:"cost_multiplier"`
+	Capability     Capability          `json:"capability"`
+	Sale           PriceCard           `json:"sale"`
+	Cost           *PriceCard          `json:"cost"`
+	SaleRule       Rule                `json:"sale_rule"`
+	CostRule       *Rule               `json:"cost_rule"`
+	Identity       Identity            `json:"identity"`
+	Request        Request             `json:"normalized"`
+	Maximum        string              `json:"maximum"`
 }
 type Line struct {
 	Name      string   `json:"name"`
@@ -187,19 +193,21 @@ type Calculation struct {
 	Missing  []string `json:"missing_usage"`
 }
 type Task struct {
-	Submission  *Submission    `json:"submission,omitempty"`
-	ID          string         `json:"id"`
-	Object      string         `json:"object"`
-	Model       string         `json:"model"`
-	Status      string         `json:"status"`
-	Progress    int            `json:"progress"`
-	CreatedAt   int64          `json:"created_at"`
-	CompletedAt *int64         `json:"completed_at,omitempty"`
-	Billing     map[string]any `json:"billing"`
-	Artifacts   []Artifact     `json:"data"`
-	Diagnostic  string         `json:"diagnostic,omitempty"`
+	Submission  *Submission         `json:"-"`
+	Inputs      *PublicInputSummary `json:"inputs,omitempty"`
+	ID          string              `json:"id"`
+	Object      string              `json:"object"`
+	Model       string              `json:"model"`
+	Status      string              `json:"status"`
+	Progress    int                 `json:"progress"`
+	CreatedAt   int64               `json:"created_at"`
+	CompletedAt *int64              `json:"completed_at,omitempty"`
+	Billing     map[string]any      `json:"billing"`
+	Artifacts   []Artifact          `json:"data"`
+	Diagnostic  string              `json:"diagnostic,omitempty"`
 }
 type Artifact struct {
+	Filename   string  `json:"filename,omitempty"`
 	Key        string  `json:"key"`
 	Type       string  `json:"type"`
 	MIME       string  `json:"mime_type"`

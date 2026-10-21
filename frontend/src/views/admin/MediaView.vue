@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { mediaAPI, type ConfigKind, type MediaConfigRecord, type MediaTaskRecord } from '@/api/media'
-import capabilityTemplates from '@/data/media-capabilities.json'
+import MediaProtocolManager from '@/components/media/MediaProtocolManager.vue'
 import MediaPriceEditor from '@/components/media/MediaPriceEditor.vue'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
@@ -20,7 +20,6 @@ const busy = ref(false)
 const selected = ref<MediaConfigRecord | null>(null)
 const editor = ref('{}')
 const histories = ref<MediaConfigRecord[]>([])
-const templateID = ref('')
 const simulator = ref('{\n  "operation": "video",\n  "request": {"model": "00sd2.5", "prompt": "A quiet valley", "seconds": 30},\n  "identity": {"Multiplier": "1", "TimeMultiplier": "1"}\n}')
 const simulation = ref<Record<string, unknown> | null>(null)
 const publishPreview = ref(false)
@@ -51,12 +50,6 @@ async function refresh() {
 async function select(record: MediaConfigRecord) {
   selected.value = record; editor.value = JSON.stringify(record.config, null, 2); publishPreview.value = false
   histories.value = await mediaAPI.history(kind.value, record.id)
-}
-function useTemplate() {
-  const template = capabilityTemplates.find(value => value.profile_id === templateID.value)
-  if (!template) return
-  kind.value = 'capability'; selected.value = null; histories.value = []; publishPreview.value = false
-  editor.value = JSON.stringify(template, null, 2)
 }
 function createPrice() {
   const cap = draft.value
@@ -123,6 +116,7 @@ onMounted(() => action(refresh))
 
 <template>
   <AppLayout>
+    <MediaProtocolManager />
     <div class="mx-auto max-w-7xl space-y-6 p-4 lg:p-8">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div><h1 class="text-2xl font-semibold">{{ text('媒体模型与计费', 'Media models and billing') }}</h1><p class="mt-2 text-sm text-gray-500">{{ text('售价与成本独立配置。草稿不会开放模型，发布需要真实渠道验证和完整价格。', 'Retail prices and supplier costs are independent. Drafts stay closed; publishing requires provider verification and configured prices.') }}</p></div>
@@ -132,8 +126,7 @@ onMounted(() => action(refresh))
       <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
         <aside class="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
           <div class="flex gap-2"><button class="btn flex-1" :class="kind === 'capability' ? 'btn-primary' : 'btn-secondary'" @click="kind = 'capability'">{{ text('能力', 'Capabilities') }}</button><button class="btn flex-1" :class="kind === 'price' ? 'btn-primary' : 'btn-secondary'" @click="kind = 'price'">{{ text('价卡', 'Prices') }}</button></div>
-          <select v-model="templateID" class="input w-full" :aria-label="text('模型模板', 'Model template')"><option value="">{{ text('38 个来源模型模板', '38 source model templates') }}</option><option v-for="value in capabilityTemplates" :key="value.profile_id" :value="value.profile_id">{{ value.provider }} · {{ value.model }}</option></select>
-          <div class="flex gap-2"><button class="btn btn-secondary flex-1" @click="useTemplate">{{ text('新建能力', 'New capability') }}</button><button class="btn btn-secondary flex-1" @click="createPrice">{{ text('新建价卡', 'New price') }}</button></div>
+          <div class="flex gap-2"><button class="btn btn-secondary flex-1" @click="createPrice">{{ text('新建价卡', 'New price') }}</button></div>
           <button v-for="record in rows" :key="record.id" class="block w-full rounded-lg border p-3 text-left text-sm dark:border-gray-700" :class="selected?.id === record.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : ''" @click="action(() => select(record))"><span class="break-all font-medium">{{ record.id }}</span><span class="mt-1 block text-xs text-gray-500">{{ record.status }} · v{{ record.version }} · {{ text('发布版本', 'Published') }} {{ record.published_version ?? '—' }}</span></button>
           <p v-if="!rows.length" class="text-sm text-gray-500">{{ text('暂无配置。先从模板创建草稿。', 'No configuration. Start with a template.') }}</p>
         </aside>

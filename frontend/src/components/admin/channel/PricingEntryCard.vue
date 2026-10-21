@@ -224,6 +224,7 @@
           </div>
         </div>
 
+        <div v-else-if="entry.billing_mode === 'characters'" class="mt-3"><label class="text-xs">语音输入字符单价（USD / Unicode 码点）<input :value="entry.per_request_price" @input="emitField('per_request_price', ($event.target as HTMLInputElement).value)" type="number" step="any" min="0" class="input mt-1 w-48" /></label></div>
         <!-- Video mode -->
         <div v-else-if="entry.billing_mode === 'video'">
           <!-- Video prices use the existing per-request field, with seconds as the quantity. -->
@@ -335,6 +336,7 @@ const emit = defineEmits<{
 const collapsed = ref(props.entry.models.length > 0)
 
 const billingModeOptions = computed(() => [
+    { value: 'characters', label: '语音输入字符（Unicode 码点）' },
     { value: 'token', label: t('admin.channels.billingMode.token') },
     { value: 'per_request', label: t('admin.channels.billingMode.perRequest') },
     { value: 'video', label: t('admin.channels.billingMode.video') },

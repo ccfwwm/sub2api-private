@@ -2210,12 +2210,12 @@
           [
             "支持编码素材的多媒体协议",
             "reference_images / reference_videos / reference_audios；公网 URL、data URL、对象 {url} / {b64_json}，范围以能力为准",
-            "图片优先级 reference_images > input_reference > images；只取第一个已提供字段，空数组也生效。duration 优先于 seconds。"
+            "同类素材别名同时填写时须一致；时长别名冲突时拒绝，不覆盖素材或参数。"
           ],
           [
-            "仅公网 URL 的视频协议",
-            "images 为 URL 对象数组；音视频参考字段按当前能力配置",
-            "拒绝 Base64、data URL 和文件；不自动上传素材，不丢弃素材后改成文生视频。"
+            "V6K 视频协议（兼容 ID v6k_url）",
+            "images / videos / audios：公网 HTTPS URL、含 MIME 的 data URL 字符串或 {url} / {b64_json} 对象",
+            "Base64 对象规范为 data URL 字符串后转发；附加属性保留。真实媒体测量、解码大小和总请求限制仍生效；该适配暂不转换 multipart 文件。上游决定模型支持情况，失败不删素材。"
           ]
         ]
       },
@@ -2231,7 +2231,13 @@
         "kind": "code",
         "language": "json",
         "text": "{\n  \"model\": \"MinimaxH3-2K\",\n  \"prompt\": \"参考画面中的主体沿海岸缓慢行走\",\n  \"seconds\": 5,\n  \"ratio\": \"16:9\",\n  \"images\": [\n    {\n      \"url\": \"https://example.com/first-frame.png\"\n    }\n  ]\n}",
-        "label": "URL 专用协议请求"
+        "label": "V6K URL 请求"
+      },
+      {
+        "kind": "code",
+        "language": "json",
+        "label": "XX 参考素材 data URL 请求（输出 5 秒）",
+        "text": "{\n  \"model\": \"XXsedanco2.5S\",\n  \"prompt\": \"根据参考视频和图片生成品牌短片\",\n  \"seconds\": 5,\n  \"ratio\": \"16:9\",\n  \"videos\": [\n    \"data:video/mp4;base64,<FULL_VIDEO_BASE64>\"\n  ],\n  \"images\": [\n    \"data:image/png;base64,<FULL_IMAGE_BASE64>\"\n  ]\n}"
       },
       {
         "kind": "code",

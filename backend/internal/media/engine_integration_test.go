@@ -16,7 +16,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 func pngFixture(t *testing.T) string {
@@ -221,8 +220,11 @@ func TestAsyncAdapterSubmitsOnceAndRecoversOnAnotherEngine(t *testing.T) {
 	}
 	first := media.NewEngine(s, blobs, lookup, nil)
 	first.Adapter.Client = media.SafeClient(true)
-	task.State = "submitting"
-	require.NoError(t, first.Process(ctx, task))
+	claimed, err := s.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.True(t, claimed.SubmissionClaim)
+	require.NoError(t, first.Process(ctx, *claimed))
 	first.Stop()
 	require.Equal(t, 1, submit)
 	task, err = s.GetTask(ctx, task.ID)
@@ -231,11 +233,168 @@ func TestAsyncAdapterSubmitsOnceAndRecoversOnAnotherEngine(t *testing.T) {
 	second := media.NewEngine(s, blobs, lookup, nil)
 	second.Adapter.Client = media.SafeClient(true)
 	defer second.Stop()
-	require.NoError(t, second.Process(ctx, task))
+	_, err = db.Exec(`UPDATE media_tasks SET next_poll_at=now() WHERE id=$1`, task.ID)
+	require.NoError(t, err)
+	claimed, err = s.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.False(t, claimed.SubmissionClaim)
+	require.NoError(t, second.Process(ctx, *claimed))
 	require.Equal(t, 1, submit)
 	require.Equal(t, 1, poll)
 	task, err = s.GetTask(ctx, task.ID)
 	require.NoError(t, err)
 	require.Equal(t, "settled", task.Settlement)
-	_ = time.Second
+}
+
+func TestExpiredSubmissionUsesOnlyConfiguredReadOnlyRecovery(t *testing.T) {
+	db := testDB(t)
+	s := &media.Store{DB: db}
+	ctx := context.Background()
+	snap := fixture(t, db, "5")
+	snap.Capability.MediaType = "image"
+	snap.Capability.Template = &media.ProtocolTemplate{
+		ID: "recovery-fixture", Version: "1", Status: "published", SchemaVersion: 1,
+		Name: "Recovery fixture", MediaTypes: []string{"image"}, Operations: []string{"image"},
+		Mode: "async", Auth: media.TemplateAuth{Mode: "bearer"},
+		Submit:   media.TemplateEndpoint{Method: http.MethodPost, Path: "/jobs"},
+		Recover:  &media.TemplateEndpoint{Method: http.MethodGet, Path: "/recover/{idempotency_key}"},
+		Response: media.TemplateResponse{TaskID: []string{"id"}, Status: []string{"status"}, States: map[string]string{"queued": "in_progress"}},
+	}
+	snap.Request.Operation = "image"
+	task, err := s.CreateTask(ctx, snap, snap.Capability.AccountIDs[0], "recovery", "hash", media.NewTaskID())
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE media_tasks SET state='submitting',lease_until=now()-interval '1 second',next_poll_at=now() WHERE id=$1`, task.ID)
+	require.NoError(t, err)
+
+	type observedRequest struct{ method, path string }
+	observed := make(chan observedRequest, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedRequest{method: r.Method, path: r.URL.EscapedPath()}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"id": "provider-recovered", "status": "queued"})
+	}))
+	defer upstream.Close()
+	claimed, err := s.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.False(t, claimed.SubmissionClaim)
+	require.True(t, claimed.RecoveryClaim)
+	blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("r", 32))
+	require.NoError(t, err)
+	engine := media.NewEngine(s, blobs, func(id, group int64) (media.Account, error) {
+		return media.Account{ID: id, BaseURL: upstream.URL, Key: "test", Allowed: true}, nil
+	}, nil)
+	engine.Adapter.Client = media.SafeClient(true)
+	defer engine.Stop()
+	require.NoError(t, engine.Process(ctx, *claimed))
+
+	req := <-observed
+	require.Equal(t, http.MethodGet, req.method)
+	require.Equal(t, "/recover/"+task.ID, req.path)
+	require.Empty(t, observed)
+	current, err := s.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	require.Equal(t, "in_progress", current.State)
+	require.Equal(t, "provider-recovered", current.UpstreamID)
+}
+
+func TestSubmissionTransportFailureGetsReadOnlyRecoveryWithoutResubmission(t *testing.T) {
+	db := testDB(t)
+	s := &media.Store{DB: db}
+	ctx := context.Background()
+	snap := fixture(t, db, "5")
+	snap.Capability.Limits.ObservationSeconds = ptr(3600)
+	snap.Capability.Template = &media.ProtocolTemplate{
+		ID: "recovery-after-submit-failure", Version: "1", Status: "published", SchemaVersion: 1,
+		Name: "Recovery after submit failure", MediaTypes: []string{"video"}, Operations: []string{"video"},
+		Mode: "async", Auth: media.TemplateAuth{Mode: "bearer"},
+		Submit:   media.TemplateEndpoint{Method: http.MethodPost, Path: "/jobs"},
+		Recover:  &media.TemplateEndpoint{Method: http.MethodGet, Path: "/recover/{idempotency_key}"},
+		Response: media.TemplateResponse{TaskID: []string{"id"}, Status: []string{"status"}, States: map[string]string{"queued": "in_progress"}},
+	}
+	blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("s", 32))
+	require.NoError(t, err)
+	id := media.NewTaskID()
+	request := media.Request{
+		Operation: "video", Parameters: map[string]any{"prompt": "test"},
+		Quantities: map[string][]string{"task_count": {"1"}},
+		Wire:       &media.PreparedMediaRequest{Method: http.MethodPost, Path: "/jobs", Encoding: "json", Body: map[string]any{"model": "fixture-model", "prompt": "test"}},
+	}
+	requestPath, err := blobs.WriteJSON(id, "request", request)
+	require.NoError(t, err)
+	snap.Request.Parameters = map[string]any{"request_blob": requestPath}
+	task, err := s.CreateTask(ctx, snap, snap.Capability.AccountIDs[0], "recovery-after-submit-failure", "hash", id)
+	require.NoError(t, err)
+
+	type observedRequest struct{ method, path string }
+	observed := make(chan observedRequest, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedRequest{method: r.Method, path: r.URL.EscapedPath()}
+		if r.Method == http.MethodPost {
+			if hijacker, ok := w.(http.Hijacker); ok {
+				conn, _, err := hijacker.Hijack()
+				if err == nil {
+					_ = conn.Close()
+				}
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "provider-recovered", "status": "queued"})
+	}))
+	defer upstream.Close()
+	claimed, err := s.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.True(t, claimed.SubmissionClaim)
+	engine := media.NewEngine(s, blobs, func(id, group int64) (media.Account, error) {
+		return media.Account{ID: id, BaseURL: upstream.URL, Key: "test", Allowed: true}, nil
+	}, nil)
+	engine.Adapter.Client = media.SafeClient(true)
+	defer engine.Stop()
+	require.NoError(t, engine.Process(ctx, *claimed))
+	require.Equal(t, http.MethodPost, (<-observed).method)
+	_, err = db.Exec(`UPDATE media_tasks SET next_poll_at=now() WHERE id=$1`, task.ID)
+	require.NoError(t, err)
+	claimed, err = s.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.True(t, claimed.RecoveryClaim)
+	require.NoError(t, engine.Process(ctx, *claimed))
+	recovered := <-observed
+	require.Equal(t, http.MethodGet, recovered.method)
+	require.Equal(t, "/recover/"+task.ID, recovered.path)
+	require.Empty(t, observed)
+	current, err := s.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	require.Equal(t, "in_progress", current.State)
+	require.Equal(t, "provider-recovered", current.UpstreamID)
+}
+
+func TestExpiredSubmissionWithoutRecoveryEndpointRequiresManualReview(t *testing.T) {
+	db := testDB(t)
+	s := &media.Store{DB: db}
+	ctx := context.Background()
+	snap := fixture(t, db, "5")
+	task, err := s.CreateTask(ctx, snap, snap.Capability.AccountIDs[0], "no-recovery", "hash", media.NewTaskID())
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE media_tasks SET state='submitting',lease_until=now()-interval '1 second',next_poll_at=now() WHERE id=$1`, task.ID)
+	require.NoError(t, err)
+	claimed, err := s.Claim(ctx)
+	require.NoError(t, err)
+	require.Nil(t, claimed)
+	current, err := s.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	require.Equal(t, "unknown", current.State)
+	require.Equal(t, "manual_review", current.Settlement)
+
+	lookupCalls := 0
+	engine := media.NewEngine(s, nil, func(id, group int64) (media.Account, error) {
+		lookupCalls++
+		return media.Account{ID: id, Key: "test", Allowed: true}, nil
+	}, nil)
+	defer engine.Stop()
+	require.NoError(t, engine.Process(ctx, current))
+	require.Zero(t, lookupCalls)
 }

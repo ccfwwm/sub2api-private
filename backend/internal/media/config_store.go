@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 type ConfigRecord struct {
@@ -14,8 +15,12 @@ type ConfigRecord struct {
 	PublishedVersion *int64          `json:"published_version"`
 	Status           string          `json:"status"`
 	Config           json.RawMessage `json:"config"`
+ BuiltinCurrent json.RawMessage `json:"builtin_current,omitempty"`
+ PublishedConfig json.RawMessage `json:"published_config,omitempty"`
 }
 type Store struct {
+	templateSeed      sync.Once
+	templateSeedError error
 	DB                *sql.DB
 	LegacyBalanceHeld func(context.Context, int64) (string, error)
 }
@@ -41,6 +46,12 @@ func (s *Store) Configs(ctx context.Context, kind string, published bool) ([]Con
 	return list, rows.Err()
 }
 func (s *Store) SaveConfig(ctx context.Context, kind, id string, expected, actor int64, data json.RawMessage, publish bool) (ConfigRecord, error) {
+	return s.saveConfig(ctx, kind, id, expected, actor, data, publish, nil)
+}
+func (s *Store) SaveProtocolConfig(ctx context.Context, kind, id string, expected, actor int64, data json.RawMessage, publish bool, upgrades []string) (ConfigRecord, error) {
+	return s.saveConfig(ctx, kind, id, expected, actor, data, publish, upgrades)
+}
+func (s *Store) saveConfig(ctx context.Context, kind, id string, expected, actor int64, data json.RawMessage, publish bool, upgrades []string) (ConfigRecord, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return ConfigRecord{}, e
@@ -88,6 +99,33 @@ func (s *Store) SaveConfig(ctx context.Context, kind, id string, expected, actor
 		if e = ValidateCapability(cap, publish); e != nil {
 			return ConfigRecord{}, e
 		}
+	case "template":
+		var template ProtocolTemplate
+		if e = decodeConfig(data, &template); e != nil {
+			return ConfigRecord{}, e
+		}
+		if template.ID != id {
+			return ConfigRecord{}, fail(400, "config_identity_conflict", "Template ID differs")
+		}
+		if e = ValidateTemplate(template, publish); e != nil {
+			return ConfigRecord{}, e
+		}
+	case "binding":
+		var binding ModelBinding
+		if e = decodeConfig(data, &binding); e != nil {
+			return ConfigRecord{}, e
+		}
+		if binding.ID != id {
+			return ConfigRecord{}, fail(400, "config_identity_conflict", "Binding ID differs")
+		}
+		if e = ValidateBinding(binding, publish); e != nil {
+			return ConfigRecord{}, e
+		}
+		if publish {
+			if e = validateBindingPublication(ctx, tx, binding); e != nil {
+				return ConfigRecord{}, e
+			}
+		}
 	case "price":
 		var card PriceCard
 		if e = decodeConfig(data, &card); e != nil {
@@ -133,10 +171,15 @@ func (s *Store) SaveConfig(ctx context.Context, kind, id string, expected, actor
 	if e != nil {
 		return ConfigRecord{}, e
 	}
+	if publish && kind == "template" && len(upgrades) > 0 {
+		if e = upgradeTemplateBindings(ctx, tx, id, current+1, actor, upgrades); e != nil {
+			return ConfigRecord{}, e
+		}
+	}
 	if e = tx.Commit(); e != nil {
 		return ConfigRecord{}, e
 	}
-	return ConfigRecord{id, current + 1, newPublished, status, data}, nil
+	return ConfigRecord{ID:id,Version:current+1,PublishedVersion:newPublished,Status:status,Config:data}, nil
 }
 
 func decodeConfig(data []byte, target any) error {

@@ -25,20 +25,37 @@ func contains(list []string, s string) bool {
 	return false
 }
 func ValidateCapability(c Capability, publish bool) error {
+	templated := c.TemplateRef != nil || c.Template != nil
+	if templated {
+		if c.TemplateRef != nil && (c.TemplateRef.ID == "" || c.TemplateRef.Version < 1) {
+			return fail(400, "invalid_template_reference", "Pin an explicit template version")
+		}
+		if c.Template != nil {
+			if err := ValidateTemplate(*c.Template, publish); err != nil {
+				return err
+			}
+		}
+		if err := ValidateParameterRules(c.TemplateRules); err != nil {
+			return err
+		}
+	}
 	if c.ID == "" || c.Model == "" || c.UpstreamModel == "" || c.Version == "" {
 		return fail(400, "invalid_capability", "Identity and exact model are required")
 	}
-	if !contains([]string{"yunfei_gpt_images", "yunfei_gemini_native", "yunfei_grok", "yunfei_veo_preview", "yunfei_omni", "yunfei_lyria", "v6k_video_gateway", "ark_native"}, c.Adapter) {
+	if !publish && !templated && c.Adapter == "" {
+		return nil
+	}
+	if !templated && !contains([]string{"yunfei_gpt_images", "yunfei_gemini_native", "yunfei_grok", "yunfei_veo_preview", "yunfei_omni", "yunfei_lyria", "v6k_video_gateway", "ark_native"}, c.Adapter) {
 		return fail(400, "invalid_adapter", "Unknown adapter")
 	}
-	if c.RequestFormat != "" && !contains([]string{"legacy", "yunfei_multimodal", "v6k_url"}, c.RequestFormat) {
+	if !templated && c.RequestFormat != "" && !contains([]string{"legacy", "yunfei_multimodal", "v6k_url"}, c.RequestFormat) {
 		return fail(400, "invalid_request_format", "Unknown request format")
 	}
-	if c.RequestFormat != "" && c.RequestFormat != "legacy" && (c.MediaType != "video" || c.Adapter == "ark_native") {
+	if !templated && c.RequestFormat != "" && c.RequestFormat != "legacy" && (c.MediaType != "video" || c.Adapter == "ark_native") {
 		return fail(400, "invalid_request_format", "Video gateway request format required")
 	}
 	for kind, m := range c.Materials {
-		if m.ReferenceField != "" && !contains([]string{kind + "s", "reference_" + kind + "s", "reference_" + kind + "_urls"}, m.ReferenceField) {
+		if !templated && m.ReferenceField != "" && !contains([]string{kind + "s", "reference_" + kind + "s", "reference_" + kind + "_urls"}, m.ReferenceField) {
 			return fail(400, "invalid_reference_field", "Reference field must match material kind")
 		}
 	}
@@ -46,7 +63,7 @@ func ValidateCapability(c Capability, publish bool) error {
 		return fail(400, "invalid_media_type", "Unknown media type")
 	}
 	for _, op := range c.Operations {
-		if !contains([]string{"image", "image_edit", "gemini_image", "video", "audio", "chat_music"}, Operation(op)) {
+		if !contains([]string{"image", "image_edit", "gemini_image", "video", "audio", "chat_music", "speech"}, Operation(op)) {
 			return fail(400, "invalid_operation", "Unknown operation")
 		}
 	}
@@ -72,7 +89,7 @@ func ValidateCapability(c Capability, publish bool) error {
 		if c.Limits.MaxRequestBytes == nil || *c.Limits.MaxRequestBytes <= 0 || *c.Limits.MaxRequestBytes > 256<<20 || c.Limits.MaxConcurrentTasks == nil || *c.Limits.MaxConcurrentTasks <= 0 || c.Limits.ObservationSeconds == nil || *c.Limits.ObservationSeconds <= 0 {
 			return fail(400, "invalid_limits", "Finite request, concurrency and observation limits required")
 		}
-		if c.MediaType == "video" && (c.Duration.Mode == "unknown" || c.Duration.Mode == "") {
+		if !templated && c.MediaType == "video" && (c.Duration.Mode == "unknown" || c.Duration.Mode == "") {
 			return fail(422, "duration_not_configured", "Video duration limits must be configured")
 		}
 		if c.Adapter == "yunfei_gpt_images" && len(c.Sizes) == 0 {
@@ -209,6 +226,9 @@ func allowedFormat(m Material, f string) bool {
 
 // Normalize rejects billing-sensitive mistakes before price resolution or holds.
 func Normalize(cap Capability, operation string, p map[string]any) (Request, error) {
+	if cap.Template != nil {
+		return normalizeTemplate(cap, operation, p, nil)
+	}
 	result := Request{Operation: Operation(operation), Model: cap.Model, Parameters: map[string]any{}, Conditions: map[string]any{}, Quantities: map[string][]string{}}
 	b, _ := json.Marshal(p)
 	if e := json.Unmarshal(b, &result.Parameters); e != nil {
@@ -508,9 +528,6 @@ func Normalize(cap Capability, operation string, p map[string]any) (Request, err
 			f, e := referenceFormat(raw, form)
 			if e != nil {
 				return result, e
-			}
-			if cap.RequestFormat == "v6k_url" && !strings.HasPrefix(f, "public_url") {
-				return result, fail(400, "reference_url_required", "Provide public HTTPS material URLs")
 			}
 			if !strings.HasPrefix(f, "public_url") {
 				encoded := raw

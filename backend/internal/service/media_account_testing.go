@@ -118,6 +118,22 @@ func accountTestCapability(account *Account, model string) (media.Capability, er
 	}
 	return media.Capability{}, fmt.Errorf("model %s is not configured on this account", model)
 }
+
+func (s *AccountTestService) SetMediaTemplateStore(store *media.Store) { s.mediaTemplateStore = store }
+func (s *AccountTestService) resolveAccountTestTemplate(ctx context.Context, cap media.Capability) (media.Capability, error) {
+	if s.mediaTemplateStore == nil {
+		return cap, nil
+	}
+	resolved, err := s.mediaTemplateStore.ResolveTemplates(ctx, []media.Capability{cap})
+	if err != nil {
+		return cap, err
+	}
+	cap = resolved[0]
+	if cap.Template == nil {
+		return cap, fmt.Errorf("Configure a published protocol template in Media management before generation")
+	}
+	return cap, nil
+}
 func DefaultAccountTestPrompt(kind string) string {
 	switch kind {
 	case "image":
@@ -353,6 +369,10 @@ func (s *AccountTestService) testMediaAccount(c *gin.Context, account *Account, 
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}
+	cap, err = s.resolveAccountTestTemplate(c.Request.Context(), cap)
+	if err != nil {
+		return s.sendErrorAndEnd(c, err.Error())
+	}
 	base, err := s.validateUpstreamBaseURL(account.GetCredential("base_url"))
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Invalid upstream Base URL")
@@ -386,12 +406,12 @@ func (s *AccountTestService) testMediaAccount(c *gin.Context, account *Account, 
 		}
 	}
 	// Gemini's native endpoint uses contents rather than a compatibility prompt.
-	if op == "gemini_image" {
+	if op == "gemini_image" && cap.Template == nil {
 		p["contents"] = []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": p["prompt"]}}}}
 		delete(p, "prompt")
 		delete(p, "n")
 	}
-	if op == "chat_music" {
+	if op == "chat_music" && cap.Template == nil {
 		p["messages"] = []any{map[string]any{"role": "user", "content": p["prompt"]}}
 	}
 	raw, _ := json.Marshal(p)
@@ -505,6 +525,14 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 	}
 	var result media.UpstreamResult
 	if submit {
+		if r.Capability.Template != nil {
+			wire, e := media.BuildTemplateRequest(ctx, t.adapter.Client, r.Capability, req)
+			if e != nil {
+				finish("failed", e)
+				return
+			}
+			req.Wire = &wire
+		}
 		result, err = t.adapter.Submit(ctx, r.Capability, req, a)
 		if err != nil {
 			detail := strings.ReplaceAll(err.Error(), a.Key, "[redacted]")

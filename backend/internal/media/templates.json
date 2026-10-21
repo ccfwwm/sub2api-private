@@ -1,0 +1,1429 @@
+[
+  {
+    "id": "video-arrays",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "通用视频·复数素材数组",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "images",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "video",
+        "target": "videos",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "audio",
+        "target": "audios",
+        "shape": "preserve",
+        "encoding": "preserve"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content"
+  },
+  {
+    "id": "video-reference-arrays",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "通用视频·reference 数组",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "reference_images",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "video",
+        "target": "reference_videos",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "audio",
+        "target": "reference_audios",
+        "shape": "preserve",
+        "encoding": "preserve"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content",
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "rename",
+        "source": "seconds",
+        "target": "duration"
+      },
+      {
+        "phase": "wire",
+        "op": "rename",
+        "source": "ratio",
+        "target": "aspect_ratio"
+      }
+    ]
+  },
+  {
+    "id": "video-single-image",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "单图视频·URL 对象",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "image",
+        "shape": "url",
+        "encoding": "preserve",
+        "single": true,
+        "max_count": 1
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content",
+    "description": "单图模板；适用示例 Grok。多图或其他素材明确拒绝。"
+  },
+  {
+    "id": "video-frame-roles",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "视频·首尾帧角色数组",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "images",
+        "shape": "url",
+        "encoding": "preserve"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content"
+  },
+  {
+    "id": "video-frame-fields",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "视频·独立首尾帧字段",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "first_frame",
+        "shape": "url",
+        "encoding": "preserve",
+        "single": true,
+        "role": "first_frame"
+      },
+      {
+        "kind": "image",
+        "target": "last_frame",
+        "shape": "url",
+        "encoding": "preserve",
+        "single": true,
+        "role": "last_frame"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content"
+  },
+  {
+    "id": "media-content-blocks",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "多媒体·类型内容块",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/api/v3/contents/generations/tasks",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/api/v3/contents/generations/tasks/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "content",
+        "shape": "content",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "video",
+        "target": "content",
+        "shape": "content",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "audio",
+        "target": "content",
+        "shape": "content",
+        "encoding": "preserve"
+      }
+    ],
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "fixed",
+        "target": "content",
+        "value": [
+          {
+            "type": "text",
+            "text": {
+              "$input": "prompt"
+            }
+          }
+        ]
+      },
+      {
+        "phase": "wire",
+        "op": "remove",
+        "source": "prompt"
+      },
+      {
+        "phase": "wire",
+        "op": "rename",
+        "source": "seconds",
+        "target": "duration"
+      }
+    ]
+  },
+  {
+    "id": "image-json",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "图片生成·JSON",
+    "media_types": [
+      "image"
+    ],
+    "operations": [
+      "image"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/images/generations",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "image/png",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15"
+  },
+  {
+    "id": "image-edit-json",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "图片编辑·JSON 参考数组",
+    "media_types": [
+      "image"
+    ],
+    "operations": [
+      "image_edit"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/images/edits",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "image/png",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "images",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "mask",
+        "target": "mask",
+        "shape": "url",
+        "encoding": "preserve",
+        "single": true
+      }
+    ]
+  },
+  {
+    "id": "image-edit-multipart",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "图片编辑·multipart",
+    "media_types": [
+      "image"
+    ],
+    "operations": [
+      "image_edit"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/images/edits",
+      "encoding": "multipart"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "image/png",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "image",
+        "shape": "string",
+        "encoding": "data_url"
+      },
+      {
+        "kind": "mask",
+        "target": "mask",
+        "shape": "string",
+        "encoding": "data_url",
+        "single": true
+      }
+    ]
+  },
+  {
+    "id": "gemini-parts",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "Gemini parts·图片/音频输出",
+    "media_types": [
+      "image",
+      "audio"
+    ],
+    "operations": [
+      "gemini_image",
+      "image",
+      "audio"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "header",
+      "name": "x-goog-api-key"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1beta/models/{model}:generateContent",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [],
+      "base64": [],
+      "mime": "image/png",
+      "results": [
+        {
+          "path": "candidates[].content.parts[].inlineData",
+          "base64": "data",
+          "mime": "mimeType"
+        }
+      ],
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "default",
+        "target": "generationConfig",
+        "value": {
+          "responseModalities": [
+            "TEXT",
+            "IMAGE"
+          ]
+        }
+      },
+      {
+        "phase": "wire",
+        "op": "fixed",
+        "target": "contents",
+        "value": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": {
+                  "$input": "prompt"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "wire",
+        "op": "remove",
+        "source": "prompt"
+      }
+    ],
+    "materials": [
+      {
+        "kind": "image",
+        "target": "contents[0].parts",
+        "shape": "parts",
+        "encoding": "base64"
+      },
+      {
+        "kind": "audio",
+        "target": "contents[0].parts",
+        "shape": "parts",
+        "encoding": "base64"
+      }
+    ],
+    "model_target": "-"
+  },
+  {
+    "id": "music-chat-json",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "音乐生成·Chat JSON",
+    "media_types": [
+      "audio"
+    ],
+    "operations": [
+      "audio",
+      "chat_music"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "data[].url",
+        "choices[].message.audio.url"
+      ],
+      "base64": [
+        "choices[].message.audio.data"
+      ],
+      "mime": "audio/mpeg",
+      "links": [
+        "choices[].message.content"
+      ],
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "default",
+        "target": "messages",
+        "value": [
+          {
+            "role": "user",
+            "content": {
+              "$input": "prompt"
+            }
+          }
+        ]
+      },
+      {
+        "phase": "wire",
+        "op": "remove",
+        "source": "prompt"
+      },
+      {
+        "phase": "wire",
+        "op": "fixed",
+        "target": "stream",
+        "value": false
+      }
+    ],
+    "materials": [
+      {
+        "kind": "image",
+        "target": "images",
+        "shape": "preserve",
+        "encoding": "preserve"
+      }
+    ]
+  },
+  {
+    "id": "audio-async",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "音频生成·异步任务",
+    "media_types": [
+      "audio"
+    ],
+    "operations": [
+      "audio"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/audio/generations",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/audio/generations/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "audio/mpeg",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15"
+  },
+  {
+    "id": "speech-binary",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "语音合成·二进制响应",
+    "media_types": [
+      "audio"
+    ],
+    "operations": [
+      "speech"
+    ],
+    "mode": "sync_binary",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/audio/speech",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "audio/mpeg",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15"
+  },
+  {
+    "id": "image-json-multipart",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "图片生成及编辑·JSON 与 multipart",
+    "media_types": [
+      "image"
+    ],
+    "operations": [
+      "image",
+      "image_edit"
+    ],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/images/generations",
+      "encoding": "json"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "image/png",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "image",
+        "shape": "string",
+        "encoding": "data_url"
+      },
+      {
+        "kind": "mask",
+        "target": "mask",
+        "shape": "string",
+        "encoding": "data_url",
+        "single": true
+      }
+    ],
+    "operation_submit": {
+      "image_edit": {
+        "method": "POST",
+        "path": "/v1/images/edits",
+        "encoding": "multipart"
+      }
+    }
+  },
+  {
+    "id": "custom-blank",
+    "version": "1",
+    "status": "draft",
+    "schema_version": 1,
+    "name": "自定义空白模板",
+    "media_types": [
+      "video"
+    ],
+    "operations": [],
+    "mode": "sync_json",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/configure-before-publishing",
+      "encoding": "json"
+    },
+    "response": {
+      "states": {},
+      "urls": [],
+      "base64": [],
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.15"
+  }
+]

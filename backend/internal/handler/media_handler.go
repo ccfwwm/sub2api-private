@@ -30,6 +30,7 @@ import (
 
 type MediaHandler struct {
 	db      *sql.DB
+	keys    *service.APIKeyService
 	groups  mediaGroupAuthorizer
 	Engine  *media.Engine
 	gateway *service.OpenAIGatewayService
@@ -37,7 +38,7 @@ type MediaHandler struct {
 	cache   *service.BillingCacheService
 }
 
-func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler, groups service.GroupRepository, channels *service.ChannelService) (*MediaHandler, error) {
+func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler, groups service.GroupRepository, channels *service.ChannelService, accountTests *service.AccountTestService, monitors *service.ChannelMonitorService) (*MediaHandler, error) {
 	root := os.Getenv("SUB2API_MEDIA_DATA_DIR")
 	if root == "" {
 		root = filepath.Join("data", "media")
@@ -86,6 +87,8 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		return nil
 	}
 	engine := media.NewEngine(&media.Store{DB: db}, blobs, lookup, invalidate)
+	accountTests.SetMediaTemplateStore(engine.Store)
+	monitors.SetMediaTemplateStore(engine.Store)
 	engine.Config = service.UnifiedMediaConfig(accounts, groups, channels)
 	var configured bool
 	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM accounts WHERE platform='imagevideo' AND deleted_at IS NULL)`).Scan(&configured); err != nil {
@@ -127,6 +130,9 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		}
 		return unlock, &balance, nil
 	})
+	if err = engine.Store.EnsureBuiltinTemplates(context.Background()); err != nil {
+		return nil, err
+	}
 	engine.Start()
 	cache.SetMediaAdmissionCheck(func(ctx context.Context, user *service.User, key *service.APIKey, group *service.Group, sub *service.UserSubscription, platform string) error {
 		if !engine.PlatformActive.Load() {
@@ -207,7 +213,7 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		}
 		return nil
 	})
-	return &MediaHandler{db: db, Engine: engine, gateway: gateway, openAI: openAI, cache: cache, groups: keys}, nil
+	return &MediaHandler{db: db, keys: keys, Engine: engine, gateway: gateway, openAI: openAI, cache: cache, groups: keys}, nil
 }
 func (h *MediaHandler) Stop() {
 	if h != nil && h.Engine != nil {
@@ -465,7 +471,7 @@ func (h *MediaHandler) writeTask(c *gin.Context, t media.StoredTask) {
 		mediaError(c, err)
 		return
 	}
-	public.Submission = h.Engine.ReadSubmission(t.ID)
+	public.Inputs = h.Engine.PublicInputs(t)
 	code := 200
 	if c.Request.Method == http.MethodPost {
 		code = 202
@@ -480,6 +486,25 @@ func (h *MediaHandler) writeSynchronous(c *gin.Context, t media.StoredTask, oper
 	artifacts, err := h.Engine.Store.Artifacts(c.Request.Context(), t.ID)
 	if err != nil {
 		mediaError(c, err)
+		return
+	}
+	if operation == "speech" {
+		if len(artifacts) != 1 {
+			mediaError(c, &media.Error{Status: 502, Code: "speech_artifact_missing", Message: "Valid speech artifact required"})
+			return
+		}
+		file, mime, _, err := h.Engine.Store.ArtifactFile(c.Request.Context(), t.ID, artifacts[0].Key)
+		if err != nil {
+			mediaError(c, err)
+			return
+		}
+		defer file.Close()
+		info, statErr := file.Stat()
+		if statErr != nil {
+			mediaError(c, statErr)
+			return
+		}
+		c.DataFromReader(200, info.Size(), mime, file, nil)
 		return
 	}
 	data := []gin.H{}
@@ -601,6 +626,11 @@ func (h *MediaHandler) writeSynchronous(c *gin.Context, t media.StoredTask, oper
 	}
 
 	c.JSON(200, result)
+}
+func (h *MediaHandler) SubmitSpeech(c *gin.Context) {
+	if !h.TrySubmit(c, "speech") {
+		c.JSON(422, gin.H{"error": gin.H{"type": "media_not_configured", "message": "Configure a priced speech model and template"}})
+	}
 }
 func (h *MediaHandler) SubmitAudio(c *gin.Context) {
 	if !h.TrySubmit(c, "audio") {

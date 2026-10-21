@@ -41,6 +41,21 @@ func RegisterAdminRoutes(
 			admin.POST("/media/configs/:kind", gin.HandlerFunc(stepUpAuth), h.Media.AdminSave)
 			admin.POST("/media/configs/:kind/disable", gin.HandlerFunc(stepUpAuth), h.Media.AdminDisable)
 			admin.POST("/media/simulate", h.Media.AdminSimulate)
+			for _, resource := range []string{"templates", "bindings"} {
+				prefix := "/media/" + resource
+				admin.GET(prefix, h.Media.AdminProtocolList)
+				admin.POST(prefix, gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolSave)
+				admin.POST(prefix+"/import", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolSave)
+				admin.POST(prefix+"/publish", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolSave)
+				admin.POST(prefix+"/rollback", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolSave)
+				admin.POST(prefix+"/archive", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolArchive)
+				admin.GET(prefix+"/:id/history", h.Media.AdminProtocolHistory)
+				admin.GET(prefix+"/:id/export", h.Media.AdminProtocolExport)
+			}
+			admin.POST("/media/templates/preview", h.Media.AdminProtocolPreview)
+			admin.GET("/media/bindings/effective", h.Media.AdminProtocolEffective)
+			admin.POST("/media/templates/discover", h.Media.AdminProtocolDiscover)
+			admin.POST("/media/templates/test", gin.HandlerFunc(stepUpAuth), h.Media.AdminProtocolTest)
 			admin.GET("/media/tasks", h.Media.AdminTasks)
 			admin.GET("/media/tasks/:id", h.Media.AdminTask)
 			admin.GET("/media/tasks/:id/export", h.Media.AdminTaskExport)

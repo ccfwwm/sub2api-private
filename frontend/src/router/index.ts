@@ -482,8 +482,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/media',
     name: 'AdminMedia',
-    redirect: '/admin/channels',
-    meta: { requiresAuth: true, requiresAdmin: true, title: 'Media models and billing' }
+    component: () => import('@/views/admin/MediaView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Media models and billing'
+    }
   },
   {
     path: '/admin/channels/monitor',

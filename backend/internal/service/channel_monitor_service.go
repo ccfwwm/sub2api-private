@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/media"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -70,9 +71,10 @@ type channelMonitorRuntimeReader interface {
 
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
-	mediaMonitorLocks sync.Map
-	repo              ChannelMonitorRepository
-	encryptor         SecretEncryptor
+	mediaTemplateStore *media.Store
+	mediaMonitorLocks  sync.Map
+	repo               ChannelMonitorRepository
+	encryptor          SecretEncryptor
 	// settings is optional; when nil, RunCheck fails closed for active probes
 	// (mode defaults to v2 / retired) so tests without settings never hit upstream.
 	settings channelMonitorRuntimeReader
