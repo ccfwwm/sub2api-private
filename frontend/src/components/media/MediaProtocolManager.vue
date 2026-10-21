@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import Icon from '@/components/icons/Icon.vue'
 import MediaParameterRulesEditor from './MediaParameterRulesEditor.vue'
 import { mediaProtocolsAPI as api, type ProtocolKind } from '@/api/media-protocols'
 import type { MediaConfigRecord } from '@/api/media'
@@ -10,6 +11,23 @@ import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
 const route = useRoute(), stepUp = useStepUp()
 const kind = ref<ProtocolKind>(route.query.tab === 'bindings' ? 'bindings' : 'templates')
 const templates = ref<MediaConfigRecord[]>([]), bindings = ref<MediaConfigRecord[]>([])
+const search = ref(''), mediaFilter = ref(''), statusFilter = ref('')
+const visibleRows = computed(() => rows.value.filter(row => {
+  const query = search.value.trim().toLowerCase()
+  return (!query || `${row.id} ${row.config.name || ''}`.toLowerCase().includes(query)) && (!mediaFilter.value || (row.config.media_types as string[] | undefined)?.includes(mediaFilter.value)) && (!statusFilter.value || row.status === statusFilter.value)
+}))
+const advancedFields = [
+  { path: 'materials', label: '素材编码与映射' }, { path: 'response', label: '响应、状态与成品解析' },
+  { path: 'query', label: '任务查询接口' }, { path: 'discovery', label: '模型发现接口' },
+  { path: 'model_ids', label: '模型 ID 路径' }, { path: 'artifact_list', label: '成品列表' },
+  { path: 'download_auth', label: '成品下载认证' }, { path: 'recover', label: '任务恢复' },
+  { path: 'body', label: '请求体映射' }, { path: 'operation_submit', label: '操作专属提交接口' }
+]
+function toggleOption(path: string, option: string, checked: boolean) {
+  const current = (field(path) as string[] | undefined) || []
+  set(path, checked ? [...new Set([...current, option])] : current.filter(item => item !== option))
+}
+function statusLabel(status: string) { return ({ enabled: '已发布', draft: '草稿', archived: '已归档', disabled: '已停用' } as Record<string, string>)[status] || status }
 const selected = ref<MediaConfigRecord | null>(null), history = ref<MediaConfigRecord[]>([])
 const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), result = ref<unknown>()
 const review = ref(false), upgrades = ref<string[]>([]), bulkModels = ref(''), builtinFields=ref<string[]>([])
@@ -51,7 +69,6 @@ async function refresh() {
   error.value = failures.join('；')
 }
 async function select(row: MediaConfigRecord) { selected.value = row; json.value = JSON.stringify(row.config, null, 2); history.value = await api.history(kind.value, row.id); review.value = false; upgrades.value = [] }
-function switchKind(next: ProtocolKind) { kind.value = next; selected.value = null; json.value = ''; history.value = []; review.value = false }
 function create() {
   selected.value = null; history.value = []; review.value = false
   const object = kind.value === 'templates' ? { id: `custom-${Date.now()}`, name: '自定义模板', version: '1', status: 'draft', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${Date.now()}`, version: '1', status: 'draft', group_id: Number(groupFilter.value || 0), account_id: Number(accountFilter.value || 0), model: '', upstream_model: '', rules: [] }
@@ -125,24 +142,28 @@ onMounted(() => action(refresh))
 </script>
 
 <template>
-  <section class="space-y-4 rounded-xl border p-4 dark:border-gray-700" aria-label="管理员协议模板与模型绑定">
-    <h2 class="text-xl font-semibold">协议模板与模型绑定</h2>
-    <p class="text-sm text-gray-500">选择格式模板并固定版本。账号保存启用模型与基础映射，分组绑定覆盖请求参数。普通用户只使用 images、videos、audios；模板不会自动调整价格。</p>
-    <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" @click="switchKind('templates')">协议模板</button><button class="btn btn-secondary" @click="switchKind('bindings')">模型绑定</button><button class="btn btn-secondary" @click="create">新建</button><label class="btn btn-secondary cursor-pointer">导入<input type="file" accept="application/json,.json" class="hidden" @change="action(() => upload($event))" /></label><button class="btn btn-secondary" @click="action(refresh)">刷新</button></div>
+  <section class="space-y-4 rounded-lg border bg-white p-5 dark:border-gray-700 dark:bg-dark-800" aria-label="管理员协议模板">
+    <header class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">协议模板</h2><p class="mt-1 text-sm text-gray-500">管理请求协议、素材映射与任务响应。模型绑定在“账号模型”中完成。</p></div><div class="flex gap-2"><button class="btn btn-primary" @click="create"><Icon name="plus" size="sm" />新建</button><label class="btn btn-secondary cursor-pointer">导入<input type="file" accept="application/json,.json" class="hidden" @change="action(() => upload($event))" /></label><button class="btn btn-secondary" title="刷新模板" aria-label="刷新模板" :disabled="busy" @click="action(refresh)"><Icon name="refresh" size="sm" /></button></div></header>
     <div v-if="kind === 'bindings'" class="flex flex-wrap items-end gap-3"><label class="text-sm">账号筛选<input v-model="accountFilter" type="number" min="1" class="input block" aria-label="绑定账号筛选" /></label><label class="text-sm">分组筛选<input v-model="groupFilter" type="number" min="1" class="input block" /></label><RouterLink v-if="accountFilter" class="text-sm text-primary-600" :to="{path:'/admin/media',query:{tab:'accounts',account_id:accountFilter}}">编辑账号 #{{ accountFilter }} 的模型</RouterLink></div>
     <p v-if="error" role="alert" class="text-red-600">{{ error }}</p>
     <details v-if="kind === 'bindings'"><summary>查看分组实际继承配置</summary><input v-model="effectiveGroup" type="number" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" @click="action(async()=>{effectiveResult=await api.effective(Number(effectiveGroup))})">解析当前绑定</button><pre class="max-h-96 overflow-auto text-xs">{{JSON.stringify(effectiveResult,null,2)}}</pre></details>
-    <div class="grid gap-4 lg:grid-cols-[260px_1fr]">
-      <aside class="max-h-[650px] space-y-2 overflow-auto"><p v-if="!rows.length" class="rounded-lg border border-dashed p-3 text-sm text-gray-500">{{ kind === 'bindings' ? '当前筛选没有独立绑定。账号内可直接绑定模板；如需分组覆盖，请点击新建。' : '暂无协议模板。' }}</p><button v-for="row in rows" :key="row.id" class="block w-full rounded-lg border p-3 text-left text-sm" @click="action(() => select(row))"><strong>{{ row.config.name || row.config.model || row.id }}</strong><p>{{ row.id }}</p><p>{{ row.status }} · 草稿 v{{ row.version }} · 发布 v{{ row.published_version || '—' }}</p><p v-if="kind === 'bindings'">分组 {{ row.config.group_id }} · 账号 {{ row.config.account_id || '全部' }} · {{ row.config.template }}</p></button></aside>
-      <div v-if="json" class="space-y-3">
-        <div class="flex gap-2"><button class="btn btn-secondary" @click="mode = 'form'">表单</button><button class="btn btn-secondary" @click="mode = 'json'">JSON</button><button class="btn btn-secondary" @click="copy">复制</button><button v-if="selected" class="btn btn-secondary" @click="action(download)">导出全部历史</button></div>
+    <div class="grid min-w-0 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <aside class="min-w-0 border-b pb-4 dark:border-dark-600 xl:border-b-0 xl:border-r xl:pr-4">
+        <label class="relative block"><span class="sr-only">搜索模板</span><input v-model="search" class="input w-full" aria-label="搜索模板" placeholder="搜索名称或 ID" /></label>
+        <div class="my-3 grid grid-cols-2 gap-2"><select v-model="mediaFilter" class="input w-full" aria-label="模板媒体类型"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option></select><select v-model="statusFilter" class="input w-full" aria-label="模板状态"><option value="">全部状态</option><option value="enabled">已发布</option><option value="draft">草稿</option><option value="archived">已归档</option></select></div>
+        <p class="mb-2 text-xs text-gray-500">{{ visibleRows.length }} 个模板</p>
+        <div class="max-h-[650px] overflow-auto"><p v-if="!visibleRows.length" class="border border-dashed p-4 text-sm text-gray-500">{{ rows.length ? '没有符合筛选的模板。' : '暂无协议模板，点击新建或导入。' }}</p><button v-for="row in visibleRows" :key="row.id" class="block w-full border-b px-3 py-3 text-left text-sm transition-colors dark:border-dark-600" :class="selected?.id === row.id ? 'border-l-2 border-l-primary-500 bg-primary-50 dark:bg-primary-950' : 'hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="selected?.id === row.id" @click="action(() => select(row))"><span class="flex items-start justify-between gap-2"><strong class="min-w-0 break-words">{{ row.config.name || row.config.model || row.id }}</strong><span class="shrink-0 rounded px-1.5 py-0.5 text-xs" :class="row.published_version ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ statusLabel(row.status) }}</span></span><span class="mt-1 block truncate text-xs text-gray-400" :title="row.id">{{ row.id }}</span><span class="mt-2 block text-xs text-gray-500">{{ (row.config.media_types as string[] || []).join(' / ') }} · {{ row.published_version ? `发布 v${row.published_version}` : '尚未发布' }} · 草稿 v{{ row.version }}</span></button></div>
+      </aside>
+      <div v-if="json" class="min-w-0 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-semibold">{{ draft?.name || '新模板' }}</h3><p class="text-xs text-gray-500">{{ selected ? `当前草稿 v${selected.version} · 发布 v${selected.published_version || '—'}` : '尚未保存' }}</p></div><div class="flex gap-2"><div class="flex rounded-lg border p-1 dark:border-dark-600"><button class="rounded px-3 py-1 text-sm" :class="mode === 'form' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'form'">表单</button><button class="rounded px-3 py-1 text-sm" :class="mode === 'json' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'json'">JSON</button></div><button class="btn btn-secondary" @click="copy">复制</button><button v-if="selected" class="btn btn-secondary" @click="action(download)">导出全部历史</button></div></div>
         <div v-if="mode === 'form' && draft" class="grid gap-3 sm:grid-cols-2">
           <label class="text-sm">配置 ID<input class="input w-full" :value="field('id')" @change="set('id', value($event))" /></label>
           <template v-if="kind === 'templates'">
             <label class="text-sm">名称<input class="input w-full" :value="field('name')" @change="set('name', value($event))" /></label>
             <label class="text-sm">模式<select class="input w-full" :value="field('mode')" @change="set('mode', value($event))"><option value="async">异步轮询</option><option value="sync_json">同步 JSON</option><option value="sync_binary">同步媒体二进制</option></select></label>
-            <label class="text-sm">媒体类型<input class="input w-full" :value="(field('media_types') as string[])?.join(',')" @change="set('media_types', value($event).split(','))" /></label>
-            <label class="text-sm">操作<input class="input w-full" :value="(field('operations') as string[])?.join(',')" @change="set('operations', value($event).split(','))" /></label>
+            <fieldset class="text-sm"><legend class="mb-2">媒体类型</legend><label v-for="item in [{id:'image',name:'图片'},{id:'video',name:'视频'},{id:'audio',name:'音频'}]" :key="item.id" class="mr-4 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('media_types') as string[] || []).includes(item.id)" @change="toggleOption('media_types',item.id,($event.target as HTMLInputElement).checked)" />{{ item.name }}</label></fieldset>
+            <fieldset class="text-sm"><legend class="mb-2">支持的请求操作</legend><label v-for="op in ['image','image_edit','gemini_image','video','audio','speech','chat_music']" :key="op" class="mb-2 mr-3 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('operations') as string[] || []).includes(op)" @change="toggleOption('operations',op,($event.target as HTMLInputElement).checked)" />{{ op }}</label></fieldset>
+            <h4 class="border-t pt-4 font-semibold sm:col-span-2 dark:border-dark-600">请求与认证</h4>
             <label class="text-sm">提交方法<select class="input w-full" :value="field('submit.method')" @change="set('submit.method', value($event))"><option>POST</option><option>PUT</option><option>GET</option></select></label>
             <label class="text-sm">相对路径<input class="input w-full" :value="field('submit.path')" @change="set('submit.path', value($event))" /></label>
             <label class="text-sm">编码<select class="input w-full" :value="field('submit.encoding')" @change="set('submit.encoding', value($event))"><option>json</option><option>multipart</option><option>form</option></select></label>
@@ -150,10 +171,11 @@ onMounted(() => action(refresh))
             <label class="text-sm">认证头 / 查询参数名称<input class="input w-full" :value="field('auth.name')" @change="set('auth.name', value($event))" /></label>
             <label class="text-sm">认证前缀<input class="input w-full" :value="field('auth.prefix')" @change="set('auth.prefix', value($event))" /></label>
             <label class="text-sm">轮询秒数<input type="number" min="1" max="300" class="input w-full" :value="field('poll_seconds')" @change="set('poll_seconds', Number(value($event)))" /></label>
-            <label v-for="path in ['materials','response','query','discovery','model_ids','artifact_list','download_auth','recover','body','operation_submit']" :key="path" class="text-sm">{{ path }}<textarea class="input min-h-24 w-full font-mono text-xs" :value="JSON.stringify(field(path) ?? null, null, 2)" @change="jsonField(path, $event)" /></label>
+            <h4 class="border-t pt-4 font-semibold sm:col-span-2 dark:border-dark-600">参数规则</h4>
             <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <label class="text-sm">模型写入目标（- 为仅路径）<input class="input w-full" :value="field('model_target')" @change="set('model_target', value($event))" /></label>
             <label class="text-sm">固定内容接口<input class="input w-full" :value="field('content_path')" @change="set('content_path', value($event))" /></label>
+            <details class="border-t pt-4 sm:col-span-2 dark:border-dark-600"><summary class="cursor-pointer font-semibold">素材映射、响应解析与高级配置</summary><div class="mt-4 grid gap-4 sm:grid-cols-2"><label v-for="item in advancedFields" :key="item.path" class="min-w-0 text-sm">{{ item.label }}<span class="ml-2 text-xs text-gray-400">{{ item.path }}</span><textarea class="input mt-1 min-h-36 w-full font-mono text-xs" :value="JSON.stringify(field(item.path) ?? null, null, 2)" @change="jsonField(item.path, $event)" /></label></div></details>
           </template>
           <template v-else>
             <label class="text-sm">分组 ID<input type="number" class="input w-full" :value="field('group_id')" @change="set('group_id', Number(value($event)))" /></label>
@@ -188,6 +210,7 @@ onMounted(() => action(refresh))
         <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览</button><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过正常任务和计费链路。草稿不会直接发送。</p><input v-model="keyID" class="input" placeholder="用于记账的 API Key ID" /><label class="block text-sm"><input v-model="paid" type="checkbox" /> 确认本次生成可能收费</label><p class="break-all text-xs">幂等 ID：{{ testKey }}</p><button class="btn btn-primary" :disabled="busy || !paid || !keyID" @click="action(async () => { result = await api.test({ api_key_id: Number(keyID), operation, request: JSON.parse(previewInput), confirm_paid_submission: paid }, testKey) }, true)">提交 / 查询原测试</button><button class="btn btn-secondary" @click="newTest">明确开始另一次测试</button></div></details>
         <pre v-if="result" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify(result, null, 2) }}</pre>
       </div>
+      <div v-else class="flex min-h-72 items-center justify-center text-sm text-gray-500">从左侧选择协议模板，或新建模板。</div>
     </div>
     <TotpStepUpDialog :controller="stepUp" />
   </section>

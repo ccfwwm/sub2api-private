@@ -3,8 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { newMediaCapability } from '@/types/media'
 import Manager from '../MediaAccountsManager.vue'
 
-const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), update: vi.fn(), pricingStatus: vi.fn(), stepUp: vi.fn() }))
-vi.mock('@/api/admin', () => ({ adminAPI: { accounts: api } }))
+const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), update: vi.fn(), pricingStatus: vi.fn(), stepUp: vi.fn(), getAllIncludingInactive: vi.fn() }))
+vi.mock('@/api/admin', () => ({ adminAPI: { accounts: api, groups: api } }))
 vi.mock('@/api/media', () => ({ mediaAPI: api }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: { account_id: '2139' } }), useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run: api.stepUp }), isStepUpCancelled: () => false }))
@@ -13,6 +13,7 @@ const saved = () => ({ id: 2139, platform: 'imagevideo', name: 'Direct account',
 const options = { global: { stubs: { MediaAccountModelsEditor: { name: 'MediaAccountModelsEditor', props: ['modelValue'], template: '<div>Model editor</div>' }, TotpStepUpDialog: true, RouterLink: true } } }
 beforeEach(() => {
   vi.resetAllMocks()
+  api.getAllIncludingInactive.mockResolvedValue([{ id: 19, name: 'Media group', platform: 'imagevideo', status: 'active' }, { id: 20, name: 'Other media', platform: 'imagevideo', status: 'active' }])
   api.list.mockResolvedValue({ items: [], total: 0 })
   api.getById.mockImplementation(async () => saved())
   api.pricingStatus.mockResolvedValue([{ model: 'public-video', operation: 'video', matched: false, reason: 'price_not_configured' }])
@@ -26,6 +27,8 @@ describe('account model administration', () => {
     expect(wrapper.text()).toContain('Direct account · #2139')
     expect(wrapper.text()).toContain('未匹配价格')
     expect(api.stepUp).not.toHaveBeenCalled()
+    expect(api.list).toHaveBeenCalledWith(1, 20, expect.objectContaining({ group: '19' }))
+    expect(wrapper.get('[aria-label="账号模型分组"]').findAll('option').map(option => option.text())).toContain('Media group')
     wrapper.unmount()
   })
   it('keeps the editor usable when independent list and price requests fail', async () => {

@@ -9,6 +9,6 @@
   "platform": "linux/amd64",
   "version_scheme": "private-feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.16 fixes legacy single-material mappings, isolates invalid media bindings and group catalogs, and adds administrator model discovery, template forms and read-only channel pricing status. Production cutover remains a separate manual operation.",
+  "version_note": "Private release 1.2.17 stabilizes media capability profile IDs across requests, prevents false account-test configuration changes, and improves administrator media model, template, and diagnostics workflows.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

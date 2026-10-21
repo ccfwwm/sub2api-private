@@ -327,7 +327,15 @@ func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load fu
 		cap.TemplateRules = append([]ParameterRule{}, cap.TemplateRules...)
 		// Preserve explicit legacy field overrides. Protocol selection itself is
 		// pinned by a persisted template_ref or an administrator binding.
-		for source, target := range cap.FieldMapping {
+		// Rule order contributes to the public profile and estimate version.
+		// Go map iteration must not invalidate an unchanged configuration.
+		mappingSources := make([]string, 0, len(cap.FieldMapping))
+		for source := range cap.FieldMapping {
+			mappingSources = append(mappingSources, source)
+		}
+		sort.Strings(mappingSources)
+		for _, source := range mappingSources {
+			target := cap.FieldMapping[source]
 			if source != target && source != "model" && !contains([]string{"image", "video", "audio", "mask", "images", "videos", "audios", "masks"}, source) && target != "" && configPath.MatchString(target) && !strings.ContainsAny(target, ":[") {
 				cap.TemplateRules = append(cap.TemplateRules, ParameterRule{Phase: "wire", Op: "rename", Source: source, Target: target})
 			}

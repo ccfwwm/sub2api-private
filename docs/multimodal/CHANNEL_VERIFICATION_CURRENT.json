@@ -1,9 +1,9 @@
 {
-  "version": "v1.2.16",
+  "version": "v1.2.17",
   "status": "recorded",
-  "acceptance_state": "candidate-direct-evidence-audited-relay-pending-deployment",
-  "verified_at": "2026-10-21T14:26:30.030Z",
-  "environment": "Carries the existing direct-upstream media audit and the v1.2.15 production model-list failure. The v1.2.16 fix is source-tested but was not yet deployed when this record was created; post-deployment relay checks remain pending.",
+  "acceptance_state": "profile-instability-reproduced-source-fix-validated-production-rollout-pending",
+  "verified_at": "2026-10-21T17:17:56Z",
+  "environment": "Production v1.2.16 reproducibly returned changing XXsedanco2.5S capability profiles and intermittent estimate 400/409 responses. v1.2.17 source fixes deterministic field-mapping order; production deployment and post-cutover stability checks remain separately recorded.",
   "evidence": {
     "report": "output/media-templates-v1215/audit-20261021/REPORT.md",
     "details": "output/media-templates-v1215/audit-20261021/evidence.json",
@@ -12,7 +12,20 @@
     "new_network_requests_during_audit": 0,
     "production_model_inventory": "output/media-v1216/model-inventory.json",
     "production_model_list_diagnostic": "output/media-v1216/live-tests.json",
-    "diagnosis": "The production proxy model-list returned HTTP 409 parameter_rule_conflict. Read-only database inspection identified account 2093 in database group 66 and legacy field_mapping image -> image.url on its Grok video capabilities; v1.2.16 excludes material fields from generic rename rules and normalizes the legacy URL leaf into the template material target."
+    "diagnosis": "The production proxy model-list returned HTTP 409 parameter_rule_conflict. Read-only database inspection identified account 2093 in database group 66 and legacy field_mapping image -> image.url on its Grok video capabilities; v1.2.16 excludes material fields from generic rename rules and normalizes the legacy URL leaf into the template material target.",
+    "v1217_live_profile_check": {
+      "capability_requests": 12,
+      "capability_http_200": 12,
+      "distinct_profile_count_for_same_video_model": 2,
+      "estimate_requests": 6,
+      "estimate_http_status_counts": {
+        "200": 3,
+        "400": 1,
+        "409": 2
+      },
+      "paid_submissions": 0,
+      "credentials_recorded": false
+    }
   },
   "budget": {
     "limit": 16,
@@ -22,7 +35,12 @@
     "remaining_conservative": 4,
     "counting": "All new started cases count, including failures, rejections and uncertain transport results. Historical reused records do not create new attempts."
   },
-  "outcomes": {"completed": 6, "failed": 1, "uncertain": 2, "rejected": 3},
+  "outcomes": {
+    "completed": 6,
+    "failed": 1,
+    "uncertain": 2,
+    "rejected": 3
+  },
   "billing": {
     "scope": "direct-upstream",
     "fee": "unverified",
@@ -38,9 +56,13 @@
   },
   "relay_acceptance": {
     "status": "pending",
-    "scope": "Run the authenticated model-list request and compare direct versus relay image, video and audio paths after v1.2.16 deployment. Source tests do not establish production behavior or billing.",
-    "models": ["Veo", "XXsedanco2.5S", "Grok"],
-    "constraints": "Use only the remaining authorized budget; one submission per new case, no automatic retry, preserve original models, materials and duration. TT is excluded."
+    "scope": "After v1.2.17 cutover, verify public profile ID stability over repeated requests, estimate, preview, and one authorized video request with exact five-second duration; reconcile every returned task and artifact before any further submission. Confirm image/video/audio request serialization and account test fingerprint.",
+    "models": [
+      "XXsedanco2.5S",
+      "gpt-image-2.5",
+      "lyria-3.5"
+    ],
+    "constraints": "Never resubmit a failed or uncertain task. Estimate calls do not create generation jobs. Keep request identities, models, duration and user materials unchanged."
   },
   "cases": [
     {
@@ -64,7 +86,10 @@
       "status": "completed",
       "account_id": 2093,
       "database_group_id": 66,
-      "models": ["grok-imagine-video", "grok-imagine-video-1.5"],
+      "models": [
+        "grok-imagine-video",
+        "grok-imagine-video-1.5"
+      ],
       "legacy_material_mapping": "image -> image.url",
       "scope": "The database group ID is distinct from the UI failure label 19. No production data was changed."
     },
@@ -96,8 +121,27 @@
       "label": "uncertain-original-requests",
       "verification": "existing_ledger_audit",
       "status": "unresolved-no-resubmission",
-      "cases": ["v6k-data-url-b64-json-object", "v6k-raw-string"],
+      "cases": [
+        "v6k-data-url-b64-json-object",
+        "v6k-raw-string"
+      ],
       "scope": "Both transport failures have neither HTTP result nor task ID; original-task queries are unavailable. They were not resubmitted."
+    },
+    {
+      "label": "v1217-production-capability-profile-instability",
+      "verification": "real_connection",
+      "status": "completed",
+      "endpoint": "GET /v1/media/capabilities",
+      "requests": 12,
+      "http": 200,
+      "distinct_profiles_same_model": 2,
+      "estimate_statuses": {
+        "200": 3,
+        "400": 1,
+        "409": 2
+      },
+      "paid_submissions": 0,
+      "scope": "Live v1.2.16 reproduction for XXsedanco2.5S. Opaque profile IDs intentionally omitted; deterministic Go map-to-rule ordering is the source fix."
     }
   ]
 }

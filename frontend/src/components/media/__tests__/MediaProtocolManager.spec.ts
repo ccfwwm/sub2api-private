@@ -90,10 +90,10 @@ describe('media protocol publication', () => {
   })
 
   it('previews published bindings with the real key identity instead of the unsaved draft', async () => {
+    route.query = { tab: 'bindings' }
     api.preview.mockResolvedValue({ paid_submission: false, pricing: { maximum_charge: '0.25' } })
     const wrapper = mount(MediaProtocolManager, { global: { stubs: { TotpStepUpDialog: true } } })
     await flushPromises()
-    await click(wrapper, '模型绑定')
     await click(wrapper, '新建')
     await wrapper.get('[aria-label="预览 API Key ID"]').setValue('23')
     await wrapper.get('[aria-label="预览候选账号 ID"]').setValue('7')

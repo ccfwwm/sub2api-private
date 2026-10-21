@@ -47,6 +47,25 @@ func TestTemplateLegacySingleMaterialMappingDoesNotBecomeRename(t *testing.T) {
 	require.NotContains(t, request.Body, "seconds")
 }
 
+func TestTemplateMappingResolutionHasStableProfileAndRuleOrder(t *testing.T) {
+	cap := Capability{ID: "account:42:video", Version: "saved-version", Model: "video", UpstreamModel: "provider-video", MediaType: "video", Operations: []string{"video"}, GroupIDs: []int64{19}, AccountIDs: []int64{42}, Enabled: true, Status: "enabled", TemplateRef: &TemplateRef{ID: "video-arrays", Version: 1}, FieldMapping: map[string]string{"seconds": "duration", "ratio": "aspect_ratio", "quality": "generation_quality", "resolution": "output_resolution"}}
+	load := func(ref TemplateRef) (ProtocolTemplate, error) { return templateFixture(t, ref.ID), nil }
+	baseline, err := ResolveTemplateBindings([]Capability{cap}, nil, load)
+	require.NoError(t, err)
+	for i := 0; i < 100; i++ {
+		resolved, err := ResolveTemplateBindings([]Capability{cap}, nil, load)
+		require.NoError(t, err)
+		require.Equal(t, baseline[0].TemplateRules, resolved[0].TemplateRules)
+		require.Equal(t, baseline[0].Version, resolved[0].Version)
+		require.Equal(t, publicProfileID(baseline[0]), publicProfileID(resolved[0]))
+	}
+	changed := cap
+	changed.UpstreamModel = "different-provider-video"
+	resolved, err := ResolveTemplateBindings([]Capability{changed}, nil, load)
+	require.NoError(t, err)
+	require.NotEqual(t, publicProfileID(baseline[0]), publicProfileID(resolved[0]))
+}
+
 // Exercises every shipped template through actual HTTP serialization, response
 // parsing, polling when configured, authenticated download and byte comparison.
 func TestBuiltinTemplatesCompleteHTTP(t *testing.T) {

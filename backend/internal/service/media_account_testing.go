@@ -340,11 +340,22 @@ func (s *AccountTestService) MediaTestResult(ctx context.Context, accountID int6
 	if r.Capability.Model == "" {
 		r.Result.ConfigChanged = basicTestFingerprint(account) != r.Fingerprint
 	} else {
-		cap, capErr := accountTestCapability(account, r.Result.Model)
+		cap, capErr := s.recordTestCapability(ctx, account, r)
 		r.Result.ConfigChanged = capErr != nil || testFingerprint(account, cap) != r.Fingerprint
 	}
 	return &r.Result, nil
 }
+
+// Generation records contain the resolved, pinned template. Compare the same
+// representation on reads and worker checks, including after a restart.
+func (s *AccountTestService) recordTestCapability(ctx context.Context, account *Account, r *mediaTestRecord) (media.Capability, error) {
+	cap, err := accountTestCapability(account, r.Result.Model)
+	if err != nil || r.Capability.Template == nil {
+		return cap, err
+	}
+	return s.resolveAccountTestTemplate(ctx, cap)
+}
+
 func (s *AccountTestService) MediaTestArtifact(ctx context.Context, accountID int64, id, key string) (string, string, error) {
 	if _, err := s.MediaTestResult(ctx, accountID, id); err != nil {
 		return "", "", err
@@ -512,7 +523,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 		finish("failed", fmt.Errorf("account unavailable"))
 		return
 	}
-	cap, err := accountTestCapability(account, r.Result.Model)
+	cap, err := t.service.recordTestCapability(ctx, account, r)
 	if err != nil || testFingerprint(account, cap) != r.Fingerprint {
 		finish("unknown", fmt.Errorf("account configuration changed; test not resubmitted"))
 		return
@@ -597,7 +608,7 @@ func (t *mediaAccountTester) work(r *mediaTestRecord, submit bool) {
 			finish("unknown", fmt.Errorf("account unavailable; task not resubmitted"))
 			return
 		}
-		currentCap, currentErr := accountTestCapability(current, r.Result.Model)
+		currentCap, currentErr := t.service.recordTestCapability(ctx, current, r)
 		if currentErr != nil || testFingerprint(current, currentCap) != r.Fingerprint {
 			finish("unknown", fmt.Errorf("account configuration changed; task not resubmitted"))
 			return

@@ -11,17 +11,16 @@ const route = useRoute(), router = useRouter(), { locale } = useI18n()
 const tr = (zh: string, en: string) => locale.value.startsWith('zh') ? zh : en
 const tabs = computed(() => [
   { id: 'accounts', name: tr('账号模型', 'Account models') },
-  { id: 'bindings', name: tr('模型绑定', 'Bindings') },
   { id: 'templates', name: tr('协议模板', 'Protocol templates') },
   { id: 'diagnostics', name: tr('联调检测', 'Diagnostics') },
   { id: 'tasks', name: tr('任务记录', 'Tasks') }
 ])
-const tab = computed(() => tabs.value.some(item => item.id === route.query.tab) ? String(route.query.tab) : 'accounts')
+const tab = computed(() => route.query.tab === 'bindings' ? 'accounts' : tabs.value.some(item => item.id === route.query.tab) ? String(route.query.tab) : 'accounts')
 function navigate(id: string) { void router.replace({ query: { ...route.query, tab: id } }) }
 </script>
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-[1600px] space-y-6 p-4 lg:p-8">
+    <div class="w-full space-y-6 p-4 lg:p-6">
       <header class="flex flex-wrap items-start justify-between gap-3">
         <div><h1 class="text-2xl font-semibold">{{ tr('媒体管理', 'Media management') }}</h1><p class="mt-2 text-sm text-gray-500">{{ tr('拉取账号模型 → 绑定协议模板 → 配置请求能力 → 测试并启用。价格按公开模型名匹配渠道定价。', 'Discover models, bind templates, configure request capabilities, then test and enable. Public model names match channel pricing.') }}</p></div>
         <RouterLink class="btn btn-secondary" to="/admin/channels/pricing">{{ tr('渠道定价', 'Channel pricing') }}</RouterLink>
@@ -32,7 +31,7 @@ function navigate(id: string) { void router.replace({ query: { ...route.query, t
         </nav>
         <main class="min-w-0">
           <MediaAccountsManager v-if="tab === 'accounts'" />
-          <MediaProtocolManager v-else-if="tab === 'templates' || tab === 'bindings'" :key="tab" />
+          <MediaProtocolManager v-else-if="tab === 'templates'" />
           <MediaDiagnostics v-else-if="tab === 'diagnostics'" />
           <MediaTaskHistory v-else admin />
         </main>

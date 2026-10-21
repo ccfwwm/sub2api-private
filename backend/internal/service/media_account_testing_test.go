@@ -30,6 +30,97 @@ type mediaTestRepo struct {
 	account *Account
 }
 
+type mediaTestTemplates struct{}
+
+func (mediaTestTemplates) ResolveTemplates(_ context.Context, caps []media.Capability) ([]media.Capability, error) {
+	return media.ResolveTemplateBindings(caps, nil, func(ref media.TemplateRef) (media.ProtocolTemplate, error) {
+		for _, template := range media.BuiltinTemplates() {
+			if template.ID == ref.ID {
+				template.PollSeconds = 1
+				return template, nil
+			}
+		}
+		return media.ProtocolTemplate{}, fmt.Errorf("template not found")
+	})
+}
+
+func TestMediaTestResolvedTemplateSurvivesWorkerAndResultChecks(t *testing.T) {
+	cap, _ := media.ModelPreset("gpt-image-2")
+	cap.TemplateRef = &media.TemplateRef{ID: "openai-image", Version: 1}
+	// Use the actual built-in image protocol rather than a legacy adapter fixture.
+	for _, template := range media.BuiltinTemplates() {
+		if template.Mode == "sync_json" && len(template.MediaTypes) == 1 && template.MediaTypes[0] == "image" && len(template.Operations) > 0 && template.Operations[0] == "image" {
+			cap.TemplateRef.ID = template.ID
+			break
+		}
+	}
+	var raw bytes.Buffer
+	require.NoError(t, png.Encode(&raw, image.NewRGBA(image.Rect(0, 0, 2, 2))))
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"b64_json": base64.StdEncoding.EncodeToString(raw.Bytes())}}})
+	}))
+	defer server.Close()
+	svc, tester := testMediaTester(t, cap, server.URL)
+	svc.mediaTemplateStore = mediaTestTemplates{}
+	resolved, err := svc.resolveAccountTestTemplate(context.Background(), cap)
+	require.NoError(t, err)
+	record := testMediaRecord(t, svc, resolved)
+	tester.work(record, true)
+	require.Equal(t, "completed", record.Result.State)
+	require.Equal(t, int32(1), posts.Load())
+	result, err := svc.MediaTestResult(context.Background(), 42, record.Result.ID)
+	require.NoError(t, err)
+	require.False(t, result.ConfigChanged)
+	account, _ := svc.accountRepo.GetByID(context.Background(), 42)
+	changed := cap
+	changed.UpstreamModel = "changed-model"
+	account.Extra["media_models"] = []media.Capability{changed}
+	result, err = svc.MediaTestResult(context.Background(), 42, record.Result.ID)
+	require.NoError(t, err)
+	require.True(t, result.ConfigChanged)
+	require.Equal(t, int32(1), posts.Load())
+}
+
+func TestMediaTestPinnedTemplatePollAndResumeNeverResubmit(t *testing.T) {
+	cap, ok := media.ModelPreset("omni-flash")
+	require.True(t, ok)
+	cap.TemplateRef = &media.TemplateRef{ID: "video-arrays", Version: 1}
+	cap.Delivery.PollSeconds = 1
+	seconds := 3
+	cap.Limits.ObservationSeconds = &seconds
+	var posts, gets atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts.Add(1)
+		} else {
+			gets.Add(1)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "remote-pinned", "status": "processing"})
+	}))
+	defer server.Close()
+	svc, tester := testMediaTester(t, cap, server.URL)
+	svc.mediaTemplateStore = mediaTestTemplates{}
+	resolved, err := svc.resolveAccountTestTemplate(context.Background(), cap)
+	require.NoError(t, err)
+	r := testMediaRecord(t, svc, resolved)
+	tester.work(r, true)
+	require.Equal(t, "unknown", r.Result.State)
+	require.Contains(t, r.Result.Error, "observation deadline reached")
+	require.Equal(t, int32(1), posts.Load())
+	require.Positive(t, gets.Load())
+	result, err := svc.MediaTestResult(context.Background(), 42, r.Result.ID)
+	require.NoError(t, err)
+	require.False(t, result.ConfigChanged)
+	before := gets.Load()
+	r.Result.StartedAt = time.Now().UTC()
+	tester.work(r, false)
+	require.Equal(t, int32(1), posts.Load())
+	require.Greater(t, gets.Load(), before)
+	require.NotContains(t, r.Result.Error, "configuration changed")
+}
+
 func (r mediaTestRepo) GetByID(context.Context, int64) (*Account, error)         { return r.account, nil }
 func (r mediaTestRepo) UpdateExtra(context.Context, int64, map[string]any) error { return nil }
 

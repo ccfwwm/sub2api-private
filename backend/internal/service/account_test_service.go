@@ -142,7 +142,9 @@ func normalizeGrokAccountTestMode(mode string) string {
 
 // AccountTestService handles account testing operations
 type AccountTestService struct {
-	mediaTemplateStore        *media.Store
+	mediaTemplateStore interface {
+		ResolveTemplates(context.Context, []media.Capability) ([]media.Capability, error)
+	}
 	accountRepo               AccountRepository
 	geminiTokenProvider       *GeminiTokenProvider
 	claudeTokenProvider       *ClaudeTokenProvider
