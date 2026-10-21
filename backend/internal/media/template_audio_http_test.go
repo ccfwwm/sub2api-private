@@ -60,14 +60,23 @@ func TestGeminiAudioTemplateNativeHTTPAndPlayableArtifact(t *testing.T) {
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				require.NotContains(t, body, "model")
 				require.NotContains(t, body, "prompt")
-				config := body["generationConfig"].(map[string]any)
+				config, ok := body["generationConfig"].(map[string]any)
+				require.True(t, ok)
 				require.Equal(t, []any{"AUDIO"}, config["responseModalities"])
 				if variant.voice {
 					require.Equal(t, map[string]any{"voice": "administrator-choice"}, config["speechConfig"])
 				}
-				contents := body["contents"].([]any)
-				parts := contents[0].(map[string]any)["parts"].([]any)
-				require.Equal(t, "朗读这句话", parts[0].(map[string]any)["text"])
+				contents, ok := body["contents"].([]any)
+				require.True(t, ok)
+				require.NotEmpty(t, contents)
+				content, ok := contents[0].(map[string]any)
+				require.True(t, ok)
+				parts, ok := content["parts"].([]any)
+				require.True(t, ok)
+				require.NotEmpty(t, parts)
+				part, ok := parts[0].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, "朗读这句话", part["text"])
 				w.Header().Set("Content-Type", "application/json")
 				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 					"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{

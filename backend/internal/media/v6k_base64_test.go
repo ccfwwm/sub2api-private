@@ -43,7 +43,11 @@ func TestV6KBase64ReferencesReachUpstreamWithoutCatalogPermission(t *testing.T) 
 				require.Equal(t, float64(5), body["seconds"])
 				require.Equal(t, cap.UpstreamModel, body["model"])
 				require.Equal(t, []any{image, image, image, image}, body["images"])
-				actual := body["videos"].([]any)[0].(string)
+				wireVideos, ok := body["videos"].([]any)
+				require.True(t, ok)
+				require.Len(t, wireVideos, 1)
+				actual, ok := wireVideos[0].(string)
+				require.True(t, ok)
 				if shape == "bare_base64" {
 					// Fixture bytes are not a real MP4; production probes real MIME
 					// before reservation. This unit covers lossless wire conversion.

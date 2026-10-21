@@ -403,6 +403,14 @@ func TestTemplateUpgradeRejectsBindingsOutsidePublishedCapability(t *testing.T) 
 	require.ErrorContains(t, validateTemplateBindingCompatibility(template, binding, capabilities), "binding_capability_missing")
 }
 
+func TestTemplateRequestRejectsNonObjectBody(t *testing.T) {
+	for _, value := range []any{"text", []any{"item"}, nil, map[string]any(nil)} {
+		capability := Capability{Template: &ProtocolTemplate{Body: map[string]any{"$input": "payload"}}}
+		_, err := BuildTemplateRequest(context.Background(), nil, capability, Request{Parameters: map[string]any{"payload": value}})
+		require.ErrorContains(t, err, "Template body must resolve to an object")
+	}
+}
+
 func TestTemplateUpgradeValidatesAccountModeCapabilities(t *testing.T) {
 	template := ProtocolTemplate{MediaTypes: []string{"video"}, Operations: []string{"video"}}
 	binding := ModelBinding{GroupID: 9, Model: "public-video", AccountID: 4}

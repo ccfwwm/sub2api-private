@@ -77,7 +77,7 @@ func TestMediaModelsIsolatesBrokenTemplateBinding(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var template media.ProtocolTemplate
 	for _, candidate := range media.BuiltinTemplates() {
 		for _, typ := range candidate.MediaTypes {

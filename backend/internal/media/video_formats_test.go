@@ -131,8 +131,12 @@ func TestExplicitFrameRolesAndEncodedReferences(t *testing.T) {
 	p := map[string]any{"prompt": "transition", "duration": 5, "reference_images": []any{map[string]any{"url": "https://media.example.com/first.png", "role": "first_frame"}, map[string]any{"url": "https://media.example.com/last.png", "role": "last_frame"}}}
 	req, err := Normalize(cap, "video", p)
 	require.NoError(t, err)
-	require.Equal(t, "first_frame", req.MaterialRefs["image"][0].(map[string]any)["role"])
-	p["reference_images"] = append(p["reference_images"].([]any), "https://media.example.com/ordinary.png")
+	firstFrame, ok := req.MaterialRefs["image"][0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "first_frame", firstFrame["role"])
+	references, ok := p["reference_images"].([]any)
+	require.True(t, ok)
+	p["reference_images"] = append(references, "https://media.example.com/ordinary.png")
 	_, err = Normalize(cap, "video", p)
 	require.ErrorContains(t, err, "frame_reference_conflict")
 	cap.RequestFormat = "v6k_url"

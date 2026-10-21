@@ -107,7 +107,9 @@ func TestAdminEffectivePreviewUsesRealKeyGroupAndMediaRateWithoutChangingAuditId
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &payload))
 	require.True(t, payload.Data.RequestComplete)
 	require.False(t, payload.Data.PaidSubmission)
-	require.Equal(t, "0.60000000", payload.Data.Pricing.(map[string]any)["maximum_charge"])
+	pricing, ok := payload.Data.Pricing.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "0.60000000", pricing["maximum_charge"])
 	require.NotContains(t, w.Body.String(), "sk-never-return-test-value")
 	require.NotContains(t, w.Body.String(), "upstream-secret-never-return")
 	require.Equal(t, "private-upstream", payload.Data.Effective["upstream_model"])
@@ -159,7 +161,7 @@ func TestAdminEffectivePreviewSubscriptionIdentityOnlyReadsActiveSubscription(t 
 			repo.key.Group.SubscriptionType = service.SubscriptionTypeSubscription
 			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			h.db = db
 			mock.ExpectQuery(`SELECT count(*),coalesce(min(id),0) FROM user_subscriptions WHERE user_id=$1 AND group_id=$2 AND status='active' AND expires_at>now() AND deleted_at IS NULL`).WithArgs(int64(12), int64(7)).WillReturnRows(sqlmock.NewRows([]string{"count", "id"}).AddRow(count, 91))
 			w := protocolRequest(t, "/admin/media/templates/preview", gin.H{"mode": "effective", "api_key_id": 11, "operation": "video", "request": gin.H{"model": "public-video", "seconds": 5}}, func(c *gin.Context) {

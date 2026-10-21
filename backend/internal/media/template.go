@@ -931,7 +931,11 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 		if e != nil {
 			return PreparedMediaRequest{}, e
 		}
-		p = value.(map[string]any)
+		var ok bool
+		p, ok = value.(map[string]any)
+		if !ok || p == nil {
+			return PreparedMediaRequest{}, fail(422, "invalid_template", "Template body must resolve to an object")
+		}
 	}
 	modelTarget := t.ModelTarget
 	if modelTarget == "" {

@@ -123,7 +123,9 @@ func TestSubmissionReceiptSurvivesEngineRestartWithoutLeakingRawInput(t *testing
 	require.NoError(t, err)
 	body := map[string]any{"model": "selected-model", "images": []any{map[string]any{"url": "https://media.example.com/a.png?signature=private"}}, "future_token": "private"}
 	raw, _ := json.Marshal(body)
-	receipt := NewSubmission("/v1/videos", raw, body, map[string][]any{"image": body["images"].([]any)}, "private")
+	images, ok := body["images"].([]any)
+	require.True(t, ok)
+	receipt := NewSubmission("/v1/videos", raw, body, map[string][]any{"image": images}, "private")
 	receipt.Stage = "attempted"
 	path, err := blobs.WriteJSON("mt_receipt_restart", "submission", receipt)
 	require.NoError(t, err)
