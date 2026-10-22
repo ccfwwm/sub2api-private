@@ -188,6 +188,7 @@ jobs:
           DOCS_IMAGE: ghcr.io/ccfwwm/sub2api-private-docs@${{ steps.build-docs.outputs.digest }}
         run: |
           set -euo pipefail
+          docker pull "$DOCS_IMAGE"
           docker image inspect "$DOCS_IMAGE" > docs-image-inspect.json
           docker run -d --name sub2api-docs-ci "$DOCS_IMAGE"
           trap 'docker rm -f sub2api-docs-ci >/dev/null 2>&1 || true' EXIT
