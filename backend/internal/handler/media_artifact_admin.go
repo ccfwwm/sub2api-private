@@ -111,7 +111,12 @@ func (h *MediaHandler) AdminTask(c *gin.Context) {
 		mediaError(c, err)
 		return
 	}
-	result = media.CompactEvidence(result).(map[string]any)
+	compact, ok := media.CompactEvidence(result).(map[string]any)
+	if !ok {
+		response.Error(c, http.StatusInternalServerError, "Failed to format media task evidence")
+		return
+	}
+	result = compact
 	c.Header("Cache-Control", "no-store")
 	response.Success(c, result)
 }
