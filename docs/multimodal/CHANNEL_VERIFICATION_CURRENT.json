@@ -1,9 +1,9 @@
 {
-  "version": "v1.3.0",
+  "version": "v1.3.1",
   "status": "recorded",
   "acceptance_state": "pre-deployment-read-only-verified",
-  "verified_at": "2026-10-22T16:12:27.075Z",
-  "environment": "Live v1.2.19 relay model discovery. New public UI and owner playback acceptance are verified separately after cutover.",
+  "verified_at": "2026-10-22T19:04:49.443682+00:00",
+  "environment": "Live v1.3.0 relay model discovery before v1.3.1 metadata and navigation deployment. Administrator price editing and browser acceptance are checked after cutover.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
@@ -13,7 +13,7 @@
       "status": "completed",
       "http": 200,
       "models": 15,
-      "scope": "Read-only GET /v1/models; no generation submission"
+      "scope": "Read-only GET /v1/models with an existing administrator media key; no generation submission"
     }
   ]
 }
