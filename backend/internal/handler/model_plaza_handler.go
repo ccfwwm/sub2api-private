@@ -112,9 +112,10 @@ type modelPlazaGroup struct {
 
 // modelPlazaMediaModel adds display-only currency metadata to the media catalog.
 // Sale values are displayed as CNY under the product's configured price policy;
-// official USD prices are not part of the current media catalog and remain absent.
+// official USD reference prices are administrator-managed display metadata.
 type modelPlazaMediaModel struct {
-	DisplayDescription string `json:"display_description,omitempty"`
+	DisplayDescription     string               `json:"display_description,omitempty"`
+	OfficialReferencePrice *mediaReferencePrice `json:"official_reference_price,omitempty"`
 	media.CatalogEntry
 	SaleCurrency     string `json:"sale_currency"`
 	OfficialCurrency string `json:"official_currency"`

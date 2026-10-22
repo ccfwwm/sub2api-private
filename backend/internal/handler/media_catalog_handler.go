@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -16,9 +18,18 @@ import (
 
 // Display metadata deliberately lives outside executable capability snapshots.
 type mediaDescriptions struct {
-	Version int64             `json:"version"`
-	Models  map[string]string `json:"models"`
+	Version         int64                          `json:"version"`
+	Models          map[string]string              `json:"models"`
+	ReferencePrices map[string]mediaReferencePrice `json:"reference_prices,omitempty"`
 }
+
+// Reference prices are display metadata in USD, never executable billing rules.
+type mediaReferencePrice struct {
+	Amount string `json:"amount"`
+	Unit   string `json:"unit"`
+}
+
+var mediaReferenceAmount = regexp.MustCompile(`^(0|[1-9][0-9]{0,11})(\.[0-9]{1,8})?$`)
 
 func mediaDescriptionKey(group int64) string {
 	return fmt.Sprintf("media_model_descriptions:%d", group)
@@ -44,6 +55,9 @@ func (h *ModelPlazaHandler) attachDescriptions(ctx context.Context, groups []mod
 		groups[i].DescriptionVersion = descriptions.Version
 		for j := range groups[i].MediaModels {
 			groups[i].MediaModels[j].DisplayDescription = descriptions.Models[groups[i].MediaModels[j].Model]
+			if price, ok := descriptions.ReferencePrices[groups[i].MediaModels[j].Model]; ok {
+				groups[i].MediaModels[j].OfficialReferencePrice = &price
+			}
 		}
 	}
 	return nil
@@ -122,72 +136,118 @@ func (h *ModelPlazaHandler) SaveMediaDescription(c *gin.Context) {
 		response.BadRequest(c, "Invalid model description (maximum 2000 characters)")
 		return
 	}
-	if h.media == nil || h.media.db == nil {
-		response.Error(c, 503, "Media catalog unavailable")
+	input.Description = strings.TrimSpace(input.Description)
+	version, ok := h.updateMediaDisplay(c, input.GroupID, input.Model, input.ExpectedVersion, func(metadata *mediaDescriptions) {
+		if metadata.Models == nil {
+			metadata.Models = map[string]string{}
+		}
+		if input.Description == "" {
+			delete(metadata.Models, input.Model)
+		} else {
+			metadata.Models[input.Model] = input.Description
+		}
+	})
+	if ok {
+		response.Success(c, gin.H{"description_version": version, "display_description": input.Description})
+	}
+}
+
+func (h *ModelPlazaHandler) SaveMediaReferencePrice(c *gin.Context) {
+	if !requireMediaAdmin(c) {
 		return
 	}
-	entries, err := h.media.Engine.Catalog(c.Request.Context(), input.GroupID)
+	var input struct {
+		GroupID         int64                `json:"group_id"`
+		Model           string               `json:"model"`
+		Price           *mediaReferencePrice `json:"official_reference_price"`
+		ExpectedVersion int64                `json:"expected_version"`
+	}
+	if c.ShouldBindJSON(&input) != nil || input.GroupID <= 0 || input.Model == "" || len(input.Model) > 300 || input.ExpectedVersion < 0 {
+		response.BadRequest(c, "Invalid reference price request")
+		return
+	}
+	if input.Price != nil {
+		input.Price.Amount = strings.TrimSpace(input.Price.Amount)
+		input.Price.Unit = strings.TrimSpace(input.Price.Unit)
+		if !mediaReferenceAmount.MatchString(input.Price.Amount) || input.Price.Unit == "" || utf8.RuneCountInString(input.Price.Unit) > 40 || strings.ContainsFunc(input.Price.Unit, unicode.IsControl) {
+			response.BadRequest(c, "Use a nonnegative USD decimal (up to 12 integer and 8 decimal digits) and a unit of at most 40 characters")
+			return
+		}
+	}
+	version, ok := h.updateMediaDisplay(c, input.GroupID, input.Model, input.ExpectedVersion, func(metadata *mediaDescriptions) {
+		if metadata.ReferencePrices == nil {
+			metadata.ReferencePrices = map[string]mediaReferencePrice{}
+		}
+		if input.Price == nil {
+			delete(metadata.ReferencePrices, input.Model)
+		} else {
+			metadata.ReferencePrices[input.Model] = *input.Price
+		}
+	})
+	if ok {
+		response.Success(c, gin.H{"description_version": version, "official_reference_price": input.Price})
+	}
+}
+
+func (h *ModelPlazaHandler) updateMediaDisplay(c *gin.Context, groupID int64, model string, expectedVersion int64, update func(*mediaDescriptions)) (int64, bool) {
+	if h.media == nil || h.media.db == nil {
+		response.Error(c, 503, "Media catalog unavailable")
+		return 0, false
+	}
+	entries, err := h.media.Engine.Catalog(c.Request.Context(), groupID)
 	if err != nil {
 		mediaError(c, err)
-		return
+		return 0, false
 	}
 	found := false
 	for _, entry := range entries {
-		found = found || entry.Model == input.Model
+		found = found || entry.Model == model
 	}
 	if !found {
 		response.NotFound(c, "Model is not available in this group")
-		return
+		return 0, false
 	}
 	tx, err := h.media.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
 	defer func() { _ = tx.Rollback() }()
-	key := mediaDescriptionKey(input.GroupID)
+	key := mediaDescriptionKey(groupID)
 	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO settings (key,value,updated_at) VALUES ($1,'{"version":0,"models":{}}',now()) ON CONFLICT (key) DO NOTHING`, key)
 	if err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
 	var raw string
 	if err = tx.QueryRowContext(c.Request.Context(), "SELECT value FROM settings WHERE key=$1 FOR UPDATE", key).Scan(&raw); err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
 	var descriptions mediaDescriptions
 	if err = json.Unmarshal([]byte(raw), &descriptions); err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
-	if descriptions.Version != input.ExpectedVersion {
-		response.Error(c, http.StatusConflict, "Description changed; refresh before saving")
-		return
+	if descriptions.Version != expectedVersion {
+		response.Error(c, http.StatusConflict, "Model display metadata changed; refresh before saving")
+		return 0, false
 	}
-	if descriptions.Models == nil {
-		descriptions.Models = map[string]string{}
-	}
-	input.Description = strings.TrimSpace(input.Description)
-	if input.Description == "" {
-		delete(descriptions.Models, input.Model)
-	} else {
-		descriptions.Models[input.Model] = input.Description
-	}
+	update(&descriptions)
 	descriptions.Version++
 	encoded, err := json.Marshal(descriptions)
 	if err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
 	_, err = tx.ExecContext(c.Request.Context(), "UPDATE settings SET value=$2,updated_at=now() WHERE key=$1", key, string(encoded))
 	if err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
 	if err = tx.Commit(); err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return 0, false
 	}
-	response.Success(c, gin.H{"description_version": descriptions.Version, "display_description": input.Description})
+	return descriptions.Version, true
 }

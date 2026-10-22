@@ -100,6 +100,7 @@ export interface PlazaMediaCharge {
 }
 export interface PlazaMediaModel {
 	 display_description?: string
+  official_reference_price?: PlazaMediaReferencePrice | null
   model: string
   media_type: string
   operations: string[]
@@ -112,6 +113,11 @@ export interface PlazaMediaModel {
   /** Single effective media rate used by billing; display prices apply this once. */
   sale_multiplier?: number
   prices: { operation: string; version: string; time_multiplier?: string; maximum_charge: string | null; rules: { priority: number; when: Record<string, unknown>; charges: PlazaMediaCharge[] }[] }[]
+}
+
+export interface PlazaMediaReferencePrice {
+  amount: string
+  unit: string
 }
 
 export interface ModelPlazaResponse {
@@ -136,6 +142,10 @@ export async function getPublicMediaCatalog(): Promise<ModelPlazaResponse> {
 }
 export async function saveMediaDescription(group_id: number, model: string, description: string, expected_version: number) {
   return (await apiClient.put<{ description_version: number; display_description: string }>('/admin/media/model-descriptions', { group_id, model, description, expected_version })).data
+}
+
+export async function saveMediaReferencePrice(group_id: number, model: string, official_reference_price: PlazaMediaReferencePrice | null, expected_version: number) {
+  return (await apiClient.put<{ description_version: number; official_reference_price: PlazaMediaReferencePrice | null }>('/admin/media/model-reference-prices', { group_id, model, official_reference_price, expected_version })).data
 }
 
 export default modelPlazaAPI

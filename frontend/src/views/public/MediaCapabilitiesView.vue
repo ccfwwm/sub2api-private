@@ -17,7 +17,6 @@ onMounted(refresh)
 <template>
   <MediaPublicLayout>
     <section class="space-y-5">
-      <header><h1 class="text-2xl font-semibold">模型能力</h1><p class="mt-2 text-sm text-gray-500">查看图片、视频和音频模型的接口、能力与售价。</p></header>
       <div class="flex flex-wrap gap-3"><input v-model="search" type="search" class="input max-w-sm" placeholder="搜索模型名称" aria-label="搜索模型" /><select v-model="group" class="input max-w-xs" aria-label="选择分组"><option value="">全部分组</option><option v-for="g in data?.groups" :key="g.id" :value="String(g.id)">{{ g.name }}</option></select><button class="btn btn-secondary" :disabled="loading" @click="refresh">刷新</button></div>
       <p v-if="error" role="alert" class="text-red-600">{{ error }}</p><p v-else-if="loading && !data" role="status">正在加载模型能力…</p>
       <p v-if="data?.notices?.length" class="text-sm text-amber-700">部分分组暂不可用，其余模型仍可查看。</p>

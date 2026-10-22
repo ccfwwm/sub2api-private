@@ -1,25 +1,37 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { PlazaMediaModel, PlazaMediaCharge } from '@/api/modelPlaza'
-import { getPublicMediaCatalog, saveMediaDescription } from '@/api/modelPlaza'
+import type { PlazaMediaModel, PlazaMediaCharge, PlazaMediaReferencePrice } from '@/api/modelPlaza'
+import { getPublicMediaCatalog, saveMediaDescription, saveMediaReferencePrice } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
 const props = defineProps<{ models: PlazaMediaModel[]; multiplier: number; imageMultiplier?: number; videoMultiplier?: number; groupId?: number; descriptionVersion?: number }>()
 const auth = useAuthStore()
 const editing = ref(''), draft = ref(''), saving = ref(false), editError = ref(''), conflict = ref(false)
+const editKind = ref<'description' | 'price'>('description')
+const priceAmount = ref(''), priceUnit = ref('')
 const version = ref(props.descriptionVersion ?? 0)
 const descriptions = ref<Record<string, string>>({})
-watch(() => props.descriptionVersion, value => { if (!editing.value) { version.value = value ?? 0; descriptions.value = {} } })
+const referencePrices = ref<Record<string, PlazaMediaReferencePrice | null>>({})
+watch(() => props.descriptionVersion, value => { if (!editing.value) { version.value = value ?? 0; descriptions.value = {}; referencePrices.value = {} } })
 const description = (model: PlazaMediaModel) => descriptions.value[model.model] ?? model.display_description ?? ''
-function edit(model: PlazaMediaModel) { editing.value = model.model; draft.value = description(model); editError.value = ''; conflict.value = false }
+const referencePrice = (model: PlazaMediaModel) => Object.prototype.hasOwnProperty.call(referencePrices.value, model.model) ? referencePrices.value[model.model] : model.official_reference_price
+function edit(model: PlazaMediaModel, kind: 'description' | 'price' = 'description') {
+  if (saving.value) return
+  editing.value = model.model; editKind.value = kind; draft.value = description(model)
+  priceAmount.value = referencePrice(model)?.amount ?? ''; priceUnit.value = referencePrice(model)?.unit ?? '次'
+  editError.value = ''; conflict.value = false
+}
 async function refreshVersion() {
   saving.value = true
   try {
     const group = (await getPublicMediaCatalog()).groups.find(g => g.id === props.groupId)
     if (!group) throw new Error('分组已不可用')
     version.value = group.description_version ?? 0
-    for (const model of group.media_models ?? []) descriptions.value[model.model] = model.display_description ?? ''
-    conflict.value = false; editError.value = '已刷新版本并保留草稿，请核对当前说明后保存。'
+    for (const model of group.media_models ?? []) {
+      descriptions.value[model.model] = model.display_description ?? ''
+      referencePrices.value[model.model] = model.official_reference_price ?? null
+    }
+    conflict.value = false; editError.value = '已刷新版本并保留草稿，请核对当前内容后保存。'
   } catch (e) { editError.value = (e as Error).message }
   finally { saving.value = false }
 }
@@ -27,13 +39,25 @@ async function save() {
   if (!props.groupId || conflict.value) return
   saving.value = true; editError.value = ''
   try {
-    const result = await saveMediaDescription(props.groupId, editing.value, draft.value, version.value)
-    descriptions.value[editing.value] = result.display_description
-    version.value = result.description_version; editing.value = ''
+    if (editKind.value === 'price') {
+      const amount = priceAmount.value.trim(), unit = priceUnit.value.trim()
+      if (amount && (!/^(0|[1-9][0-9]{0,11})(\.[0-9]{1,8})?$/.test(amount) || !unit || [...unit].length > 40)) {
+        editError.value = '请输入非负美元金额（最多 12 位整数、8 位小数）和不超过 40 字的计价单位。'
+        return
+      }
+      const result = await saveMediaReferencePrice(props.groupId, editing.value, amount ? { amount, unit } : null, version.value)
+      referencePrices.value[editing.value] = result.official_reference_price
+      version.value = result.description_version
+    } else {
+      const result = await saveMediaDescription(props.groupId, editing.value, draft.value, version.value)
+      descriptions.value[editing.value] = result.display_description
+      version.value = result.description_version
+    }
+    editing.value = ''
   } catch (e) {
     const failure = e as { status?: number; response?: { status?: number }; message?: string }
     conflict.value = failure.status === 409 || failure.response?.status === 409
-    editError.value = conflict.value ? '说明已被其他管理员修改。请刷新版本，核对后保存；草稿已保留。' : failure.message || '保存失败，请重试。'
+    editError.value = conflict.value ? '本分组内容已被其他管理员修改。请刷新版本，核对后保存；草稿已保留。' : failure.message || '保存失败，请重试。'
   } finally { saving.value = false }
 }
 const { locale } = useI18n()
@@ -75,7 +99,17 @@ function displayedPrice(model: PlazaMediaModel, price: string | null, timeMultip
                 <p v-else-if="charge.method === 'package'">{{ charge.package_quantity }} {{ label(charge, model) }} {{ text('套餐总价', 'package total') }}: {{ displayedPrice(model, charge.unit_price, price.time_multiplier) }}</p>
                 <p v-else>{{ displayedPrice(model, charge.unit_price, price.time_multiplier) }} / {{ label(charge, model) }}</p>
                 <span v-if="charge.trigger === 'accepted'" class="text-xs text-amber-700 dark:text-amber-400">{{ text('受理后失败不退', 'Nonrefundable after acceptance') }}</span>
-              </div></div><p v-if="price.time_multiplier && price.time_multiplier !== '1'" class="mt-1 text-xs">{{ text('当前模型分时倍率', 'Current model time multiplier') }} ×{{ price.time_multiplier }}</p><p v-if="price.maximum_charge !== null" class="mt-1 text-xs">{{ text('最高收费上限', 'Maximum charge cap') }} {{ displayedPrice(model, price.maximum_charge, price.time_multiplier) }}</p></div></td><td class="p-3 align-top text-gray-500">—</td><td class="p-3 align-top min-w-72"><div v-if="editing === model.model" class="space-y-2"><label class="block text-xs font-medium">能力说明（本分组）<textarea v-model="draft" maxlength="2000" rows="4" class="input mt-2" placeholder="例如：最多 9 张参考图，每项含 url；720P；5 / 10 / 15 秒；支持 16:9、9:16" /></label><p class="text-xs text-gray-500">{{ draft.length }} / 2000 · 仅修改展示说明，请求规则在媒体管理中配置。</p><p class="whitespace-pre-wrap text-xs">当前说明：{{ description(model) || '未填写' }}</p><p v-if="editError" role="alert" class="text-xs text-amber-700">{{ editError }}</p><div class="flex flex-wrap gap-2"><button class="btn btn-primary" :disabled="saving || conflict" @click="save">保存</button><button v-if="conflict" class="btn btn-secondary" :disabled="saving" @click="refreshVersion">刷新版本</button><button class="btn btn-secondary" :disabled="saving" @click="draft = ''">清空说明</button><button class="btn btn-secondary" :disabled="saving" @click="editing = ''">取消</button></div></div><template v-else><p v-if="description(model)" class="mb-2 whitespace-pre-wrap break-words">{{ description(model) }}</p><button v-if="auth.isAdmin && groupId" class="mb-2 text-xs text-primary-600 hover:underline" @click="edit(model)">编辑说明</button></template><p class="text-xs text-gray-500">{{ model.resolutions?.join(' / ') }}</p><template v-for="(d, index) in model.duration_variants || [model.duration]" :key="index"><p v-if="d.mode === 'fixed'">{{ d.values[0] }}{{ text(' 秒固定时长', ' seconds, fixed') }}</p><p v-else-if="d.values?.length">{{ d.values.join(' / ') }} {{ text('秒', 'seconds') }}</p><p v-else-if="d.min">{{ d.min }}–{{ d.max }} {{ text('秒', 'seconds') }}</p></template></td></tr></tbody>
+              </div></div><p v-if="price.time_multiplier && price.time_multiplier !== '1'" class="mt-1 text-xs">{{ text('当前模型分时倍率', 'Current model time multiplier') }} ×{{ price.time_multiplier }}</p><p v-if="price.maximum_charge !== null" class="mt-1 text-xs">{{ text('最高收费上限', 'Maximum charge cap') }} {{ displayedPrice(model, price.maximum_charge, price.time_multiplier) }}</p></div></td><td class="p-3 align-top min-w-56">
+                <div v-if="editing === model.model && editKind === 'price'" class="space-y-2">
+                  <label class="block text-xs font-medium">官方参考价（美元 / 单位）<input v-model="priceAmount" aria-label="官方参考价金额" inputmode="decimal" maxlength="21" class="input mt-2" placeholder="例如：0.10" /></label>
+                  <label class="block text-xs font-medium">计价单位<input v-model="priceUnit" aria-label="官方参考价单位" maxlength="40" class="input mt-2" placeholder="例如：秒、张、次" /></label>
+                  <p class="text-xs text-gray-500">按本分组保存；仅供参考，不影响实付价格。金额留空可清除。</p>
+                  <p class="text-xs">当前参考价：{{ referencePrice(model) ? `$${referencePrice(model)!.amount} / ${referencePrice(model)!.unit}` : '未填写' }}</p>
+                  <p v-if="editError" role="alert" class="text-xs text-amber-700">{{ editError }}</p>
+                  <div class="flex flex-wrap gap-2"><button class="btn btn-primary" :disabled="saving || conflict" @click="save">保存参考价</button><button v-if="conflict" class="btn btn-secondary" :disabled="saving" @click="refreshVersion">刷新版本</button><button class="btn btn-secondary" :disabled="saving" @click="priceAmount = ''">清空参考价</button><button class="btn btn-secondary" :disabled="saving" @click="editing = ''">取消</button></div>
+                </div>
+                <template v-else><p>{{ referencePrice(model) ? `$${referencePrice(model)!.amount} / ${referencePrice(model)!.unit}` : '—' }}</p><button v-if="auth.isAdmin && groupId" class="mt-2 text-xs text-primary-600 hover:underline" :disabled="saving" @click="edit(model, 'price')">编辑参考价</button></template>
+              </td><td class="p-3 align-top min-w-72"><div v-if="editing === model.model && editKind === 'description'" class="space-y-2"><label class="block text-xs font-medium">能力说明（本分组）<textarea v-model="draft" maxlength="2000" rows="4" class="input mt-2" placeholder="例如：最多 9 张参考图，每项含 url；720P；5 / 10 / 15 秒；支持 16:9、9:16" /></label><p class="text-xs text-gray-500">{{ draft.length }} / 2000 · 仅修改展示说明，请求规则在媒体管理中配置。</p><p class="whitespace-pre-wrap text-xs">当前说明：{{ description(model) || '未填写' }}</p><p v-if="editError" role="alert" class="text-xs text-amber-700">{{ editError }}</p><div class="flex flex-wrap gap-2"><button class="btn btn-primary" :disabled="saving || conflict" @click="save">保存</button><button v-if="conflict" class="btn btn-secondary" :disabled="saving" @click="refreshVersion">刷新版本</button><button class="btn btn-secondary" :disabled="saving" @click="draft = ''">清空说明</button><button class="btn btn-secondary" :disabled="saving" @click="editing = ''">取消</button></div></div><template v-else><p v-if="description(model)" class="mb-2 whitespace-pre-wrap break-words">{{ description(model) }}</p><button v-if="auth.isAdmin && groupId" class="mb-2 text-xs text-primary-600 hover:underline" @click="edit(model)">编辑说明</button></template><p class="text-xs text-gray-500">{{ model.resolutions?.join(' / ') }}</p><template v-for="(d, index) in model.duration_variants || [model.duration]" :key="index"><p v-if="d.mode === 'fixed'">{{ d.values[0] }}{{ text(' 秒固定时长', ' seconds, fixed') }}</p><p v-else-if="d.values?.length">{{ d.values.join(' / ') }} {{ text('秒', 'seconds') }}</p><p v-else-if="d.min">{{ d.min }}–{{ d.max }} {{ text('秒', 'seconds') }}</p></template></td></tr></tbody>
     </table>
   </div><p class="text-xs text-gray-500">{{ text('查询和下载不重复计费；分时倍率在创建任务时锁定。完整档位、取整和估价以对应价卡为准。', 'Queries and downloads are free; time multipliers lock at creation. Tier and rounding details follow the price card.') }}</p></div>
 </template>

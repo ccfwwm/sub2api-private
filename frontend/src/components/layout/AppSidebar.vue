@@ -705,6 +705,7 @@ const purchaseNavLabel = computed(() => {
       return t('nav.buySubscription')
   }
 })
+const flagModelPlaza = makeSidebarFlag(FeatureFlags.modelPlaza)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
@@ -725,6 +726,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
+    { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
     { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -759,7 +761,7 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
-const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => !['/media-docs','/media-capabilities'].includes(item.path))))
+const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => !['/model-plaza?embedded=1','/media-docs','/media-capabilities'].includes(item.path))))
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {
@@ -849,6 +851,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
       ],
     },
+    { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
     { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },

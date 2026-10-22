@@ -18,8 +18,8 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
-  { path: '/media-capabilities', name: 'MediaCapabilities', component: () => import('@/views/public/MediaCapabilitiesView.vue'), meta: { requiresAuth: false, title: '模型能力' } },
-  { path: '/media-docs', name: 'MediaDocs', component: () => import('@/views/public/MediaDocsView.vue'), meta: { requiresAuth: false, title: '音视频接口文档' } },
+  { path: '/media-capabilities', name: 'MediaCapabilities', component: () => import('@/views/public/MediaCapabilitiesView.vue'), meta: { requiresAuth: false, title: '多媒体模型能力' } },
+  { path: '/media-docs', name: 'MediaDocs', component: () => import('@/views/public/MediaDocsView.vue'), meta: { requiresAuth: false, title: '多媒体接口文档' } },
   { path: '/docs/imagevideo', name: 'ImageVideoDocs', component: () => import('@/views/public/ImageVideoDocsView.vue'), meta: { requiresAuth: false, title: '词元互联图片、视频与音乐接口文档' } },
   // ==================== Setup Routes ====================
   {

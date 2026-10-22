@@ -20,13 +20,15 @@ func TestMediaDescriptionsStayWithinGroupAndDisplayDTO(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	h := &ModelPlazaHandler{media: &MediaHandler{db: db}}
-	mock.ExpectQuery("SELECT value FROM settings").WithArgs(mediaDescriptionKey(19)).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(`{"version":2,"models":{"same":"9图 / 720P"}}`))
+	mock.ExpectQuery("SELECT value FROM settings").WithArgs(mediaDescriptionKey(19)).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(`{"version":2,"models":{"same":"9图 / 720P"},"reference_prices":{"same":{"amount":"0.10","unit":"秒"}}}`))
 	mock.ExpectQuery("SELECT value FROM settings").WithArgs(mediaDescriptionKey(20)).WillReturnError(sql.ErrNoRows)
 	groups := []modelPlazaGroup{{ID: 19, MediaModels: []modelPlazaMediaModel{{CatalogEntry: media.CatalogEntry{Model: "same"}}}}, {ID: 20, MediaModels: []modelPlazaMediaModel{{CatalogEntry: media.CatalogEntry{Model: "same"}}}}}
 	require.NoError(t, h.attachDescriptions(context.Background(), groups))
 	require.Equal(t, int64(2), groups[0].DescriptionVersion)
 	require.Equal(t, "9图 / 720P", groups[0].MediaModels[0].DisplayDescription)
 	require.Empty(t, groups[1].MediaModels[0].DisplayDescription)
+	require.Equal(t, &mediaReferencePrice{Amount: "0.10", Unit: "秒"}, groups[0].MediaModels[0].OfficialReferencePrice)
+	require.Nil(t, groups[1].MediaModels[0].OfficialReferencePrice)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -53,11 +55,11 @@ func TestDescriptionEditUsesVersionAndPreservesOtherModels(t *testing.T) {
 			}}}}
 			mock.ExpectBegin()
 			mock.ExpectExec("INSERT INTO settings").WithArgs(mediaDescriptionKey(19)).WillReturnResult(sqlmock.NewResult(0, 0))
-			mock.ExpectQuery("SELECT value FROM settings.*FOR UPDATE").WithArgs(mediaDescriptionKey(19)).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(`{"version":2,"models":{"other":"preserved"}}`))
+			mock.ExpectQuery("SELECT value FROM settings.*FOR UPDATE").WithArgs(mediaDescriptionKey(19)).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(`{"version":2,"models":{"other":"preserved"},"reference_prices":{"same":{"amount":"0","unit":"次"}}}`))
 			if conflict {
 				mock.ExpectRollback()
 			} else {
-				mock.ExpectExec("UPDATE settings").WithArgs(mediaDescriptionKey(19), `{"version":3,"models":{"other":"preserved","same":"new description"}}`).WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectExec("UPDATE settings").WithArgs(mediaDescriptionKey(19), `{"version":3,"models":{"other":"preserved","same":"new description"},"reference_prices":{"same":{"amount":"0","unit":"次"}}}`).WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectCommit()
 			}
 			expected := 2
