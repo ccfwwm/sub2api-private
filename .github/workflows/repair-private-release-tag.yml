@@ -1,13 +1,13 @@
-name: Repair Published Private Image Tag
+name: Repair Published Image Tag
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Published immutable private release
+        description: Published immutable public Release with a public runtime image
         required: true
         type: string
       build_run:
-        description: Successful Private Release candidate whose artifact matches this release
+        description: Successful Sub2API Release candidate whose artifact matches this release
         required: true
         type: string
 permissions:
@@ -35,8 +35,8 @@ jobs:
           set -euo pipefail
           [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]
           [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
-          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
-          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
+          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx false
+          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx public
           mkdir published candidate
           gh release download "$VERSION" --repo ccfwwm/sub2api-private --pattern deployment.json --pattern checksums.txt --pattern '*.sql' --dir published
           (cd published && sha256sum -c checksums.txt)
@@ -50,7 +50,8 @@ jobs:
           m=json.load(open('published/deployment.json'))
           r=json.load(open('build-run.json'))
           validate_manifest(m,sys.argv[1])
-          assert r['name']=='Private Release' and r['status']=='completed' and r['conclusion']=='success'
+          assert r['path']=='.github/workflows/release.yml'
+          assert r['name'] in ('Private Release', 'Sub2API Release') and r['status']=='completed' and r['conclusion']=='success'
           assert r['head_sha']==m['commit']
           PY
           IMAGE=ghcr.io/ccfwwm/sub2api-private

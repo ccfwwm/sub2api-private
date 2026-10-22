@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       build_run:
-        description: 'Private Release run whose exact source passed the test job'
+        description: 'Sub2API Release run whose exact source passed the test job'
         required: true
         type: string
 permissions:
@@ -55,7 +55,9 @@ jobs:
           python3 - "$SHA" <<'PY'
           import json,sys
           run=json.load(open('build-run.json'))
-          assert run['head_sha']==sys.argv[1] and run['name']=='Private Release'
+          assert run['head_sha']==sys.argv[1]
+          assert run['path']=='.github/workflows/release.yml'
+          assert run['name'] in ('Private Release', 'Sub2API Release')
           jobs=json.load(open('build-jobs.json'))['jobs']
           assert any(j['name']=='test' and j['conclusion']=='success' for j in jobs)
           PY
@@ -65,14 +67,21 @@ jobs:
           docker pull "$DOCS_IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SHA"
           test "$(docker image inspect "$DOCS_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SHA"
-          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
-          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
+          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx false
+          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx public
+          gh api users/ccfwwm/packages/container/sub2api-private-docs --jq '.visibility' | grep -qx public
+          docker logout ghcr.io
+          docker pull "$IMAGE"
+          docker pull "$DOCS_IMAGE"
           python3 tooling/deploy/private/smoke_image.py --image "$IMAGE" --version "$VERSION"
           docker run -d --name sub2api-docs-finalize "$DOCS_IMAGE"
+          trap 'docker rm -f sub2api-docs-finalize >/dev/null 2>&1 || true' EXIT
+          DOCS_HEALTHY=false
           for i in $(seq 1 30); do
-            if docker run --rm --network container:sub2api-docs-finalize curlimages/curl:8.12.1 -fsS http://127.0.0.1:8080/health; then break; fi
+            if docker run --rm --network container:sub2api-docs-finalize curlimages/curl:8.12.1 -fsS http://127.0.0.1:8080/health; then DOCS_HEALTHY=true; break; fi
             sleep 2
           done
+          test "$DOCS_HEALTHY" = true
           docker image inspect "$DOCS_IMAGE" > docs-image-inspect.json
           docker rm -f sub2api-docs-finalize >/dev/null
           python3 deploy/private/release_manifest.py --version "$VERSION" --digest "$DIGEST" --docs-digest "${{ inputs.docs_digest }}" --output deployment.json
@@ -94,14 +103,7 @@ jobs:
           cp backend/migrations/24{3,4,5,6,7}_*.sql .
           cp backend/migrations/248_public_imagevideo_docs.sql .
           cp backend/migrations/249_media_protocol_templates.sql .
-          sha256sum 243_media_tasks_and_pricing.sql 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql 247_media_task_list_indexes.sql 248_public_imagevideo_docs.sql 249_media_protocol_templates.sql >> checksums.txt
+          cp backend/migrations/250_migrate_legacy_media_template_refs.sql .
+          sha256sum 243_media_tasks_and_pricing.sql 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql 247_media_task_list_indexes.sql 248_public_imagevideo_docs.sql 249_media_protocol_templates.sql 250_migrate_legacy_media_template_refs.sql >> checksums.txt
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
-          gh release create "$VERSION" deployment.json docs-image-inspect.json checksums.txt 24{3,4,5,6,7,8,9}_*.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $VERSION" --notes "Exact application and independently replaceable docs images validated in a clean runner after source tests, application smoke, backup/restore, cutover, rollback and emergency rescue. Formal releases deploy automatically through the restricted host manager after backup and restore verification."
-
-
-  deploy:
-    needs: finalize
-    uses: ./.github/workflows/deploy-production.yml
-    with:
-      version: ${{ inputs.version }}
-    secrets: inherit
+          gh release create "$VERSION" deployment.json docs-image-inspect.json checksums.txt 24{3,4,5,6,7,8,9}_*.sql 250_migrate_legacy_media_template_refs.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $VERSION" --notes "Public Sub2API release. Application and documentation images support anonymous pulls. Exact images were validated after source tests, application smoke, documentation health, backup/restore, cutover, rollback and emergency rescue. Production deployment is a separate operation through the host manager."

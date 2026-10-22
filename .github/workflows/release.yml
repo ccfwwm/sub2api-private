@@ -1,11 +1,11 @@
-name: Private Release
+name: Sub2API Release
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing stable private tag, e.g. v1.2.15 (publish verified artifacts; no production switch)'
+        description: 'Existing stable tag, e.g. v1.2.19 (publish a public Release; no production switch)'
         required: true
         type: string
       candidate:
@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: private-release-${{ inputs.tag || github.ref_name }}
+  group: sub2api-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   validate:
@@ -197,12 +197,16 @@ jobs:
             sleep 2
           done
           exit 1
-      - name: Verify private repository and image visibility
+      - name: Verify public repository and image visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx true
-          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx private
+          gh api repos/ccfwwm/sub2api-private --jq '.private' | grep -qx false
+          gh api users/ccfwwm/packages/container/sub2api-private --jq '.visibility' | grep -qx public
+          gh api users/ccfwwm/packages/container/sub2api-private-docs --jq '.visibility' | grep -qx public
+          docker logout ghcr.io
+          docker pull ghcr.io/ccfwwm/sub2api-private@${{ steps.build.outputs.digest }}
+          docker pull ghcr.io/ccfwwm/sub2api-private-docs@${{ steps.build-docs.outputs.digest }}
       - name: Publish validated release inventory
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -242,7 +246,7 @@ jobs:
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API Private $TAG" --notes "Media platform imagevideo integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Validated application and documentation images; production deployment uses a separately authorized restricted host manager with backup, isolated restore and request draining. Models support direct enablement; real-channel testing is recorded separately. Publishing this release does not switch production."
+            gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $TAG" --notes "Public Sub2API release. Media platform imagevideo is integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Application and documentation images are validated; production deployment uses the restricted host manager with backup, isolated restore and request draining. Publishing this release does not switch production."
           fi
       - uses: actions/upload-artifact@v7
         with:
