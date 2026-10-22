@@ -1,0 +1,194 @@
+{
+  "version": "v1.3.1",
+  "commit": "cbcb94d2d0bd0eafe16e97a05a60e5bc4aeb7cad",
+  "checked_at": "2026-10-22T19:37:31.962173+00:00",
+  "application_started_at": "2026-10-22T19:35:59.753616775Z",
+  "job_id": "77bbb9aa1ff4499ea632d1ca05782951",
+  "job_status": "succeeded",
+  "backup_id": "91a5959c32734cbbab85af385210fe48",
+  "cutover_mode": "immediate",
+  "app_digest": "sha256:bdb5ce42e69400aaa481ab2098a9603e628a80c80d6b57950abab3da0525bee0",
+  "docs_digest": "sha256:fb19a0317f695dee06a3f30d75fb6dfed9acd69f8338a48315e99a2b0c3574ac",
+  "application_health": "healthy",
+  "postgres_and_redis_unchanged": true,
+  "new_database_migrations": false,
+  "public_endpoints": [
+    {
+      "base": "http://127.0.0.1:8081",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.1",
+      "/media-capabilities": 200,
+      "/media-docs": 200,
+      "/media-tasks": 200,
+      "/docs/imagevideo": 200,
+      "public_catalog": 200,
+      "groups": 1,
+      "models": 15,
+      "unauthenticated_admin": 401
+    },
+    {
+      "base": "https://code.aicodeme.xyz",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.1",
+      "/media-capabilities": 200,
+      "/media-docs": 200,
+      "/media-tasks": 200,
+      "/docs/imagevideo": 200,
+      "docs_x_frame_options": "SAMEORIGIN",
+      "docs_same_origin_embedding": true,
+      "public_catalog": 200,
+      "groups": 1,
+      "models": 15,
+      "unauthenticated_admin": 401
+    },
+    {
+      "base": "https://code.aicodeme.cn",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.1",
+      "/media-capabilities": 200,
+      "/media-docs": 200,
+      "/media-tasks": 200,
+      "/docs/imagevideo": 200,
+      "docs_x_frame_options": "SAMEORIGIN",
+      "docs_same_origin_embedding": true,
+      "public_catalog": 200,
+      "groups": 1,
+      "models": 15,
+      "unauthenticated_admin": 401
+    },
+    {
+      "base": "https://hkcode.aicodeme.xyz",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.1",
+      "/media-capabilities": 200,
+      "/media-docs": 200,
+      "/media-tasks": 200,
+      "/docs/imagevideo": 200,
+      "docs_x_frame_options": "DENY",
+      "docs_same_origin_embedding": false,
+      "known_hk_edge_header_issue": true,
+      "public_catalog": 200,
+      "groups": 1,
+      "models": 15,
+      "unauthenticated_admin": 401
+    }
+  ],
+  "validation": {
+    "release_workflow_run": 39837079900,
+    "release_url": "https://github.com/ccfwwm/sub2api-private/releases/tag/v1.3.1",
+    "deployment_used_verified_digest": true,
+    "production_backup_and_isolated_restore_rehearsal": "passed",
+    "workflow_conclusion": "success",
+    "workflow_jobs": {
+      "validate": "success",
+      "test": "success",
+      "image": "success"
+    },
+    "release_frontend_test_files": 40,
+    "release_frontend_tests_passed": 611,
+    "frontend_lint_typecheck_build": "passed",
+    "backend_unit_and_integration": "passed",
+    "specification_and_public_clients": "passed",
+    "deployment_tests_passed": 67,
+    "deployment_tests_skipped": 1,
+    "golangci_lint_issues": 0,
+    "go_vulnerability_gate": "passed",
+    "frontend_production_dependency_audit": "passed",
+    "app_image_isolated_smoke": "passed",
+    "docs_image_health": "passed",
+    "anonymous_registry_digest_pull": "passed",
+    "release_rehearsals": "passed"
+  },
+  "new_paid_generation_submissions": 0,
+  "evidence_recorded_at": "2026-10-22T19:45:27.009385+00:00",
+  "reference_price_acceptance": {
+    "version": "v1.3.1",
+    "group_id": 66,
+    "model": "gemini-omni-1.1-flash-10s",
+    "reference_price_save": 200,
+    "stale_update": 409,
+    "price_readback_and_description_preserved": true,
+    "description_save_preserves_reference_price": true,
+    "reference_price_clear": true,
+    "restored_original_reference_price": true,
+    "runtime_config_and_retail_rules_unchanged": true,
+    "anonymous_price_write": 401
+  },
+  "ordinary_user_permissions": {
+    "version": "v1.3.1",
+    "ordinary_user_price_write": 403,
+    "ordinary_user_auth": 200
+  },
+  "browser_acceptance": {
+    "administrator": {
+      "host": "code.aicodeme.xyz",
+      "displayed_version": "1.3.1",
+      "capabilities_title": "多媒体模型能力",
+      "capabilities_duplicate_inner_heading_removed": true,
+      "reference_price_editor_opened": true,
+      "reference_price_editor_cancelled_after_screenshot": true,
+      "sidebar_model_plaza_opened_with_sidebar_preserved": true,
+      "docs_title": "多媒体接口文档",
+      "docs_outer_h1_count": 1,
+      "docs_embedded_protocol_navigation_and_parameters_rendered": true,
+      "docs_loading_indicator_visible_after_load": false,
+      "docs_iframe_height_css_pixels": 948,
+      "docs_browser": "Chrome",
+      "docs_final_verification": "Fresh authenticated page rendered successfully; an existing tab initially remained at its loading indicator."
+    },
+    "ordinary_user": {
+      "host": "hkcode.aicodeme.xyz",
+      "capabilities_rendered": true,
+      "reference_price_edit_buttons": 0,
+      "new_titles_and_sidebar_visible": true
+    },
+    "anonymous": {
+      "browser": "Codex in-app browser",
+      "docs_embedded_content_rendered_hosts": [
+        "code.aicodeme.xyz",
+        "hkcode.aicodeme.xyz"
+      ],
+      "duplicate_inner_page_heading_removed": true,
+      "sidebar_labels": [
+        "多媒体模型能力",
+        "多媒体接口文档",
+        "模型广场"
+      ]
+    },
+    "screenshots_local": [
+      "output/media-v131/production-admin-reference-price.jpg",
+      "output/media-v131/production-admin-docs.jpg",
+      "output/media-v131/production-public-docs.jpg",
+      "output/media-v131/production-hk-docs.jpg"
+    ]
+  },
+  "response_header_hygiene": {
+    "host": "hkcode.aicodeme.xyz",
+    "duplicate_x_frame_options": [
+      "SAMEORIGIN",
+      "DENY"
+    ],
+    "content_security_policy_frame_ancestors": "'self'",
+    "strict_header_check_passed": false,
+    "actual_embedded_browser_check_passed": true,
+    "edge_security_configuration_changed": false,
+    "interpretation": "The strict header check is distinct from the actual successful browser embedding check."
+  },
+  "prior_failed_release_attempts": [
+    {
+      "run_id": 39832656487,
+      "reason": "DOMPurify production dependency security audit",
+      "resolution": "Upgraded DOMPurify and transitive override to 3.4.17; no security audit exemptions added."
+    },
+    {
+      "run_id": 39833891879,
+      "reason": "Release manifest rejected stale channel verification record",
+      "resolution": "Repeated read-only /v1/models check (200, 15 models, no paid generation) and updated the verification record before the successful release."
+    }
+  ],
+  "immutable_release_preserved_during_evidence_sync": true
+}
