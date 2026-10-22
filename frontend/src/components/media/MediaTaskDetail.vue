@@ -15,12 +15,17 @@ const ledgerUnits = (v: string | undefined) => { const [whole = '0', fraction = 
 const netCharge = (task: MediaTaskRecord['task']) => { const units = ledgerUnits(task.billing.accepted) + ledgerUnits(task.billing.settled) - ledgerUnits(task.billing.refunded); return `${units / 100000000n}.${String(units % 100000000n).padStart(8, '0')}` }
 const review = ref<MediaTaskReview | null>(null), loading = ref(false)
 const current = computed(() => review.value?.record || props.record)
+const copied = ref('')
+async function copyEvidence(id: string, value: unknown) {
+  try { await navigator.clipboard.writeText(JSON.stringify(value, null, 2)); copied.value = id }
+  catch { error.value = tr('复制失败，请在下方选中内容手动复制。','Copy failed. Select the content below to copy it manually.') }
+}
 const access = ref<Record<string, {url: string; expires_at: number}>>({})
 let sequence = 0
 onBeforeUnmount(() => { sequence++ })
 watch(() => props.record, async () => {
   const generation = ++sequence
-  review.value = null; access.value = {}; error.value = ''; amount.value = ''; reason.value = ''; decision.value = 'failed'; upstream.value = ''; action.value = 'review'; disposition.value = 'refund'; operationKey.value = crypto.randomUUID(); busy.value = false; loading.value = false
+  review.value = null; access.value = {}; copied.value = ''; error.value = ''; amount.value = ''; reason.value = ''; decision.value = 'failed'; upstream.value = ''; action.value = 'review'; disposition.value = 'refund'; operationKey.value = crypto.randomUUID(); busy.value = false; loading.value = false
   if (!props.admin || !props.record) return
   loading.value = true
   try { const result = await mediaAPI.detail(props.record.task.id); if (generation === sequence) review.value = result }
@@ -116,7 +121,14 @@ async function run(record: MediaTaskRecord) {
           </template>
         </div><p v-if="!admin" class="text-xs text-gray-500">{{ tr('下载需携带创建任务时的 API Key','Download with the API key that created this task') }}</p></div></div>
         <p v-if="admin && review" data-testid="submission-stage">{{ tr('实际上游提交','Upstream submission') }}: {{ review.submission?.stage === 'accepted' ? tr('上游已受理','Accepted') : review.submission?.stage === 'attempted' ? tr('已尝试发送','Attempted') : review.submission?.stage === 'prepared' ? tr('准备发送','Prepared') : tr('未记录','Not recorded') }}<span v-if="review.submission"> · {{ JSON.stringify(review.submission.references) }}</span></p>
-        <details v-if="admin && review" class="rounded-lg border p-3 dark:border-dark-600"><summary>{{ tr('请求与响应摘要（已脱敏）','Sanitized request and response') }}</summary><pre class="mt-2 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify({incoming_request: review.incoming_request, normalized_request: review.request, submission: review.submission ?? "未记录", response: review.response}, null, 2) }}</pre></details>
+        <section v-if="admin && review" class="space-y-3 rounded-lg border p-3 dark:border-dark-600" aria-label="管理员请求与响应证据">
+          <div><h4 class="font-medium">{{ tr('请求与响应证据','Request and response evidence') }}</h4><p class="mt-1 text-xs text-gray-500">{{ tr('按阶段分开显示：用户入站、归一化参数、模板生成的准备请求、实际发给上游的请求，以及上游响应。媒体正文和带签名的素材 URL 对管理员完整保留，可复制复测；账号认证密钥和本地文件路径仍会保护。','Stages are separated so the administrator can reproduce the call. Media payloads and signed media URLs remain available for reproduction; account credentials and local paths stay protected.') }}</p></div>
+          <details open class="rounded border p-3"><summary class="cursor-pointer font-medium">{{ tr('1. 用户入站请求','1. Incoming request') }}</summary><button type="button" class="btn btn-secondary mt-2" data-testid="copy-incoming" @click="copyEvidence('incoming', review.incoming_request ?? {})">{{ copied === 'incoming' ? tr('已复制','Copied') : tr('复制 JSON','Copy JSON') }}</button><pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify(review.incoming_request ?? {}, null, 2) }}</pre></details>
+          <details class="rounded border p-3"><summary class="cursor-pointer font-medium">{{ tr('2. 归一化与计费前参数','2. Normalized parameters') }}</summary><pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify(review.normalized_request ?? review.request ?? {}, null, 2) }}</pre></details>
+          <details class="rounded border p-3"><summary class="cursor-pointer font-medium">{{ tr('3. 模板准备请求','3. Template prepared request') }}</summary><pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{{ JSON.stringify(review.prepared_request ?? {}, null, 2) }}</pre></details>
+          <details class="rounded border p-3"><summary class="cursor-pointer font-medium">{{ tr('4. 实际上游请求','4. Actual upstream request') }}</summary><button type="button" class="btn btn-secondary mt-2" data-testid="copy-outgoing" @click="copyEvidence('outgoing', review.upstream_request?.body ?? review.submission?.request ?? {})">{{ copied === 'outgoing' ? tr('已复制','Copied') : tr('复制 JSON','Copy JSON') }}</button><div class="mt-2 text-xs"><p>{{ review.upstream_request?.method || review.submission?.method || '—' }} {{ review.upstream_request?.path || review.submission?.path || '—' }} · {{ review.upstream_request?.encoding || review.submission?.encoding || '—' }}</p><pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all">{{ JSON.stringify({ body: review.upstream_request?.body ?? review.submission?.request ?? {}, files: review.upstream_request?.files ?? review.submission?.files ?? [] }, null, 2) }}</pre></div></details>
+          <details class="rounded border p-3"><summary class="cursor-pointer font-medium">{{ tr('5. 上游提交与响应','5. Upstream submission and response') }}</summary><button type="button" class="btn btn-secondary mt-2" data-testid="copy-response" @click="copyEvidence('response', review.submission?.response ?? review.upstream_response ?? review.response ?? {})">{{ copied === 'response' ? tr('已复制','Copied') : tr('复制 JSON','Copy JSON') }}</button><div class="mt-2 text-xs"><p>{{ tr('提交状态','Submission stage') }}: {{ review.submission?.stage || tr('未记录','Not recorded') }} · HTTP {{ review.submission?.response_status_code || '—' }} · {{ review.submission?.response_content_type || '—' }}</p><pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all">{{ JSON.stringify(review.submission?.response ?? review.upstream_response ?? review.response ?? {}, null, 2) }}</pre></div></details>
+        </section>
       </div>
   </BaseDialog>
 </template>

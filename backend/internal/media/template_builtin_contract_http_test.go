@@ -45,6 +45,7 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 	first := map[string]any{"url": imageURL, "role": "first_frame", "weight": float64(0)}
 	last := map[string]any{"url": imageURL, "role": "last_frame"}
 	frameImages := []any{first, last}
+	referenceImage := map[string]any{"url": imageURL, "role": "reference"}
 	type contract struct {
 		id, operation, mediaType, submit, query, encoding string
 		refs, expected                                    map[string]any
@@ -55,6 +56,7 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 	}
 	cases := []contract{
 		{id: "video-arrays", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": images, "videos": videos, "audios": audios}, expected: map[string]any{"images": images, "videos": videos, "audios": audios, "seconds": float64(5), "ratio": "16:9"}},
+		{id: "v6k-video-reference-string", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": []any{referenceImage}}, expected: map[string]any{"images": []any{imageURL}}},
 		{id: "video-reference-arrays", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": images, "videos": videos, "audios": audios}, expected: map[string]any{"reference_images": images, "reference_videos": videos, "reference_audios": audios, "duration": float64(5), "aspect_ratio": "16:9"}, absent: []string{"images", "videos", "audios", "seconds", "ratio"}},
 		{id: "video-single-image", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": []any{imageURL}}, expected: map[string]any{"image": map[string]any{"url": imageURL}}, absent: []string{"images"}},
 		{id: "video-frame-roles", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": frameImages}, expected: map[string]any{"images": frameImages}},
@@ -245,7 +247,7 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 				sum := sha256.Sum256(output)
 				require.Equal(t, hex.EncodeToString(sum[:]), hash)
 				downloadPath := "/generated/contract"
-				if strings.HasPrefix(tc.id, "video-") {
+				if strings.HasPrefix(tc.id, "video-") || tc.id == "v6k-video-reference-string" {
 					downloadPath = "/v1/videos/job/a/content"
 				}
 				expectedCalls = append(expectedCalls, "GET "+downloadPath)

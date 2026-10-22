@@ -40,4 +40,31 @@ describe('Submission evidence', () => {
   else expect(w.get('[data-testid="submission-stage"]').text()).not.toContain('上游已受理')
   w.unmount()
  })
+
+ it('shows incoming, normalized, prepared, upstream request and response separately with media payloads intact', async () => {
+  api.detail.mockResolvedValueOnce({
+   record, request: { images: ['legacy'] }, response: { status: 'in_progress' },
+   incoming_request: { images: ['https://media.example.org/ref.png?variant=large'] },
+   normalized_request: { images: [{ url: 'https://media.example.org/ref.png?variant=large', role: 'reference' }] },
+   prepared_request: { method: 'POST', path: '/v1/videos', body: { images: ['https://media.example.org/ref.png?variant=large'] } },
+   upstream_request: { method: 'POST', path: '/v1/videos', encoding: 'json', body: { images: ['https://media.example.org/ref.png?variant=large'] } },
+   submission: { stage: 'attempted', response_status_code: 400, response_content_type: 'application/json', response: { error: 'invalid_request' }, references: { image: 1 }, request: {} }
+  })
+  const w=create();await flushPromises()
+  expect(w.text()).toContain('1. 用户入站请求')
+  expect(w.text()).toContain('2. 归一化与计费前参数')
+  expect(w.text()).toContain('3. 模板准备请求')
+  expect(w.text()).toContain('4. 实际上游请求')
+  expect(w.text()).toContain('5. 上游提交与响应')
+  expect(w.text()).toContain('HTTP 400')
+  expect(w.text()).toContain('variant=large')
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  await w.get('[data-testid="copy-outgoing"]').trigger('click'); await flushPromises()
+  expect(JSON.parse(writeText.mock.calls[0]![0])).toEqual({ images: ['https://media.example.org/ref.png?variant=large'] })
+  await w.get('[data-testid="copy-response"]').trigger('click'); await flushPromises()
+  expect(JSON.parse(writeText.mock.calls[1]![0])).toEqual({ error: 'invalid_request' })
+  vi.unstubAllGlobals()
+  w.unmount()
+ })
 })

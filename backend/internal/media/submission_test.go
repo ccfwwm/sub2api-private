@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -72,6 +73,47 @@ func TestSubmissionReceiptRedactsExtensionsAndDoesNotInventHistory(t *testing.T)
 	require.Nil(t, e.ReadSubmission("mt_history"))
 }
 
+func TestAdminSubmissionReviewKeepsMediaPayloadAndProtectsCredentials(t *testing.T) {
+	const dataURL = "data:image/png;base64,cHJpdmF0ZS1pbmxpbmU="
+	jpegBase64 := base64.StdEncoding.EncodeToString(append([]byte{0xff, 0xd8, 0xff, 0xdb}, make([]byte, 80)...))
+	input := map[string]any{
+		"images":   []any{map[string]any{"url": "https://media.example.org/ref.png?variant=full&signature=signed-secret", "role": "reference"}},
+		"b64_json": strings.Repeat("A", 256),
+		"jpeg":     jpegBase64,
+		"api_key":  "provider-secret",
+		"prompt":   dataURL + " Bearer provider-secret sk-inline-secret",
+	}
+	clean := SafeAdminReviewValue(input, []string{"provider-secret"}, 0)
+	raw, err := json.Marshal(clean)
+	require.NoError(t, err)
+	text := string(raw)
+	require.Contains(t, text, dataURL)
+	require.Contains(t, text, jpegBase64)
+	require.Contains(t, text, strings.Repeat("A", 256))
+	require.Contains(t, text, "variant=full")
+	require.Contains(t, text, "role")
+	require.Contains(t, text, "signature=signed-secret")
+	require.NotContains(t, text, "provider-secret")
+	require.NotContains(t, text, "sk-inline-secret")
+	require.Contains(t, text, "[redacted]")
+
+	ordinary, err := json.Marshal(SafeReviewValue(input, []string{"provider-secret"}, 0))
+	require.NoError(t, err)
+	require.NotContains(t, string(ordinary), dataURL)
+}
+
+func TestPreviewSubmissionReceiptKeepsPayloadRedacted(t *testing.T) {
+	const dataURL = "data:image/png;base64,cHJpdmF0ZS1pbmxpbmU="
+	input := map[string]any{"images": []any{dataURL}}
+	raw, err := json.Marshal(input)
+	require.NoError(t, err)
+	receipt := NewSubmission("/v1/videos", raw, input, map[string][]any{"image": {dataURL}}, "")
+	encoded, err := json.Marshal(receipt)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), dataURL)
+	require.Contains(t, string(encoded), "encoded or long content omitted")
+}
+
 func TestPublicTaskProjectionOmitsSubmissionAndPrivateRuntimeData(t *testing.T) {
 	const rawURL = "https://media.example.com/reference.png?signature=private"
 	const encoded = "data:image/png;base64,cHJpdmF0ZS1pbmxpbmU="
@@ -125,7 +167,7 @@ func TestSubmissionReceiptSurvivesEngineRestartWithoutLeakingRawInput(t *testing
 	raw, _ := json.Marshal(body)
 	images, ok := body["images"].([]any)
 	require.True(t, ok)
-	receipt := NewSubmission("/v1/videos", raw, body, map[string][]any{"image": images}, "private")
+	receipt := NewAdminSubmission("/v1/videos", raw, body, map[string][]any{"image": images}, "private")
 	receipt.Stage = "attempted"
 	path, err := blobs.WriteJSON("mt_receipt_restart", "submission", receipt)
 	require.NoError(t, err)
@@ -140,6 +182,9 @@ func TestSubmissionReceiptSurvivesEngineRestartWithoutLeakingRawInput(t *testing
 	require.Equal(t, "attempted", got.Stage)
 	require.Equal(t, receipt.RequestHash, got.RequestHash)
 	require.Equal(t, 1, got.References["image"])
+	requestJSON, err := json.Marshal(got.Request)
+	require.NoError(t, err)
+	require.Contains(t, string(requestJSON), "a.png")
 	require.Nil(t, (&Engine{Blobs: restarted}).ReadSubmission("mt_unrecorded_history"))
 }
 
@@ -149,7 +194,7 @@ func TestSubmissionNeverConfusesAttemptWithAcceptance(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(status)
-				_, _ = w.Write([]byte(`{"error":{"code":"REF_UNSUPPORTED","message":"Bearer fixture-key https://media.example.com/error?secret=private"}}`))
+				_, _ = w.Write([]byte(`{"error":{"code":"REF_UNSUPPORTED","message":"Bearer fixture-key https://media.example.com/error?secret=fixture-key"}}`))
 			}))
 			defer server.Close()
 			cap := videoFormatCapability("v6k_url")
@@ -162,7 +207,7 @@ func TestSubmissionNeverConfusesAttemptWithAcceptance(t *testing.T) {
 			require.Equal(t, "attempted", receipt.Stage)
 			raw, _ := json.Marshal(receipt)
 			require.NotContains(t, string(raw), "fixture-key")
-			require.NotContains(t, string(raw), "secret=private")
+			require.Contains(t, string(raw), "secret=[credential")
 			if status == 422 {
 				require.Contains(t, result.Diagnostic, "REF_UNSUPPORTED")
 				require.NotContains(t, result.Diagnostic, "fixture-key")

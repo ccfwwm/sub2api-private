@@ -86,12 +86,20 @@ func (a *Adapter) submitTemplate(ctx context.Context, cap Capability, req Reques
 	}
 	body = bytes.NewReader(raw)
 	if observe := account.ObserveSubmission; observe != nil {
-		receipt := NewSubmission(wire.Path, raw, wire.Body, req.MaterialRefs, account.Key)
+		receipt := NewAdminSubmissionWithFiles(wire.Path, raw, wire.Body, wire.Files, req.MaterialRefs, account.Key)
+		receipt.Method = wire.Method
+		receipt.Encoding = wire.Encoding
 		if err = observe(receipt); err != nil {
 			return UpstreamResult{}, err
 		}
 		account.ObserveSubmission = func(update Submission) error {
 			receipt.Stage = update.Stage
+			if update.ResponseStatusCode != 0 {
+				receipt.ResponseStatusCode = update.ResponseStatusCode
+			}
+			if update.ResponseContentType != "" {
+				receipt.ResponseContentType = update.ResponseContentType
+			}
 			if update.Response != nil {
 				receipt.Response = update.Response
 			}

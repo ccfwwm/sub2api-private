@@ -68,8 +68,10 @@ func TestV6KBase64ReferencesReachUpstreamWithoutCatalogPermission(t *testing.T) 
 			require.Equal(t, 1, receipt.References["video"])
 			raw, err := json.Marshal(receipt)
 			require.NoError(t, err)
-			require.NotContains(t, string(raw), image)
-			require.NotContains(t, string(raw), video)
+			require.Contains(t, string(raw), image)
+			// Non-MP4 fixture bytes are sniffed as text/plain; the receipt must
+			// preserve their payload without inventing a media MIME type.
+			require.Contains(t, string(raw), strings.SplitN(video, ",", 2)[1])
 		})
 	}
 }

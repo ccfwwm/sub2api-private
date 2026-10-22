@@ -9,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
@@ -36,8 +35,10 @@ func requireMediaAdmin(c *gin.Context) bool {
 	return true
 }
 
-// Provider extension field names remain visible, with explicit redaction markers.
-func mediaReviewValue(value any, depth int) any { return media.SafeReviewValue(value, nil, depth) }
+// Provider extension field names and media payloads remain visible to an
+// authenticated administrator. Account credentials remain redacted while
+// signed media URLs remain reproducible.
+func mediaReviewValue(value any, depth int) any { return media.SafeAdminReviewValue(value, nil, depth) }
 
 func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	t, err := h.Engine.Store.GetTask(c.Request.Context(), c.Param("id"))
@@ -48,17 +49,37 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := gin.H{"record": rows[0], "request": map[string]any{}, "response": map[string]any{}}
+	result := gin.H{
+		"record":             rows[0],
+		"incoming_request":   map[string]any{},
+		"normalized_request": map[string]any{},
+		"prepared_request":   nil,
+		"request":            map[string]any{}, // backwards-compatible alias for normalized_request
+		"response":           map[string]any{},
+	}
 	var request media.Request
 	path, _ := t.Snapshot.Request.Parameters["request_blob"].(string)
 	if path != "" && h.Engine.Blobs.ReadJSON(path, &request) == nil {
-		result["request"] = mediaReviewValue(request.Parameters, 0)
 		result["incoming_request"] = mediaReviewValue(request.Incoming, 0)
+		result["normalized_request"] = mediaReviewValue(request.Parameters, 0)
+		result["request"] = result["normalized_request"]
+		if request.Wire != nil {
+			result["prepared_request"] = mediaReviewValue(request.Wire, 0)
+		}
 	}
 	result["submission"] = nil
 	receipt := h.Engine.ReadSubmission(t.ID)
 	if receipt != nil {
 		result["submission"] = receipt
+		result["upstream_request"] = gin.H{
+			"method":       receipt.Method,
+			"path":         receipt.Path,
+			"encoding":     receipt.Encoding,
+			"body":         receipt.Request,
+			"files":        receipt.Files,
+			"references":   receipt.References,
+			"request_hash": receipt.RequestHash,
+		}
 	}
 	result["submission_status"] = "not_recorded"
 	if receipt != nil {
@@ -67,6 +88,7 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 	var upstream map[string]any
 	if t.ResultPath != "" && h.Engine.Blobs.ReadJSON(t.ResultPath, &upstream) == nil {
 		result["response"] = mediaReviewValue(upstream, 0)
+		result["upstream_response"] = result["response"]
 	}
 	// Also redact known credentials echoed inside otherwise permitted text fields.
 	secrets := []string{}
@@ -75,19 +97,8 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 		return nil, err
 	}
 	secrets = append(secrets, key, providerKey)
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	for _, secret := range secrets {
-		if secret == "" {
-			continue
-		}
-		encoded, _ := json.Marshal(secret)
-		raw = []byte(strings.ReplaceAll(string(raw), string(encoded[1:len(encoded)-1]), "[credential omitted]"))
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, err
+	for field, value := range result {
+		result[field] = media.SafeAdminReviewValue(value, secrets, 0)
 	}
 	return result, nil
 }

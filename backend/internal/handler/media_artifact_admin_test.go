@@ -109,7 +109,7 @@ func TestArtifactRangeHeadAndGone(t *testing.T) {
 
 func TestMediaReviewSummaryDropsSecretsAndInternalLocations(t *testing.T) {
 	raw := map[string]any{"model": "test", "api_key": "secret", "password": "secret", "images": []any{"data:image/png;base64,AAAA", "/app/private/file.png", "https://user:secret@example.com/a.png?token=secret"}, "usage": map[string]any{"input_tokens": 12, "credential": "secret"}}
-	clean := mediaReviewValue(raw, 0)
+	clean := media.SafeReviewValue(raw, nil, 0)
 	encoded, err := json.Marshal(clean)
 	require.NoError(t, err)
 	require.NotContains(t, string(encoded), "secret")
@@ -120,4 +120,22 @@ func TestMediaReviewSummaryDropsSecretsAndInternalLocations(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	(&MediaHandler{}).AdminTaskExport(c)
 	require.Equal(t, 403, w.Code)
+}
+
+func TestMediaAdminReviewKeepsMediaButHidesCredentialsAndLocalPaths(t *testing.T) {
+	raw := map[string]any{
+		"images":   []any{"data:image/png;base64,AAAA", "/app/private/reference.png", "https://media.example.org/ref.png?signature=signed-reference"},
+		"api_key":  "provider-secret",
+		"response": "Bearer provider-secret",
+		"usage":    map[string]any{"input_tokens": 12, "output_tokens": 8},
+	}
+	clean := mediaReviewValue(raw, 0)
+	encoded, err := json.Marshal(clean)
+	require.NoError(t, err)
+	body := string(encoded)
+	require.Contains(t, body, "data:image/png;base64,AAAA")
+	require.NotContains(t, body, "/app/private")
+	require.NotContains(t, body, "provider-secret")
+	require.Contains(t, body, "signature=signed-reference")
+	require.Contains(t, body, `"input_tokens":12`)
 }

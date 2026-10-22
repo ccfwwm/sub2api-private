@@ -44,14 +44,15 @@ type ParameterRule struct {
 	Type       string         `json:"type,omitempty"`
 }
 type MaterialRule struct {
-	Kind     string         `json:"kind"`
-	Target   string         `json:"target"`
-	Encoding string         `json:"encoding"` // preserve, data_url, base64
-	Shape    string         `json:"shape"`    // preserve, string, url, b64_json, data_mime, content, parts
-	Single   bool           `json:"single,omitempty"`
-	MaxCount int            `json:"max_count,omitempty"`
-	Role     string         `json:"role,omitempty"`
-	Wrapper  map[string]any `json:"wrapper,omitempty"`
+	Kind           string           `json:"kind"`
+	Target         string           `json:"target"`
+	Encoding       string           `json:"encoding"` // preserve, data_url, base64
+	Shape          string           `json:"shape"`    // preserve, string, url, b64_json, data_mime, content, parts
+	Single         bool             `json:"single,omitempty"`
+	MaxCount       int              `json:"max_count,omitempty"`
+	Role           string           `json:"role,omitempty"`
+	DropProperties map[string][]any `json:"drop_properties,omitempty"`
+	Wrapper        map[string]any   `json:"wrapper,omitempty"`
 }
 type TemplateResponse struct {
 	PCMToWAV *PCMToWAVConfig      `json:"pcm_to_wav,omitempty"`
@@ -218,6 +219,21 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 	for _, m := range t.Materials {
 		if !contains([]string{"image", "video", "audio", "mask"}, m.Kind) || !configPath.MatchString(m.Target) || strings.Contains(m.Target, "[]") || !contains([]string{"preserve", "data_url", "base64"}, m.Encoding) || !contains([]string{"preserve", "string", "url", "b64_json", "data_mime", "content", "parts"}, m.Shape) || m.MaxCount < 0 {
 			return fail(400, "invalid_material_rule", "Invalid material mapping")
+		}
+		if len(m.DropProperties) > 32 {
+			return fail(400, "invalid_material_rule", "Too many material properties to filter")
+		}
+		for property, values := range m.DropProperties {
+			if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]{0,63}$`).MatchString(property) || contains([]string{"url", "b64_json"}, property) || len(values) == 0 || len(values) > 32 {
+				return fail(400, "invalid_material_rule", "Material property filters require a safe property name and exact values")
+			}
+			for _, value := range values {
+				switch value.(type) {
+				case string, bool, float64, json.Number, int, int64:
+				default:
+					return fail(400, "invalid_material_rule", "Material property filters only support scalar values")
+				}
+			}
 		}
 		key := m.Kind + ":" + m.Role
 		if targets[key] {
@@ -972,6 +988,20 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			if m.Role != "" && stringValue(props["role"]) != m.Role {
 				continue
 			}
+			filteredProperty := false
+			for property, values := range m.DropProperties {
+				value, exists := props[property]
+				if !exists {
+					continue
+				}
+				for _, match := range values {
+					if reflect.DeepEqual(value, match) {
+						delete(props, property)
+						filteredProperty = true
+						break
+					}
+				}
+			}
 			attributes := cloneObject(props)
 			encoded, mime, e := encodeTemplateMaterial(ctx, client, raw, m.Encoding)
 			if e != nil {
@@ -1013,6 +1043,9 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 					value = props
 				}
 			case "string":
+				if len(props) > 0 && !filteredProperty {
+					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "String material mapping requires an explicit matching property filter before dropping reference attributes")
+				}
 				if len(props) > 0 {
 					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "String material mapping would lose role or attributes")
 				}

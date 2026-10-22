@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
 import MediaParameterRulesEditor from './MediaParameterRulesEditor.vue'
+import MediaMaterialsEditor from './MediaMaterialsEditor.vue'
+import MediaResponseEditor from './MediaResponseEditor.vue'
 import { mediaProtocolsAPI as api, type ProtocolKind } from '@/api/media-protocols'
 import type { MediaConfigRecord } from '@/api/media'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
@@ -17,11 +19,14 @@ const visibleRows = computed(() => rows.value.filter(row => {
   return (!query || `${row.id} ${row.config.name || ''}`.toLowerCase().includes(query)) && (!mediaFilter.value || (row.config.media_types as string[] | undefined)?.includes(mediaFilter.value)) && (!statusFilter.value || row.status === statusFilter.value)
 }))
 const advancedFields = [
-  { path: 'materials', label: '素材编码与映射' }, { path: 'response', label: '响应、状态与成品解析' },
-  { path: 'query', label: '任务查询接口' }, { path: 'discovery', label: '模型发现接口' },
-  { path: 'model_ids', label: '模型 ID 路径' }, { path: 'artifact_list', label: '成品列表' },
-  { path: 'download_auth', label: '成品下载认证' }, { path: 'recover', label: '任务恢复' },
-  { path: 'body', label: '请求体映射' }, { path: 'operation_submit', label: '操作专属提交接口' }
+  { path: 'query', label: '任务查询接口', hint: '异步模式必填。配置只读轮询的 GET 方法和相对路径；{task_id} 会替换成上游返回的任务 ID。' },
+  { path: 'discovery', label: '模型发现接口', hint: '只用于“发现候选模型”，不会启用模型。通常选择 GET /v1/models。' },
+  { path: 'model_ids', label: '模型 ID 提取路径', hint: '填写模型列表响应里模型 ID 的 JSON 路径，例如 data[].id。' },
+  { path: 'artifact_list', label: '单独的成品列表接口', hint: '仅当任务状态响应不包含成品、而上游另有只读 GET 列表接口时配置。' },
+  { path: 'download_auth', label: '成品下载认证', hint: '只有下载成品需要与任务查询不同的认证时配置；密钥始终引用账号凭据。' },
+  { path: 'recover', label: '超时后的只读任务恢复', hint: '按幂等 ID 查询是否已受理；这里不能配置 POST，也不会自动重提生成。' },
+  { path: 'body', label: '请求体映射', hint: '将统一参数重组为上游请求体；普通字段直接保留，特殊字段用 $input 或 $variable 引用。' },
+  { path: 'operation_submit', label: '操作专属提交接口', hint: '仅当同一模板中的不同操作使用不同提交路径或编码时填写。' }
 ]
 function toggleOption(path: string, option: string, checked: boolean) {
   const current = (field(path) as string[] | undefined) || []
@@ -175,7 +180,9 @@ onMounted(() => action(refresh))
             <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <label class="text-sm">模型写入目标（- 为仅路径）<input class="input w-full" :value="field('model_target')" @change="set('model_target', value($event))" /></label>
             <label class="text-sm">固定内容接口<input class="input w-full" :value="field('content_path')" @change="set('content_path', value($event))" /></label>
-            <details class="border-t pt-4 sm:col-span-2 dark:border-dark-600"><summary class="cursor-pointer font-semibold">素材映射、响应解析与高级配置</summary><div class="mt-4 grid gap-4 sm:grid-cols-2"><label v-for="item in advancedFields" :key="item.path" class="min-w-0 text-sm">{{ item.label }}<span class="ml-2 text-xs text-gray-400">{{ item.path }}</span><textarea class="input mt-1 min-h-36 w-full font-mono text-xs" :value="JSON.stringify(field(item.path) ?? null, null, 2)" @change="jsonField(item.path, $event)" /></label></div></details>
+            <details class="border-t pt-4 sm:col-span-2 dark:border-dark-600"><summary class="cursor-pointer font-semibold">素材字段映射</summary><div class="mt-3"><MediaMaterialsEditor :model-value="(field('materials') as Record<string, unknown>[]) || []" @update:model-value="set('materials', $event)" /></div></details>
+            <details class="border-t pt-4 sm:col-span-2 dark:border-dark-600"><summary class="cursor-pointer font-semibold">任务响应解析</summary><div class="mt-3"><MediaResponseEditor :model-value="(field('response') as Record<string, unknown>) || {}" @update:model-value="set('response', $event)" /></div></details>
+            <details class="border-t pt-4 sm:col-span-2 dark:border-dark-600"><summary class="cursor-pointer font-semibold">请求体和其他高级配置</summary><div class="mt-3 grid gap-4 sm:grid-cols-2"><label v-for="item in advancedFields" :key="item.path" class="min-w-0 text-sm">{{ item.label }}<span class="ml-2 text-xs text-gray-400">{{ item.path }}</span><p class="mt-1 text-xs text-gray-500">{{ item.hint }}</p><textarea class="input mt-1 min-h-28 w-full font-mono text-xs" :value="JSON.stringify(field(item.path) ?? null, null, 2)" @change="jsonField(item.path, $event)" /></label></div></details>
           </template>
           <template v-else>
             <label class="text-sm">分组 ID<input type="number" class="input w-full" :value="field('group_id')" @change="set('group_id', Number(value($event)))" /></label>
@@ -187,7 +194,7 @@ onMounted(() => action(refresh))
             <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <p class="text-xs text-gray-500 sm:col-span-2">继承顺序：模板 → 账号模型 → 分组默认 → 分组精确模型 → 分组精确模型与账号。相同选择器冲突时禁止发布。</p>
           </template>
-          <p class="text-xs text-gray-500 sm:col-span-2">表单直接修改完整 JSON 对象；切换模式保留高级字段。服务端以同一版本 schema 校验。模板只引用账号密钥，不能填写真实密钥。</p>
+          <p class="text-xs text-gray-500 sm:col-span-2">建议顺序：先填写提交/查询路径，再设素材目标字段，然后用真实响应样例预览解析；每次发布产生固定新版本，只有明确选择绑定时才会升级绑定。模板只引用账号密钥，不能填写真实密钥。</p>
         </div>
         <textarea v-if="mode === 'json' || !draft" v-model="json" class="input min-h-[460px] w-full font-mono text-xs" aria-label="完整协议配置 JSON" />
         <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(() => save(false), true)">保存草稿</button><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(saveImported, true)">作为新配置导入</button><button class="btn btn-primary" :disabled="busy || !draft" @click="review = true">审阅并发布</button><button v-if="selected" class="btn btn-secondary" :disabled="busy" @click="action(async () => { await api.archive(kind, selected!.id, selected!.version); await refresh() }, true)">归档（保留固定版本）</button></div>

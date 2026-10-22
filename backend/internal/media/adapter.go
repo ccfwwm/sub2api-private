@@ -240,7 +240,12 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 			return UpstreamResult{}, readErr
 		}
 		body = bytes.NewReader(raw)
-		submission := NewSubmission(path, raw, p, req.MaterialRefs, account.Key)
+		submission := NewAdminSubmissionWithFiles(path, raw, p, req.Uploads, req.MaterialRefs, account.Key)
+		submission.Method = http.MethodPost
+		submission.Encoding = "json"
+		if len(req.Uploads) > 0 {
+			submission.Encoding = "multipart"
+		}
 		observe := account.ObserveSubmission
 		var receiptMu sync.Mutex
 		if err := observe(submission); err != nil {
@@ -250,6 +255,12 @@ func (a *Adapter) Submit(ctx context.Context, cap Capability, req Request, accou
 			receiptMu.Lock()
 			defer receiptMu.Unlock()
 			submission.Stage = update.Stage
+			if update.ResponseStatusCode != 0 {
+				submission.ResponseStatusCode = update.ResponseStatusCode
+			}
+			if update.ResponseContentType != "" {
+				submission.ResponseContentType = update.ResponseContentType
+			}
 			if update.Response != nil {
 				submission.Response = update.Response
 			}
@@ -359,7 +370,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 
 		var object any
 		_ = json.Unmarshal(raw, &object)
-		if err := account.ObserveSubmission(Submission{Stage: state, Response: SafeReviewValue(object, []string{account.Key}, 0)}); err != nil {
+		if err := account.ObserveSubmission(Submission{Stage: state, ResponseStatusCode: response.StatusCode, ResponseContentType: response.Header.Get("Content-Type"), Response: SafeAdminReviewValue(object, []string{account.Key}, 0)}); err != nil {
 			return UpstreamResult{Status: "unknown", Diagnostic: "Submission receipt could not be persisted; reconcile original task"}, nil
 		}
 	}

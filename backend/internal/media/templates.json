@@ -1494,5 +1494,113 @@
     },
     "poll_seconds": 10,
     "builtin_revision": "1.2.15"
+  },
+  {
+    "id": "v6k-video-reference-string",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "V6K 视频·普通参考图字符串映射",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.2.19",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "images",
+        "shape": "string",
+        "encoding": "preserve",
+        "drop_properties": {
+          "role": [
+            "reference"
+          ]
+        }
+      },
+      {
+        "kind": "video",
+        "target": "videos",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "audio",
+        "target": "audios",
+        "shape": "preserve",
+        "encoding": "preserve"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content",
+    "description": "用于接受公开 URL 或 Data URL 字符串的 /v1/videos 兼容接口。仅普通 reference 图片移除 role 属性；首尾帧及其他未知属性不会静默丢弃。"
   }
 ]
