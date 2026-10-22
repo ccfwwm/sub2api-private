@@ -5,10 +5,10 @@
   "upstream_commit": "f2669c8cf62555cd92389b3f55920e9e6e7c6ff2",
   "upstream_version": "0.2.15",
   "first_private_version": "1.0.0",
-  "deployment": "formal-release-automatic",
+  "deployment": "formal-release-manual",
   "platform": "linux/amd64",
-  "version_scheme": "private-feature-milestone",
+  "version_scheme": "feature-milestone",
   "version_scheme_since": "1.1.0",
-  "version_note": "Private release 1.2.18 repairs account-test artifact previews, exposes administrator media capabilities and restores direct access to personal media task history.",
+  "version_note": "Public releases from 1.2.19 include public GitHub Releases and anonymously accessible application and documentation images. Production cutover remains a separate operation.",
   "legacy_private_versions": "1.0.0-1.0.6"
 }

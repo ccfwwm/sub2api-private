@@ -1,11 +1,11 @@
-name: Export Validated Private Image
+name: Export Validated Image
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Published private release to export for offline image staging'
+        description: 'Published public release to export for offline image staging'
         required: true
-        default: v1.0.0
+        default: v1.2.19
         type: string
 permissions:
   contents: read

@@ -97,7 +97,7 @@ def main():
                             for n in ['sub2api-postgres', 'sub2api-redis', 'sub2api-pricing-overlay']}
             if args.ops:
                 from manage import Manager
-                manager = Manager(root / 'ops-state', prod)
+                manager = Manager(root / 'ops-state', prod, docs_proxy_enabled=False)
                 release = manager.state / 'releases' / manifest['version']
                 release.mkdir(parents=True)
                 (release / 'deployment.json').write_text(json.dumps(manifest))

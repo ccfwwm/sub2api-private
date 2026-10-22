@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       digest:
-        description: 'Digest of an existing private candidate image (no release or production operation)'
+        description: 'Digest of an existing candidate image (no release or production operation)'
         required: true
         type: string
       version:
