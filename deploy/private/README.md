@@ -1,12 +1,12 @@
-# Sub2API 私有版本发布与生产交接
+# Sub2API 公开版本发布与生产交接
 
-源码仓库：`ccfwwm/sub2api-private`（私有）。生产镜像：`ghcr.io/ccfwwm/sub2api-private`（私有）。
-上游同步版本 `v0.2.15` 保持已有发布；本次私有多模态功能版本为 `v1.1.0`，上游基线仍为 `v0.2.15`。旧 `v1.0.0`–`v1.0.6` 保留历史恢复用途。上游基线及私有版本说明记录在 `deploy/private-release.json`。
+从 `v1.2.19` 起，源码仓库、正式 GitHub Release、应用镜像和文档镜像均公开发布。源码仓库为 `ccfwwm/sub2api-private`，镜像为 `ghcr.io/ccfwwm/sub2api-private` 和 `ghcr.io/ccfwwm/sub2api-private-docs`；名称中的 `private` 以及现有部署目录仅为兼容历史清单和回滚引用而保留，不代表可见性。当前发布规则见 [Public releases](../../.github/RELEASE.md)。
+上游基线仍为 `v0.2.15`，版本说明记录在 `deploy/private-release.json`。旧版本及其恢复材料保留历史用途，不能代替当前发布流程。
 
 ## 发布不等于部署
 
-推送 main 只运行 CI。推送正式标签或手动运行 **Private Release** 时，使用同一提交完成测试、镜像构建、隔离启动检查，再发布带有提交、digest 和迁移 SHA-256 清单的 `deployment.json`。发布流程不调用生产部署工作流；生产切换必须独立执行 **Manual Production Deployment** 或已授权的宿主机管理命令。
-任何构建或发布流程都不连接生产。**Manual Production Deployment** 仅支持 `workflow_dispatch`，保留请求排空、备份、恢复演练和精确迁移门禁；不采用 `immediate` 切换。
+推送 main 只运行 CI。推送正式标签或手动运行 **Sub2API Release** 时，使用同一提交完成测试、镜像构建、隔离启动检查，验证仓库和两个镜像包均公开且可匿名拉取，再公开发布带有提交、digest 和迁移 SHA-256 清单的 `deployment.json`。已发布的标签和镜像摘要保持不可变。发布流程不调用生产部署工作流；生产切换必须独立执行 **Manual Production Deployment** 或已授权的宿主机管理命令。
+任何构建或发布流程都不连接生产。**Manual Production Deployment** 仅支持 `workflow_dispatch`，保留请求排空、备份、恢复演练和精确迁移门禁。宿主机管理命令支持在用户明确要求时使用 `--immediate` 跳过排空等待，其余校验不跳过。
 
 ### v1.2.15 的受审迁移
 
@@ -34,9 +34,9 @@ sudo sh install.sh --confirm-host-install
 
 配置独立凭据（不复制个人广权限 gh 登录）：
 
-- `/etc/sub2api-deployer/github-token`：读取指定私有仓库 Release 的凭据，root:root 0600。
-- Docker credential store：可读取私有 GHCR 包的专用凭据，通过 `docker login --password-stdin` 配置。GitHub 仓库访问权限与 Packages 权限分别验证。
-- `/etc/sub2api-deployer/release-token`：供应用读取版本元数据的仓库只读凭据，root:1000 0440；只读挂载到应用。实际容器 GID 若有调整，修改 `socket_gid` 和文件组权限。
+- `/etc/sub2api-deployer/github-token`：部署工具调用 GitHub API 时使用的只读凭据，root:root 0600。公开 Release 和附件也可匿名读取。
+- Docker credential store：现有凭据可保留用于兼容历史私有包；当前正式应用与文档镜像必须支持匿名拉取，发布验证不能以已登录状态代替匿名验证。
+- `/etc/sub2api-deployer/release-token`：供应用读取版本元数据、提高 GitHub API 限额的只读凭据，root:1000 0440；只读挂载到应用。实际容器 GID 若有调整，修改 `socket_gid` 和文件组权限。
 
 读取代码包和凭据都使用受限目录；禁止将 .env、数据库备份、当前容器快照或密钥上传到 GitHub。`docker commit --pause=false` 捕获的应急镜像可能含运行时环境机密，**只能留在服务器本机，禁止推送**。
 
