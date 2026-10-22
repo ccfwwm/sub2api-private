@@ -725,7 +725,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
-    { path: '/docs/imagevideo', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
+    { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
+    { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/media-tasks', label: t('nav.mediaTasks'), icon: BatchImageIcon },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -758,7 +759,7 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
-const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => item.path !== '/docs/imagevideo')))
+const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => !['/media-docs','/media-capabilities'].includes(item.path))))
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {
@@ -848,7 +849,8 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
       ],
     },
-    { path: '/docs/imagevideo', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
+    { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
+    { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

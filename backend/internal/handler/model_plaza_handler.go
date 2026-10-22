@@ -85,6 +85,7 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
+	DescriptionVersion int64                  `json:"description_version"`
 	MediaModels        []modelPlazaMediaModel `json:"media_models,omitempty"`
 	ID                 int64                  `json:"id"`
 	Name               string                 `json:"name"`
@@ -113,6 +114,7 @@ type modelPlazaGroup struct {
 // Sale values are displayed as CNY under the product's configured price policy;
 // official USD prices are not part of the current media catalog and remain absent.
 type modelPlazaMediaModel struct {
+	DisplayDescription string `json:"display_description,omitempty"`
 	media.CatalogEntry
 	SaleCurrency     string `json:"sale_currency"`
 	OfficialCurrency string `json:"official_currency"`
@@ -124,6 +126,11 @@ type modelPlazaMediaModel struct {
 func toModelPlazaMediaModels(entries []media.CatalogEntry, group modelPlazaGroup) []modelPlazaMediaModel {
 	models := make([]modelPlazaMediaModel, 0, len(entries))
 	for _, entry := range entries {
+		entry.Duration.Scenarios = nil
+		entry.DurationVariants = append([]media.Duration(nil), entry.DurationVariants...)
+		for i := range entry.DurationVariants {
+			entry.DurationVariants[i].Scenarios = nil
+		}
 		rate := group.RateMultiplier
 		if group.UserRateMultiplier != nil {
 			rate = *group.UserRateMultiplier
@@ -260,6 +267,10 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		}
 	}
 	filtered := out[:0]
+	if err := h.attachDescriptions(c.Request.Context(), out); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	for i := range visible {
 		dto := out[i]
 		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {

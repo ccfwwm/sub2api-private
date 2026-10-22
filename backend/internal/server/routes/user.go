@@ -17,6 +17,11 @@ func RegisterUserRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
+	if h.Media != nil {
+		playback := v1.Group("/media/playback")
+		playback.GET("/tasks/:id/artifacts/:key/content", h.Media.UserArtifactContent)
+		playback.HEAD("/tasks/:id/artifacts/:key/content", h.Media.UserArtifactContent)
+	}
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
@@ -28,6 +33,8 @@ func RegisterUserRoutes(
 		if h.Media != nil {
 			authenticated.GET("/media/capabilities", h.Media.Capabilities)
 			authenticated.GET("/media/tasks", h.Media.UserTasks)
+			authenticated.GET("/media/tasks/:id", h.Media.UserTask)
+			authenticated.POST("/media/tasks/:id/artifacts/:key/access", h.Media.UserArtifactAccess)
 		}
 		// 用户接口
 		user := authenticated.Group("/user")

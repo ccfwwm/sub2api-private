@@ -9,6 +9,14 @@ vi.mock('@/composables/useRoutePrefetch', () => ({ useRoutePrefetch: () => ({ tr
 vi.mock('@/api/setup', () => ({ getSetupStatus: vi.fn() }))
 
 describe('admin media route', () => {
+  it('exposes capabilities and in-app documentation without login', async () => {
+    const { default: router } = await import('@/router')
+    for (const path of ['/media-capabilities', '/media-docs']) {
+      const route=router.getRoutes().find(r=>r.path===path)
+      expect(route?.meta.requiresAuth).toBe(false)
+      expect(route?.redirect).toBeUndefined()
+    }
+  })
   it('makes personal media history available to authenticated ordinary users', async () => {
     const { default: router } = await import('@/router')
     const route = router.getRoutes().find(record => record.name === 'MediaTasks')

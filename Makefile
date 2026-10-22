@@ -1,6 +1,9 @@
 .PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
+	src/components/modelPlaza/__tests__/MediaDescription.spec.ts \
+	src/components/modelPlaza/__tests__/PlazaMediaPricing.spec.ts \
+	src/router/__tests__/media-admin-route.spec.ts \
 	src/components/media/__tests__/MediaTaskHistory.spec.ts \
 	src/components/media/__tests__/MediaTaskDetail.spec.ts \
 	src/views/__tests__/ImageVideoDocs.spec.ts \

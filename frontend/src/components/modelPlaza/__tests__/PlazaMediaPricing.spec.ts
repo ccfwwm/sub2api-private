@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import PlazaMediaPricing from '../PlazaMediaPricing.vue'
@@ -21,6 +22,7 @@ function render(method: string) {
 }
 
 describe('media price disclosure', () => {
+  beforeEach(() => setActivePinia(createPinia()))
   it('discloses a 30 second package as a total instead of a per second price', () => {
     const text = render('package').text()
     expect(text).toContain('30 second package total: ¥2')

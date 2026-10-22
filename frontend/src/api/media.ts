@@ -107,8 +107,9 @@ export const mediaAPI = {
     return (await apiClient.post(`/admin/media/tasks/${encodeURIComponent(id)}/review`, { status, target_charge, reason, expected_version }, { headers: { 'Idempotency-Key': key } })).data
   },
   async detail(id: string) { return (await apiClient.get<MediaTaskReview>(`/admin/media/tasks/${encodeURIComponent(id)}`)).data },
+  async userDetail(id: string) { return (await apiClient.get<MediaTaskReview>(`/media/tasks/${encodeURIComponent(id)}`)).data },
   async exportTask(id: string) { return (await apiClient.get<Blob>(`/admin/media/tasks/${encodeURIComponent(id)}/export`, { responseType: 'blob' })).data },
-  async artifactAccess(id: string, key: string) { return (await apiClient.post<{ url: string; expires_at: number }>(`/admin/media/tasks/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(key)}/access`)).data },
+  async artifactAccess(id: string, key: string, admin = true) { return (await apiClient.post<{ url: string; expires_at: number }>(`${admin ? '/admin/media' : '/media'}/tasks/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(key)}/access`)).data },
   async configs(kind: ConfigKind) { return (await apiClient.get<MediaConfigRecord[]>(`/admin/media/configs/${kind}`)).data },
   async history(kind: ConfigKind, id: string) { return (await apiClient.get<MediaConfigRecord[]>(`/admin/media/configs/${kind}`, { params: { id } })).data },
   async save(kind: ConfigKind, id: string, expected_version: number, config: Record<string, unknown>, publish: boolean) {

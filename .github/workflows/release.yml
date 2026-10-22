@@ -246,7 +246,7 @@ jobs:
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
-            gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $TAG" --notes "Public Sub2API release. Media platform imagevideo is integrated into existing accounts, groups and channel model pricing on upstream v0.2.15. Prices are configured manually. Application and documentation images are validated; production deployment uses the restricted host manager with backup, isolated restore and request draining. Publishing this release does not switch production."
+            gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $TAG" --notes-file "docs/multimodal/RELEASE-$TAG.md"
           fi
       - uses: actions/upload-artifact@v7
         with:

@@ -1,9 +1,9 @@
 {
-  "version": "v1.2.19",
+  "version": "v1.3.0",
   "status": "recorded",
   "acceptance_state": "pre-deployment-read-only-verified",
-  "verified_at": "2026-10-22T06:12:01.165526+00:00",
-  "environment": "Live v1.2.18; read-only relay and V6K model discovery; exact task and account binding inspection. Candidate code tests and post-cutover acceptance are separate.",
+  "verified_at": "2026-10-22T16:12:27.075Z",
+  "environment": "Live v1.2.19 relay model discovery. New public UI and owner playback acceptance are verified separately after cutover.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
@@ -12,27 +12,8 @@
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
-      "models": 14,
-      "scope": "Read-only GET /v1/models; no generation submission"
-    },
-    {
-      "label": "v6k-model-list",
-      "verification": "real_connection",
-      "status": "completed",
-      "http": 200,
-      "models": 38,
+      "models": 15,
       "scope": "Read-only GET /v1/models; no generation submission"
     }
-  ],
-  "diagnosis": {
-    "task_id": "mt_ee291176-7ab2-4352-a8fa-f9fe35faad2d",
-    "account_id": 2117,
-    "model": "XXsedanco2.5S",
-    "http": 400,
-    "template": {
-      "id": "video-arrays",
-      "version": 1
-    },
-    "scope": "The failed request used generic video-arrays; ordinary role metadata reached the string-only image reference endpoint. Explicit 400, no upstream task ID; no resubmission."
-  }
+  ]
 }

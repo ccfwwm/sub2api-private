@@ -60,6 +60,7 @@ export interface PlazaModel {
 }
 
 export interface ModelPlazaGroup {
+	 description_version?: number
   media_models?: PlazaMediaModel[]
   id: number
   name: string
@@ -98,6 +99,7 @@ export interface PlazaMediaCharge {
   tiers: { up_to: string | null; unit_price: string | null }[]
 }
 export interface PlazaMediaModel {
+	 display_description?: string
   model: string
   media_type: string
   operations: string[]
@@ -128,5 +130,12 @@ export async function getModelPlaza(options?: { signal?: AbortSignal }): Promise
 }
 
 export const modelPlazaAPI = { getModelPlaza }
+
+export async function getPublicMediaCatalog(): Promise<ModelPlazaResponse> {
+  return (await apiClient.get<ModelPlazaResponse>('/public/media/catalog')).data
+}
+export async function saveMediaDescription(group_id: number, model: string, description: string, expected_version: number) {
+  return (await apiClient.put<{ description_version: number; display_description: string }>('/admin/media/model-descriptions', { group_id, model, description, expected_version })).data
+}
 
 export default modelPlazaAPI

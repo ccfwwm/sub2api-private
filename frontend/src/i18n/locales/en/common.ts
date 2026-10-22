@@ -166,6 +166,7 @@ export default {
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
+    mediaCapabilities: 'Model capabilities',
     imagevideoDocs: 'Media API docs',
     batchImage: 'Batch Images',
     usage: 'Usage',

@@ -37,6 +37,7 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
 		if h.Media != nil {
+			admin.PUT("/media/model-descriptions", h.ModelPlaza.SaveMediaDescription)
 			admin.GET("/media/configs/:kind", h.Media.AdminConfigs)
 			admin.POST("/media/configs/:kind", gin.HandlerFunc(stepUpAuth), h.Media.AdminSave)
 			admin.POST("/media/configs/:kind/disable", gin.HandlerFunc(stepUpAuth), h.Media.AdminDisable)

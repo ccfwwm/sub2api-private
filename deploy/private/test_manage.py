@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from controller import atomic_json, file_hash
-from manage import Manager, ident, DOCS_PROXY_SNIPPET, LEGACY_DOCS_PROXY_SNIPPET
+from manage import Manager, ident, DOCS_PROXY_SNIPPET, LEGACY_DOCS_PROXY_SNIPPET, V1219_DOCS_PROXY_SNIPPET
 
 
 class ManagementSafetyTests(unittest.TestCase):
@@ -92,6 +92,17 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertIn('frame-ancestors \'self\'', updated)
         self.assertIn('Strict-Transport-Security "max-age=31536000; includeSubDomains"', updated)
         self.assertIn('X-Content-Type-Options "nosniff"', updated)
+
+    def test_v1219_proxy_upgrade_adds_private_user_playback(self):
+        vhost, snippet = self.root / 'nginx.conf', self.root / 'snippet.conf'
+        vhost.write_text('server {\n    server_name code.aicodeme.xyz;\n    include /etc/nginx/snippets/sub2api-docs-web.conf;\n}\n')
+        snippet.write_text(V1219_DOCS_PROXY_SNIPPET)
+        manager = Manager(self.root / 'proxy-state', self.root / 'production', nginx_vhost=vhost, nginx_snippet=snippet)
+        with patch('manage.run', return_value=b''):
+            manager.sync_docs_proxy(True)
+        self.assertEqual(snippet.read_text(), DOCS_PROXY_SNIPPET)
+        self.assertIn('location ^~ /api/v1/media/playback/tasks/', snippet.read_text())
+        self.assertEqual(snippet.read_text().count('access_log off;'), 2)
 
     def test_docs_proxy_failed_upgrade_restores_legacy_snippet(self):
         vhost = self.root / 'nginx.conf'

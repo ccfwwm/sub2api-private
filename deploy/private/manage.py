@@ -49,13 +49,23 @@ PREVIOUS_DOCS_PROXY_SNIPPET = LEGACY_DOCS_PROXY_SNIPPET.replace(
     '    add_header X-Frame-Options "SAMEORIGIN" always;\n'
     '    add_header Content-Security-Policy "frame-ancestors \'self\'" always;\n'
 )
-DOCS_PROXY_SNIPPET = PREVIOUS_DOCS_PROXY_SNIPPET + '''location = /api/v1/public-docs/imagevideo {
+V1219_DOCS_PROXY_SNIPPET = PREVIOUS_DOCS_PROXY_SNIPPET + '''location = /api/v1/public-docs/imagevideo {
     proxy_pass http://127.0.0.1:8082/api/v1/public-docs/imagevideo;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 30s;
 }
 location ^~ /api/v1/media/review/tasks/ {
+    proxy_pass http://127.0.0.1:8081;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+    proxy_read_timeout 180s;
+    access_log off;
+}
+'''
+DOCS_PROXY_SNIPPET = V1219_DOCS_PROXY_SNIPPET + '''location ^~ /api/v1/media/playback/tasks/ {
     proxy_pass http://127.0.0.1:8081;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -521,7 +531,7 @@ class Manager:
                 updated = before_vhost
             # Normalize newlines because CI rehearses this code on Windows
             # while production stores the source-controlled LF snippet.
-            if before_snippet and before_snippet.decode(errors='replace').replace('\r\n', '\n') not in (LEGACY_DOCS_PROXY_SNIPPET, PREVIOUS_DOCS_PROXY_SNIPPET, DOCS_PROXY_SNIPPET):
+            if before_snippet and before_snippet.decode(errors='replace').replace('\r\n', '\n') not in (LEGACY_DOCS_PROXY_SNIPPET, PREVIOUS_DOCS_PROXY_SNIPPET, V1219_DOCS_PROXY_SNIPPET, DOCS_PROXY_SNIPPET):
                 raise ValueError('managed documentation Nginx snippet has unexpected contents')
             snippet.parent.mkdir(parents=True, exist_ok=True)
             snippet.write_text(DOCS_PROXY_SNIPPET, encoding='utf-8')

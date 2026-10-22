@@ -125,3 +125,16 @@ Release 必须包含 `249_media_protocol_templates.sql`、`250_migrate_legacy_me
 ## 文档草稿的同源预览
 
 文档专用 `/docs/` location 使用 `X-Frame-Options: SAMEORIGIN` 和 `frame-ancestors 'self'`，使后台可在 iframe 中显示未发布草稿；其他路径继续继承原有禁止嵌入策略。location 同时显式保留 HSTS 和 nosniff。管理器只接受原始片段或已审阅的新片段，未知配置仍拒绝覆盖；Nginx 校验或平滑重载失败时恢复原文件。更新该配置不重启 API、文档或数据容器。
+
+
+## v1.3.0 公开能力与立即发布
+
+本版本没有新增数据库迁移。先从公开正式 Release 下载、校验并登记清单、管理工具和两个固定摘要镜像，安装同一提交的管理代码。用户已要求本次立即切换：
+
+```sh
+/root/sub2api-manage upgrade v1.3.0 --immediate --confirm UPGRADE
+```
+
+该模式仍执行完整备份、隔离恢复与新旧程序验证，只跳过空闲等待和排空；在途连接可能短暂中断。必须检查任务最终 `succeeded`、应用及文档摘要、三个入口的版本与健康，并核对原 PostgreSQL/Redis 容器标识和启动时间。失败按该任务捕获的程序和配置恢复，不覆盖业务数据库。
+
+管理脚本识别 v1.2.19 的现有文档代理片段，新增用户播放路由并关闭该路由访问日志，避免短期票据进入 Nginx 日志；保留原管理员媒体读取路由与同源文档嵌入头。

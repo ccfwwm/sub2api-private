@@ -111,6 +111,7 @@ func (h *MediaHandler) AdminTask(c *gin.Context) {
 		mediaError(c, err)
 		return
 	}
+	result = media.CompactEvidence(result).(map[string]any)
 	c.Header("Cache-Control", "no-store")
 	response.Success(c, result)
 }

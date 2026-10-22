@@ -24,7 +24,8 @@
         </div>
         <div class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
           <LocaleSwitcher />
-          <router-link to="/docs/imagevideo" class="text-sm font-medium px-2">{{ t('nav.imagevideoDocs') }}</router-link>
+          <router-link to="/media-capabilities" class="text-sm font-medium px-2">{{ t('nav.mediaCapabilities') }}</router-link>
+          <router-link to="/media-docs" class="text-sm font-medium px-2">{{ t('nav.imagevideoDocs') }}</router-link>
           <a
             v-if="docUrl"
             :href="docUrl"
@@ -100,8 +101,9 @@
           <span>词元互联</span>
         </router-link>
         <nav class="token-nav" aria-label="首页导航">
-          <router-link to="/docs/imagevideo" class="token-nav-link">音视频接口文档</router-link>
-          <router-link v-if="showModelPlazaEntry" :to="modelPlazaRoute" class="token-nav-link">
+          <router-link v-if="showModelPlazaEntry" to="/model-plaza?embedded=1" class="token-nav-link">模型广场</router-link>
+          <router-link to="/media-docs" class="token-nav-link">音视频接口文档</router-link>
+          <router-link to="/media-capabilities" class="token-nav-link">
             模型能力
           </router-link>
           <router-link :to="isAuthenticated ? dashboardPath : '/login'" class="token-nav-action">
@@ -179,7 +181,6 @@ const modelPlazaRequiresAuth = computed(() => appStore.cachedPublicSettings?.mod
 const showModelPlazaEntry = computed(() => modelPlazaEnabled.value && (isAuthenticated.value || !modelPlazaRequiresAuth.value))
 const dashboardPath = computed(() => authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
 const currentYear = computed(() => new Date().getFullYear())
-const modelPlazaRoute = '/model-plaza?embedded=1'
 const heroCanvas = ref<HTMLCanvasElement | null>(null)
 let stopHeroField: (() => void) | null = null
 

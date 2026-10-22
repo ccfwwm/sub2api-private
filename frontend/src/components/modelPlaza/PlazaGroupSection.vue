@@ -71,6 +71,8 @@
           {{ t('modelPlaza.detail.mediaCapabilities') }}
         </div>
         <PlazaMediaPricing
+          :group-id="group.id"
+          :description-version="group.description_version"
           :models="group.media_models"
           :multiplier="effectiveRate"
           :image-multiplier="group.image_rate_independent ? group.image_rate_multiplier : undefined"

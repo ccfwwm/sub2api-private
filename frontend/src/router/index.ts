@@ -18,6 +18,8 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  { path: '/media-capabilities', name: 'MediaCapabilities', component: () => import('@/views/public/MediaCapabilitiesView.vue'), meta: { requiresAuth: false, title: '模型能力' } },
+  { path: '/media-docs', name: 'MediaDocs', component: () => import('@/views/public/MediaDocsView.vue'), meta: { requiresAuth: false, title: '音视频接口文档' } },
   { path: '/docs/imagevideo', name: 'ImageVideoDocs', component: () => import('@/views/public/ImageVideoDocsView.vue'), meta: { requiresAuth: false, title: '词元互联图片、视频与音乐接口文档' } },
   // ==================== Setup Routes ====================
   {
@@ -775,7 +777,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/docs/imagevideo', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/media-capabilities', '/media-docs', '/docs/imagevideo', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',
