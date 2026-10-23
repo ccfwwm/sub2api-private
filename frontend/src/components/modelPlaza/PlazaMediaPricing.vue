@@ -2,8 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PlazaMediaModel, PlazaMediaCharge, PlazaMediaReferencePrice } from '@/api/modelPlaza'
-import { getPublicMediaCatalog, saveMediaDescription, saveMediaReferencePrice } from '@/api/modelPlaza'
+import { getPublicMediaCatalog, saveMediaAvailability, saveMediaDescription, saveMediaReferencePrice } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
+import Icon from '@/components/icons/Icon.vue'
+import Toggle from '@/components/common/Toggle.vue'
 const props = defineProps<{ models: PlazaMediaModel[]; multiplier: number; imageMultiplier?: number; videoMultiplier?: number; groupId?: number; descriptionVersion?: number }>()
 const auth = useAuthStore()
 const editing = ref(''), draft = ref(''), saving = ref(false), editError = ref(''), conflict = ref(false)
@@ -12,9 +14,21 @@ const priceAmount = ref(''), priceUnit = ref('')
 const version = ref(props.descriptionVersion ?? 0)
 const descriptions = ref<Record<string, string>>({})
 const referencePrices = ref<Record<string, PlazaMediaReferencePrice | null>>({})
+const availabilities = ref<Record<string, 'available' | 'unavailable'>>({})
+const availabilitySaving = ref('')
+const availabilityError = ref('')
+const availabilityErrorModel = ref('')
 watch(() => props.descriptionVersion, value => { if (!editing.value) { version.value = value ?? 0; descriptions.value = {}; referencePrices.value = {} } })
+watch(() => props.models.map(model => ({ model: model.model, availability: model.availability })), models => {
+  const next = { ...availabilities.value }
+  for (const model of models) {
+    if (model.model !== availabilitySaving.value) next[model.model] = model.availability ?? 'available'
+  }
+  availabilities.value = next
+})
 const description = (model: PlazaMediaModel) => descriptions.value[model.model] ?? model.display_description ?? ''
 const referencePrice = (model: PlazaMediaModel) => Object.prototype.hasOwnProperty.call(referencePrices.value, model.model) ? referencePrices.value[model.model] : model.official_reference_price
+const availability = (model: PlazaMediaModel) => availabilities.value[model.model] ?? model.availability ?? 'available'
 function edit(model: PlazaMediaModel, kind: 'description' | 'price' = 'description') {
   if (saving.value) return
   editing.value = model.model; editKind.value = kind; draft.value = description(model)
@@ -30,10 +44,33 @@ async function refreshVersion() {
     for (const model of group.media_models ?? []) {
       descriptions.value[model.model] = model.display_description ?? ''
       referencePrices.value[model.model] = model.official_reference_price ?? null
+      availabilities.value[model.model] = model.availability ?? 'available'
     }
     conflict.value = false; editError.value = '已刷新版本并保留草稿，请核对当前内容后保存。'
   } catch (e) { editError.value = (e as Error).message }
   finally { saving.value = false }
+}
+async function toggleAvailability(model: PlazaMediaModel, value: boolean) {
+  if (!props.groupId || !auth.isAdmin || availabilitySaving.value) return
+  const next = value ? 'available' : 'unavailable'
+  const previous = availability(model)
+  availabilitySaving.value = model.model
+  availabilityError.value = ''
+  availabilityErrorModel.value = model.model
+  availabilities.value[model.model] = next
+  try {
+    const result = await saveMediaAvailability(props.groupId, model.model, next, version.value)
+    availabilities.value[model.model] = result.availability
+    version.value = result.description_version
+  } catch (e) {
+    availabilities.value[model.model] = previous
+    const failure = e as { status?: number; response?: { status?: number }; message?: string }
+    availabilityError.value = failure.status === 409 || failure.response?.status === 409
+      ? '本分组内容已被其他管理员修改，请刷新后重试。'
+      : failure.message || '保存模型状态失败，请重试。'
+  } finally {
+    availabilitySaving.value = ''
+  }
 }
 async function save() {
   if (!props.groupId || conflict.value) return
@@ -91,7 +128,7 @@ function displayedPrice(model: PlazaMediaModel, price: string | null, timeMultip
 <template>
   <div class="space-y-3"><div class="flex flex-wrap gap-2"><button v-for="kind in ['all','image','video','audio']" :key="kind" class="rounded-full px-3 py-1.5 text-sm" :class="filter === kind ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40' : 'bg-gray-100 dark:bg-dark-800'" @click="filter = kind">{{ ({all:text('全部','All'),image:text('图片','Images'),video:text('视频','Video'),audio:text('音频','Audio')} as Record<string,string>)[kind] }}</button></div><div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
     <table class="w-full text-left text-sm"><thead class="bg-gray-50 dark:bg-gray-900"><tr><th class="p-3">{{ text('媒体模型 / 接口', 'Media model / operation') }}</th><th class="p-3">{{ text('实付价格 ¥ / 单位', 'Sale price ¥ / unit') }}</th><th class="p-3">{{ text('官方参考价 $', 'Official reference price $') }}</th><th class="p-3">{{ text('能力与收费规则', 'Capabilities and billing') }}</th></tr></thead>
-      <tbody><tr v-for="model in visible" :key="model.model" class="border-t dark:border-gray-700"><td class="p-3 align-top"><div class="font-medium">{{ model.model }}</div><div class="mt-1 text-xs text-gray-500"><p v-for="op in model.operations" :key="op" class="break-all">{{ endpoints[op] || op }}</p></div></td><td class="p-3 align-top"><div v-for="price in prices(model)" :key="price.operation" class="mb-3"><div class="text-xs text-gray-500">{{ text('基础模型价格', 'Base model price') }}</div><div v-for="rule in price.rules" :key="rule.priority"><p v-if="Object.keys(rule.when).length" class="mt-1 text-xs text-gray-500">{{ conditions(rule.when) }}</p><div v-for="charge in rule.charges" :key="charge.name" class="mt-1">
+      <tbody><tr v-for="model in visible" :key="model.model" class="border-t dark:border-gray-700"><td class="p-3 align-top"><div class="flex flex-wrap items-center gap-2"><div class="font-medium">{{ model.model }}</div><span :data-testid="`media-model-status-${model.model}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium" :class="availability(model) === 'available' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'"><Icon :name="availability(model) === 'available' ? 'checkCircle' : 'xCircle'" size="xs" class="h-3 w-3" />{{ text(availability(model) === 'available' ? '可用' : '不可用', availability(model) === 'available' ? 'Available' : 'Unavailable') }}</span><Toggle v-if="auth.isAdmin && groupId" :model-value="availability(model) === 'available'" :disabled="availabilitySaving === model.model" :aria-label="`${model.model} ${text('可用状态', 'availability')}`" :data-testid="`media-model-availability-toggle-${model.model}`" @update:model-value="toggleAvailability(model, $event)" /></div><p v-if="availabilityError && availabilityErrorModel === model.model && availabilitySaving === ''" role="alert" class="mt-1 text-xs text-red-600">{{ availabilityError }}</p><div class="mt-1 text-xs text-gray-500"><p v-for="op in model.operations" :key="op" class="break-all">{{ endpoints[op] || op }}</p></div></td><td class="p-3 align-top"><div v-for="price in prices(model)" :key="price.operation" class="mb-3"><div class="text-xs text-gray-500">{{ text('基础模型价格', 'Base model price') }}</div><div v-for="rule in price.rules" :key="rule.priority"><p v-if="Object.keys(rule.when).length" class="mt-1 text-xs text-gray-500">{{ conditions(rule.when) }}</p><div v-for="charge in rule.charges" :key="charge.name" class="mt-1">
                 <template v-if="charge.method === 'progressive'">
                   <p class="text-xs">{{ text('累进分档', 'Progressive tiers') }}</p>
                   <p v-for="(tier, index) in charge.tiers" :key="index">{{ index === 0 ? '0' : charge.tiers[index - 1].up_to }}–{{ tier.up_to ?? '∞' }} {{ label(charge, model) }}: {{ displayedPrice(model, tier.unit_price, price.time_multiplier) }} / {{ label(charge, model) }}</p>

@@ -2159,16 +2159,6 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
-        <div v-if="editForm.platform === 'imagevideo'" class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <label class="input-label">{{ t('admin.groups.mediaStatus.label') }}</label>
-          <div class="flex items-center gap-3">
-          <Toggle v-model="editForm.media_availability_available" :aria-label="t('admin.groups.mediaStatus.label')" />
-            <span class="text-sm text-gray-600 dark:text-gray-300">
-              {{ editForm.media_availability_available ? t('admin.groups.mediaStatus.available') : t('admin.groups.mediaStatus.unavailable') }}
-            </span>
-          </div>
-          <p class="input-hint">{{ t('admin.groups.mediaStatus.hint') }}</p>
-        </div>
         <template v-if="!authStore.isSimpleMode">
         <!-- 从分组复制账号（编辑时） -->
         <div v-if="copyAccountsGroupOptionsForEdit.length > 0">
@@ -5322,7 +5312,6 @@ const editForm = reactive({
   rate_multiplier: 1.0,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
-  media_availability_available: true,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
@@ -6067,7 +6056,6 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
-  editForm.media_availability_available = (group.media_availability ?? 'available') === 'available';
   editForm.subscription_type = group.subscription_type || "standard";
   editForm.daily_limit_usd = group.daily_limit_usd;
   editForm.weekly_limit_usd = group.weekly_limit_usd;
@@ -6263,15 +6251,9 @@ const handleUpdateGroup = async () => {
   submitting.value = true;
   try {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
-    const {
-      media_availability_available: mediaAvailabilityAvailable,
-      ...baseEditForm
-    } = editForm;
+    const baseEditForm = { ...editForm };
     const payload = {
       ...baseEditForm,
-      ...(editForm.platform === 'imagevideo'
-        ? { media_availability: mediaAvailabilityAvailable ? 'available' as const : 'unavailable' as const }
-        : {}),
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,
@@ -6396,9 +6378,6 @@ const handleUpdateGroup = async () => {
       ? {
           name: editForm.name,
           description: editForm.description,
-          ...(editForm.platform === 'imagevideo'
-            ? { media_availability: editForm.media_availability_available ? 'available' as const : 'unavailable' as const }
-            : {}),
         }
       : payload;
     await adminAPI.groups.update(editingGroup.value.id, requestData);

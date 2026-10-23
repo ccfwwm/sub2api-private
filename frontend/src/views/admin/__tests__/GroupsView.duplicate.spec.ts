@@ -325,7 +325,7 @@ describe('GroupsView duplicate action', () => {
     wrapper.unmount()
   })
 
-  it('edits and saves media availability independently from the regular group status', async () => {
+  it('does not edit or send group-level media availability', async () => {
     const mediaGroup = { ...sourceGroup, platform: 'imagevideo' as const, media_availability: 'unavailable' as const }
     listGroups.mockResolvedValue({ items: [mediaGroup], total: 1, page: 1, page_size: 20, pages: 1 })
     updateGroup.mockResolvedValue(mediaGroup)
@@ -335,15 +335,11 @@ describe('GroupsView duplicate action', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
     await flushPromises()
 
-    const mediaSwitch = wrapper.get('#edit-group-form [aria-label="admin.groups.mediaStatus.label"]')
-    expect(mediaSwitch.attributes('aria-checked')).toBe('false')
-    await mediaSwitch.trigger('click')
-    expect(mediaSwitch.attributes('aria-checked')).toBe('true')
+    expect(wrapper.find('#edit-group-form [aria-label="admin.groups.mediaStatus.label"]').exists()).toBe(false)
 
     await wrapper.get('#edit-group-form').trigger('submit')
     await flushPromises()
-    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ media_availability: 'available' }))
-    expect(updateGroup.mock.calls[0][1]).not.toHaveProperty('media_availability_available')
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.not.objectContaining({ media_availability: expect.anything() }))
     wrapper.unmount()
   })
 

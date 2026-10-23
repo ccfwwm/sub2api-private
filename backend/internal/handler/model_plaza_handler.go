@@ -117,6 +117,7 @@ type modelPlazaGroup struct {
 type modelPlazaMediaModel struct {
 	DisplayDescription     string               `json:"display_description,omitempty"`
 	OfficialReferencePrice *mediaReferencePrice `json:"official_reference_price,omitempty"`
+	Availability           string               `json:"availability"`
 	media.CatalogEntry
 	SaleCurrency     string `json:"sale_currency"`
 	OfficialCurrency string `json:"official_currency"`
@@ -148,6 +149,7 @@ func toModelPlazaMediaModels(entries []media.CatalogEntry, group modelPlazaGroup
 		}
 		models = append(models, modelPlazaMediaModel{
 			CatalogEntry:     entry,
+			Availability:     mediaModelAvailabilityAvailable,
 			SaleCurrency:     "CNY",
 			OfficialCurrency: "USD",
 			SaleMultiplier:   rate,

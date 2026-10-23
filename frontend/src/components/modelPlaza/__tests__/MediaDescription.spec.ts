@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import PlazaMediaPricing from '../PlazaMediaPricing.vue'
-const state = vi.hoisted(() => ({ isAdmin: true, save: vi.fn(), savePrice: vi.fn(), catalog: vi.fn() }))
+const state = vi.hoisted(() => ({ isAdmin: true, save: vi.fn(), savePrice: vi.fn(), saveAvailability: vi.fn(), catalog: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => state }))
-vi.mock('@/api/modelPlaza', () => ({ saveMediaDescription: state.save, saveMediaReferencePrice: state.savePrice, getPublicMediaCatalog: state.catalog }))
+vi.mock('@/api/modelPlaza', () => ({ saveMediaDescription: state.save, saveMediaReferencePrice: state.savePrice, saveMediaAvailability: state.saveAvailability, getPublicMediaCatalog: state.catalog }))
 const model = { model: 'sample', media_type: 'video', operations: ['video'], duration: { mode: 'fixed', values: [10] }, prices: [], resolutions: ['720p'], display_description: '原说明' }
-function render() {
-  return mount(PlazaMediaPricing, { props: { models: [model] as never, multiplier: 1, groupId: 19, descriptionVersion: 2 }, global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: {} } })] } })
+function render(models: unknown[] = [model]) {
+  return mount(PlazaMediaPricing, { props: { models: models as never, multiplier: 1, groupId: 19, descriptionVersion: 2 }, global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: {} } })] } })
 }
 describe('group model descriptions', () => {
   beforeEach(() => { vi.clearAllMocks(); state.isAdmin = true })
@@ -36,6 +36,80 @@ describe('group model descriptions', () => {
   it('shows descriptions without edit controls to ordinary and anonymous viewers', () => {
     state.isAdmin = false
     const w = render(); expect(w.text()).toContain('原说明'); expect(w.find('td button').exists()).toBe(false); w.unmount()
+  })
+})
+
+describe('per-model media availability', () => {
+  beforeEach(() => { vi.clearAllMocks(); state.isAdmin = true })
+
+  it('shows mixed model statuses and defaults a missing status to available', () => {
+    const w = render([
+      { ...model, model: 'ready-model' },
+      { ...model, model: 'paused-model', availability: 'unavailable' },
+      { ...model, model: 'legacy-model', availability: undefined }
+    ])
+
+    expect(w.get('[data-testid="media-model-status-ready-model"]').text()).toContain('可用')
+    expect(w.get('[data-testid="media-model-status-paused-model"]').text()).toContain('不可用')
+    expect(w.get('[data-testid="media-model-status-legacy-model"]').text()).toContain('可用')
+    expect(w.get('[data-testid="media-model-status-ready-model"]').find('svg').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('uses refreshed model status props when the group component is reused', async () => {
+    const w = render()
+
+    await w.setProps({ models: [{ ...model, availability: 'unavailable' }] as never })
+    expect(w.get('[data-testid="media-model-status-sample"]').text()).toContain('不可用')
+
+    await w.setProps({ models: [{ ...model, availability: 'available' }] as never })
+    expect(w.get('[data-testid="media-model-status-sample"]').text()).toContain('可用')
+    w.unmount()
+  })
+
+  it('saves only the selected model and carries the updated shared version forward', async () => {
+    state.saveAvailability
+      .mockResolvedValueOnce({ description_version: 3, availability: 'unavailable' })
+      .mockResolvedValueOnce({ description_version: 4, availability: 'available' })
+    const w = render([
+      { ...model, model: 'target-model' },
+      { ...model, model: 'other-model' }
+    ])
+
+    await w.get('[data-testid="media-model-availability-toggle-target-model"]').trigger('click')
+    await flushPromises()
+    expect(state.saveAvailability).toHaveBeenNthCalledWith(1, 19, 'target-model', 'unavailable', 2)
+    expect(w.get('[data-testid="media-model-status-target-model"]').text()).toContain('不可用')
+    expect(w.get('[data-testid="media-model-status-other-model"]').text()).toContain('可用')
+
+    await w.get('[data-testid="media-model-availability-toggle-target-model"]').trigger('click')
+    await flushPromises()
+    expect(state.saveAvailability).toHaveBeenNthCalledWith(2, 19, 'target-model', 'available', 3)
+    expect(w.get('[data-testid="media-model-status-target-model"]').text()).toContain('可用')
+    w.unmount()
+  })
+
+  it('rolls back a conflicted admin change and displays an error', async () => {
+    state.saveAvailability.mockRejectedValueOnce({ status: 409 })
+    const w = render()
+
+    await w.get('[data-testid="media-model-availability-toggle-sample"]').trigger('click')
+    await flushPromises()
+
+    expect(state.saveAvailability).toHaveBeenCalledWith(19, 'sample', 'unavailable', 2)
+    expect(w.get('[data-testid="media-model-status-sample"]').text()).toContain('可用')
+    expect(w.get('[data-testid="media-model-availability-toggle-sample"]').attributes('aria-checked')).toBe('true')
+    expect(w.get('[role="alert"]').text()).toContain('其他管理员修改')
+    w.unmount()
+  })
+
+  it('shows model status without an edit control to ordinary users', () => {
+    state.isAdmin = false
+    const w = render([{ ...model, availability: 'unavailable' }])
+
+    expect(w.get('[data-testid="media-model-status-sample"]').text()).toContain('不可用')
+    expect(w.find('[data-testid="media-model-availability-toggle-sample"]').exists()).toBe(false)
+    w.unmount()
   })
 })
 

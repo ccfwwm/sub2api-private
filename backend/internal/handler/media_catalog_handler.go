@@ -21,6 +21,19 @@ type mediaDescriptions struct {
 	Version         int64                          `json:"version"`
 	Models          map[string]string              `json:"models"`
 	ReferencePrices map[string]mediaReferencePrice `json:"reference_prices,omitempty"`
+	Availability    map[string]string              `json:"availability,omitempty"`
+}
+
+const (
+	mediaModelAvailabilityAvailable   = "available"
+	mediaModelAvailabilityUnavailable = "unavailable"
+)
+
+func normalizeMediaModelAvailability(value string) string {
+	if value == mediaModelAvailabilityUnavailable {
+		return mediaModelAvailabilityUnavailable
+	}
+	return mediaModelAvailabilityAvailable
 }
 
 // Reference prices are display metadata in USD, never executable billing rules.
@@ -40,6 +53,11 @@ func (h *ModelPlazaHandler) attachDescriptions(ctx context.Context, groups []mod
 		return nil
 	}
 	for i := range groups {
+		for j := range groups[i].MediaModels {
+			// Historical groups may have no settings row or no availability map;
+			// keep the public contract explicit and default each model to available.
+			groups[i].MediaModels[j].Availability = mediaModelAvailabilityAvailable
+		}
 		var raw string
 		err := h.media.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key=$1", mediaDescriptionKey(groups[i].ID)).Scan(&raw)
 		if err == sql.ErrNoRows {
@@ -54,8 +72,10 @@ func (h *ModelPlazaHandler) attachDescriptions(ctx context.Context, groups []mod
 		}
 		groups[i].DescriptionVersion = descriptions.Version
 		for j := range groups[i].MediaModels {
-			groups[i].MediaModels[j].DisplayDescription = descriptions.Models[groups[i].MediaModels[j].Model]
-			if price, ok := descriptions.ReferencePrices[groups[i].MediaModels[j].Model]; ok {
+			model := groups[i].MediaModels[j].Model
+			groups[i].MediaModels[j].Availability = normalizeMediaModelAvailability(descriptions.Availability[model])
+			groups[i].MediaModels[j].DisplayDescription = descriptions.Models[model]
+			if price, ok := descriptions.ReferencePrices[model]; ok {
 				groups[i].MediaModels[j].OfficialReferencePrice = &price
 			}
 		}
@@ -186,6 +206,34 @@ func (h *ModelPlazaHandler) SaveMediaReferencePrice(c *gin.Context) {
 	})
 	if ok {
 		response.Success(c, gin.H{"description_version": version, "official_reference_price": input.Price})
+	}
+}
+
+// SaveMediaAvailability changes the display-only availability for one media
+// model within one group. It deliberately does not alter executable capability
+// snapshots, routing, billing, or request admission.
+func (h *ModelPlazaHandler) SaveMediaAvailability(c *gin.Context) {
+	if !requireMediaAdmin(c) {
+		return
+	}
+	var input struct {
+		GroupID         int64  `json:"group_id"`
+		Model           string `json:"model"`
+		Availability    string `json:"availability"`
+		ExpectedVersion int64  `json:"expected_version"`
+	}
+	if c.ShouldBindJSON(&input) != nil || input.GroupID <= 0 || input.Model == "" || len(input.Model) > 300 || input.ExpectedVersion < 0 || (input.Availability != mediaModelAvailabilityAvailable && input.Availability != mediaModelAvailabilityUnavailable) {
+		response.BadRequest(c, "Invalid model availability request")
+		return
+	}
+	version, ok := h.updateMediaDisplay(c, input.GroupID, input.Model, input.ExpectedVersion, func(metadata *mediaDescriptions) {
+		if metadata.Availability == nil {
+			metadata.Availability = map[string]string{}
+		}
+		metadata.Availability[input.Model] = input.Availability
+	})
+	if ok {
+		response.Success(c, gin.H{"description_version": version, "availability": input.Availability})
 	}
 }
 

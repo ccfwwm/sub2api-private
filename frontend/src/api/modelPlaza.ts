@@ -60,7 +60,7 @@ export interface PlazaModel {
 }
 
 export interface ModelPlazaGroup {
-	 description_version?: number
+  description_version?: number
   media_models?: PlazaMediaModel[]
   /** Availability of media-platform groups; missing on older servers means available. */
   media_availability?: 'available' | 'unavailable'
@@ -101,8 +101,10 @@ export interface PlazaMediaCharge {
   tiers: { up_to: string | null; unit_price: string | null }[]
 }
 export interface PlazaMediaModel {
-	 display_description?: string
+  display_description?: string
   official_reference_price?: PlazaMediaReferencePrice | null
+  /** Per-group, per-model display status; older servers default to available. */
+  availability?: 'available' | 'unavailable'
   model: string
   media_type: string
   operations: string[]
@@ -148,6 +150,10 @@ export async function saveMediaDescription(group_id: number, model: string, desc
 
 export async function saveMediaReferencePrice(group_id: number, model: string, official_reference_price: PlazaMediaReferencePrice | null, expected_version: number) {
   return (await apiClient.put<{ description_version: number; official_reference_price: PlazaMediaReferencePrice | null }>('/admin/media/model-reference-prices', { group_id, model, official_reference_price, expected_version })).data
+}
+
+export async function saveMediaAvailability(group_id: number, model: string, availability: 'available' | 'unavailable', expected_version: number) {
+  return (await apiClient.put<{ description_version: number; availability: 'available' | 'unavailable' }>('/admin/media/model-availability', { group_id, model, availability, expected_version })).data
 }
 
 export default modelPlazaAPI

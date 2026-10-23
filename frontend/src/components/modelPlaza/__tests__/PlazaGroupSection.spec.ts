@@ -125,16 +125,14 @@ describe('PlazaGroupSection 长上下文说明', () => {
   })
 })
 
-describe('PlazaGroupSection 媒体分组状态', () => {
-  it('only marks media groups and treats a missing status as available', () => {
+describe('PlazaGroupSection 媒体模型状态', () => {
+  it('does not show a group-level status because availability belongs to each media model', () => {
     const media = mountSection(group({ platform: 'imagevideo', media_availability: 'unavailable' }))
-    expect(media.get('[data-testid="media-group-status"]').text()).toContain('modelPlaza.mediaStatus.unavailable')
-    expect(media.get('[data-testid="media-group-status"]').find('icon-stub').attributes('name')).toBe('xCircle')
+    expect(media.find('[data-testid="media-group-status"]').exists()).toBe(false)
     media.unmount()
 
     const legacy = mountSection(group({ platform: 'imagevideo' }))
-    expect(legacy.get('[data-testid="media-group-status"]').text()).toContain('modelPlaza.mediaStatus.available')
-    expect(legacy.get('[data-testid="media-group-status"]').find('icon-stub').attributes('name')).toBe('checkCircle')
+    expect(legacy.find('[data-testid="media-group-status"]').exists()).toBe(false)
     legacy.unmount()
 
     const standard = mountSection(group({ platform: 'openai' }))

@@ -19,17 +19,6 @@
           always-show-rate
         />
         <span
-          v-if="group.platform === 'imagevideo'"
-          data-testid="media-group-status"
-          class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium"
-          :class="mediaStatus === 'available'
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-            : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'"
-        >
-          <Icon :name="mediaStatus === 'available' ? 'checkCircle' : 'xCircle'" size="xs" class="h-3 w-3" />
-          {{ t(`modelPlaza.mediaStatus.${mediaStatus}`) }}
-        </span>
-        <span
           v-if="group.is_exclusive"
           class="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
         >
@@ -117,7 +106,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const effectiveRate = computed(() => props.group.user_rate_multiplier ?? props.group.rate_multiplier)
-const mediaStatus = computed(() => props.group.media_availability ?? 'available')
 
 /** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
 const peakWindow = computed(() => {
