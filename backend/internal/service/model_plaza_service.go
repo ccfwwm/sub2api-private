@@ -241,7 +241,7 @@ func (s *ModelPlazaService) ListActiveGroups(ctx context.Context) ([]PlazaGroup,
 		out = append(out, PlazaGroup{
 			ID: g.ID, Name: g.Name, Description: g.Description, Platform: g.Platform,
 			MediaAvailability: NormalizeMediaAvailability(g.MediaAvailability),
-			SubscriptionType: g.SubscriptionType, RateMultiplier: g.RateMultiplier,
+			SubscriptionType:  g.SubscriptionType, RateMultiplier: g.RateMultiplier,
 			PeakRateEnabled: g.PeakRateEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd,
 			PeakRateMultiplier: g.PeakRateMultiplier, IsExclusive: g.IsExclusive,
 			ImageRateIndependent: g.ImageRateIndependent, ImageRateMultiplier: g.ImageRateMultiplier,

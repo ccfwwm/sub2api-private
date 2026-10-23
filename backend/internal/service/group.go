@@ -32,7 +32,7 @@ type Group struct {
 	// MediaAvailability is display-only metadata for imagevideo groups. It must
 	// never be consulted for routing, scheduling, or request authorization.
 	MediaAvailability string
-	Hydrated           bool // indicates the group was loaded from a trusted repository source
+	Hydrated          bool // indicates the group was loaded from a trusted repository source
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
