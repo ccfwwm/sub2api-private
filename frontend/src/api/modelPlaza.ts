@@ -62,6 +62,8 @@ export interface PlazaModel {
 export interface ModelPlazaGroup {
 	 description_version?: number
   media_models?: PlazaMediaModel[]
+  /** Availability of media-platform groups; missing on older servers means available. */
+  media_availability?: 'available' | 'unavailable'
   id: number
   name: string
   description: string

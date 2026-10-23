@@ -41,6 +41,7 @@ type PlazaGroup struct {
 	Name               string
 	Description        string
 	Platform           string
+	MediaAvailability  string
 	SubscriptionType   string
 	RateMultiplier     float64
 	PeakRateEnabled    bool
@@ -126,6 +127,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			Name:                      g.Name,
 			Description:               g.Description,
 			Platform:                  g.Platform,
+			MediaAvailability:         NormalizeMediaAvailability(g.MediaAvailability),
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,
 			PeakRateEnabled:           g.PeakRateEnabled,
@@ -238,6 +240,7 @@ func (s *ModelPlazaService) ListActiveGroups(ctx context.Context) ([]PlazaGroup,
 		g := &groups[i]
 		out = append(out, PlazaGroup{
 			ID: g.ID, Name: g.Name, Description: g.Description, Platform: g.Platform,
+			MediaAvailability: NormalizeMediaAvailability(g.MediaAvailability),
 			SubscriptionType: g.SubscriptionType, RateMultiplier: g.RateMultiplier,
 			PeakRateEnabled: g.PeakRateEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd,
 			PeakRateMultiplier: g.PeakRateMultiplier, IsExclusive: g.IsExclusive,

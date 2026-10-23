@@ -900,6 +900,12 @@ export default {
       accountsRateLimited: 'Limited:',
       accountsTotal: 'Total:',
       accountsUnit: 'accounts',
+      mediaStatus: {
+        label: 'Media group availability',
+        available: 'Available',
+        unavailable: 'Unavailable',
+        hint: 'Shown only in media catalogs; it does not disable the group or affect API requests.'
+      },
       rateAndAccounts: '{rate}x rate · {count} accounts',
       accountsCount: '{count} accounts',
       rateLabel: 'rate',

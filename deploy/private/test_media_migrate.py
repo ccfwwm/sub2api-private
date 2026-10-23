@@ -7,6 +7,8 @@ from media_migrate import reviewed_transaction, tracked_operation, unified_trans
 from media_migrate import monitor_transaction, validate_monitor_transaction, reviewed_monitor_upgrade, MONITOR_FILE
 from media_migrate import task_index_transaction, validate_task_index_transaction, reviewed_upgrade, TASK_INDEX_FILE
 from media_migrate import docs_transaction, validate_docs_transaction, reviewed_docs_upgrade, DOCS_FILE
+from media_migrate import (group_availability_transaction, validate_group_availability_transaction,
+                           reviewed_group_availability_upgrade, GROUP_AVAILABILITY_FILE, group_availability_statements)
 from media_migrate import (TEMPLATE_FILES, TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE, TEMPLATE_UPGRADE,
                           template_transaction, template_transaction_files, validate_template_transaction,
                           legacy_accounts_fingerprint_sql)
@@ -100,6 +102,53 @@ class MediaMigrationGateTests(unittest.TestCase):
             self.assertIsNone(reviewed_docs_upgrade(target, target, folder))
             for bad in ({**target, 'unexpected.sql': 'a' * 64}, {**target, DOCS_FILE: 'a' * 64}):
                 with self.assertRaises(ValueError): reviewed_docs_upgrade(before, bad, folder)
+
+    def test_group_availability_migration_is_exact_additive_and_defaulted_available(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        sql = (root / GROUP_AVAILABILITY_FILE).read_text(encoding='utf-8').strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        transaction = group_availability_transaction(sql, checksum)
+        self.assertTrue(validate_group_availability_transaction(transaction))
+        self.assertIn("DEFAULT 'available'", transaction)
+        self.assertIn("CHECK (media_availability IN ('available', 'unavailable'))", transaction)
+        self.assertFalse(validate_group_availability_transaction(transaction.replace(' COMMIT;', ' DROP TABLE groups; COMMIT;')))
+        for bad in (sql + ' UPDATE groups SET media_availability=\'unavailable\';',
+                    sql.replace("'unavailable'", "'disabled'"), sql.replace('VARCHAR(20)', 'TEXT')):
+            with self.subTest(sql=bad), self.assertRaises(ValueError):
+                group_availability_transaction(bad, hashlib.sha256(bad.encode()).hexdigest())
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, GROUP_AVAILABILITY_FILE).write_text(sql, encoding='utf-8')
+            before = {'old.sql': 'b' * 64}
+            target = {**before, GROUP_AVAILABILITY_FILE: checksum}
+            reviewed = reviewed_upgrade(before, target, folder)
+            self.assertEqual(reviewed['filename'], GROUP_AVAILABILITY_FILE)
+            self.assertEqual(reviewed['transaction'], transaction)
+            self.assertEqual(reviewed['expected_migrations'], target)
+            self.assertIsNone(reviewed_upgrade(target, target, folder))
+            for bad in ({**target, 'old.sql': 'a' * 64}, {**target, 'unexpected.sql': 'a' * 64},
+                        {**target, GROUP_AVAILABILITY_FILE: 'a' * 64}):
+                with self.subTest(target=bad), self.assertRaises(ValueError):
+                    reviewed_group_availability_upgrade(before, bad, folder)
+
+    def test_old_worker_stages_media_group_availability_only_for_matching_release(self):
+        sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / GROUP_AVAILABILITY_FILE).read_text().strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, GROUP_AVAILABILITY_FILE: checksum}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release = state / 'releases/v1.3.2'
+            release.mkdir(parents=True)
+            assets = state / 'automatic/receipt-assets'
+            assets.mkdir(parents=True)
+            (assets / GROUP_AVAILABILITY_FILE).write_text(sql, encoding='utf-8')
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.2', 'migrations': target}))
+            self.assertTrue(validate_group_availability_transaction(
+                reviewed_upgrade(before, target, release)['transaction']))
+            (assets / GROUP_AVAILABILITY_FILE).write_text(sql + ' DROP TABLE users;', encoding='utf-8')
+            with self.assertRaises(ValueError): reviewed_upgrade(before, target, release)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.1', 'migrations': target}))
+            with self.assertRaises(FileNotFoundError): reviewed_upgrade(before, target, release)
 
     def test_task_indexes_require_exact_sql_and_preserve_old_migrations(self):
         sql = (Path(__file__).resolve().parents[2] / 'backend/migrations' / TASK_INDEX_FILE).read_text().strip()

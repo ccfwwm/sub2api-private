@@ -381,7 +381,9 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description}
+	*input = UpdateGroupInput{
+		Name: input.Name, Description: input.Description, MediaAvailability: input.MediaAvailability,
+	}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
@@ -569,6 +571,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		RateMultiplier:                  input.RateMultiplier,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
+		MediaAvailability:               MediaAvailabilityAvailable,
 		SubscriptionType:                subscriptionType,
 		DailyLimitUSD:                   dailyLimit,
 		WeeklyLimitUSD:                  weeklyLimit,
@@ -790,6 +793,15 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.Status != "" {
 		group.Status = input.Status
+	}
+	if input.MediaAvailability != nil {
+		if group.Platform != PlatformImageVideo {
+			return nil, infraerrors.BadRequest("MEDIA_AVAILABILITY_REQUIRES_MEDIA_GROUP", "media_availability can only be set for imagevideo groups")
+		}
+		if err := ValidateMediaAvailability(*input.MediaAvailability); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_MEDIA_AVAILABILITY", err.Error())
+		}
+		group.MediaAvailability = *input.MediaAvailability
 	}
 	if input.LongContextPricingEnabled != nil {
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled

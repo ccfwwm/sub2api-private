@@ -68,6 +68,10 @@ func (Group) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.String("media_availability").
+			MaxLen(20).
+			Default("available").
+			Comment("媒体分组展示状态；不影响分组调度或请求授权"),
 		field.String("duplicate_operation_id").
 			MaxLen(64).
 			Optional().

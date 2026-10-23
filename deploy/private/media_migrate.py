@@ -30,6 +30,7 @@ UNIFIED_FILES = {
 MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
 TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
 DOCS_FILE = '248_public_imagevideo_docs.sql'
+GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
 TEMPLATE_SCHEMA_FILE = '249_media_protocol_templates.sql'
 LEGACY_TEMPLATE_FILE = '250_migrate_legacy_media_template_refs.sql'
 TEMPLATE_FILES = (TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE)
@@ -235,11 +236,63 @@ def reviewed_docs_upgrade(before, target, folder):
     return {'filename': DOCS_FILE, 'transaction': docs_transaction(sql, checksum), 'expected_migrations': target}
 
 
+def group_availability_statements():
+    return ("ALTER TABLE groups ADD COLUMN IF NOT EXISTS media_availability VARCHAR(20) "
+            "NOT NULL DEFAULT 'available' CHECK (media_availability IN ('available', 'unavailable'));")
+
+
+def group_availability_transaction(sql, checksum):
+    """Only add the display availability column with its two-value constraint."""
+    import re
+    normalized = ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+    if (normalized != ' '.join(group_availability_statements().split()) or
+            not re.fullmatch(r'[0-9a-f]{64}', checksum)):
+        raise ValueError('outside reviewed media group availability migration')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + group_availability_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{GROUP_AVAILABILITY_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_group_availability_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('251_media_group_availability\.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == group_availability_transaction(group_availability_statements(), match[1]))
+
+
+def reviewed_group_availability_upgrade(before, target, folder):
+    if before == target:
+        return None
+    if (GROUP_AVAILABILITY_FILE in before or
+            set(target) - set(before) != {GROUP_AVAILABILITY_FILE} or
+            {k: v for k, v in target.items() if k != GROUP_AVAILABILITY_FILE} != before):
+        raise ValueError('migration inventory differs outside reviewed media group availability migration')
+    folder = Path(folder)
+    source = folder / GROUP_AVAILABILITY_FILE
+    if not source.exists():
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / GROUP_AVAILABILITY_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / GROUP_AVAILABILITY_FILE
+                break
+    sql = source.read_text().replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if target[GROUP_AVAILABILITY_FILE] != checksum:
+        raise ValueError('media group availability migration checksum differs')
+    return {'filename': GROUP_AVAILABILITY_FILE,
+            'transaction': group_availability_transaction(sql, checksum),
+            'expected_migrations': target}
+
+
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
     if (set(target) - set(before)) & set(TEMPLATE_FILES):
         return reviewed_template_upgrade(before, target, folder)
+    if set(target) - set(before) == {GROUP_AVAILABILITY_FILE}:
+        return reviewed_group_availability_upgrade(before, target, folder)
     if set(target) - set(before) != {TASK_INDEX_FILE}:
         if set(target) - set(before) == {MONITOR_FILE}:
             return reviewed_monitor_upgrade(before, target, folder)

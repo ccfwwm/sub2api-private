@@ -190,6 +190,20 @@ func (_c *GroupCreate) SetNillableStatus(v *string) *GroupCreate {
 	return _c
 }
 
+// SetMediaAvailability sets the "media_availability" field.
+func (_c *GroupCreate) SetMediaAvailability(v string) *GroupCreate {
+	_c.mutation.SetMediaAvailability(v)
+	return _c
+}
+
+// SetNillableMediaAvailability sets the "media_availability" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableMediaAvailability(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetMediaAvailability(*v)
+	}
+	return _c
+}
+
 // SetDuplicateOperationID sets the "duplicate_operation_id" field.
 func (_c *GroupCreate) SetDuplicateOperationID(v string) *GroupCreate {
 	_c.mutation.SetDuplicateOperationID(v)
@@ -1075,6 +1089,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.MediaAvailability(); !ok {
+		v := group.DefaultMediaAvailability
+		_c.mutation.SetMediaAvailability(v)
+	}
 	if _, ok := _c.mutation.Platform(); !ok {
 		v := group.DefaultPlatform
 		_c.mutation.SetPlatform(v)
@@ -1264,6 +1282,14 @@ func (_c *GroupCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.MediaAvailability(); !ok {
+		return &ValidationError{Name: "media_availability", err: errors.New(`ent: missing required field "Group.media_availability"`)}
+	}
+	if v, ok := _c.mutation.MediaAvailability(); ok {
+		if err := group.MediaAvailabilityValidator(v); err != nil {
+			return &ValidationError{Name: "media_availability", err: fmt.Errorf(`ent: validator failed for field "Group.media_availability": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.DuplicateOperationID(); ok {
@@ -1492,6 +1518,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.MediaAvailability(); ok {
+		_spec.SetField(group.FieldMediaAvailability, field.TypeString, value)
+		_node.MediaAvailability = value
 	}
 	if value, ok := _c.mutation.DuplicateOperationID(); ok {
 		_spec.SetField(group.FieldDuplicateOperationID, field.TypeString, value)
@@ -2018,6 +2048,18 @@ func (u *GroupUpsert) SetStatus(v string) *GroupUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateStatus() *GroupUpsert {
 	u.SetExcluded(group.FieldStatus)
+	return u
+}
+
+// SetMediaAvailability sets the "media_availability" field.
+func (u *GroupUpsert) SetMediaAvailability(v string) *GroupUpsert {
+	u.Set(group.FieldMediaAvailability, v)
+	return u
+}
+
+// UpdateMediaAvailability sets the "media_availability" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateMediaAvailability() *GroupUpsert {
+	u.SetExcluded(group.FieldMediaAvailability)
 	return u
 }
 
@@ -3148,6 +3190,20 @@ func (u *GroupUpsertOne) SetStatus(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateStatus() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMediaAvailability sets the "media_availability" field.
+func (u *GroupUpsertOne) SetMediaAvailability(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMediaAvailability(v)
+	})
+}
+
+// UpdateMediaAvailability sets the "media_availability" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateMediaAvailability() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMediaAvailability()
 	})
 }
 
@@ -4594,6 +4650,20 @@ func (u *GroupUpsertBulk) SetStatus(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateStatus() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMediaAvailability sets the "media_availability" field.
+func (u *GroupUpsertBulk) SetMediaAvailability(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMediaAvailability(v)
+	})
+}
+
+// UpdateMediaAvailability sets the "media_availability" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateMediaAvailability() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMediaAvailability()
 	})
 }
 

@@ -569,6 +569,8 @@ export interface Group {
   name: string
   description: string | null
   platform: GroupPlatform
+  /** Media group availability shown to users; older API responses omit it. */
+  media_availability?: 'available' | 'unavailable'
   rate_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
   max_reasoning_effort?: string // Anthropic/OpenAI reasoning ceiling; empty means unlimited
@@ -859,6 +861,7 @@ export interface UpdateGroupRequest {
   name?: string
   description?: string | null
   platform?: GroupPlatform
+  media_availability?: 'available' | 'unavailable'
   rate_multiplier?: number
   is_exclusive?: boolean
   status?: 'active' | 'inactive'

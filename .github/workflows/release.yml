@@ -249,12 +249,14 @@ jobs:
           cp backend/migrations/248_public_imagevideo_docs.sql ./248_public_imagevideo_docs.sql
           cp backend/migrations/249_media_protocol_templates.sql ./249_media_protocol_templates.sql
           cp backend/migrations/250_migrate_legacy_media_template_refs.sql ./250_migrate_legacy_media_template_refs.sql
+          cp backend/migrations/251_media_group_availability.sql ./251_media_group_availability.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
           sha256sum 247_media_task_list_indexes.sql >> checksums.txt
           sha256sum 248_public_imagevideo_docs.sql >> checksums.txt
           sha256sum 249_media_protocol_templates.sql >> checksums.txt
           sha256sum 250_migrate_legacy_media_template_refs.sql >> checksums.txt
+          sha256sum 251_media_group_availability.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
@@ -275,4 +277,5 @@ jobs:
             248_public_imagevideo_docs.sql
             249_media_protocol_templates.sql
             250_migrate_legacy_media_template_refs.sql
+            251_media_group_availability.sql
             docs-image-inspect.json

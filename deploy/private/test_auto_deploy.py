@@ -78,7 +78,7 @@ class AutomaticDeployTests(unittest.TestCase):
    staged = stage_reviewed_migrations(assets, release)
    self.assertEqual(staged, list(REVIEWED_MIGRATION_ASSETS))
    self.assertEqual((release / '248_public_imagevideo_docs.sql').read_text(), '248_public_imagevideo_docs.sql')
-   for name in ('249_media_protocol_templates.sql', '250_migrate_legacy_media_template_refs.sql'):
+   for name in ('249_media_protocol_templates.sql', '250_migrate_legacy_media_template_refs.sql', '251_media_group_availability.sql'):
     self.assertEqual((release / name).read_text(), name)
 
  def test_online_verification_requires_all_production_domains(self):

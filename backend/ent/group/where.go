@@ -115,6 +115,11 @@ func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
 }
 
+// MediaAvailability applies equality check predicate on the "media_availability" field. It's identical to MediaAvailabilityEQ.
+func MediaAvailability(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldMediaAvailability, v))
+}
+
 // DuplicateOperationID applies equality check predicate on the "duplicate_operation_id" field. It's identical to DuplicateOperationIDEQ.
 func DuplicateOperationID(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDuplicateOperationID, v))
@@ -908,6 +913,71 @@ func StatusEqualFold(v string) predicate.Group {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// MediaAvailabilityEQ applies the EQ predicate on the "media_availability" field.
+func MediaAvailabilityEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityNEQ applies the NEQ predicate on the "media_availability" field.
+func MediaAvailabilityNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityIn applies the In predicate on the "media_availability" field.
+func MediaAvailabilityIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldMediaAvailability, vs...))
+}
+
+// MediaAvailabilityNotIn applies the NotIn predicate on the "media_availability" field.
+func MediaAvailabilityNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldMediaAvailability, vs...))
+}
+
+// MediaAvailabilityGT applies the GT predicate on the "media_availability" field.
+func MediaAvailabilityGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityGTE applies the GTE predicate on the "media_availability" field.
+func MediaAvailabilityGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityLT applies the LT predicate on the "media_availability" field.
+func MediaAvailabilityLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityLTE applies the LTE predicate on the "media_availability" field.
+func MediaAvailabilityLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityContains applies the Contains predicate on the "media_availability" field.
+func MediaAvailabilityContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityHasPrefix applies the HasPrefix predicate on the "media_availability" field.
+func MediaAvailabilityHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityHasSuffix applies the HasSuffix predicate on the "media_availability" field.
+func MediaAvailabilityHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityEqualFold applies the EqualFold predicate on the "media_availability" field.
+func MediaAvailabilityEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldMediaAvailability, v))
+}
+
+// MediaAvailabilityContainsFold applies the ContainsFold predicate on the "media_availability" field.
+func MediaAvailabilityContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldMediaAvailability, v))
 }
 
 // DuplicateOperationIDEQ applies the EQ predicate on the "duplicate_operation_id" field.

@@ -116,6 +116,10 @@ Release 必须包含 `249_media_protocol_templates.sql`、`250_migrate_legacy_me
 
 正式升级先备份并演练，再等待闲置和请求排空；249/250 的事务在排空成功后、应用容器切换前执行。排空失败时不修改生产配置。回退使用本次捕获的旧镜像与原配置，不覆盖生产数据库；普通 rollback 仍拒绝未经证明的迁移清单差异。
 
+## v1.3.2 媒体分组可用状态
+
+正式 Release 应包含 `251_media_group_availability.sql` 及 checksum。管理器仅接受在 `groups` 增加 `media_availability VARCHAR(20) NOT NULL DEFAULT 'available'` 并限制为 `available` / `unavailable` 的固定语句；迁移清单必须只有该项新增，SQL 在锁超时与语句超时保护下原子执行。旧 worker 只会从匹配版本、匹配迁移清单的已校验 Release assets 取回迁移文件。先完成备份副本演练，再按 `prepare v1.3.2 --confirm PREPARE` 和 `upgrade v1.3.2 --confirm UPGRADE` 执行，不要手工运行 SQL。
+
 ## v1.2.4 媒体任务分页索引
 
 `247_media_task_list_indexes.sql` 仅增加 `media_tasks` 的全局及用户时间/任务 ID 索引。管理器只接受这两条固定 CREATE INDEX、对应的原始 checksum 和唯一新增迁移；其他 schema 差异仍拒绝。正式 Release 包含该 SQL 及校验值，旧 worker 下载后新管理器可从同一 Release 的已验证 assets 读取。

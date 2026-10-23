@@ -676,6 +676,10 @@ export default {
       exclusive: 'Exclusive',
       subscription: 'Subscription'
     },
+    mediaStatus: {
+      available: 'Available',
+      unavailable: 'Unavailable'
+    },
     detail: {
       noModels: 'No models configured for this group',
       mediaCapabilities: 'Media capabilities',

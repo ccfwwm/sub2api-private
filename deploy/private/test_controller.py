@@ -70,6 +70,20 @@ class DeploymentTests(unittest.TestCase):
                 self.controller.apply_reviewed_media_migration(transaction)
             command.assert_not_called()
 
+    def test_group_availability_migration_uses_exact_reviewed_transaction(self):
+        from media_migrate import group_availability_transaction
+        migration = Path(__file__).resolve().parents[2] / 'backend/migrations/251_media_group_availability.sql'
+        sql = migration.read_text(encoding='utf-8').strip()
+        transaction = group_availability_transaction(sql, __import__('hashlib').sha256(sql.encode()).hexdigest())
+        with patch('controller.run') as command:
+            self.controller.apply_reviewed_media_migration(transaction)
+            command.assert_called_once()
+        for bad in (transaction.replace("DEFAULT 'available'", "DEFAULT 'unavailable'"),
+                    transaction.replace(' COMMIT;', ' DROP TABLE groups; COMMIT;')):
+            with patch('controller.run') as command, self.assertRaisesRegex(ValueError, 'reviewed atomic'):
+                self.controller.apply_reviewed_media_migration(bad)
+                command.assert_not_called()
+
     def test_task_index_rehearsal_can_fingerprint_media_but_not_arbitrary_tables(self):
         for table in ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):
             self.assertIn('"' + table + '"', self.controller.fingerprint_sql(table))

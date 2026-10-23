@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import Icon from '@/components/icons/Icon.vue'
 import MediaPublicLayout from '@/components/media/MediaPublicLayout.vue'
 import PlazaMediaPricing from '@/components/modelPlaza/PlazaMediaPricing.vue'
 import { getPublicMediaCatalog, type ModelPlazaResponse } from '@/api/modelPlaza'
 const data = ref<ModelPlazaResponse | null>(null), loading = ref(false), error = ref('')
+const { t } = useI18n()
 const search = ref(''), group = ref('')
 async function refresh() {
   loading.value = true; error.value = ''
@@ -17,10 +20,10 @@ onMounted(refresh)
 <template>
   <MediaPublicLayout>
     <section class="space-y-5">
-      <div class="flex flex-wrap gap-3"><input v-model="search" type="search" class="input max-w-sm" placeholder="搜索模型名称" aria-label="搜索模型" /><select v-model="group" class="input max-w-xs" aria-label="选择分组"><option value="">全部分组</option><option v-for="g in data?.groups" :key="g.id" :value="String(g.id)">{{ g.name }}</option></select><button class="btn btn-secondary" :disabled="loading" @click="refresh">刷新</button></div>
+      <div class="flex flex-wrap gap-3"><input v-model="search" type="search" class="input max-w-sm" placeholder="搜索模型名称" aria-label="搜索模型" /><select v-model="group" class="input max-w-xs" aria-label="选择分组"><option value="">全部分组</option><option v-for="g in data?.groups" :key="g.id" :value="String(g.id)">{{ g.name }}（{{ t(`modelPlaza.mediaStatus.${g.media_availability ?? 'available'}`) }}）</option></select><button class="btn btn-secondary" :disabled="loading" @click="refresh">刷新</button></div>
       <p v-if="error" role="alert" class="text-red-600">{{ error }}</p><p v-else-if="loading && !data" role="status">正在加载模型能力…</p>
       <p v-if="data?.notices?.length" class="text-sm text-amber-700">部分分组暂不可用，其余模型仍可查看。</p>
-      <section v-for="g in visible" :key="g.id" class="rounded-xl border bg-white p-4 dark:border-dark-700 dark:bg-dark-900"><h2 class="mb-4 font-semibold">{{ g.name }}</h2><PlazaMediaPricing :models="g.media_models!" :group-id="g.id" :description-version="g.description_version" :multiplier="g.user_rate_multiplier ?? g.rate_multiplier" :image-multiplier="g.image_rate_independent ? g.image_rate_multiplier : undefined" :video-multiplier="g.video_rate_independent ? g.video_rate_multiplier : undefined" /></section>
+      <section v-for="g in visible" :key="g.id" class="rounded-xl border bg-white p-4 dark:border-dark-700 dark:bg-dark-900"><header class="mb-4 flex flex-wrap items-center gap-2"><h2 class="font-semibold">{{ g.name }}</h2><span data-testid="media-group-status" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium" :class="(g.media_availability ?? 'available') === 'available' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'"><Icon :name="(g.media_availability ?? 'available') === 'available' ? 'checkCircle' : 'xCircle'" size="xs" class="h-3 w-3" />{{ t(`modelPlaza.mediaStatus.${g.media_availability ?? 'available'}`) }}</span></header><PlazaMediaPricing :models="g.media_models!" :group-id="g.id" :description-version="g.description_version" :multiplier="g.user_rate_multiplier ?? g.rate_multiplier" :image-multiplier="g.image_rate_independent ? g.image_rate_multiplier : undefined" :video-multiplier="g.video_rate_independent ? g.video_rate_multiplier : undefined" /></section>
       <p v-if="!loading && !error && !visible.length" class="py-8 text-center text-gray-500">暂无符合条件的模型。</p>
     </section>
   </MediaPublicLayout>

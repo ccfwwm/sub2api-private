@@ -681,6 +681,10 @@ export default {
       exclusive: '专属分组',
       subscription: '订阅'
     },
+    mediaStatus: {
+      available: '可用',
+      unavailable: '不可用'
+    },
     detail: {
       noModels: '该分组暂未配置模型',
       mediaCapabilities: '媒体能力',

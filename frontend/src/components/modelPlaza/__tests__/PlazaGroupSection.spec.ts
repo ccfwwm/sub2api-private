@@ -125,6 +125,24 @@ describe('PlazaGroupSection 长上下文说明', () => {
   })
 })
 
+describe('PlazaGroupSection 媒体分组状态', () => {
+  it('only marks media groups and treats a missing status as available', () => {
+    const media = mountSection(group({ platform: 'imagevideo', media_availability: 'unavailable' }))
+    expect(media.get('[data-testid="media-group-status"]').text()).toContain('modelPlaza.mediaStatus.unavailable')
+    expect(media.get('[data-testid="media-group-status"]').find('icon-stub').attributes('name')).toBe('xCircle')
+    media.unmount()
+
+    const legacy = mountSection(group({ platform: 'imagevideo' }))
+    expect(legacy.get('[data-testid="media-group-status"]').text()).toContain('modelPlaza.mediaStatus.available')
+    expect(legacy.get('[data-testid="media-group-status"]').find('icon-stub').attributes('name')).toBe('checkCircle')
+    legacy.unmount()
+
+    const standard = mountSection(group({ platform: 'openai' }))
+    expect(standard.find('[data-testid="media-group-status"]').exists()).toBe(false)
+    standard.unmount()
+  })
+})
+
 describe('PlazaGroupSection 高峰配置传递', () => {
   it('分组启用高峰时把窗口描述与倍率传给价格表', () => {
     const wrapper = mountSection(

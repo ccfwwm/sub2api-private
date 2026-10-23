@@ -132,6 +132,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	for _, key := range []string{
 		"id", "name", "description", "platform", "subscription_type",
 		"rate_multiplier", "user_rate_multiplier", "is_exclusive", "models",
+		"media_availability",
 		"peak_rate_enabled", "peak_start", "peak_end", "peak_rate_multiplier",
 		"image_rate_independent", "image_rate_multiplier", "long_context_pricing_enabled",
 		"video_rate_independent", "video_rate_multiplier",
@@ -139,6 +140,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 		_, exists := decoded[key]
 		require.Truef(t, exists, "plaza group DTO must expose %q", key)
 	}
+	require.Equal(t, service.MediaAvailabilityAvailable, decoded["media_availability"], "legacy groups with no stored value should be shown as available")
 	require.InDelta(t, 0.5, decoded["user_rate_multiplier"].(float64), 1e-9)
 	require.Equal(t, true, decoded["video_rate_independent"])
 	require.Equal(t, 0.7, decoded["video_rate_multiplier"])

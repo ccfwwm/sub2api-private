@@ -893,6 +893,12 @@ export default {
       accountsRateLimited: '限流:',
       accountsTotal: '总量:',
       accountsUnit: '个账号',
+      mediaStatus: {
+        label: '媒体分组可用状态',
+        available: '可用',
+        unavailable: '不可用',
+        hint: '该状态仅展示在媒体模型目录，不会停用分组或影响 API 调用。'
+      },
       form: {
         name: '名称',
         description: '描述',
