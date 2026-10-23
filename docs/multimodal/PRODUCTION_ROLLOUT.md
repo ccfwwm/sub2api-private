@@ -1,6 +1,41 @@
 # 多模态生产发布记录
 
-## 当前生产：v1.3.1
+## 当前生产：v1.3.2
+
+北京时间 **2026-10-23 17:02:36**（`2026-10-23T09:02:36.764114Z`）已按用户授权立即切换，升级任务为 `succeeded`，三个公网入口均独立验收为 `1.3.2`。
+
+- 发布提交及不可变标签：`17dded99cd77b22df87358bf6a27c35ced180486`、`v1.3.2`。
+- 应用镜像：`ghcr.io/ccfwwm/sub2api-private@sha256:7a15d11d8217a3fe6b04c4b202ab9ef6133af332ac27361c0658bd508eab6b12`。
+- 文档镜像：`ghcr.io/ccfwwm/sub2api-private-docs@sha256:7b4ea82bf6951f8c3c54eea7de8ba60b76ff6cca8ce62b47372d2a1969e5fab9`。
+- 升级任务：`c81776d45eff478481fe11d90f8d069d`；备份：`2f8463f7e31a4aaf8882c265347ef701`。
+- 切换方式：`immediate=true`、`cutover_mode=immediate`；本次备份和隔离恢复验证成功。
+- [正式发布](https://github.com/ccfwwm/sub2api-private/releases/tag/v1.3.2)；[成功发布流水线](https://github.com/ccfwwm/sub2api-private/actions/runs/39922270146)；功能说明见 [RELEASE-v1.3.2.md](RELEASE-v1.3.2.md)。
+
+### 功能与生产验收
+
+- 管理员可编辑媒体分组“可用 / 不可用”，默认全部可用；用户在模型广场和多媒体模型能力页看到对应状态文字及图标。
+- 状态仅用于展示，不改变 API 调用、调度、定价或计费。
+- 真实普通用户浏览器已验证能力页和模型广场的绿色 `checkCircle`、“可用”文字；能力页分组下拉含“可用”，16 行模型正常显示。
+- `code.aicodeme.cn`、`code.aicodeme.xyz`、`hkcode.aicodeme.xyz` 独立 GET 验证健康接口 HTTP 200、公共版本 `1.3.2`。
+- 三个入口公共媒体目录均为 1 个分组（ID `66`）、`media_availability=available`、16 个模型，响应使用 `Cache-Control: private, no-store`。
+- 渠道只读 `GET /v1/models` 返回 HTTP 200、16 个模型；本轮未提交新的付费生成调用。
+
+### 测试、迁移与保护检查
+
+后端完整 unit / integration、前端 611 项关键测试及 20 项定向回归、lint、typecheck、生产构建均通过；部署工具 71 项通过、1 项跳过。正式发布流水线的安全检查、应用及文档镜像验证、恢复与回退演练全部通过。
+
+- 迁移 `251_media_group_availability.sql` 增加 `media_availability`，非空、默认 `available`，仅允许 `available` / `unavailable`。
+- 独立 SSH 与 SQL 核验：迁移文件名及 checksum 匹配；非空、默认值、两值约束均存在；现有 67 个分组全部为 `available`，媒体分组 `66` 唯一且可用。
+- 应用及文档运行镜像身份和 revision 均匹配正式 Release；应用 healthy、文档 running。
+- PostgreSQL、Redis 的容器 ID 和启动时间保护检查通过。
+- 前次自动部署作业 `75527f16b1be486c8b3978d4c6a9032f` 已完成迁移恢复、回退和原数据不变验证，`group_availability_migration` 的 `restore_verified`、`rollback_verified`、`data_unchanged` 均为 `true`；对应备份 `761c343b19a44140a2d371b9d17d4ae2`。
+- 本次立即切换时数据库已包含迁移 251，因此未重复记录该迁移演练字段，保留前次验证记录。
+
+前次[自动部署运行](https://github.com/ccfwwm/sub2api-private/actions/runs/39925813037) 以 `failure` 结束，宿主机任务为 `failed_needs_inspection`，未完成切换，原失败记录保留；精确原因尚未确认。本次成功来自上方独立的立即切换任务。
+
+本段为发布后的文档同步，不移动已发布标签，不重新构建正式产物。
+
+## 历史生产：v1.3.1
 
 北京时间 **2026-10-23 03:35:59** 已按用户授权立即切换，不等待自然空闲。升级任务为 `succeeded`，应用容器 healthy；三个公网入口均返回版本 `1.3.1`。
 
