@@ -3,7 +3,7 @@ import {flushPromises,mount} from '@vue/test-utils'
 import {accountMediaCapabilities,mergeDiscoveredMediaModels,newMediaCapability} from '@/types/media'
 import MediaAccountModelsEditor from '../MediaAccountModelsEditor.vue'
 
-const templateAPI = vi.hoisted(() => ({list:vi.fn(),history:vi.fn()}))
+const templateAPI = vi.hoisted(() => ({list:vi.fn(),history:vi.fn(),effective:vi.fn()}))
 vi.mock('@/api/media-protocols',()=>({mediaProtocolsAPI:templateAPI}))
 const accountAPI = vi.hoisted(() => ({ syncUpstreamModels: vi.fn(), syncUpstreamModelsPreview: vi.fn() }))
 vi.mock('@/api/admin',()=>({adminAPI:{accounts:accountAPI}}))
@@ -42,7 +42,8 @@ describe('动态媒体模板配置',()=>{
 describe('账号模板输出配置',()=>{
  beforeEach(()=>{
   templateAPI.history.mockResolvedValue([])
-  templateAPI.list.mockResolvedValue([
+  templateAPI.effective.mockResolvedValue([])
+  templateAPI.list.mockImplementation(async (kind: string) => kind === 'bindings' ? [] : [
    {id:'multi-parts',published_version:2,config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']},published_config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']}},
    {id:'gemini-audio-parts',published_version:1,config:{name:'Audio parts',media_types:['audio'],operations:['audio']}}
   ])
@@ -100,6 +101,21 @@ describe('账号模板输出配置',()=>{
   expect((wrapper.get('[aria-label="启用操作 speech"]').element as HTMLInputElement).checked).toBe(true)
   expect(wrapper.find('[aria-label="启用操作 image"]').exists()).toBe(false)
   expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  wrapper.unmount()
+ })
+ it('shows the resolved template version and the binding that supplies it',async()=>{
+  templateAPI.effective.mockResolvedValueOnce([{
+   model:'arbitrary-model',account_ids:[7],template_ref:{id:'multi-parts',version:2},
+   execution_template:{name:'Mixed parts',status:'enabled'},
+   binding_versions:[{id:'account-model-binding',version:4}]
+  }])
+  templateAPI.list.mockImplementation(async (kind: string) => kind === 'bindings'
+   ? [{id:'account-model-binding',config:{account_id:7,model:'arbitrary-model'}}]
+   : [{id:'multi-parts',published_version:2,config:{name:'Mixed parts'},published_config:{name:'Mixed parts'}}])
+  const wrapper=mount(MediaAccountModelsEditor,{props:{modelValue:[newMediaCapability('arbitrary-model')],accountId:7,account:{id:7,group_ids:[19]} as never,baseUrl:'https://example.invalid'},global:{stubs:{AccountTestModal:true}}})
+  await flushPromises()
+  expect(templateAPI.effective).toHaveBeenCalledWith(19)
+  expect(wrapper.text()).toContain('Mixed parts · v2 · 账号+模型绑定')
   wrapper.unmount()
  })
  it('imports all discovered models in one action without replacing existing bindings',async()=>{

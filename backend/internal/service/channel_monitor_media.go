@@ -266,7 +266,10 @@ type monitorMediaTask struct {
 	Revision       string           `json:"revision"`
 	Fingerprint    string           `json:"fingerprint"`
 	StartedAt      time.Time        `json:"started_at"`
+	NextRetryAt    time.Time        `json:"next_retry_at,omitempty"`
+	RetryAttempts  int              `json:"retry_attempts,omitempty"`
 	State          string           `json:"state"`
+	ExplicitReject bool             `json:"explicit_reject,omitempty"`
 	UpstreamID     string           `json:"upstream_id"`
 	ResultStatus   string           `json:"result_status,omitempty"`
 	Message        string           `json:"message,omitempty"`
@@ -282,6 +285,53 @@ func (s *ChannelMonitorService) monitorMediaStatePath(id int64, model string) st
 		root = filepath.Join("data", "channel-monitor-tasks")
 	}
 	return filepath.Join(root, fmt.Sprintf("%d-%x.state", id, sha256.Sum256([]byte(model))))
+}
+
+// ConfirmMediaTaskReset clears a blocked task only after an administrator has
+// reconciled its upstream state. A known active task remains query-only.
+func (s *ChannelMonitorService) ConfirmMediaTaskReset(ctx context.Context, id int64, model string, confirmed bool) error {
+	if !confirmed || strings.TrimSpace(model) == "" {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_RESET_CONFIRMATION_REQUIRED", "Confirm the upstream task was checked before retrying")
+	}
+	m, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	allowed := false
+	for _, candidate := range normalizeModels(append([]string{m.PrimaryModel}, m.ExtraModels...)) {
+		allowed = allowed || candidate == model
+	}
+	if m.Provider != MonitorProviderImageVideo || !allowed {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_MODEL_INVALID", "Model is not part of this media monitor")
+	}
+	lock, _ := s.mediaMonitorLocks.LoadOrStore(id, &sync.Mutex{})
+	mu, ok := lock.(*sync.Mutex)
+	if !ok || !mu.TryLock() {
+		return infraerrors.Conflict("CHANNEL_MONITOR_MEDIA_CHECK_RUNNING", "A media check is still running")
+	}
+	defer mu.Unlock()
+
+	path := s.monitorMediaStatePath(id, model)
+	stored, err := os.ReadFile(path)
+	if err != nil {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_TASK_NOT_BLOCKED", "No blocked media task is available to reset")
+	}
+	plain, err := s.encryptor.Decrypt(string(stored))
+	var task monitorMediaTask
+	if err != nil || json.Unmarshal([]byte(plain), &task) != nil {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_JOURNAL_UNREADABLE", "The task journal cannot be safely reset")
+	}
+	resettable := task.ResultStatus == MonitorStatusFailed || task.ResultStatus == MonitorStatusError && task.UpstreamID == ""
+	if task.State != "blocked" || task.ExplicitReject || !resettable {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_TASK_NOT_RESETTABLE", "Only an unresolved or terminal failed task can be reset")
+	}
+	if task.UpstreamID != "" && task.ResultStatus != MonitorStatusFailed {
+		return infraerrors.BadRequest("CHANNEL_MONITOR_MEDIA_TASK_STILL_QUERYABLE", "The original task has an ID and must be queried instead of resubmitted")
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reset media task journal: %w", err)
+	}
+	return nil
 }
 
 func (s *ChannelMonitorService) saveMonitorMediaTask(path string, task monitorMediaTask) error {
@@ -368,6 +418,13 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		}
 		if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed {
 			readErr = os.ErrNotExist
+		} else if task.ExplicitReject && !task.NextRetryAt.IsZero() {
+			if time.Now().Before(task.NextRetryAt) {
+				res.Status = MonitorStatusFailed
+				res.Message = task.Message + "; retry available after " + task.NextRetryAt.UTC().Format(time.RFC3339)
+				return res
+			}
+			readErr = os.ErrNotExist
 		} else if task.State != "completed" && (task.Account.BaseURL != m.Endpoint || task.Account.Key != m.APIKey) {
 			res.Message = "generation: 配置已变化，需核对原任务后恢复；no resubmission"
 			return res
@@ -380,6 +437,7 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	wasPending := task.State != "completed" && !os.IsNotExist(readErr)
 	var upstream media.UpstreamResult
 	var err error
+	submittedThisCheck := false
 	if os.IsNotExist(readErr) || task.State == "completed" {
 		entry := c.Models[model]
 		if entry.Capability == nil {
@@ -422,6 +480,7 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			req.Wire = &wire
 		}
 		upstream, err = adapter.Submit(ctx, cap, req, task.Account)
+		submittedThisCheck = true
 	} else {
 		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
 		if task.UpstreamID == "" && canRecover && task.IdempotencyKey != "" {
@@ -450,6 +509,18 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		}
 	}
 	if err != nil {
+		if submittedThisCheck {
+			task.State = "blocked"
+			task.ResultStatus = MonitorStatusError
+			task.Message = "generation: acceptance uncertain; check the original upstream request before retrying, then use the confirmed reset action; no resubmission"
+			task.Message = truncateMessage(task.Message)
+			if s.saveMonitorMediaTask(path, task) != nil {
+				res.Status, res.Message = MonitorStatusError, "generation: submission outcome uncertain and journal update failed; no resubmission"
+				return res
+			}
+			res.Status, res.Message = task.ResultStatus, task.Message
+			return res
+		}
 		res.Message = "generation: 原任务查询暂不可用；保留任务 " + task.UpstreamID + "，下次继续查询"
 		return res
 	}
@@ -473,7 +544,23 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		}
 	case "failed":
 		task.State, res.Status = "blocked", MonitorStatusFailed
-		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; edit detection settings and reset task before retrying; no resubmission"
+		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m)
+		if submittedThisCheck && upstream.Rejected && upstream.Retryable {
+			delay := upstream.RetryAfter
+			if delay <= 0 {
+				shift := min(task.RetryAttempts, 6)
+				delay = 30 * time.Second * time.Duration(1<<shift)
+			}
+			if delay > 24*time.Hour {
+				delay = 24 * time.Hour
+			}
+			task.ExplicitReject = true
+			task.RetryAttempts++
+			task.NextRetryAt = time.Now().Add(delay)
+			res.Message += "; explicitly rejected; retry after " + task.NextRetryAt.UTC().Format(time.RFC3339) + " on a later check; no resubmission in this request"
+		} else {
+			res.Message += "; edit detection settings and reset task before retrying; no resubmission"
+		}
 	default:
 		task.State = "blocked"
 		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; acceptance uncertain; reset task only after checking the original request; no resubmission"

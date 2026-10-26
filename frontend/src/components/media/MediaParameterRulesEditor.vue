@@ -69,18 +69,33 @@ function setValue(index: number, event: Event) {
     set(index, 'value', parsed); error.value = ''
   } catch { error.value = '值格式无效，请核对所选类型。' }
 }
+function ruleHint(op: string) {
+  const hints: Record<string, string> = {
+    default: '仅当目标字段缺失时补值。例：目标 quality，类型 number，值 1；不会覆盖调用方已有值。',
+    fixed: '无论调用方传什么都写入固定值。例：目标 model，类型 string，值 provider-image-v2。',
+    rename: '把源字段移动到目标字段并移除源字段。例：resolution → output_resolution；路径不要相互包含。',
+    copy: '复制源字段到目标字段并保留原字段。例：prompt → text，两个字段会同时存在。',
+    map: '按原值精确匹配后替换。例：quality 的 high → hd；未匹配值可报错或保留。',
+    convert: '将源值转换成指定基础类型。例：字符串 "5" 转为 integer 5；无效数字会报错。',
+    wrap: '把源值放进目标对象路径。例：prompt → input.text 会生成 {"input":{"text":"..."}}。',
+    remove: '删除源字段。例：删除客户端内部字段 debug；不能填写目标字段。',
+    allow: '只保留列出的字段，其余字段会移除。例：model,prompt,quality；确认素材字段也包含在列表中。'
+  }
+  return hints[op] || '先选择规则类型，再按示例填写字段路径和值。'
+}
 </script>
 <template>
   <fieldset class="space-y-3 rounded-lg border p-3 dark:border-dark-600">
     <legend class="px-1 text-sm font-medium">请求参数规则</legend>
-    <p class="text-xs text-gray-500">依次设置字段和规则。重命名的源和目标不能相互包含；模型映射使用专用输入框。</p>
+    <p class="text-xs text-gray-500">阶段决定规则运行时点：能力与计价前用于统一、校验用户输入；上游发送前用于改写协议字段。源/目标支持点号路径，例如 contents.parts；模型字段由“模型写入目标”设置。</p>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
     <div v-for="(rule,index) in modelValue" :key="index" class="grid gap-2 rounded-lg bg-gray-50 p-3 dark:bg-dark-800 sm:grid-cols-3">
       <label class="text-xs">阶段<select class="input w-full" :value="rule.phase" @change="set(index,'phase',value($event))"><option value="semantic">请求能力与计价前</option><option value="wire">上游发送前</option></select></label>
       <label class="text-xs">规则<select class="input w-full" :aria-label="'规则类型 ' + (index+1)" :value="rule.op" @change="setOperation(index,value($event))"><option v-for="[op,label] in [['default','默认值'],['fixed','固定值'],['rename','重命名'],['copy','复制'],['map','值映射'],['convert','类型转换'],['wrap','包装'],['remove','移除'],['allow','保留指定字段']]" :key="op" :value="op">{{ label }}</option></select></label>
       <button type="button" class="text-right text-xs text-red-600" @click="emit('update:modelValue',modelValue.filter((_,i)=>i!==index))">删除规则 {{ index+1 }}</button>
-      <label v-if="!['default','fixed','allow'].includes(String(rule.op))" class="text-xs">源字段<input class="input w-full" :value="rule.source" @change="set(index,'source',value($event))" /></label>
-      <label v-if="!['remove','allow'].includes(String(rule.op))" class="text-xs">目标字段<input class="input w-full" :value="rule.target" @change="set(index,'target',value($event))" /></label>
+      <p class="sm:col-span-3 rounded border border-blue-100 bg-blue-50 px-2 py-1.5 text-xs leading-relaxed text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">{{ ruleHint(String(rule.op)) }}</p>
+      <label v-if="!['default','fixed','allow'].includes(String(rule.op))" class="text-xs">源字段<input class="input w-full" :placeholder="rule.op === 'map' ? 'quality' : 'resolution / contents.parts'" :value="rule.source" @change="set(index,'source',value($event))" /></label>
+      <label v-if="!['remove','allow'].includes(String(rule.op))" class="text-xs">目标字段<input class="input w-full" :placeholder="rule.op === 'wrap' ? 'input.text' : 'output_resolution'" :value="rule.target" @change="set(index,'target',value($event))" /></label>
       <template v-if="['default','fixed'].includes(String(rule.op))">
         <label class="text-xs">值类型<select class="input w-full" :aria-label="'值类型 ' + (index+1)" :value="valueType(rule)" @change="set(index,'value',({string:'',number:0,boolean:false,null:null,json:{}} as Record<string,unknown>)[value($event)])"><option value="string">文本</option><option value="number">数字</option><option value="boolean">布尔值</option><option value="null">空值</option><option value="json">对象 / 数组</option></select></label>
         <label class="text-xs">值<input class="input w-full" :aria-label="'规则值 ' + (index+1)" :disabled="rule.value === null" :value="typeof rule.value === 'string' ? rule.value : JSON.stringify(rule.value)" @change="setValue(index,$event)" /></label>

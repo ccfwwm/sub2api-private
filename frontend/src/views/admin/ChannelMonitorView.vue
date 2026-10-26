@@ -107,6 +107,7 @@
               :duplicating="duplicatingIds.has(row.id)"
               @run="handleRunNow"
               @duplicate="handleDuplicate"
+      @history="handleViewHistory"
               @edit="openEditDialog"
               @delete="handleDelete"
             />
@@ -154,6 +155,7 @@
       :results="runResults"
       :editable="runMonitor?.provider === 'imagevideo'"
       @edit="editRunMonitor"
+      @reset="handleResetMediaTask"
       @close="showRunResult = false"
     />
 
@@ -349,9 +351,45 @@ async function handleRunNow(row: ChannelMonitor) {
     // Refresh row to get latest status from backend
     void reload()
   } catch (err: unknown) {
+    try {
+      const history = await adminAPI.channelMonitor.listHistory(row.id, { limit: 20 })
+      if (history.items.length > 0) {
+        runResults.value = history.items
+        runMonitor.value = row
+        showRunResult.value = true
+        appStore.showSuccess(t('admin.channelMonitor.viewingSavedResults'))
+        return
+      }
+    } catch {
+      // Keep the original run error when history cannot be fetched.
+    }
     appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.runFailed')))
   } finally {
     runningId.value = null
+  }
+}
+
+async function handleViewHistory(row: ChannelMonitor) {
+  try {
+    const history = await adminAPI.channelMonitor.listHistory(row.id, { limit: 50 })
+    runResults.value = history.items
+    runMonitor.value = row
+    showRunResult.value = true
+    if (history.items.length === 0) appStore.showSuccess(t('admin.channelMonitor.noSavedResults'))
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('common.error')))
+  }
+}
+
+async function handleResetMediaTask(model: string) {
+  const confirmed = window.confirm(t('admin.channelMonitor.confirmMediaTaskReset'))
+  if (!confirmed || !runMonitor.value) return
+  try {
+    await adminAPI.channelMonitor.confirmMediaTaskReset(runMonitor.value.id, model)
+    appStore.showSuccess(t('admin.channelMonitor.mediaTaskReset'))
+    showRunResult.value = false
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('common.error')))
   }
 }
 

@@ -711,6 +711,70 @@ func (h *UserHandler) GetUserPlatformQuotas(c *gin.Context) {
 	response.Success(c, map[string]any{"platform_quotas": out})
 }
 
+type batchPlatformQuotasRequest struct {
+	UserIDs []int64 `json:"user_ids" binding:"required,min=1,max=100,dive,gt=0"`
+}
+
+// BatchGetUserPlatformQuotas returns quota rows for one bounded user page.
+func (h *UserHandler) BatchGetUserPlatformQuotas(c *gin.Context) {
+	var req batchPlatformQuotasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "user_ids must contain 1 to 100 positive IDs")
+		return
+	}
+	seen := make(map[int64]struct{}, len(req.UserIDs))
+	for _, id := range req.UserIDs {
+		if id <= 0 {
+			response.BadRequest(c, "user_ids must contain only positive IDs")
+			return
+		}
+		if _, ok := seen[id]; ok {
+			response.BadRequest(c, "user_ids must not contain duplicates")
+			return
+		}
+		seen[id] = struct{}{}
+	}
+
+	quotas := make(map[string][]map[string]any, len(req.UserIDs))
+	for _, id := range req.UserIDs {
+		quotas[strconv.FormatInt(id, 10)] = []map[string]any{}
+	}
+	if h.userPlatformQuotaRepo == nil {
+		response.Success(c, map[string]any{"platform_quotas": quotas})
+		return
+	}
+
+	var records []service.UserPlatformQuotaRecord
+	var err error
+	if reader, ok := h.userPlatformQuotaRepo.(interface {
+		BatchListByUsers(context.Context, []int64) ([]service.UserPlatformQuotaRecord, error)
+	}); ok {
+		records, err = reader.BatchListByUsers(c.Request.Context(), req.UserIDs)
+	} else {
+		for _, id := range req.UserIDs {
+			var rows []service.UserPlatformQuotaRecord
+			rows, err = h.userPlatformQuotaRepo.ListByUser(c.Request.Context(), id)
+			if err != nil {
+				break
+			}
+			records = append(records, rows...)
+		}
+	}
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	now := time.Now().UTC()
+	for _, record := range records {
+		key := strconv.FormatInt(record.UserID, 10)
+		if _, requested := quotas[key]; !requested {
+			continue
+		}
+		quotas[key] = append(quotas[key], quotaview.LazyZeroQuotaForResponse(record, now, true))
+	}
+	response.Success(c, map[string]any{"platform_quotas": quotas})
+}
+
 // UpdateUserPlatformQuotasRequest is the body for PUT /admin/users/:id/platform-quotas.
 type UpdateUserPlatformQuotasRequest struct {
 	Quotas []PlatformQuotaInput `json:"quotas" binding:"required"`

@@ -631,7 +631,9 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	var results []*CheckResult
 	if m.Provider == MonitorProviderImageVideo {
 		results = s.runMediaMonitor(ctx, m)
-		s.persistCheckResults(ctx, m, results)
+		persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		s.persistCheckResults(persistCtx, m, results)
 		return results, nil
 	}
 	switch checkMode {

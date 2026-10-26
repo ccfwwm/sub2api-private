@@ -64,6 +64,18 @@ func (a *userPlatformQuotaServiceAdapter) ListByUser(ctx context.Context, userID
 	return out, nil
 }
 
+func (a *userPlatformQuotaServiceAdapter) BatchListByUsers(ctx context.Context, userIDs []int64) ([]service.UserPlatformQuotaRecord, error) {
+	rows, err := a.inner.BatchListByUsers(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.UserPlatformQuotaRecord, len(rows))
+	for i, row := range rows {
+		out[i] = *toServiceRecord(&row)
+	}
+	return out, nil
+}
+
 // BulkInsertInitial 将 service.UserPlatformQuotaRecord 切片转换后调用底层 repo。
 func (a *userPlatformQuotaServiceAdapter) BulkInsertInitial(ctx context.Context, records []service.UserPlatformQuotaRecord) error {
 	repoRecords := make([]UserPlatformQuotaRecord, len(records))
@@ -156,6 +168,31 @@ func (a *genericUserPlatformQuotaAdapter) ListByUser(ctx context.Context, userID
 			WeeklyWindowStart:  r.WeeklyWindowStart,
 			MonthlyWindowStart: r.MonthlyWindowStart,
 		}
+	}
+	return out, nil
+}
+
+func (a *genericUserPlatformQuotaAdapter) BatchListByUsers(ctx context.Context, userIDs []int64) ([]service.UserPlatformQuotaRecord, error) {
+	if reader, ok := a.inner.(interface {
+		BatchListByUsers(context.Context, []int64) ([]UserPlatformQuotaRecord, error)
+	}); ok {
+		rows, err := reader.BatchListByUsers(ctx, userIDs)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]service.UserPlatformQuotaRecord, len(rows))
+		for i, row := range rows {
+			out[i] = *toServiceRecord(&row)
+		}
+		return out, nil
+	}
+	var out []service.UserPlatformQuotaRecord
+	for _, userID := range userIDs {
+		rows, err := a.ListByUser(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rows...)
 	}
 	return out, nil
 }

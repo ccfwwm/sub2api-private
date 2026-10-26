@@ -26,6 +26,16 @@ func (f *fakeQuotaRepoForAdmin) ListByUser(_ context.Context, _ int64) ([]servic
 	return f.records, f.err
 }
 
+type fakeBatchQuotaRepoForAdmin struct {
+	fakeQuotaRepoForAdmin
+	requested []int64
+}
+
+func (f *fakeBatchQuotaRepoForAdmin) BatchListByUsers(_ context.Context, ids []int64) ([]service.UserPlatformQuotaRecord, error) {
+	f.requested = append([]int64(nil), ids...)
+	return f.records, f.err
+}
+
 func newAdminQuotaTestContext(w *httptest.ResponseRecorder) *gin.Context {
 	c, _ := gin.CreateTestContext(w)
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -120,5 +130,53 @@ func TestAdminGetUserPlatformQuotas_UserNotFoundReturns404(t *testing.T) {
 	h.GetUserPlatformQuotas(c)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for non-existent user, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAdminBatchGetUserPlatformQuotasUsesBatchReaderAndReturnsRequestedUsers(t *testing.T) {
+	repo := &fakeBatchQuotaRepoForAdmin{fakeQuotaRepoForAdmin: fakeQuotaRepoForAdmin{records: []service.UserPlatformQuotaRecord{{
+		UserID: 8, Platform: "openai", DailyUsageUSD: 1.25,
+	}}}}
+	h := &UserHandler{userPlatformQuotaRepo: repo}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/admin/users/batch-platform-quotas", strings.NewReader(`{"user_ids":[8,9]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h.BatchGetUserPlatformQuotas(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.requested) != 2 || repo.requested[0] != 8 || repo.requested[1] != 9 {
+		t.Fatalf("batch reader got IDs %v", repo.requested)
+	}
+	var body struct {
+		Data struct {
+			Quotas map[string][]map[string]any `json:"platform_quotas"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Data.Quotas["8"]) != 1 || len(body.Data.Quotas["9"]) != 0 {
+		t.Fatalf("unexpected batch quota mapping: %s", w.Body.String())
+	}
+}
+
+func TestAdminBatchGetUserPlatformQuotasRejectsUnboundedOrDuplicateIDs(t *testing.T) {
+	for _, body := range []string{`{"user_ids":[]}`, `{"user_ids":[1,1]}`, `{"user_ids":[0]}`} {
+		t.Run(body, func(t *testing.T) {
+			h := &UserHandler{userPlatformQuotaRepo: &fakeBatchQuotaRepoForAdmin{}}
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/admin/users/batch-platform-quotas", strings.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			h.BatchGetUserPlatformQuotas(c)
+			if w.Code < 400 || w.Code >= 500 {
+				t.Fatalf("expected 4xx, got %d: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }

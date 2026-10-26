@@ -85,6 +85,11 @@ type channelMonitorUpdateRequest struct {
 	AccountID *int64  `json:"account_id"`
 }
 
+type resetMonitorMediaTaskRequest struct {
+	Model     string `json:"model" binding:"required,max=200"`
+	Confirmed bool   `json:"confirmed" binding:"required"`
+}
+
 type channelMonitorResponse struct {
 	ID                  int64                                `json:"id"`
 	Name                string                               `json:"name"`
@@ -487,6 +492,24 @@ func (h *ChannelMonitorHandler) Run(c *gin.Context) {
 		out = append(out, checkResultToResponse(r))
 	}
 	response.Success(c, gin.H{"results": out})
+}
+
+// ResetMediaTask allows an administrator to retry after reconciling the original task.
+func (h *ChannelMonitorHandler) ResetMediaTask(c *gin.Context) {
+	id, ok := ParseChannelMonitorID(c)
+	if !ok {
+		return
+	}
+	var req resetMonitorMediaTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "A model and explicit confirmation are required")
+		return
+	}
+	if err := h.monitorService.ConfirmMediaTaskReset(c.Request.Context(), id, req.Model, req.Confirmed); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, nil)
 }
 
 // History GET /api/v1/admin/channel-monitors/:id/history

@@ -1331,6 +1331,7 @@ const getUserSelectionLabel = (user: AdminUser) =>
 
 // User attribute definitions and values
 const attributeDefinitions = ref<UserAttributeDefinition[]>([])
+const attributeDefinitionsLoaded = ref(false)
 const userAttributeValues = ref<Record<number, Record<number, string>>>({})
 const pagination = reactive({
   page: 1,
@@ -1410,25 +1411,12 @@ const loadUsersSecondaryData = async (
     tasks.push(
       (async () => {
         try {
-          // 无批量端点：对当前页用户逐个拉取，分块并发（每批 6），批间检查中止条件，避免大 pageSize 时请求洪峰
-          const CHUNK = 6
-          for (let i = 0; i < userIds.length; i += CHUNK) {
-            if (signal?.aborted) return
-            if (typeof expectedSeq === 'number' && expectedSeq !== secondaryDataSeq) return
-            const chunk = userIds.slice(i, i + CHUNK)
-            const results = await Promise.allSettled(
-              chunk.map((id) => adminAPI.users.getPlatformQuotas(id))
-            )
-            if (signal?.aborted) return
-            if (typeof expectedSeq === 'number' && expectedSeq !== secondaryDataSeq) return
-            const merged = { ...platformQuotaStats.value }
-            results.forEach((r, idx) => {
-              if (r.status === 'fulfilled') {
-                merged[chunk[idx]] = r.value.platform_quotas || []
-              }
-            })
-            platformQuotaStats.value = merged
-          }
+          if (signal?.aborted) return
+          if (typeof expectedSeq === 'number' && expectedSeq !== secondaryDataSeq) return
+          const response = await adminAPI.users.getPlatformQuotasBatch(userIds)
+          if (signal?.aborted) return
+          if (typeof expectedSeq === 'number' && expectedSeq !== secondaryDataSeq) return
+          platformQuotaStats.value = { ...platformQuotaStats.value, ...response.platform_quotas }
         } catch (e) {
           if (signal?.aborted) return
           console.error('Failed to load platform quotas:', e)
@@ -1440,6 +1428,15 @@ const loadUsersSecondaryData = async (
   if (tasks.length > 0) {
     await Promise.allSettled(tasks)
   }
+}
+
+const scheduleUserSecondaryData = (userIds: number[], signal?: AbortSignal) => {
+  if (!attributeDefinitionsLoaded.value || userIds.length === 0) return
+  const seq = ++secondaryDataSeq
+  window.setTimeout(() => {
+    if (signal?.aborted || seq !== secondaryDataSeq) return
+    void loadUsersSecondaryData(userIds, signal, seq)
+  }, 50)
 }
 
 const refreshCurrentPageSecondaryData = () => {
@@ -1572,6 +1569,9 @@ const loadAttributeDefinitions = async () => {
     attributeDefinitions.value = await adminAPI.userAttributes.listEnabledDefinitions()
   } catch (e) {
     console.error('Failed to load attribute definitions:', e)
+  } finally {
+    attributeDefinitionsLoaded.value = true
+    scheduleUserSecondaryData(users.value.map(user => user.id), abortController?.signal)
   }
 }
 
@@ -1587,6 +1587,7 @@ const loadUsers = async () => {
   const currentAbortController = new AbortController()
   abortController = currentAbortController
   const { signal } = currentAbortController
+  ++secondaryDataSeq
   loading.value = true
   try {
     // Build attribute filters from active filters
@@ -1627,11 +1628,7 @@ const loadUsers = async () => {
     // Defer heavy secondary data so table can render first.
     if (response.items.length > 0) {
       const userIds = response.items.map((u) => u.id)
-      const seq = ++secondaryDataSeq
-      window.setTimeout(() => {
-        if (signal.aborted || seq !== secondaryDataSeq) return
-        void loadUsersSecondaryData(userIds, signal, seq)
-      }, 50)
+      scheduleUserSecondaryData(userIds, signal)
     }
   } catch (error: any) {
     const errorInfo = error as { name?: string; code?: string }
@@ -1889,7 +1886,7 @@ const handleScroll = () => {
 }
 
 onMounted(async () => {
-  await loadAttributeDefinitions()
+  void loadAttributeDefinitions()
   loadSavedFilters()
   loadSavedColumns()
   loadUsers()

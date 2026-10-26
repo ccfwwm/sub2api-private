@@ -13,7 +13,8 @@ const {
   getAllGroups,
   getBatchUsersUsage,
   listEnabledDefinitions,
-  getBatchUserAttributes
+  getBatchUserAttributes,
+  getBatchUserPlatformQuotas
 } = vi.hoisted(() => ({
   listUsers: vi.fn(),
   toggleStatus: vi.fn(),
@@ -23,7 +24,8 @@ const {
   getAllGroups: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   listEnabledDefinitions: vi.fn(),
-  getBatchUserAttributes: vi.fn()
+  getBatchUserAttributes: vi.fn(),
+  getBatchUserPlatformQuotas: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -31,7 +33,8 @@ vi.mock('@/api/admin', () => ({
     users: {
       list: listUsers,
       toggleStatus,
-      delete: deleteUser
+      delete: deleteUser,
+      getPlatformQuotasBatch: getBatchUserPlatformQuotas
     },
     groups: {
       getAll: getAllGroups
@@ -191,6 +194,7 @@ describe('admin UsersView', () => {
     getBatchUsersUsage.mockReset()
     listEnabledDefinitions.mockReset()
     getBatchUserAttributes.mockReset()
+    getBatchUserPlatformQuotas.mockReset()
 
     listUsers.mockResolvedValue({
       items: [createAdminUser()],
@@ -202,7 +206,8 @@ describe('admin UsersView', () => {
     getAllGroups.mockResolvedValue([])
     getBatchUsersUsage.mockResolvedValue({ stats: {} })
     listEnabledDefinitions.mockResolvedValue([])
-    getBatchUserAttributes.mockResolvedValue({ values: {} })
+    getBatchUserAttributes.mockResolvedValue({ attributes: {} })
+    getBatchUserPlatformQuotas.mockResolvedValue({ platform_quotas: { '42': [] } })
   })
 
   afterEach(() => {
@@ -223,6 +228,49 @@ describe('admin UsersView', () => {
     expect(wrapper.find('[data-test="delete-dialog"]').exists()).toBe(false)
     expect(deleteUser).not.toHaveBeenCalled()
     expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('42')
+    wrapper.unmount()
+  })
+
+  it('renders users before custom field definitions and loads their values when definitions arrive', async () => {
+    vi.useFakeTimers()
+    let finishDefinitions!: (definitions: Array<{ id: number; name: string; type: string; enabled: boolean }>) => void
+    listEnabledDefinitions.mockImplementation(() => new Promise(resolve => { finishDefinitions = resolve }))
+    getBatchUserAttributes.mockResolvedValue({ attributes: { 42: { 7: 'Gold' } } })
+
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="row-order"]').text()).toBe('scoped@example.com')
+    await vi.advanceTimersByTimeAsync(50)
+    expect(getBatchUserAttributes).not.toHaveBeenCalled()
+
+    finishDefinitions([{ id: 7, name: 'Region', type: 'text', enabled: true }])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(50)
+    await flushPromises()
+
+    expect(getBatchUserAttributes).toHaveBeenCalledOnce()
+    expect(getBatchUserAttributes).toHaveBeenCalledWith([42])
+    wrapper.unmount()
+  })
+
+  it('loads platform quotas for the current page with one bounded request', async () => {
+    vi.useFakeTimers()
+    localStorage.setItem('user-hidden-columns', JSON.stringify([]))
+    localStorage.setItem('user-column-settings-version', '3')
+    listUsers.mockResolvedValue({
+      items: [createAdminUser({ id: 42 }), createAdminUser({ id: 43 })],
+      total: 2, page: 1, page_size: 20, pages: 1
+    })
+    getBatchUserPlatformQuotas.mockResolvedValue({ platform_quotas: { '42': [], '43': [] } })
+
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(50)
+    await flushPromises()
+
+    expect(getBatchUserPlatformQuotas).toHaveBeenCalledOnce()
+    expect(getBatchUserPlatformQuotas).toHaveBeenCalledWith([42, 43])
     wrapper.unmount()
   })
 

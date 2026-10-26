@@ -15,6 +15,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -378,12 +379,18 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		if !submission {
 			return UpstreamResult{}, fmt.Errorf("upstream query HTTP %d", response.StatusCode)
 		}
+		status := response.StatusCode
+		if status >= 500 || status == http.StatusRequestTimeout {
+			if nestedStatus := explicitUpstreamHTTPStatus(raw); nestedStatus == http.StatusTooManyRequests {
+				status = nestedStatus
+			}
+		}
 		// A complete 503 response is an explicit rejection, not a lost response.
 		// Gateway timeouts can still conceal acceptance and require recovery.
-		if (response.StatusCode >= 500 && response.StatusCode != http.StatusServiceUnavailable) || response.StatusCode == 408 {
+		if status >= 500 && status != http.StatusServiceUnavailable || status == http.StatusRequestTimeout {
 			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
 		}
-		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", response.StatusCode)
+		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", status)
 		var rejectedDetail map[string]any
 		if len(raw) <= 8192 && json.Unmarshal(raw, &rejectedDetail) == nil {
 			if detail, ok := rejectedDetail["error"].(map[string]any); ok {
@@ -393,7 +400,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			message, _ := SafeReviewValue(rejectedDetail["message"], []string{account.Key}, 0).(string)
 			diagnostic += ": " + code + " " + message
 		}
-		if response.StatusCode == 400 || response.StatusCode == 415 || response.StatusCode == 422 {
+		if status == 400 || status == 415 || status == 422 {
 			var rejected map[string]any
 			if len(raw) <= 8192 && json.Unmarshal(raw, &rejected) == nil {
 				code := stringValue(rejected["code"])
@@ -405,7 +412,9 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 				}
 			}
 		}
-		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic}, nil
+		retryAfter := parseRetryAfter(response.Header.Get("Retry-After"), raw, time.Now())
+		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic, Rejected: true,
+			Retryable: status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || retryAfter > 0, RetryAfter: retryAfter}, nil
 	}
 	if cap.Template != nil && cap.Template.Mode == "sync_binary" {
 		mime := strings.Split(response.Header.Get("Content-Type"), ";")[0]
@@ -436,6 +445,98 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"
 	}
 	return result, nil
+}
+
+func explicitUpstreamHTTPStatus(raw []byte) int {
+	if len(raw) == 0 || len(raw) > 8192 {
+		return 0
+	}
+	var root any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&root) != nil {
+		return 0
+	}
+	var walk func(any, int) int
+	walk = func(value any, depth int) int {
+		if depth > 6 {
+			return 0
+		}
+		switch node := value.(type) {
+		case map[string]any:
+			for key, candidate := range node {
+				switch strings.ToLower(key) {
+				case "upstream_status", "upstream_status_code", "status_code", "http_status", "http_status_code":
+					if status := parseHTTPStatus(candidate); status == http.StatusTooManyRequests {
+						return status
+					}
+				}
+			}
+			for _, candidate := range node {
+				if status := walk(candidate, depth+1); status != 0 {
+					return status
+				}
+			}
+		case []any:
+			for _, candidate := range node {
+				if status := walk(candidate, depth+1); status != 0 {
+					return status
+				}
+			}
+		}
+		return 0
+	}
+	return walk(root, 0)
+}
+
+func parseHTTPStatus(value any) int {
+	switch v := value.(type) {
+	case json.Number:
+		status, _ := v.Int64()
+		return int(status)
+	case float64:
+		return int(v)
+	case string:
+		status, _ := strconv.Atoi(strings.TrimSpace(v))
+		return status
+	default:
+		return 0
+	}
+}
+
+func parseRetryAfter(header string, raw []byte, now time.Time) time.Duration {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && seconds >= 0 {
+		return clampRetryAfter(time.Duration(seconds) * time.Second)
+	}
+	if retryAt, err := http.ParseTime(header); err == nil {
+		return clampRetryAfter(retryAt.Sub(now))
+	}
+	if len(raw) > 0 && len(raw) <= 8192 {
+		var root map[string]any
+		if json.Unmarshal(raw, &root) == nil {
+			for _, key := range []string{"retry_after_seconds", "retry_after"} {
+				if seconds := parseHTTPStatus(root[key]); seconds > 0 {
+					return clampRetryAfter(time.Duration(seconds) * time.Second)
+				}
+			}
+			if detail, ok := root["error"].(map[string]any); ok {
+				if seconds := parseHTTPStatus(detail["retry_after_seconds"]); seconds > 0 {
+					return clampRetryAfter(time.Duration(seconds) * time.Second)
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func clampRetryAfter(delay time.Duration) time.Duration {
+	if delay <= 0 {
+		return 0
+	}
+	if delay > 24*time.Hour {
+		return 24 * time.Hour
+	}
+	return delay
 }
 
 // Recover performs a read only lookup; a missing response never triggers POST.

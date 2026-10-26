@@ -224,6 +224,9 @@ type UpstreamResult struct {
 	Artifacts              []Artifact
 	Quantities             map[string][]string
 	Accepted               bool
+	Rejected               bool
+	Retryable              bool
+	RetryAfter             time.Duration
 }
 type Account struct {
 	ObserveSubmission      func(Submission) error `json:"-"`

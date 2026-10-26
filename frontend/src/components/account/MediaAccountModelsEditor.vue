@@ -19,6 +19,8 @@ const advanced = ref<number | null>(props.modelValue[0]?.adapter ? null : 0), te
 const templates = ref<MediaConfigRecord[]>([])
 const importNotice = ref(''), bulkTemplate = ref(''), selectedModels = ref<string[]>([])
 const pinnedTemplates = ref<Record<string, Record<string, unknown>>>({})
+const effectiveTemplates = ref<Record<string, string>>({})
+const effectiveTemplateState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
 onMounted(async () => {
   try {
     templates.value = await mediaProtocolsAPI.list('templates')
@@ -29,7 +31,11 @@ onMounted(async () => {
       const pinned = history.find(item => item.version === ref.version)
       if (pinned) pinnedTemplates.value[`${ref.id}:${ref.version}`] = pinned.config
     }
-  } catch (e) { error.value = (e as Error).message }
+    await loadEffectiveTemplates()
+  } catch (e) {
+    effectiveTemplateState.value = 'error'
+    error.value = (e as Error).message
+  }
 })
 onUnmounted(() => { if (retryTimer) clearInterval(retryTimer) })
 const val = (e: Event) => (e.target as HTMLInputElement).value
@@ -106,6 +112,67 @@ function selectedTemplate(c: MediaCapability): Record<string, unknown> | undefin
 function templateOptions(c: MediaCapability, field: 'media_types' | 'operations'): string[] {
   return (selectedTemplate(c)?.[field] as string[] | undefined) ?? []
 }
+async function loadEffectiveTemplates() {
+  const accountID = props.accountId ?? props.account?.id
+  const groupIDs = [...new Set(props.account?.group_ids ?? [])]
+  if (!accountID || groupIDs.length === 0) {
+    effectiveTemplateState.value = 'loaded'
+    return
+  }
+  effectiveTemplateState.value = 'loading'
+  const [bindings, groups] = await Promise.all([
+    mediaProtocolsAPI.list('bindings'),
+    Promise.all(groupIDs.map(async groupID => ({
+      groupID,
+      caps: await mediaProtocolsAPI.effective(groupID) as Array<Record<string, unknown>>
+    })))
+  ])
+  const sourceFor = (cap: Record<string, unknown>, groupID: number) => {
+    const versions = cap.binding_versions as Array<{ id: string; version: number }> | undefined
+    const latest = versions?.at(-1)
+    if (!latest) return tr('账号模型', 'Account model')
+    const binding = bindings.find(row => row.id === latest.id)
+    const config = (binding?.config || {}) as Record<string, unknown>
+    if (config.account_id && config.model) return tr('账号+模型绑定', 'Account + model binding')
+    if (config.account_id) return tr('账号绑定', 'Account binding')
+    if (config.model) return tr(`分组 ${groupID} 模型绑定`, `Group ${groupID} model binding`)
+    return tr(`分组 ${groupID} 默认绑定`, `Group ${groupID} default binding`)
+  }
+  for (const model of props.modelValue) {
+    const matches = groups.flatMap(({ groupID, caps }) => caps
+      .filter(cap => cap.model === model.model)
+      .filter(cap => {
+        const accountIDs = cap.account_ids as number[] | undefined
+        return !accountIDs?.length || accountIDs.includes(accountID)
+      })
+      .map(cap => {
+        const ref = cap.template_ref as { id: string; version: number } | undefined
+        const execution = cap.execution_template as { name?: string; status?: string } | undefined
+        const validationStatus = String(cap.validation_status || '')
+        if (!ref) {
+          return validationStatus
+            ? `${validationStatus} · ${tr(`分组 ${groupID}`, `Group ${groupID}`)}`
+            : tr(`分组 ${groupID}：未配置模板`, `Group ${groupID}: no template`)
+        }
+        if (!execution || execution.status && execution.status !== 'enabled') {
+          return `${execution?.name || ref.id} · v${ref.version} · ${tr('模板不可用', 'Template unavailable')}`
+        }
+        return `${execution?.name || ref.id} · v${ref.version} · ${sourceFor(cap, groupID)}`
+      }))
+    effectiveTemplates.value[model.model] = matches.length > 0
+      ? [...new Set(matches)].join(' / ')
+      : tr('未解析到有效模板', 'No effective template resolved')
+  }
+  effectiveTemplateState.value = 'loaded'
+}
+function effectiveTemplateLabel(c: MediaCapability) {
+  if (effectiveTemplateState.value === 'loading') return tr('正在解析当前生效模板', 'Resolving effective template')
+  if (effectiveTemplateState.value === 'error') return tr('模板来源解析失败', 'Template source could not be resolved')
+  const resolved = effectiveTemplates.value[c.model]
+  if (resolved) return resolved
+  if (c.template_ref) return `${(selectedTemplate(c)?.name as string) || c.template_ref.id} · v${c.template_ref.version} · ${tr('账号模型', 'Account model')}`
+  return tr('未绑定模板', 'No template bound')
+}
 function selectMediaType(c: MediaCapability, mediaType: string) {
   if (!templateOptions(c, 'media_types').includes(mediaType)) return
   c.media_type = mediaType; c.duration.required = mediaType === 'video'
@@ -140,9 +207,9 @@ function testStatus(c: MediaCapability) {
     <div v-if="modelValue.length" class="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-3 dark:bg-dark-800"><label class="text-sm"><input type="checkbox" :checked="selectedModels.length === modelValue.length" @change="selectedModels = ($event.target as HTMLInputElement).checked ? modelValue.map(c=>c.model) : []" /> 全选模型</label><select v-model="bulkTemplate" class="input" aria-label="批量协议模板"><option value="">选择批量绑定模板</option><option v-for="row in templates.filter(row=>row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><button type="button" class="btn btn-secondary" :disabled="!selectedModels.length || !bulkTemplate" @click="bindSelected">绑定所选（{{ selectedModels.length }}）</button><span class="text-xs text-gray-500">批量绑定后请检查请求能力，模型保持停用。</span></div>
     <div v-if="candidates.length" class="flex flex-wrap gap-2"><select v-model="selected" class="input max-w-md"><option value="">{{ tr('选择候选模型','Select a model') }}</option><option v-for="m in candidates" :key="m">{{ m }}</option></select><button type="button" class="btn btn-secondary" :disabled="!selected" @click="add(selected)">{{ tr('添加到账号','Add to account') }}</button></div>
     <p v-if="!modelValue.length" class="text-sm text-gray-500">{{ tr('先同步候选模型或手动添加。','Discover models or add one manually.') }}</p>
-    <div v-else class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="text-xs text-gray-500"><th>{{ tr('模型名称','Model') }}</th><th>{{ tr('上游映射','Upstream mapping') }}</th><th>{{ tr('类型','Type') }}</th><th>{{ tr('启用','Enabled') }}</th><th>{{ tr('测试结果','Test result') }}</th><th>{{ tr('操作','Actions') }}</th></tr></thead><tbody><template v-for="(c,i) in modelValue" :key="i">
-      <tr class="border-t dark:border-dark-600"><td class="py-2 pr-2"><input v-model="selectedModels" type="checkbox" :value="c.model" :aria-label="'选择模型 ' + c.model" class="mr-2" /><input class="input min-w-36" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></td><td class="pr-2"><input class="input min-w-36" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event))" /></td><td class="pr-2">{{ c.media_type || tr('待选接口','Choose interface') }}</td><td class="pr-2"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" :disabled="!c.template_ref || !c.media_type || !c.operations.length" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" /></td><td class="pr-2 text-xs">{{ testStatus(c) }}</td><td class="whitespace-nowrap"><button type="button" class="mr-2 text-primary-600 disabled:opacity-40" :disabled="!canTest" @click="testingModel = c.model">{{ tr('测试 / 查看','Test / view') }}</button><button type="button" class="mr-2 text-primary-600" @click="advanced = advanced === i ? null : i">{{ tr('配置请求能力','Configure capabilities') }}</button><button type="button" class="text-red-600" @click="emit('update:modelValue',modelValue.filter((_,index) => index !== i))">{{ tr('移除','Remove') }}</button></td></tr>
-      <tr v-if="advanced === i"><td colspan="6" class="bg-gray-50 p-3 dark:bg-dark-800"><div class="grid gap-3 sm:grid-cols-2">
+    <div v-else class="overflow-x-auto"><table class="min-w-[1040px] w-full text-left text-sm"><thead><tr class="text-xs text-gray-500"><th>{{ tr('模型名称','Model') }}</th><th>{{ tr('上游映射','Upstream mapping') }}</th><th>{{ tr('类型','Type') }}</th><th>{{ tr('协议模板 / 来源','Protocol template / source') }}</th><th>{{ tr('启用','Enabled') }}</th><th>{{ tr('测试结果','Test result') }}</th><th>{{ tr('操作','Actions') }}</th></tr></thead><tbody><template v-for="(c,i) in modelValue" :key="i">
+      <tr class="border-t dark:border-dark-600"><td class="py-2 pr-2"><input v-model="selectedModels" type="checkbox" :value="c.model" :aria-label="'选择模型 ' + c.model" class="mr-2" /><input class="input min-w-36" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></td><td class="pr-2"><input class="input min-w-36" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event))" /></td><td class="pr-2">{{ c.media_type || tr('待选接口','Choose interface') }}</td><td class="max-w-64 pr-2 text-xs" :title="effectiveTemplateLabel(c)"><span class="block truncate">{{ effectiveTemplateLabel(c) }}</span></td><td class="pr-2"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" :disabled="!c.template_ref || !c.media_type || !c.operations.length" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" /></td><td class="pr-2 text-xs">{{ testStatus(c) }}</td><td class="whitespace-nowrap"><button type="button" class="mr-2 text-primary-600 disabled:opacity-40" :disabled="!canTest" @click="testingModel = c.model">{{ tr('测试 / 查看','Test / view') }}</button><button type="button" class="mr-2 text-primary-600" @click="advanced = advanced === i ? null : i">{{ tr('配置请求能力','Configure capabilities') }}</button><button type="button" class="text-red-600" @click="emit('update:modelValue',modelValue.filter((_,index) => index !== i))">{{ tr('移除','Remove') }}</button></td></tr>
+      <tr v-if="advanced === i"><td colspan="7" class="bg-gray-50 p-3 dark:bg-dark-800"><div class="grid gap-3 sm:grid-cols-2">
         <label class="text-xs">协议模板<select class="input mt-1" aria-label="协议模板" :value="c.template_ref?.id || ''" @change="edit(i,c => chooseTemplate(c,val($event))); advanced = i"><option value="">请选择模板</option><option v-for="row in templates.filter(row => row.published_version)" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select><a class="block text-primary-600" :href="'/admin/media?tab=templates&account_id=' + (accountId || '')">管理协议模板</a></label>
         <p v-if="selectedTemplate(c)?.description" class="text-xs text-gray-500">{{ selectedTemplate(c)?.description }}</p>
         <label v-if="c.template_ref" class="text-xs">{{ tr('输出媒体类型','Output media type') }}<select class="input mt-1" :aria-label="tr('输出媒体类型','Output media type')" :value="c.media_type" @change="edit(i,c => selectMediaType(c,val($event)))"><option value="">{{ tr('请选择输出媒体类型','Choose output media type') }}</option><option v-if="c.media_type && !templateOptions(c,'media_types').includes(c.media_type)" :value="c.media_type">{{ c.media_type }} · {{ tr('当前固定版本','Current pinned version') }}</option><option v-for="mediaType in templateOptions(c,'media_types')" :key="mediaType" :value="mediaType">{{ mediaType }}</option></select></label>

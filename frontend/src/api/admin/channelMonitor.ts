@@ -328,8 +328,12 @@ export async function del(id: number): Promise<void> {
  * Returns the latest check results for primary + extra models.
  */
 export async function runNow(id: number): Promise<RunNowResponse> {
-  const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`)
+	const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`, undefined, { timeout: 240_000 })
   return data
+}
+
+export async function confirmMediaTaskReset(id: number, model: string): Promise<void> {
+  await apiClient.post(`/admin/channel-monitors/${id}/media-tasks/reset`, { model, confirmed: true })
 }
 
 /**
@@ -354,6 +358,7 @@ export const channelMonitorAPI = {
   update,
   del,
   runNow,
+  confirmMediaTaskReset,
   listHistory,
 }
 

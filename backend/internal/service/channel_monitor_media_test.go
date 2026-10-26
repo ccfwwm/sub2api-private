@@ -15,10 +15,40 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/stretchr/testify/require"
 )
+
+type cancelledMediaCheckRepository struct {
+	ChannelMonitorRepository
+	monitor        *ChannelMonitor
+	historyRows    []*ChannelMonitorHistoryRow
+	historyCtxErr  error
+	markCheckedErr error
+}
+
+func (r *cancelledMediaCheckRepository) GetByID(context.Context, int64) (*ChannelMonitor, error) {
+	return r.monitor, nil
+}
+
+func (r *cancelledMediaCheckRepository) InsertHistoryBatch(ctx context.Context, rows []*ChannelMonitorHistoryRow) error {
+	r.historyRows = rows
+	r.historyCtxErr = ctx.Err()
+	return nil
+}
+
+func (r *cancelledMediaCheckRepository) MarkChecked(ctx context.Context, _ int64, _ time.Time) error {
+	r.markCheckedErr = ctx.Err()
+	return nil
+}
+
+type mediaCancellationRuntimeReader struct{}
+
+func (mediaCancellationRuntimeReader) GetChannelMonitorRuntime(context.Context) ChannelMonitorRuntime {
+	return ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV1}
+}
 
 func TestMediaMonitorConnectionNoGenerationAndModelVisibility(t *testing.T) {
 	swapMonitorHTTPClient(t)
@@ -220,6 +250,46 @@ func TestMediaMonitorInterruptedSubmissionAndCorruptJournalNeverSubmit(t *testin
 	require.Contains(t, res.Message, "journal unreadable")
 }
 
+func TestMediaMonitorLostSubmissionResponseRequiresConfirmedReset(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		if posts == 1 {
+			connection, _, err := w.(http.Hijacker).Hijack()
+			require.NoError(t, err)
+			require.NoError(t, connection.Close())
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"id":"accepted-after-confirmed-reset","status":"queued"}`))
+	}))
+	defer server.Close()
+
+	encryptor := &duplicateChannelMonitorEncryptor{}
+	encryptedAPIKey, err := encryptor.Encrypt("test-key")
+	require.NoError(t, err)
+	monitor := &ChannelMonitor{ID: 48, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: encryptedAPIKey, PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)}}}}
+	repo := &cancelledMediaCheckRepository{monitor: monitor}
+	service := NewChannelMonitorService(repo, encryptor)
+	first := service.runMediaMonitor(context.Background(), monitor)[0]
+	require.Equal(t, MonitorStatusError, first.Status)
+	require.Contains(t, first.Message, "acceptance uncertain")
+	require.Contains(t, first.Message, "reset task")
+	require.Equal(t, 1, posts)
+
+	next := service.runMediaMonitor(context.Background(), monitor)[0]
+	require.Equal(t, first.Message, next.Message)
+	require.Equal(t, 1, posts)
+	require.Error(t, service.ConfirmMediaTaskReset(context.Background(), monitor.ID, monitor.PrimaryModel, false))
+	require.NoError(t, service.ConfirmMediaTaskReset(context.Background(), monitor.ID, monitor.PrimaryModel, true))
+
+	retried := service.runMediaMonitor(context.Background(), monitor)[0]
+	require.Equal(t, MonitorStatusPending, retried.Status)
+	require.Equal(t, 2, posts)
+}
+
 func TestMediaMonitorRejectionKeepsReasonAndFailedStatusWithoutResubmitting(t *testing.T) {
 	swapMonitorHTTPClient(t)
 	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
@@ -245,6 +315,96 @@ func TestMediaMonitorRejectionKeepsReasonAndFailedStatusWithoutResubmitting(t *t
 	require.Equal(t, first.Status, next.Status)
 	require.Equal(t, first.Message, next.Message)
 	require.Equal(t, 1, posts)
+}
+
+func TestMediaMonitorRetriesWrapped429OnlyAfterRetryAfterOnLaterCheck(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		posts++
+		if posts == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"error":{"code":"service_busy","message":"upstream busy"},"upstream_status_code":429}`))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"id":"accepted-after-retry","status":"queued"}`))
+	}))
+	defer server.Close()
+	m := &ChannelMonitor{ID: 33, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)}}}}
+	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+
+	result := s.runMediaMonitor(context.Background(), m)
+	require.Equal(t, MonitorStatusFailed, result[0].Status)
+	require.Contains(t, result[0].Message, "HTTP 429")
+	require.Contains(t, result[0].Message, "no resubmission in this request")
+	require.Equal(t, 1, posts)
+
+	result = s.runMediaMonitor(context.Background(), m)
+	require.Equal(t, MonitorStatusFailed, result[0].Status)
+	require.Contains(t, result[0].Message, "retry available after")
+	require.Equal(t, 1, posts)
+
+	time.Sleep(1100 * time.Millisecond)
+	result = s.runMediaMonitor(context.Background(), m)
+	require.Equal(t, MonitorStatusPending, result[0].Status)
+	require.Equal(t, 2, posts)
+}
+
+func TestMediaMonitorOrdinary502NeverResubmitsUncertainTask(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":{"message":"gateway failure"}}`))
+	}))
+	defer server.Close()
+	m := &ChannelMonitor{ID: 34, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)}}}}
+	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+
+	for i := 0; i < 2; i++ {
+		result := s.runMediaMonitor(context.Background(), m)
+		require.Equal(t, MonitorStatusError, result[0].Status)
+		require.Contains(t, result[0].Message, "acceptance uncertain")
+	}
+	require.Equal(t, 1, posts)
+}
+
+func TestCancelledMediaCheckPersistsHistoryWithoutSubmitting(t *testing.T) {
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	encryptor := &duplicateChannelMonitorEncryptor{}
+	encryptedAPIKey, err := encryptor.Encrypt("test-key")
+	require.NoError(t, err)
+	monitor := &ChannelMonitor{
+		ID:           991,
+		Provider:     MonitorProviderImageVideo,
+		Endpoint:     "https://example.invalid",
+		APIKey:       encryptedAPIKey,
+		PrimaryModel: "omni-flash",
+		BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{
+			Mode:   "generation",
+			Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)},
+		}},
+	}
+	repo := &cancelledMediaCheckRepository{monitor: monitor}
+	service := NewChannelMonitorService(repo, encryptor)
+	service.SetRuntimeReader(mediaCancellationRuntimeReader{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	results, err := service.RunCheck(ctx, monitor.ID)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, MonitorStatusError, results[0].Status)
+	require.Len(t, repo.historyRows, 1)
+	require.Equal(t, MonitorStatusError, repo.historyRows[0].Status)
+	require.NoError(t, repo.historyCtxErr)
+	require.NoError(t, repo.markCheckedErr)
 }
 
 func TestMediaMonitorUnknownAcceptanceStaysBlocked(t *testing.T) {

@@ -172,6 +172,25 @@ func (r *userPlatformQuotaRepository) ListByUser(ctx context.Context, userID int
 	return out, nil
 }
 
+// BatchListByUsers loads active quota rows for a bounded page of users in one query.
+func (r *userPlatformQuotaRepository) BatchListByUsers(ctx context.Context, userIDs []int64) ([]UserPlatformQuotaRecord, error) {
+	if len(userIDs) == 0 {
+		return []UserPlatformQuotaRecord{}, nil
+	}
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.UserPlatformQuota.Query().
+		Where(userplatformquota.UserIDIn(userIDs...), userplatformquota.DeletedAtIsNil()).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UserPlatformQuotaRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, *entQuotaToRecord(row))
+	}
+	return out, nil
+}
+
 // IncrementUsageWithReset 原子累加 cost 到 (user, platform) 三个窗口的 *_usage_usd。
 // 行为：
 //   - 记录存在：在事务内 SELECT FOR UPDATE，按 (prev_window_start vs current_window_start)

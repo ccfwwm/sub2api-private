@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func tinyPNG(t *testing.T) []byte {
@@ -23,6 +24,39 @@ func tinyPNG(t *testing.T) []byte {
 	im.Set(0, 0, color.White)
 	require.NoError(t, png.Encode(&b, im))
 	return b.Bytes()
+}
+
+func TestAdapterClassifiesWrappedUpstream429AndRetryAfter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "13")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":{"code":"service_busy","message":"upstream rejected"},"upstream_status_code":429}`))
+	}))
+	defer server.Close()
+
+	result, err := (&Adapter{SafeClient(true)}).Submit(context.Background(), Capability{MediaType: "video"},
+		Request{Operation: "video", Parameters: map[string]any{"model": "mock"}}, Account{BaseURL: server.URL, Key: "secret"})
+	require.NoError(t, err)
+	require.Equal(t, "failed", result.Status)
+	require.True(t, result.Rejected)
+	require.True(t, result.Retryable)
+	require.Equal(t, 13*time.Second, result.RetryAfter)
+	require.Contains(t, result.Diagnostic, "HTTP 429")
+}
+
+func TestAdapterOrdinary502IsAcceptanceUncertain(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":{"message":"gateway failure"}}`))
+	}))
+	defer server.Close()
+
+	result, err := (&Adapter{SafeClient(true)}).Submit(context.Background(), Capability{MediaType: "video"},
+		Request{Operation: "video", Parameters: map[string]any{"model": "mock"}}, Account{BaseURL: server.URL, Key: "secret"})
+	require.NoError(t, err)
+	require.Equal(t, "unknown", result.Status)
+	require.False(t, result.Rejected)
+	require.False(t, result.Retryable)
 }
 func TestAdapterAcceptanceAndUnknownResponses(t *testing.T) {
 	for _, tc := range []struct {

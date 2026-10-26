@@ -375,6 +375,14 @@ export async function getPlatformQuotas(id: number): Promise<PlatformQuotasRespo
   return data
 }
 
+export async function getPlatformQuotasBatch(userIds: number[]): Promise<{ platform_quotas: Record<string, PlatformQuotaItem[]> }> {
+  const { data } = await apiClient.post<{ platform_quotas: Record<string, PlatformQuotaItem[]> }>(
+    '/admin/users/batch-platform-quotas',
+    { user_ids: userIds }
+  )
+  return data
+}
+
 /**
  * Replace user's platform quotas (全量替换)
  */
@@ -420,6 +428,7 @@ export const usersAPI = {
   replaceGroup,
   bindUserAuthIdentity,
   getPlatformQuotas,
+  getPlatformQuotasBatch,
   updatePlatformQuotas,
   resetPlatformQuotaWindow,
 }
