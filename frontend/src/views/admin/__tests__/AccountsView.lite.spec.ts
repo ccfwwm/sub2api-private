@@ -197,6 +197,23 @@ describe('admin AccountsView lite account list', () => {
     wrapper.unmount()
   })
 
+  it('retries the group catalog request after a transient failure', async () => {
+    vi.useFakeTimers()
+    getAllGroups
+      .mockReset()
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce([{ id: 7, name: 'codex', platform: 'openai' }])
+    const wrapper = mountView()
+    await flushPromises()
+    expect(getAllGroups).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(getAllGroups).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-test="account-groups"]').text()).toBe('codex')
+    wrapper.unmount()
+  })
+
   it('keeps the action menu open during internal scrolling but closes it on table scrolling', async () => {
     const wrapper = mountView(false)
     await flushPromises()

@@ -546,7 +546,25 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const groupsRetryDelaysMs = [250, 750, 1500]
+let accountsViewUnmounted = false
 const groupsByID = computed(() => new Map(groups.value.map(group => [group.id, group])))
+const loadGroupsWithRetry = async () => {
+  for (let attempt = 0; ; attempt += 1) {
+    if (accountsViewUnmounted) return
+    try {
+      const result = await adminAPI.groups.getAll()
+      if (!accountsViewUnmounted) groups.value = result
+      return
+    } catch (error) {
+      if (attempt >= groupsRetryDelaysMs.length) {
+        console.error('Failed to load groups after retries:', error)
+        return
+      }
+      await new Promise(resolve => window.setTimeout(resolve, groupsRetryDelaysMs[attempt]))
+    }
+  }
+}
 const accountGroupsForRow = (account: Pick<AccountListItem, 'group_ids'>): AdminGroup[] => {
   const groupIDs = account.group_ids ?? []
   if (groupIDs.length === 0) return []
@@ -1484,7 +1502,7 @@ const refreshAccountsIncrementally = async () => {
 }
 
 const handleManualRefresh = async () => {
-  await Promise.all([load(), loadUpstreamBillingProbeGlobalState()])
+  await Promise.all([load(), loadGroupsWithRetry(), loadUpstreamBillingProbeGlobalState()])
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
 }
@@ -2525,6 +2543,7 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 onMounted(async () => {
+  accountsViewUnmounted = false
   if (typeof window !== 'undefined') {
     desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
     isDesktopViewport.value = desktopViewportMediaQuery.matches
@@ -2540,19 +2559,12 @@ onMounted(async () => {
 
   load()
   loadUpstreamBillingProbeGlobalState()
-  const [proxiesResult, groupsResult] = await Promise.allSettled([
-    adminAPI.proxies.getAll(),
-    adminAPI.groups.getAll()
-  ])
+  void loadGroupsWithRetry()
+  const [proxiesResult] = await Promise.allSettled([adminAPI.proxies.getAll()])
   if (proxiesResult.status === 'fulfilled') {
     proxies.value = proxiesResult.value
   } else {
     console.error('Failed to load proxies:', proxiesResult.reason)
-  }
-  if (groupsResult.status === 'fulfilled') {
-    groups.value = groupsResult.value
-  } else {
-    console.error('Failed to load groups:', groupsResult.reason)
   }
   window.addEventListener('scroll', handleScroll, true)
   window.addEventListener('resize', handleViewportResize)
@@ -2567,6 +2579,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  accountsViewUnmounted = true
   upstreamBillingRateAbortController?.abort()
   if (usageBatchFlushTimer !== null) {
     clearTimeout(usageBatchFlushTimer)

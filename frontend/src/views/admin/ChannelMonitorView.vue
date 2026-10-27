@@ -155,7 +155,6 @@
       :results="runResults"
       :editable="runMonitor?.provider === 'imagevideo'"
       @edit="editRunMonitor"
-      @reset="handleResetMediaTask"
       @close="showRunResult = false"
     />
 
@@ -376,18 +375,6 @@ async function handleViewHistory(row: ChannelMonitor) {
     runMonitor.value = row
     showRunResult.value = true
     if (history.items.length === 0) appStore.showSuccess(t('admin.channelMonitor.noSavedResults'))
-  } catch (err: unknown) {
-    appStore.showError(extractApiErrorMessage(err, t('common.error')))
-  }
-}
-
-async function handleResetMediaTask(model: string) {
-  const confirmed = window.confirm(t('admin.channelMonitor.confirmMediaTaskReset'))
-  if (!confirmed || !runMonitor.value) return
-  try {
-    await adminAPI.channelMonitor.confirmMediaTaskReset(runMonitor.value.id, model)
-    appStore.showSuccess(t('admin.channelMonitor.mediaTaskReset'))
-    showRunResult.value = false
   } catch (err: unknown) {
     appStore.showError(extractApiErrorMessage(err, t('common.error')))
   }

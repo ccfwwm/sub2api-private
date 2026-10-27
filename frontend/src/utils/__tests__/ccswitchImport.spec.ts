@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CC_SWITCH_USAGE_SCRIPT,
+  CLAUDE_CC_SWITCH_MODEL,
   GROK_CC_SWITCH_MODEL,
   OPENAI_CC_SWITCH_CODEX_MODEL,
   buildCcSwitchImportDeeplink
@@ -14,7 +15,7 @@ function paramsFromDeeplink(deeplink: string): URLSearchParams {
 
 describe('ccswitchImport utils', () => {
   it('defaults OpenAI CC Switch imports to the current Codex model', () => {
-    expect(OPENAI_CC_SWITCH_CODEX_MODEL).toBe('gpt-5.5')
+    expect(OPENAI_CC_SWITCH_CODEX_MODEL).toBe('gpt-6.1-sol')
   })
 
   it('defaults Grok Build imports to the current Grok model', () => {
@@ -73,7 +74,7 @@ describe('ccswitchImport utils', () => {
   it.each([
     { platform: 'anthropic' as GroupPlatform, clientType: 'claude' as const, app: 'claude' },
     { platform: 'gemini' as GroupPlatform, clientType: 'gemini' as const, app: 'gemini' }
-  ])('does not add a model parameter for $platform imports', ({ platform, clientType, app }) => {
+  ])('uses the default model only for Claude app imports on $platform', ({ platform, clientType, app }) => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -84,7 +85,13 @@ describe('ccswitchImport utils', () => {
 
     expect(params.get('app')).toBe(app)
     expect(params.get('endpoint')).toBe(baseInput.baseUrl)
-    expect(params.has('model')).toBe(false)
+    if (app === 'claude') {
+      expect(params.get('model')).toBe(CLAUDE_CC_SWITCH_MODEL)
+      expect(params.get('opusModel')).toBe(CLAUDE_CC_SWITCH_MODEL)
+    } else {
+      expect(params.has('model')).toBe(false)
+      expect(params.has('opusModel')).toBe(false)
+    }
   })
 
   it('keeps Antigravity imports on the selected client endpoint without a model parameter', () => {
@@ -99,6 +106,21 @@ describe('ccswitchImport utils', () => {
     expect(params.get('app')).toBe('gemini')
     expect(params.get('endpoint')).toBe(`${baseInput.baseUrl}/antigravity`)
     expect(params.has('model')).toBe(false)
+    expect(params.has('opusModel')).toBe(false)
+  })
+
+  it('sets both Claude defaults for Antigravity imports using the Claude app', () => {
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({
+        ...baseInput,
+        platform: 'antigravity',
+        clientType: 'claude'
+      })
+    )
+
+    expect(params.get('app')).toBe('claude')
+    expect(params.get('model')).toBe(CLAUDE_CC_SWITCH_MODEL)
+    expect(params.get('opusModel')).toBe(CLAUDE_CC_SWITCH_MODEL)
   })
 })
 

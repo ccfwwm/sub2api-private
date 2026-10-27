@@ -1,6 +1,7 @@
 import type { GroupPlatform } from '@/types'
 
-export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-5.5'
+export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-6.1-sol'
+export const CLAUDE_CC_SWITCH_MODEL = 'claude-opus-5-5'
 export const GROK_CC_SWITCH_MODEL = 'grok-4.5'
 
 export type CcSwitchClientType = 'claude' | 'gemini'
@@ -9,6 +10,7 @@ export interface CcSwitchImportConfig {
   app: string
   endpoint: string
   model?: string
+  opusModel?: string
 }
 
 export interface CcSwitchImportDeeplinkInput {
@@ -59,37 +61,47 @@ export function resolveCcSwitchImportConfig(
   clientType: CcSwitchClientType,
   baseUrl: string
 ): CcSwitchImportConfig {
+  let config: CcSwitchImportConfig
   switch (platform || 'anthropic') {
     case 'antigravity':
-      return {
+      config = {
         app: clientType === 'gemini' ? 'gemini' : 'claude',
         endpoint: `${baseUrl.replace(/\/+$/, '')}/antigravity`
       }
+      break
     case 'openai':
-      return {
+      config = {
         app: 'codex',
         // CC Switch's Codex provider appends the OpenAI-compatible path itself.
         // Passing /v1 here can make the client request /v1/v1/....
         endpoint: withoutTrailingSlashes(baseUrl),
         model: OPENAI_CC_SWITCH_CODEX_MODEL
       }
+      break
     case 'gemini':
-      return {
+      config = {
         app: 'gemini',
         endpoint: baseUrl
       }
+      break
     case 'grok':
-      return {
+      config = {
         app: 'grokbuild',
         endpoint: withV1Endpoint(baseUrl),
         model: GROK_CC_SWITCH_MODEL
       }
+      break
     default:
-      return {
+      config = {
         app: 'claude',
         endpoint: baseUrl
       }
   }
+  if (config.app === 'claude') {
+    config.model = CLAUDE_CC_SWITCH_MODEL
+    config.opusModel = CLAUDE_CC_SWITCH_MODEL
+  }
+  return config
 }
 
 export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput): string {
@@ -110,6 +122,7 @@ export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput):
   if (config.model) {
     entries.splice(2, 0, ['model', config.model])
   }
+  if (config.opusModel) entries.push(['opusModel', config.opusModel])
 
   return `ccswitch://v1/import?${new URLSearchParams(entries).toString()}`
 }

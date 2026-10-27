@@ -260,23 +260,24 @@ func runMonitorMediaConnection(ctx context.Context, m *ChannelMonitor, c Monitor
 }
 
 // A durable encrypted acceptance journal is written BEFORE the billable POST.
-// Each subsequent check polls the same task. Interrupted or ambiguous POSTs
-// remain blocked until an administrator explicitly resets the revision.
+// Pending tasks are polled by later checks. Terminal failures are recorded for
+// this check and a new availability probe may be submitted by the next check.
 type monitorMediaTask struct {
-	Revision       string           `json:"revision"`
-	Fingerprint    string           `json:"fingerprint"`
-	StartedAt      time.Time        `json:"started_at"`
-	NextRetryAt    time.Time        `json:"next_retry_at,omitempty"`
-	RetryAttempts  int              `json:"retry_attempts,omitempty"`
-	State          string           `json:"state"`
-	ExplicitReject bool             `json:"explicit_reject,omitempty"`
-	UpstreamID     string           `json:"upstream_id"`
-	ResultStatus   string           `json:"result_status,omitempty"`
-	Message        string           `json:"message,omitempty"`
-	Capability     media.Capability `json:"capability"`
-	Account        media.Account    `json:"account"`
-	Operation      string           `json:"operation,omitempty"`
-	IdempotencyKey string           `json:"idempotency_key,omitempty"`
+	Revision            string           `json:"revision"`
+	Fingerprint         string           `json:"fingerprint"`
+	StartedAt           time.Time        `json:"started_at"`
+	NextRetryAt         time.Time        `json:"next_retry_at,omitempty"`
+	RetryAttempts       int              `json:"retry_attempts,omitempty"`
+	State               string           `json:"state"`
+	ExplicitReject      bool             `json:"explicit_reject,omitempty"`
+	AcceptanceUncertain bool             `json:"acceptance_uncertain,omitempty"`
+	UpstreamID          string           `json:"upstream_id"`
+	ResultStatus        string           `json:"result_status,omitempty"`
+	Message             string           `json:"message,omitempty"`
+	Capability          media.Capability `json:"capability"`
+	Account             media.Account    `json:"account"`
+	Operation           string           `json:"operation,omitempty"`
+	IdempotencyKey      string           `json:"idempotency_key,omitempty"`
 }
 
 func (s *ChannelMonitorService) monitorMediaStatePath(id int64, model string) string {
@@ -416,7 +417,33 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message = "generation: task journal unreadable; no resubmission"
 			return res
 		}
-		if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed {
+		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
+		if task.State == "submitting" && task.UpstreamID == "" && !canRecover {
+			task.State = "blocked"
+			task.ResultStatus = MonitorStatusFailed
+			task.AcceptanceUncertain = true
+			task.Message = "generation: previous submission outcome is uncertain; this probe failed without a user prompt; no resubmission"
+			if s.saveMonitorMediaTask(path, task) != nil {
+				res.Message = "generation: task journal update failed; no resubmission"
+				return res
+			}
+			res.Status, res.Message = task.ResultStatus, task.Message
+			return res
+		}
+		if task.State == "blocked" && task.UpstreamID == "" && task.ResultStatus == MonitorStatusError {
+			// Older journals exposed an error plus a manual reset prompt for the
+			// same unresolved submission. Keep the result failed and query-only.
+			task.ResultStatus = MonitorStatusFailed
+			task.AcceptanceUncertain = true
+			task.Message = "generation: previous submission outcome is uncertain; this probe failed without a user prompt; keep checking the original task; no resubmission"
+			if s.saveMonitorMediaTask(path, task) != nil {
+				res.Message = "generation: task journal update failed; no resubmission"
+				return res
+			}
+			res.Status, res.Message = task.ResultStatus, task.Message
+			return res
+		}
+		if task.Revision != c.Revision && task.ResultStatus == MonitorStatusFailed && !task.AcceptanceUncertain {
 			readErr = os.ErrNotExist
 		} else if task.ExplicitReject && !task.NextRetryAt.IsZero() {
 			if time.Now().Before(task.NextRetryAt) {
@@ -424,6 +451,10 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 				res.Message = task.Message + "; retry available after " + task.NextRetryAt.UTC().Format(time.RFC3339)
 				return res
 			}
+			readErr = os.ErrNotExist
+		} else if task.State == "blocked" && task.ResultStatus == MonitorStatusFailed && !task.AcceptanceUncertain {
+			// A failed availability probe must not require an administrator reset.
+			// Start a fresh probe on the next monitor cycle, never in this request.
 			readErr = os.ErrNotExist
 		} else if task.State != "completed" && (task.Account.BaseURL != m.Endpoint || task.Account.Key != m.APIKey) {
 			res.Message = "generation: 配置已变化，需核对原任务后恢复；no resubmission"
@@ -487,7 +518,8 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			task.Account.IdempotencyKey = task.IdempotencyKey
 			upstream, err = recoverMonitorMediaTask(ctx, adapter, task)
 			if err != nil || upstream.ID == "" {
-				res.Message = "generation: 正在核对原任务；未重新提交 (no resubmission)"
+				res.Status = MonitorStatusFailed
+				res.Message = "generation: original task recovery unavailable; this availability probe failed without a user prompt; retry recovery on a later check; no resubmission"
 				return res
 			}
 			task.UpstreamID = upstream.ID
@@ -499,7 +531,8 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			}
 			res.Message = task.Message
 			if res.Message == "" {
-				res.Message = "generation: previous probe stopped; edit detection settings and reset task before retrying; no resubmission"
+				res.Status = MonitorStatusFailed
+				res.Message = "generation: previous probe stopped; this availability probe failed; a later check will try again; no resubmission in this request"
 			}
 			return res
 		}
@@ -511,8 +544,10 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	if err != nil {
 		if submittedThisCheck {
 			task.State = "blocked"
-			task.ResultStatus = MonitorStatusError
-			task.Message = "generation: acceptance uncertain; check the original upstream request before retrying, then use the confirmed reset action; no resubmission"
+			task.ResultStatus = MonitorStatusFailed
+			task.AcceptanceUncertain = true
+			diagnostic := monitorMediaDiagnostic(media.UpstreamResult{Diagnostic: err.Error()}, m)
+			task.Message = "generation: " + diagnostic + "; submission outcome is uncertain; this probe failed without a user prompt; keep checking the original task; no resubmission"
 			task.Message = truncateMessage(task.Message)
 			if s.saveMonitorMediaTask(path, task) != nil {
 				res.Status, res.Message = MonitorStatusError, "generation: submission outcome uncertain and journal update failed; no resubmission"
@@ -531,21 +566,31 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	case "in_progress":
 		task.State = "in_progress"
 		if task.UpstreamID == "" {
+			canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
 			task.State = "blocked"
-			res.Message = "generation: accepted response missing task ID; no resubmission"
+			if canRecover {
+				task.State = "submitting"
+			}
+			task.AcceptanceUncertain = true
+			res.Status = MonitorStatusFailed
+			res.Message = "generation: accepted response missing task ID; submission outcome is uncertain; this availability probe failed without a user prompt; the original task will be recovered when supported; no resubmission"
 			break
 		}
 		res.Status, res.Message = MonitorStatusPending, "generation: task in progress; 下次只查询原任务 "+task.UpstreamID
 	case "completed":
+		task.AcceptanceUncertain = false
 		if err := media.ValidateMonitorArtifacts(ctx, client, task.Capability, upstream.Artifacts, task.Account); err != nil {
-			task.State, res.Message = "blocked", "generation: result is not a valid deliverable artifact; no resubmission"
+			task.State, res.Status, res.Message = "blocked", MonitorStatusFailed, "generation: result is not a valid deliverable artifact; this availability probe failed; a later check will try again; no resubmission in this request"
 		} else {
 			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: 已校验实际 "+task.Capability.MediaType+" 文件；任务 "+task.UpstreamID
 		}
 	case "failed":
 		task.State, res.Status = "blocked", MonitorStatusFailed
+		task.AcceptanceUncertain = submittedThisCheck && !upstream.Rejected
 		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m)
-		if submittedThisCheck && upstream.Rejected && upstream.Retryable {
+		if task.AcceptanceUncertain {
+			res.Message += "; submission outcome is uncertain; this check failed without a user prompt; keep checking the original task; no resubmission"
+		} else if submittedThisCheck && upstream.Rejected && upstream.Retryable {
 			delay := upstream.RetryAfter
 			if delay <= 0 {
 				shift := min(task.RetryAttempts, 6)
@@ -559,11 +604,26 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			task.NextRetryAt = time.Now().Add(delay)
 			res.Message += "; explicitly rejected; retry after " + task.NextRetryAt.UTC().Format(time.RFC3339) + " on a later check; no resubmission in this request"
 		} else {
-			res.Message += "; edit detection settings and reset task before retrying; no resubmission"
+			res.Message += "; this availability probe failed; a later check will try again; no resubmission in this request"
 		}
 	default:
-		task.State = "blocked"
-		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; acceptance uncertain; reset task only after checking the original request; no resubmission"
+		// The adapter uses "unknown" when a request may have been accepted but
+		// the response did not establish a task ID or final state. Keep the
+		// availability result failed while preserving the original request for
+		// read-only recovery/polling. Never turn an unknown acceptance into an
+		// implicit confirmation or a second generation request.
+		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
+		switch {
+		case task.UpstreamID != "":
+			task.State = "in_progress"
+		case canRecover:
+			task.State = "submitting"
+		default:
+			task.State = "blocked"
+		}
+		res.Status = MonitorStatusFailed
+		task.AcceptanceUncertain = true
+		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; submission outcome is uncertain; this availability probe failed without a user prompt; the original task will be checked when supported; no resubmission"
 	}
 	res.Message = truncateMessage(res.Message)
 	task.ResultStatus, task.Message = res.Status, res.Message
