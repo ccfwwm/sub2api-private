@@ -15,7 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -147,6 +147,17 @@ func moneyState(t *testing.T, db *sql.DB, user int64) (string, string) {
 	require.NoError(t, db.QueryRow(`SELECT balance::text,frozen_balance::text FROM users WHERE id=$1`, user).Scan(&balance, &frozen))
 	return balance, frozen
 }
+
+func cleanupMediaTasks(t *testing.T, db *sql.DB, userIDs ...int64) {
+	t.Helper()
+	users := pq.Array(userIDs)
+	for _, table := range []string{"media_artifacts", "media_cost_entries", "media_quota_holds", "media_ledger_entries"} {
+		_, err := db.Exec(`DELETE FROM `+table+` WHERE task_id IN (SELECT id FROM media_tasks WHERE user_id = ANY($1))`, users)
+		require.NoError(t, err)
+	}
+	_, err := db.Exec(`DELETE FROM media_tasks WHERE user_id = ANY($1)`, users)
+	require.NoError(t, err)
+}
 func TestPersistentReserveSettleRefundAndRepeatedOperations(t *testing.T) {
 	db := testDB(t)
 	s := &media.Store{DB: db}
@@ -235,6 +246,7 @@ func TestMediaAdmissionUsesAccountConcurrencyAndCountsManualReview(t *testing.T)
 	}
 
 	narrow := fixture(t, db, "10")
+	t.Cleanup(func() { cleanupMediaTasks(t, db, wide.Identity.UserID, narrow.Identity.UserID) })
 	narrow.Capability.Limits.MaxConcurrentTasks = ptr(2)
 	_, err := db.ExecContext(ctx, `UPDATE accounts SET concurrency=2 WHERE id=$1`, narrow.Capability.AccountIDs[0])
 	require.NoError(t, err)
