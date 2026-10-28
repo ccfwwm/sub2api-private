@@ -65,7 +65,11 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		if base == "" || key == "" {
 			return media.Account{}, fmt.Errorf("media account requires base URL and API key")
 		}
-		return media.Account{ID: id, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
+		concurrency := a.Concurrency
+		if concurrency < 1 {
+			concurrency = 1
+		}
+		return media.Account{ID: id, Concurrency: concurrency, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
 	}
 	invalidate := func(identity media.Identity) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -227,10 +231,99 @@ func (h *MediaHandler) Stop() {
 func mediaError(c *gin.Context, err error) {
 	var problem *media.Error
 	if errors.As(err, &problem) {
-		c.JSON(problem.Status, gin.H{"error": gin.H{"type": problem.Code, "message": problem.Message}})
+		if problem.RetryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(problem.RetryAfter))
+		}
+		if problem.Details != nil {
+			setOpsMediaAdmission(c, problem.Details)
+			if accountID, ok := problem.Details["account_id"].(int64); ok {
+				setOpsSelectedAccount(c, accountID, service.PlatformImageVideo)
+			}
+		}
+		errorBody := gin.H{"type": problem.Code, "code": problem.Code, "message": problem.Message}
+		if problem.Details != nil {
+			errorBody["details"] = problem.Details
+		}
+		c.JSON(problem.Status, gin.H{"error": errorBody})
 		return
 	}
 	c.JSON(500, gin.H{"error": gin.H{"type": "media_service_error", "message": "Media operation failed; inspect the task or server diagnostics"}})
+}
+
+func mediaDiagnosticField(diagnostic, key string) string {
+	marker := key + "="
+	start := strings.LastIndex(diagnostic, marker)
+	if start < 0 {
+		return ""
+	}
+	value := diagnostic[start+len(marker):]
+	if end := strings.Index(value, "; "); end >= 0 {
+		value = value[:end]
+	}
+	return strings.TrimSpace(value)
+}
+
+func upstreamStatusFromMediaDiagnostic(diagnostic string) int {
+	value := mediaDiagnosticField(diagnostic, "upstream_status_code")
+	if value == "" {
+		if marker := "HTTP "; strings.Contains(diagnostic, marker) {
+			value = diagnostic[strings.LastIndex(diagnostic, marker)+len(marker):]
+			if end := strings.IndexAny(value, "; :"); end >= 0 {
+				value = value[:end]
+			}
+		}
+	}
+	status, _ := strconv.Atoi(value)
+	if status < 100 || status > 599 {
+		return 0
+	}
+	return status
+}
+
+func (h *MediaHandler) setOpsMediaTaskFailure(c *gin.Context, task media.StoredTask) {
+	if c == nil {
+		return
+	}
+	setOpsSelectedAccount(c, task.AccountID, service.PlatformImageVideo)
+	if h != nil && h.Engine != nil && h.Engine.Store != nil {
+		if usage, err := h.Engine.Store.AccountAdmission(c.Request.Context(), task.AccountID); err == nil {
+			setOpsMediaAdmission(c, map[string]any{
+				"account_concurrency": usage.Concurrency,
+				"in_flight":           usage.InFlight,
+				"queued":              usage.Queued,
+				"manual_review":       usage.ManualReview,
+			})
+		}
+	}
+	status := upstreamStatusFromMediaDiagnostic(task.Diagnostic)
+	requestID := mediaDiagnosticField(task.Diagnostic, "upstream_request_id")
+	if requestID == "" {
+		requestID = mediaDiagnosticField(task.Diagnostic, "request_id")
+	}
+	message := mediaDiagnosticField(task.Diagnostic, "upstream_message")
+	if status == 0 && requestID == "" && message == "" {
+		return
+	}
+	if message == "" {
+		message = task.Diagnostic
+	}
+	service.SetOpsUpstreamError(c, status, message, task.Diagnostic)
+	event := &service.OpsUpstreamErrorEvent{
+		AccountID:          task.AccountID,
+		UpstreamStatusCode: status,
+		UpstreamRequestID:  requestID,
+		Kind:               "http_error",
+		Stage:              string(service.GatewayFailureStageInference),
+		Message:            message,
+		Detail:             task.Diagnostic,
+	}
+	events, _ := c.Get(service.OpsUpstreamErrorsKey)
+	if existing, ok := events.([]*service.OpsUpstreamErrorEvent); ok {
+		events = append(existing, event)
+	} else {
+		events = []*service.OpsUpstreamErrorEvent{event}
+	}
+	c.Set(service.OpsUpstreamErrorsKey, events)
 }
 func (h *MediaHandler) identity(c *gin.Context) (media.Identity, error) {
 	key, ok := middleware.GetAPIKeyFromContext(c)
@@ -397,6 +490,7 @@ func (h *MediaHandler) TrySubmit(c *gin.Context, operation string) bool {
 		}
 		return false
 	}
+	setOpsRequestContext(c, cap.Model, false)
 	if key.Group.ModelAllowlistEnabled() && !key.Group.ModelAllowlist.Allows(cap.Model) {
 		mediaError(c, &media.Error{Status: 403, Code: "model_not_allowed", Message: "Model is not allowed in this group"})
 		return true
@@ -436,6 +530,7 @@ func (h *MediaHandler) TrySubmit(c *gin.Context, operation string) bool {
 		mediaError(c, err)
 		return true
 	}
+	setOpsSelectedAccount(c, task.AccountID, service.PlatformImageVideo)
 	if operation == "video" || p["async"] == true {
 		h.writeTask(c, task)
 		return true
@@ -484,6 +579,7 @@ func (h *MediaHandler) writeTask(c *gin.Context, t media.StoredTask) {
 }
 func (h *MediaHandler) writeSynchronous(c *gin.Context, t media.StoredTask, operation string, p map[string]any) {
 	if t.State == "failed" {
+		h.setOpsMediaTaskFailure(c, t)
 		c.JSON(502, gin.H{"id": t.ID, "error": gin.H{"type": "generation_failed", "message": t.Diagnostic}})
 		return
 	}

@@ -11,10 +11,14 @@ import (
 type Error struct {
 	Status        int
 	Code, Message string
+	Details       map[string]any
+	RetryAfter    int
 }
 
-func (e *Error) Error() string                    { return e.Code + ": " + e.Message }
-func fail(status int, code, message string) error { return &Error{status, code, message} }
+func (e *Error) Error() string { return e.Code + ": " + e.Message }
+func fail(status int, code, message string) error {
+	return &Error{Status: status, Code: code, Message: message}
+}
 
 type Duration struct {
 	Mode      string           `json:"mode"`
@@ -220,6 +224,10 @@ type Artifact struct {
 }
 type UpstreamResult struct {
 	ID, Status, Diagnostic string
+	UpstreamCode           string
+	UpstreamMessage        string
+	UpstreamRequestID      string
+	UpstreamStatusCode     int
 	Response               json.RawMessage
 	Artifacts              []Artifact
 	Quantities             map[string][]string
@@ -232,6 +240,7 @@ type Account struct {
 	ObserveSubmission      func(Submission) error `json:"-"`
 	CostMultiplier         string
 	ID                     int64
+	Concurrency            int
 	BaseURL, Key, Platform string
 	Allowed                bool
 	// TaskAPI is set only for the local durable gateway protocol, never guessed

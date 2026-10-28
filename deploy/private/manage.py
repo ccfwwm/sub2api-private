@@ -338,6 +338,7 @@ class Manager:
             field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
                      else 'monitor_migration' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
                      else 'group_availability_migration' if reviewed['filename'] == '251_media_group_availability.sql'
+                    else 'ops_diagnostics_migration' if reviewed['filename'] == '252_media_account_concurrency_diagnostics.sql'
                      else 'template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'docs_migration')
             job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
@@ -752,6 +753,7 @@ class Manager:
             phase = ('applying_reviewed_task_indexes' if reviewed['filename'] == '247_media_task_list_indexes.sql'
                      else 'applying_reviewed_monitor_enum_expansion' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
                      else 'applying_reviewed_media_group_availability' if reviewed['filename'] == '251_media_group_availability.sql'
+                     else 'applying_reviewed_media_account_diagnostics' if reviewed['filename'] == '252_media_account_concurrency_diagnostics.sql'
                      else 'applying_reviewed_media_template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'applying_reviewed_public_documentation_migration')
             self.save(job, phase)

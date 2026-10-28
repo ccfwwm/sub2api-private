@@ -26,11 +26,15 @@ import (
 )
 
 const (
-	opsModelKey                  = "ops_model"
-	opsStreamKey                 = "ops_stream"
-	opsAccountIDKey              = "ops_account_id"
-	opsRoutingCapacityLimitedKey = "ops_routing_capacity_limited"
-	opsDedicatedErrorRecordedKey = "ops_dedicated_error_recorded"
+	opsModelKey                    = "ops_model"
+	opsStreamKey                   = "ops_stream"
+	opsAccountIDKey                = "ops_account_id"
+	opsMediaAccountConcurrencyKey  = "ops_media_account_concurrency"
+	opsMediaAccountInFlightKey     = "ops_media_account_in_flight"
+	opsMediaAccountQueuedKey       = "ops_media_account_queued"
+	opsMediaAccountManualReviewKey = "ops_media_account_manual_review"
+	opsRoutingCapacityLimitedKey   = "ops_routing_capacity_limited"
+	opsDedicatedErrorRecordedKey   = "ops_dedicated_error_recorded"
 
 	opsUpstreamModelKey = service.OpsUpstreamModelKey
 	opsRequestTypeKey   = "ops_request_type"
@@ -480,6 +484,44 @@ func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) 
 		}
 		c.Request = c.Request.WithContext(ctx)
 	}
+}
+
+func setOpsMediaAdmission(c *gin.Context, details map[string]any) {
+	if c == nil || details == nil {
+		return
+	}
+	for key, contextKey := range map[string]string{
+		"account_concurrency": opsMediaAccountConcurrencyKey,
+		"in_flight":           opsMediaAccountInFlightKey,
+		"queued":              opsMediaAccountQueuedKey,
+		"manual_review":       opsMediaAccountManualReviewKey,
+	} {
+		if value, ok := details[key]; ok {
+			c.Set(contextKey, value)
+		}
+	}
+}
+
+func opsMediaIntPointer(c *gin.Context, key string) *int {
+	if c == nil {
+		return nil
+	}
+	value, ok := c.Get(key)
+	if !ok {
+		return nil
+	}
+	var n int
+	switch v := value.(type) {
+	case int:
+		n = v
+	case int64:
+		n = int(v)
+	case float64:
+		n = int(v)
+	default:
+		return nil
+	}
+	return &n
 }
 
 func markOpsRoutingCapacityLimited(c *gin.Context) {
@@ -1188,8 +1230,12 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		phase, isBusinessLimited, errorOwner, errorSource := classifyOpsErrorLog(c, normalizedType, parsed.Message, parsed.Code, status)
 
 		entry := &service.OpsInsertErrorLogInput{
-			RequestID:       requestID,
-			ClientRequestID: clientRequestID,
+			RequestID:           requestID,
+			ClientRequestID:     clientRequestID,
+			AccountConcurrency:  opsMediaIntPointer(c, opsMediaAccountConcurrencyKey),
+			AccountInFlight:     opsMediaIntPointer(c, opsMediaAccountInFlightKey),
+			AccountQueued:       opsMediaIntPointer(c, opsMediaAccountQueuedKey),
+			AccountManualReview: opsMediaIntPointer(c, opsMediaAccountManualReviewKey),
 
 			AccountID: accountID,
 			Platform:  platform,
@@ -2298,7 +2344,9 @@ func isOpsLocalBusinessLimitError(code string, msg string) bool {
 		opsCodeSubscriptionNotFound,
 		opsCodeSubscriptionInvalid,
 		opsCodeAPIKeyQuotaExhausted,
-		opsCodeAPIKeyQueryDeprecated:
+		opsCodeAPIKeyQueryDeprecated,
+		"account_concurrency_exhausted",
+		"task_concurrency_limit":
 		return true
 	}
 	return strings.Contains(msg, "api key in query parameter is deprecated") ||
@@ -2317,6 +2365,7 @@ func isOpsLocalBusinessLimitError(code string, msg string) bool {
 		strings.Contains(msg, "monthly usage limit exceeded") ||
 		strings.Contains(msg, "usage quota exhausted for this platform") ||
 		strings.Contains(msg, "requests-per-minute limit exceeded") ||
+		strings.Contains(msg, "account media concurrency exhausted") ||
 		strings.Contains(msg, "too many pending requests") ||
 		strings.Contains(msg, "concurrency limit exceeded") ||
 		strings.Contains(msg, "image generation concurrency limit exceeded") ||

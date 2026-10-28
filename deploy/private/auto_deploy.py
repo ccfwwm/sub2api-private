@@ -23,6 +23,7 @@ REVIEWED_MIGRATION_ASSETS = (
     '249_media_protocol_templates.sql',
     '250_migrate_legacy_media_template_refs.sql',
     '251_media_group_availability.sql',
+    '252_media_account_concurrency_diagnostics.sql',
 )
 
 def stage_reviewed_migrations(assets, release):

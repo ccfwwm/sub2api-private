@@ -3623,7 +3623,6 @@ components:
               minimum: 0
           required:
           - max_request_bytes
-          - max_concurrent_tasks
           - observation_seconds
           additionalProperties: false
         account_ids:

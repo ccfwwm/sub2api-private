@@ -120,6 +120,10 @@ Release 必须包含 `249_media_protocol_templates.sql`、`250_migrate_legacy_me
 
 正式 Release 应包含 `251_media_group_availability.sql` 及 checksum。管理器仅接受在 `groups` 增加 `media_availability VARCHAR(20) NOT NULL DEFAULT 'available'` 并限制为 `available` / `unavailable` 的固定语句；迁移清单必须只有该项新增，SQL 在锁超时与语句超时保护下原子执行。旧 worker 只会从匹配版本、匹配迁移清单的已校验 Release assets 取回迁移文件。先完成备份副本演练，再按 `prepare v1.3.2 --confirm PREPARE` 和 `upgrade v1.3.2 --confirm UPGRADE` 执行，不要手工运行 SQL。
 
+## 媒体账号并发诊断字段
+
+实现账号级媒体并发后，正式 Release 还应包含 `252_media_account_concurrency_diagnostics.sql` 及 checksum。该迁移只向 `ops_error_logs` 增加账号并发、在途、排队和人工核对占用的可空快照列，不修改业务数据；管理器仅接受固定 `ALTER TABLE` 与列注释语句，并要求先完成隔离副本演练，再按同一 Release 的 `prepare` / `upgrade` 流程应用。
+
 ## v1.2.4 媒体任务分页索引
 
 `247_media_task_list_indexes.sql` 仅增加 `media_tasks` 的全局及用户时间/任务 ID 索引。管理器只接受这两条固定 CREATE INDEX、对应的原始 checksum 和唯一新增迁移；其他 schema 差异仍拒绝。正式 Release 包含该 SQL 及校验值，旧 worker 下载后新管理器可从同一 Release 的已验证 assets 读取。

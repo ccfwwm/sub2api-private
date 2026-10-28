@@ -375,6 +375,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			return UpstreamResult{Status: "unknown", Diagnostic: "Submission receipt could not be persisted; reconcile original task"}, nil
 		}
 	}
+	upstreamRequestID := mediaUpstreamRequestID(response)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if !submission {
 			return UpstreamResult{}, fmt.Errorf("upstream query HTTP %d", response.StatusCode)
@@ -388,16 +389,23 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		// A complete 503 response is an explicit rejection, not a lost response.
 		// Gateway timeouts can still conceal acceptance and require recovery.
 		if status >= 500 && status != http.StatusServiceUnavailable || status == http.StatusRequestTimeout {
-			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)}, nil
+			diagnostic := fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)
+			code, message := mediaUpstreamErrorDetails(raw, account.Key)
+			if code != "" || message != "" {
+				diagnostic += ": " + code + " " + message
+			}
+			if upstreamRequestID != "" {
+				diagnostic += "; request_id=" + upstreamRequestID
+			}
+			return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: diagnostic, UpstreamCode: code,
+				UpstreamMessage: message, UpstreamRequestID: upstreamRequestID, UpstreamStatusCode: response.StatusCode}, nil
 		}
 		diagnostic := fmt.Sprintf("Upstream rejected request: HTTP %d", status)
-		var rejectedDetail map[string]any
-		if len(raw) <= 8192 && json.Unmarshal(raw, &rejectedDetail) == nil {
-			if detail, ok := rejectedDetail["error"].(map[string]any); ok {
-				rejectedDetail = detail
-			}
-			code, _ := SafeReviewValue(rejectedDetail["code"], []string{account.Key}, 0).(string)
-			message, _ := SafeReviewValue(rejectedDetail["message"], []string{account.Key}, 0).(string)
+		if status == http.StatusTooManyRequests {
+			diagnostic = fmt.Sprintf("upstream_rate_limit: HTTP %d", status)
+		}
+		code, message := mediaUpstreamErrorDetails(raw, account.Key)
+		if code != "" || message != "" {
 			diagnostic += ": " + code + " " + message
 		}
 		if status == 400 || status == 415 || status == 422 {
@@ -413,7 +421,14 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			}
 		}
 		retryAfter := parseRetryAfter(response.Header.Get("Retry-After"), raw, time.Now())
-		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic, Rejected: true,
+		if upstreamRequestID != "" {
+			diagnostic += "; request_id=" + upstreamRequestID
+		}
+		if retryAfter > 0 {
+			diagnostic += fmt.Sprintf("; retry_after_seconds=%d", int(retryAfter/time.Second))
+		}
+		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic, UpstreamCode: code,
+			UpstreamMessage: message, UpstreamRequestID: upstreamRequestID, UpstreamStatusCode: status, Rejected: true,
 			Retryable: status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || retryAfter > 0, RetryAfter: retryAfter}, nil
 	}
 	if cap.Template != nil && cap.Template.Mode == "sync_binary" {
@@ -425,7 +440,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			return UpstreamResult{Status: "unknown", Diagnostic: "Successful response was not the configured media type; do not resubmit"}, nil
 		}
 		payload, _ := json.Marshal(map[string]any{"_media_binary": map[string]any{"mime": mime, "data": base64String(raw)}})
-		return UpstreamResult{Status: "completed", Accepted: true, Response: payload, Artifacts: []Artifact{{Key: cap.MediaType + "1", Type: cap.MediaType, MIME: mime, Source: "data:" + mime + ";base64," + base64String(raw)}}}, nil
+		return UpstreamResult{Status: "completed", Accepted: true, Response: payload, UpstreamRequestID: mediaUpstreamRequestID(response), UpstreamStatusCode: response.StatusCode, Artifacts: []Artifact{{Key: cap.MediaType + "1", Type: cap.MediaType, MIME: mime, Source: "data:" + mime + ";base64," + base64String(raw)}}}, nil
 	}
 	var object map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -441,10 +456,61 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 	}
 	result.Response = raw
+	result.UpstreamRequestID = mediaUpstreamRequestID(response)
+	result.UpstreamStatusCode = response.StatusCode
 	if result.Status == "unknown" {
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"
 	}
 	return result, nil
+}
+
+func mediaUpstreamRequestID(response *http.Response) string {
+	if response == nil {
+		return ""
+	}
+	for _, name := range []string{"x-request-id", "request-id", "x-correlation-id"} {
+		if value := strings.TrimSpace(response.Header.Get(name)); value != "" {
+			clean := strings.Map(func(r rune) rune {
+				if r < 32 || r == 127 {
+					return -1
+				}
+				return r
+			}, value)
+			if len(clean) > 128 {
+				clean = clean[:128]
+			}
+			return strings.TrimSpace(clean)
+		}
+	}
+	return ""
+}
+
+func mediaUpstreamErrorDetails(raw []byte, secret string) (string, string) {
+	if len(raw) == 0 || len(raw) > 8192 {
+		return "", ""
+	}
+	var detail map[string]any
+	if json.Unmarshal(raw, &detail) != nil {
+		return "", ""
+	}
+	if nested, ok := detail["error"].(map[string]any); ok {
+		detail = nested
+	}
+	code := safeMediaUpstreamText(detail["code"], secret)
+	message := safeMediaUpstreamText(detail["message"], secret)
+	return strings.TrimSpace(code), strings.TrimSpace(message)
+}
+
+func safeMediaUpstreamText(value any, secret string) string {
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	if secret != "" {
+		text = strings.ReplaceAll(text, secret, "[redacted]")
+	}
+	clean, _ := SafeReviewValue(text, nil, 0).(string)
+	return clean
 }
 
 func explicitUpstreamHTTPStatus(raw []byte) int {

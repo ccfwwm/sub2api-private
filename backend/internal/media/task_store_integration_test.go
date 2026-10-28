@@ -134,7 +134,7 @@ func fixture(t *testing.T, db *sql.DB, balance string) media.Snapshot {
 	var user, group, account, key int64
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO users(email,password_hash,balance) VALUES('media-test-'||gen_random_uuid()||'@example.invalid','isolated-test-only',$1) RETURNING id`, balance).Scan(&user))
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO groups(name,platform) VALUES('media-test-'||gen_random_uuid(),'openai') RETURNING id`).Scan(&group))
-	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO accounts(name,platform,type,credentials) VALUES('media-test-'||gen_random_uuid(),'openai','apikey','{}') RETURNING id`).Scan(&account))
+	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO accounts(name,platform,type,credentials,concurrency) VALUES('media-test-'||gen_random_uuid(),'openai','apikey','{}',100) RETURNING id`).Scan(&account))
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO api_keys(user_id,key,name,group_id) VALUES($1,'media-test-'||gen_random_uuid(),'media-test',$2) RETURNING id`, user, group).Scan(&key))
 	cap := media.Capability{ID: media.NewTaskID(), Model: "00sd2.5", UpstreamModel: "00sd2.5", MediaType: "video", AccountIDs: []int64{account}, GroupIDs: []int64{group}, Duration: media.Duration{Mode: "fixed", Values: []int{30}}}
 	cap.Limits.MaxConcurrentTasks = ptr(30)
@@ -218,6 +218,72 @@ func TestConcurrentReserveCannotOversellAndFailureReleases(t *testing.T) {
 	b, f = moneyState(t, db, snap.Identity.UserID)
 	require.Equal(t, "3.00000000", b)
 	require.Equal(t, "0.00000000", f)
+}
+
+func TestMediaAdmissionUsesAccountConcurrencyAndCountsManualReview(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	store := &media.Store{DB: db}
+
+	// The legacy capability value remains 2 in the snapshot, but the account
+	// budget is 100 and therefore all three submissions are admitted.
+	wide := fixture(t, db, "10")
+	wide.Capability.Limits.MaxConcurrentTasks = ptr(2)
+	for i := 0; i < 3; i++ {
+		_, err := store.CreateTask(ctx, wide, wide.Capability.AccountIDs[0], "", "", media.NewTaskID())
+		require.NoError(t, err)
+	}
+
+	narrow := fixture(t, db, "10")
+	narrow.Capability.Limits.MaxConcurrentTasks = ptr(2)
+	_, err := db.ExecContext(ctx, `UPDATE accounts SET concurrency=2 WHERE id=$1`, narrow.Capability.AccountIDs[0])
+	require.NoError(t, err)
+	manual, err := store.CreateTask(ctx, narrow, narrow.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE media_tasks SET state='unknown',settlement_state='manual_review' WHERE id=$1`, manual.ID)
+	require.NoError(t, err)
+	otherModel := narrow
+	otherModel.Capability.Model = "same-account-second-model"
+	_, err = store.CreateTask(ctx, otherModel, narrow.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	require.NoError(t, err)
+	_, err = store.CreateTask(ctx, narrow, narrow.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	var admissionErr *media.Error
+	require.ErrorAs(t, err, &admissionErr)
+	require.Equal(t, 429, admissionErr.Status)
+	require.Equal(t, "account_concurrency_exhausted", admissionErr.Code)
+	require.Equal(t, 2, admissionErr.Details["account_concurrency"])
+	require.Equal(t, 1, admissionErr.Details["manual_review"])
+	_, err = db.ExecContext(ctx, `UPDATE accounts SET concurrency=3 WHERE id=$1`, narrow.Capability.AccountIDs[0])
+	require.NoError(t, err)
+	_, err = store.CreateTask(ctx, narrow, narrow.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	require.NoError(t, err, "a live account concurrency edit must apply to the next admission")
+}
+
+func TestClaimHonorsAccountConcurrencyAcrossMediaModels(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	store := &media.Store{DB: db}
+	snap := fixture(t, db, "10")
+	_, err := db.ExecContext(ctx, `UPDATE accounts SET concurrency=2 WHERE id=$1`, snap.Capability.AccountIDs[0])
+	require.NoError(t, err)
+	first, err := store.CreateTask(ctx, snap, snap.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	require.NoError(t, err)
+	second := snap
+	second.Capability.Model = "claim-second-model"
+	secondTask, err := store.CreateTask(ctx, second, snap.Capability.AccountIDs[0], "", "", media.NewTaskID())
+	require.NoError(t, err)
+
+	claimed, err := store.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.Equal(t, first.ID, claimed.ID)
+	claimed, err = store.Claim(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+	require.Equal(t, secondTask.ID, claimed.ID)
+	claimed, err = store.Claim(ctx)
+	require.NoError(t, err)
+	require.Nil(t, claimed, "workers must not claim a third task beyond the account budget")
 }
 func TestInterruptedSubmissionIsNotResubmittedAndFencing(t *testing.T) {
 	db := testDB(t)

@@ -31,6 +31,7 @@ MONITOR_FILE = '246_channel_monitor_imagevideo.sql'
 TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
 DOCS_FILE = '248_public_imagevideo_docs.sql'
 GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
+OPS_DIAGNOSTICS_FILE = '252_media_account_concurrency_diagnostics.sql'
 TEMPLATE_SCHEMA_FILE = '249_media_protocol_templates.sql'
 LEGACY_TEMPLATE_FILE = '250_migrate_legacy_media_template_refs.sql'
 TEMPLATE_FILES = (TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE)
@@ -259,6 +260,58 @@ def validate_group_availability_transaction(transaction):
     return bool(match and transaction == group_availability_transaction(group_availability_statements(), match[1]))
 
 
+def ops_diagnostics_statements():
+    return ("ALTER TABLE ops_error_logs ADD COLUMN IF NOT EXISTS account_concurrency INT, "
+            "ADD COLUMN IF NOT EXISTS account_in_flight INT, "
+            "ADD COLUMN IF NOT EXISTS account_queued INT, "
+            "ADD COLUMN IF NOT EXISTS account_manual_review INT; "
+            "COMMENT ON COLUMN ops_error_logs.account_concurrency IS 'Live media account concurrency at request admission'; "
+            "COMMENT ON COLUMN ops_error_logs.account_in_flight IS 'Media tasks held by the account at request admission'; "
+            "COMMENT ON COLUMN ops_error_logs.account_queued IS 'Queued media tasks held by the account at request admission'; "
+            "COMMENT ON COLUMN ops_error_logs.account_manual_review IS 'Manual-review media tasks held by the account at request admission';")
+
+
+def ops_diagnostics_transaction(sql, checksum):
+    import re
+    normalized = ' '.join(re.sub(r'--[^\n]*', '', sql).split())
+    if normalized != ' '.join(ops_diagnostics_statements().split()) or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+        raise ValueError('outside reviewed media account diagnostics migration')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + ops_diagnostics_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{OPS_DIAGNOSTICS_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_ops_diagnostics_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('252_media_account_concurrency_diagnostics\.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == ops_diagnostics_transaction(ops_diagnostics_statements(), match[1]))
+
+
+def reviewed_ops_diagnostics_upgrade(before, target, folder):
+    if before == target:
+        return None
+    if OPS_DIAGNOSTICS_FILE in before or set(target) - set(before) != {OPS_DIAGNOSTICS_FILE} or {k: v for k, v in target.items() if k != OPS_DIAGNOSTICS_FILE} != before:
+        raise ValueError('migration inventory differs outside reviewed media account diagnostics migration')
+    folder = Path(folder)
+    source = folder / OPS_DIAGNOSTICS_FILE
+    if not source.exists():
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / OPS_DIAGNOSTICS_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / OPS_DIAGNOSTICS_FILE
+                break
+    sql = source.read_text().replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if target[OPS_DIAGNOSTICS_FILE] != checksum:
+        raise ValueError('media account diagnostics migration checksum differs')
+    return {'filename': OPS_DIAGNOSTICS_FILE,
+            'transaction': ops_diagnostics_transaction(sql, checksum),
+            'expected_migrations': target}
+
+
 def reviewed_group_availability_upgrade(before, target, folder):
     if before == target:
         return None
@@ -293,6 +346,8 @@ def reviewed_upgrade(before, target, folder):
         return reviewed_template_upgrade(before, target, folder)
     if set(target) - set(before) == {GROUP_AVAILABILITY_FILE}:
         return reviewed_group_availability_upgrade(before, target, folder)
+    if set(target) - set(before) == {OPS_DIAGNOSTICS_FILE}:
+        return reviewed_ops_diagnostics_upgrade(before, target, folder)
     if set(target) - set(before) != {TASK_INDEX_FILE}:
         if set(target) - set(before) == {MONITOR_FILE}:
             return reviewed_monitor_upgrade(before, target, folder)

@@ -281,13 +281,15 @@ class Controller:
         from media_migrate import (validate_unified_transaction, validate_monitor_transaction,
                                    validate_task_index_transaction, validate_docs_transaction,
                                    validate_template_transaction, validate_legacy_transaction,
-                                   validate_group_availability_transaction)
+                                   validate_group_availability_transaction,
+                                   validate_ops_diagnostics_transaction)
         legacy = validate_legacy_transaction(transaction)
         reviewed = (legacy or validate_unified_transaction(transaction) or
                     validate_monitor_transaction(transaction) or
                     validate_task_index_transaction(transaction) or
                     validate_docs_transaction(transaction) or validate_template_transaction(transaction))
         reviewed = reviewed or validate_group_availability_transaction(transaction)
+        reviewed = reviewed or validate_ops_diagnostics_transaction(transaction)
         if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not reviewed:
             raise ValueError("reviewed atomic media transaction required")
         container = container or self.config.get("database_container", "sub2api-postgres")
@@ -460,7 +462,7 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql"):
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql", "252_media_account_concurrency_diagnostics.sql"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"

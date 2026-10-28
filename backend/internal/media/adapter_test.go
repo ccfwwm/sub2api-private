@@ -44,6 +44,24 @@ func TestAdapterClassifiesWrappedUpstream429AndRetryAfter(t *testing.T) {
 	require.Contains(t, result.Diagnostic, "HTTP 429")
 }
 
+func TestAdapterPreservesSanitizedUpstreamErrorMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "provider-req-42")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"invalid_media","message":"Bearer secret-provider-key: invalid input"}}`))
+	}))
+	defer server.Close()
+
+	result, err := (&Adapter{SafeClient(true)}).Submit(context.Background(), Capability{MediaType: "video"},
+		Request{Operation: "video", Parameters: map[string]any{"model": "mock"}}, Account{BaseURL: server.URL, Key: "secret-provider-key"})
+	require.NoError(t, err)
+	require.Equal(t, "invalid_media", result.UpstreamCode)
+	require.Equal(t, "[credential omitted] invalid input", result.UpstreamMessage)
+	require.Equal(t, "provider-req-42", result.UpstreamRequestID)
+	require.Equal(t, http.StatusBadRequest, result.UpstreamStatusCode)
+	require.NotContains(t, result.Diagnostic, "secret-provider-key")
+}
+
 func TestAdapterOrdinary502IsAcceptanceUncertain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)

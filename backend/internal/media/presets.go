@@ -42,6 +42,8 @@ func CapabilityDefaults(c Capability) Capability {
 		c.Limits.MaxRequestBytes = &v
 	}
 	if c.Limits.MaxConcurrentTasks == nil {
+		// Kept only for snapshot and admin-client compatibility. Runtime media
+		// admission is account-scoped and reads accounts.concurrency.
 		v := 2
 		c.Limits.MaxConcurrentTasks = &v
 	}

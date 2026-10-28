@@ -73,8 +73,10 @@ DEFS = {
         "delivery": obj({"poll_seconds": {"type": "integer", "minimum": 1}, "head": {"type": ["boolean", "null"]},
                          "range": {"type": ["boolean", "null"]}, "refresh": {"type": ["boolean", "null"]}},
                         ["poll_seconds", "head", "range", "refresh"]),
+        # max_concurrent_tasks remains a legacy snapshot field. Media runtime
+        # admission is owned by the bound account's concurrency setting.
         "limits": obj({"max_request_bytes": NULL_INT, "max_concurrent_tasks": NULL_INT,
-                       "observation_seconds": NULL_INT}, ["max_request_bytes", "max_concurrent_tasks", "observation_seconds"]),
+                       "observation_seconds": NULL_INT}, ["max_request_bytes", "observation_seconds"]),
         "account_ids": arr({"type":"integer","minimum":1}), "group_ids": arr({"type":"integer","minimum":1}),
         "channel_id":{"type":"integer","minimum":1}, "price_templates":arr(TEXT), "cost_templates":arr(TEXT),
         "music_rate_override":PRICE, "verification_evidence":TEXT, "artifact_hosts":arr(TEXT),

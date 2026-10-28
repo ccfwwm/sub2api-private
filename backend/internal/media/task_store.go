@@ -90,6 +90,121 @@ type quotaSpec struct {
 	limitValue                      *string
 }
 
+// mediaAccountCapacity reads the live account setting while the account row is
+// locked. Media tasks deliberately share this budget across every model and
+// operation bound to the account. A legacy zero/negative value is treated as
+// one so an invalid setting cannot disable admission safety.
+func mediaAccountCapacity(ctx context.Context, tx *sql.Tx, accountID int64) (int, error) {
+	var capacity int
+	err := tx.QueryRowContext(ctx, `SELECT concurrency FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, accountID).Scan(&capacity)
+	if err == sql.ErrNoRows {
+		return 0, fail(503, "media_account_unavailable", "Media account is no longer available")
+	}
+	if err != nil {
+		return 0, err
+	}
+	if capacity < 1 {
+		capacity = 1
+	}
+	return capacity, nil
+}
+
+type mediaAccountUsageStats struct {
+	Total        int
+	Running      int
+	Queued       int
+	ManualReview int
+}
+
+// AccountAdmission is a point-in-time account media occupancy snapshot used
+// by diagnostics. Admission itself still uses the transaction-locked helpers
+// above; this read is intentionally best effort for an already-finished task.
+type AccountAdmission struct {
+	Concurrency  int
+	InFlight     int
+	Running      int
+	Queued       int
+	ManualReview int
+}
+
+func (s *Store) AccountAdmission(ctx context.Context, accountID int64) (AccountAdmission, error) {
+	var snapshot AccountAdmission
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT GREATEST(a.concurrency, 1),
+			count(t.id) FILTER (WHERE t.settlement_state IN ('held','pending_usage','manual_review')),
+			count(t.id) FILTER (WHERE t.settlement_state IN ('held','pending_usage') AND t.state <> 'queued'),
+			count(t.id) FILTER (WHERE t.settlement_state IN ('held','pending_usage') AND t.state = 'queued'),
+			count(t.id) FILTER (WHERE t.settlement_state = 'manual_review')
+		FROM accounts a
+		LEFT JOIN media_tasks t ON t.account_id=a.id
+		WHERE a.id=$1 AND a.deleted_at IS NULL
+		GROUP BY a.concurrency`, accountID).
+		Scan(&snapshot.Concurrency, &snapshot.InFlight, &snapshot.Running, &snapshot.Queued, &snapshot.ManualReview)
+	if err == sql.ErrNoRows {
+		return AccountAdmission{}, fail(503, "media_account_unavailable", "Media account is no longer available")
+	}
+	return snapshot, err
+}
+
+func mediaAccountUsage(ctx context.Context, tx *sql.Tx, accountID int64) (mediaAccountUsageStats, error) {
+	var usage mediaAccountUsageStats
+	err := tx.QueryRowContext(ctx, `
+		SELECT
+			count(*) FILTER (WHERE settlement_state IN ('held','pending_usage','manual_review')),
+			count(*) FILTER (WHERE settlement_state IN ('held','pending_usage') AND state <> 'queued'),
+			count(*) FILTER (WHERE settlement_state IN ('held','pending_usage') AND state = 'queued'),
+			count(*) FILTER (WHERE settlement_state = 'manual_review')
+		FROM media_tasks WHERE account_id=$1`, accountID).
+		Scan(&usage.Total, &usage.Running, &usage.Queued, &usage.ManualReview)
+	return usage, err
+}
+
+// mediaResultDiagnostic keeps the durable task diagnostic useful without
+// allowing provider response text or request IDs to inject credentials or
+// unbounded data into task history. The structured fields are also retained in
+// the human-readable diagnostic because media_tasks predates structured error
+// columns and is the source used by the public task status endpoint.
+func mediaResultDiagnostic(result UpstreamResult) string {
+	base := sanitizeMediaDiagnostic(result.Diagnostic)
+	fields := make([]string, 0, 4)
+	if code := sanitizeMediaDiagnostic(result.UpstreamCode); code != "" {
+		fields = append(fields, "upstream_code="+code)
+	}
+	if message := sanitizeMediaDiagnostic(result.UpstreamMessage); message != "" {
+		fields = append(fields, "upstream_message="+message)
+	}
+	if requestID := sanitizeMediaDiagnostic(result.UpstreamRequestID); requestID != "" {
+		fields = append(fields, "upstream_request_id="+requestID)
+	}
+	if result.UpstreamStatusCode > 0 {
+		fields = append(fields, fmt.Sprintf("upstream_status_code=%d", result.UpstreamStatusCode))
+	}
+	if len(fields) == 0 {
+		return base
+	}
+	if base == "" {
+		return strings.Join(fields, "; ")
+	}
+	return base + "; " + strings.Join(fields, "; ")
+}
+
+func sanitizeMediaDiagnostic(value string) string {
+	value = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return ' '
+		}
+		return r
+	}, strings.TrimSpace(value))
+	value = strings.TrimSpace(value)
+	if len(value) > 512 {
+		value = value[:512]
+	}
+	if safe, ok := SafeReviewValue(value, nil, 0).(string); ok {
+		return strings.TrimSpace(safe)
+	}
+	return ""
+}
+
 func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int64, idem, hash, id string) (StoredTask, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -103,7 +218,11 @@ func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int
 	if _, e = money(snapshot.Maximum); e != nil {
 		return StoredTask{}, e
 	}
-	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "media-profile:"+snapshot.Capability.ID); e != nil {
+	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("media-account:%d", accountID)); e != nil {
+		return StoredTask{}, e
+	}
+	capacity, e := mediaAccountCapacity(ctx, tx, accountID)
+	if e != nil {
 		return StoredTask{}, e
 	}
 	// Per-user lock serializes all new media holds. Existing balances use row-atomic updates.
@@ -154,13 +273,26 @@ func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int
 	if keyStatus != "active" || keyUser != identity.UserID || !keyGroup.Valid || keyGroup.Int64 != identity.GroupID || keyExpires.Valid && keyExpires.Time.Before(time.Now()) {
 		return StoredTask{}, fail(403, "key_unavailable", "API Key changed or inactive")
 	}
-	var count int
-	e = tx.QueryRowContext(ctx, `SELECT count(*) FROM media_tasks WHERE snapshot->'capability'->>'profile_id'=$1 AND settlement_state IN ('held','pending_usage','manual_review')`, snapshot.Capability.ID).Scan(&count)
+	usage, e := mediaAccountUsage(ctx, tx, accountID)
 	if e != nil {
 		return StoredTask{}, e
 	}
-	if snapshot.Capability.Limits.MaxConcurrentTasks == nil || count >= *snapshot.Capability.Limits.MaxConcurrentTasks {
-		return StoredTask{}, fail(429, "task_concurrency_limit", "Model concurrency exhausted")
+	if usage.Total >= capacity {
+		return StoredTask{}, &Error{
+			Status:     429,
+			Code:       "account_concurrency_exhausted",
+			Message:    "Account media concurrency exhausted",
+			RetryAfter: 1,
+			Details: map[string]any{
+				"account_id":          accountID,
+				"account_concurrency": capacity,
+				"in_flight":           usage.Total,
+				"running":             usage.Running,
+				"queued":              usage.Queued,
+				"manual_review":       usage.ManualReview,
+				"retry_after_seconds": 1,
+			},
+		}
 	}
 	rawSnap, e := json.Marshal(snapshot)
 	if e != nil {
@@ -410,12 +542,31 @@ func (s *Store) Claim(ctx context.Context) (*StoredTask, error) {
 		return nil, e
 	}
 	defer func() { _ = tx.Rollback() }()
-	t, e := scanTask(tx.QueryRowContext(ctx, `SELECT `+taskSelect+` FROM media_tasks WHERE settlement_state IN ('held','pending_usage') AND next_poll_at<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_poll_at LIMIT 1 FOR UPDATE SKIP LOCKED`))
+	t, e := scanTask(tx.QueryRowContext(ctx, `SELECT `+taskSelect+` FROM media_tasks mt WHERE mt.settlement_state IN ('held','pending_usage') AND mt.next_poll_at<=now() AND (mt.lease_until IS NULL OR mt.lease_until<now()) AND (mt.state <> 'queued' OR (SELECT count(*) FROM media_tasks running WHERE running.account_id=mt.account_id AND running.settlement_state IN ('held','pending_usage','manual_review') AND (running.state <> 'queued' OR running.settlement_state='manual_review')) < GREATEST((SELECT concurrency FROM accounts capacity WHERE capacity.id=mt.account_id AND capacity.deleted_at IS NULL),1)) ORDER BY mt.created_at,mt.id LIMIT 1 FOR UPDATE OF mt SKIP LOCKED`))
 	if e == sql.ErrNoRows {
 		return nil, nil
 	}
 	if e != nil {
 		return nil, e
+	}
+	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("media-account:%d", t.AccountID)); e != nil {
+		return nil, e
+	}
+	capacity, e := mediaAccountCapacity(ctx, tx, t.AccountID)
+	if e != nil {
+		return nil, e
+	}
+	usage, e := mediaAccountUsage(ctx, tx, t.AccountID)
+	if e != nil {
+		return nil, e
+	}
+	// Queued tasks wait for a running slot. A poll/recovery task already owns
+	// one of the running slots, so it is allowed to renew that same slot.
+	if t.State == "queued" && usage.Running+usage.ManualReview >= capacity {
+		if e = tx.Commit(); e != nil {
+			return nil, e
+		}
+		return nil, nil
 	}
 	if t.State == "submitting" {
 		if t.Snapshot.Capability.Template != nil && t.Snapshot.Capability.Template.Recover != nil {
@@ -466,7 +617,7 @@ func (s *Store) Progress(ctx context.Context, t StoredTask, result UpstreamResul
 	if status == "completed" {
 		settlement = "pending_usage"
 	}
-	r, e := s.DB.ExecContext(ctx, `UPDATE media_tasks SET state=$1,settlement_state=$2,upstream_id=coalesce(nullif($3,''),upstream_id),result_path=coalesce(nullif($4,''),result_path),quantities=quantities||$5::jsonb,diagnostic=$6,lease_until=CASE WHEN $1='completed' THEN lease_until ELSE NULL END,next_poll_at=now()+make_interval(secs=>$7),completed_at=CASE WHEN $1 IN ('completed','failed') THEN coalesce(completed_at,now()) ELSE completed_at END,version=version+1 WHERE id=$8 AND lease_epoch=$9 AND settlement_state IN ('held','pending_usage')`, status, settlement, result.ID, path, q, result.Diagnostic, t.Snapshot.Capability.Delivery.PollSeconds, t.ID, t.Epoch)
+	r, e := s.DB.ExecContext(ctx, `UPDATE media_tasks SET state=$1,settlement_state=$2,upstream_id=coalesce(nullif($3,''),upstream_id),result_path=coalesce(nullif($4,''),result_path),quantities=quantities||$5::jsonb,diagnostic=$6,lease_until=CASE WHEN $1='completed' THEN lease_until ELSE NULL END,next_poll_at=now()+make_interval(secs=>$7),completed_at=CASE WHEN $1 IN ('completed','failed') THEN coalesce(completed_at,now()) ELSE completed_at END,version=version+1 WHERE id=$8 AND lease_epoch=$9 AND settlement_state IN ('held','pending_usage')`, status, settlement, result.ID, path, q, mediaResultDiagnostic(result), t.Snapshot.Capability.Delivery.PollSeconds, t.ID, t.Epoch)
 	return requireOne(r, e)
 }
 

@@ -1,14 +1,14 @@
 {
-  "version": "v1.3.6",
+  "version": "v1.3.7",
   "status": "recorded",
   "acceptance_state": "pre-release-read-only-verified",
   "verified_at": "2026-10-27T13:44:18+00:00",
-  "environment": "Pre-release read-only connectivity check against the live production relay at https://code.aicodeme.xyz before v1.3.6; performed with the existing dedicated media probe key on 2026-10-27.",
+  "environment": "Pre-release read-only connectivity check against the live production relay at https://code.aicodeme.xyz before v1.3.7; performed with the existing dedicated media probe key. This check used GET /v1/models only and did not submit a paid generation.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
     {
-      "label": "relay-model-list-v1.3.6",
+      "label": "relay-model-list-v1.3.7",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,

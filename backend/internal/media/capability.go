@@ -86,8 +86,8 @@ func ValidateCapability(c Capability, publish bool) error {
 		}
 		// Verification is informational. Enabling still validates executable
 		// capabilities; pricing is resolved separately at request submission.
-		if c.Limits.MaxRequestBytes == nil || *c.Limits.MaxRequestBytes <= 0 || *c.Limits.MaxRequestBytes > 256<<20 || c.Limits.MaxConcurrentTasks == nil || *c.Limits.MaxConcurrentTasks <= 0 || c.Limits.ObservationSeconds == nil || *c.Limits.ObservationSeconds <= 0 {
-			return fail(400, "invalid_limits", "Finite request, concurrency and observation limits required")
+		if c.Limits.MaxRequestBytes == nil || *c.Limits.MaxRequestBytes <= 0 || *c.Limits.MaxRequestBytes > 256<<20 || c.Limits.ObservationSeconds == nil || *c.Limits.ObservationSeconds <= 0 {
+			return fail(400, "invalid_limits", "Finite request and observation limits required")
 		}
 		if !templated && c.MediaType == "video" && (c.Duration.Mode == "unknown" || c.Duration.Mode == "") {
 			return fail(422, "duration_not_configured", "Video duration limits must be configured")
