@@ -158,6 +158,13 @@ func cleanupMediaTasks(t *testing.T, db *sql.DB, userIDs ...int64) {
 	_, err := db.Exec(`DELETE FROM media_tasks WHERE user_id = ANY($1)`, users)
 	require.NoError(t, err)
 }
+
+func parkOtherMediaTasks(t *testing.T, db *sql.DB, userID int64) {
+	t.Helper()
+	_, err := db.Exec(`UPDATE media_tasks SET next_poll_at='infinity',lease_until=NULL WHERE user_id<>$1 AND settlement_state IN ('held','pending_usage')`, userID)
+	require.NoError(t, err)
+}
+
 func TestPersistentReserveSettleRefundAndRepeatedOperations(t *testing.T) {
 	db := testDB(t)
 	s := &media.Store{DB: db}
@@ -285,6 +292,7 @@ func TestClaimHonorsAccountConcurrencyAcrossMediaModels(t *testing.T) {
 	secondTask, err := store.CreateTask(ctx, second, snap.Capability.AccountIDs[0], "", "", media.NewTaskID())
 	require.NoError(t, err)
 
+	parkOtherMediaTasks(t, db, snap.Identity.UserID)
 	claimed, err := store.Claim(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, claimed)
@@ -306,6 +314,7 @@ func TestInterruptedSubmissionIsNotResubmittedAndFencing(t *testing.T) {
 	require.NoError(t, e)
 	_, e = db.Exec(`UPDATE media_tasks SET state='submitting',lease_until=now()-interval '1 minute',next_poll_at='1970-01-01' WHERE id=$1`, task.ID)
 	require.NoError(t, e)
+	parkOtherMediaTasks(t, db, snap.Identity.UserID)
 	_, e = s.Claim(ctx)
 	require.NoError(t, e)
 	task, e = s.GetTask(ctx, task.ID)
