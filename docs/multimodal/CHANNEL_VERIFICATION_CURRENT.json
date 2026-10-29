@@ -1,11 +1,11 @@
 {
   "version": "v1.3.13",
   "status": "recorded",
-  "acceptance_state": "pre-release-read-only-verified-no-new-generation",
-  "verified_at": "2026-10-30T02:17:00.554698+08:00",
-  "new_paid_submissions": 0,
+  "acceptance_state": "production-deployed-and-real-mapped-generation-verified",
+  "verified_at": "2026-10-29T19:21:04.8037405+00:00",
+  "new_paid_submissions": 1,
   "credentials_recorded": false,
-  "environment": "Production v1.3.11 existing completed video and public authenticated artifact verified read-only. New template CRUD, mapped-model wire requests, uploads and UI are validated with isolated PostgreSQL, mock providers and browser fixtures. This does not claim a new provider generation.",
+  "environment": "Production v1.3.13 verified across all three public origins. Real single-submit video generation succeeded using the configured upstream model, and authenticated artifact Range access returned HTTP 206 with a valid MP4 header. Existing task snapshots and PostgreSQL/Redis containers are unchanged. Upload combinations and template CRUD were validated with isolated PostgreSQL and browser fixtures.",
   "cases": [
     {
       "label": "existing-completed-video-and-public-artifact",
@@ -16,6 +16,19 @@
       "artifact_range_http": 206,
       "artifact_range_bytes": 32,
       "snapshot_md5": "a57f035d7979eb8a0d10d8d81a271e0b"
+    },
+    {
+      "label": "mapped-model-real-minimal-video-generation",
+      "verification": "real_connection",
+      "status": "completed",
+      "account_id": 2142,
+      "test_id": "mt_96eb6b75fc804a6cb0cad79f632d9da5",
+      "public_model": "sd-2.5-满血全参数-720p",
+      "upstream_model": "高质量快速sd2.5(满血30-10-10/720P)",
+      "submission_attempts": 1,
+      "artifact_count": 1,
+      "artifact_http": 206,
+      "artifact_header_valid": true
     }
   ]
 }

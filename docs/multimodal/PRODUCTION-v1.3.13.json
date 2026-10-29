@@ -1,0 +1,59 @@
+{
+  "version": "v1.3.13",
+  "commit": "94be784f282c65489124aa8cb44ffb0b9c13fc80",
+  "verified_at": "2026-10-30T03:03:58.383743+08:00",
+  "protected_containers_unchanged": true,
+  "public": [
+    {
+      "origin": "https://code.aicodeme.xyz",
+      "health_http": 200,
+      "version": "v1.3.13",
+      "docs_http": 200,
+      "workspace_css": true
+    },
+    {
+      "origin": "https://code.aicodeme.cn",
+      "health_http": 200,
+      "version": "v1.3.13",
+      "docs_http": 200,
+      "workspace_css": true
+    },
+    {
+      "origin": "https://hkcode.aicodeme.xyz",
+      "health_http": 200,
+      "version": "v1.3.13",
+      "docs_http": 200,
+      "workspace_css": true
+    }
+  ],
+  "existing_task_snapshots_unchanged": 6,
+  "existing_video": {
+    "task_id": "mt_47517d24-04a1-4359-9b5e-8dfb74866ffa",
+    "range_http": 206,
+    "range_bytes": 32,
+    "snapshot_unchanged": true
+  },
+  "app_digest": "sha256:8bff64588b9e1cf0aac690a25abee2fc44f47c507a3fbfcfe0aefdcc8c914b34",
+  "docs_digest": "sha256:21d5e48ee486b05c89c8e396bbbfbf57d17c763baddd00656fc4f906f04fb739",
+  "provider_generation": {
+    "version": "v1.3.13",
+    "account_id": 2142,
+    "public_model": "sd-2.5-满血全参数-720p",
+    "upstream_model": "高质量快速sd2.5(满血30-10-10/720P)",
+    "submitted_at": "2026-10-30T03:05:06.923391+08:00",
+    "submission_attempts": 1,
+    "status": "completed",
+    "test_kind": "minimal",
+    "automatic_resubmission": false,
+    "credentials_recorded": false,
+    "test_id": "mt_96eb6b75fc804a6cb0cad79f632d9da5",
+    "mapping_sse_verified": true,
+    "completed_at": "2026-10-29T19:18:27.581899165Z",
+    "artifact_count": 1,
+    "upstream_task_id": "task_IW7rTfvon5G2yvH022GmanA6pCzkKjBt",
+    "upstream_status": "completed",
+    "config_changed": false,
+    "artifact_http": 206,
+    "artifact_header_valid": true
+  }
+}
