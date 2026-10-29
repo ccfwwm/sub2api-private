@@ -123,10 +123,16 @@ func TestTemplateExplicitNestedPropertyValueMappingAndConversion(t *testing.T) {
 	require.NoError(t, err)
 	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
 	require.NoError(t, err)
-	got := wire.Body["images"].([]any)[0].(map[string]any)
+	images, ok := wire.Body["images"].([]any)
+	require.True(t, ok)
+	require.Len(t, images, 1)
+	got, ok := images[0].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, ref["b64_json"], got["b64_json"])
 	require.Equal(t, map[string]any{"role": "input", "weight": float64(0.7), "keep": true}, got["metadata"])
-	require.Equal(t, "0.7", ref["metadata"].(map[string]any)["weight"])
+	metadata, ok := ref["metadata"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "0.7", metadata["weight"])
 	template.Materials[0].PropertyRules = []ParameterRule{{Op: "convert", Source: "b64_json", Type: "string"}}
 	require.ErrorContains(t, ValidateTemplate(template, false), "ordinary attributes")
 }
@@ -158,7 +164,9 @@ func TestTemplateExplicitlyMapsAndFiltersNestedReferenceProperties(t *testing.T)
 	// normalized reference snapshot.
 	require.Contains(t, ref, "b64_json")
 	require.Contains(t, ref, "role")
-	require.Equal(t, "opening frame", ref["metadata"].(map[string]any)["description"])
+	metadata, ok := ref["metadata"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "opening frame", metadata["description"])
 }
 
 func TestTemplateMaterialPropertyMappingsAreValidated(t *testing.T) {

@@ -366,7 +366,11 @@ func cloneMaterialValue(value any) any {
 }
 
 func cloneMaterialObject(value map[string]any) map[string]any {
-	return cloneMaterialValue(value).(map[string]any)
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = cloneMaterialValue(item)
+	}
+	return out
 }
 
 func transformMaterialProperties(ref any, m MaterialRule) (map[string]any, string, bool, error) {
