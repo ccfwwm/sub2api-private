@@ -12,7 +12,7 @@
       },
       {
         "kind": "text",
-        "text": "参考素材统一使用 images、videos、audios，按请求完整保留素材顺序、角色和附加属性。客户端按所选模型的公开输入提交，服务端使用管理员已发布的模板编译请求。能力目录的数量、格式、时长与可选参数枚举用于提示，最终支持情况以实际调用为准；鉴权、计费、请求体大小与公网访问安全边界继续生效。冲突的参数别名会明确报错，上游不支持时返回真实拒绝原因，不自动删除素材或切换模型。"
+        "text": "参考素材统一使用 images、videos、audios。每项可提交 URL 字符串、{\"url\":\"…\"} 或 {\"b64_json\":\"…\",\"mime_type\":\"…\"}。服务端默认保留用户选择的定位字段和值、顺序、role 及其他属性，不会把 b64_json 改成 URL，也不会把 URL 改成 Base64；只有管理员已发布的模板明确配置编码、结构转换、属性映射或过滤时才执行对应操作。能力目录的数量、格式、时长与可选参数枚举用于提示，最终支持情况以所选模型为准；鉴权、计费、请求体大小与公网访问安全边界继续生效。"
       },
       {
         "kind": "text",
@@ -488,7 +488,7 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"image.generation\",\n  \"model\": \"gpt-image-2-1k\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"image.generation\",\n  \"model\": \"gpt-image-2-1k\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "异步任务 · HTTP 202"
       },
       {
@@ -747,7 +747,7 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"image.generation\",\n  \"model\": \"gpt-image-2-1k\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"image.generation\",\n  \"model\": \"gpt-image-2-1k\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "异步任务 · HTTP 202"
       },
       {
@@ -1159,7 +1159,7 @@
   },
   {
     "id": "grok-video-submit",
-    "group": "Grok 视频",
+    "group": "视频生成",
     "navTitle": "文生视频",
     "title": "Grok · 文生视频",
     "subtitle": "选择时长、分辨率与画幅，提交视频任务。",
@@ -1231,12 +1231,12 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"grok-imagine-video\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"grok-imagine-video\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       },
       {
         "kind": "heading",
@@ -1363,7 +1363,7 @@
   },
   {
     "id": "grok-video-image",
-    "group": "Grok 视频",
+    "group": "视频生成",
     "navTitle": "图生视频",
     "title": "Grok · 图生视频",
     "subtitle": "将一张参考图转换为动态镜头，比例沿用输入图。",
@@ -1455,18 +1455,18 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"grok-imagine-video\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"grok-imagine-video\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       }
     ]
   },
   {
     "id": "grok-video-result",
-    "group": "Grok 视频",
+    "group": "视频生成",
     "navTitle": "查询与取片",
     "title": "Grok · 查询与取片",
     "subtitle": "查询和下载都使用本站任务 ID。",
@@ -1507,7 +1507,7 @@
   },
   {
     "id": "omni-video-submit",
-    "group": "Omni 视频",
+    "group": "视频生成",
     "navTitle": "文生视频",
     "title": "Omni · 文生视频",
     "subtitle": "文字描述主体、运动与镜头。",
@@ -1596,18 +1596,18 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"omni-flash\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"omni-flash\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       }
     ]
   },
   {
     "id": "omni-video-result",
-    "group": "Omni 视频",
+    "group": "视频生成",
     "navTitle": "查询与下载",
     "title": "Omni · 查询与下载",
     "subtitle": "跟踪同一任务直到完成。",
@@ -1643,7 +1643,7 @@
   },
   {
     "id": "veo-text",
-    "group": "Veo 视频",
+    "group": "视频生成",
     "navTitle": "文生视频与参数",
     "title": "Veo · 文生视频",
     "subtitle": "文字描述主体、运动与镜头。",
@@ -1744,18 +1744,18 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"veo-3.1-fast\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"veo-3.1-fast\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       }
     ]
   },
   {
     "id": "veo-result",
-    "group": "Veo 视频",
+    "group": "视频生成",
     "navTitle": "查询与下载",
     "title": "Veo · 查询与下载",
     "subtitle": "跟踪同一任务直到完成。",
@@ -1791,7 +1791,7 @@
   },
   {
     "id": "other-video",
-    "group": "更多视频模型",
+    "group": "视频生成",
     "navTitle": "文字视频与模型差异",
     "title": "其他视频 · 文生视频",
     "subtitle": "逐模型选择时长，保留完整别名和大小写。",
@@ -1910,12 +1910,12 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"doolaa2.5\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"doolaa2.5\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       },
       {
         "kind": "text",
@@ -1925,7 +1925,7 @@
   },
   {
     "id": "video-reference",
-    "group": "更多视频模型",
+    "group": "视频生成",
     "navTitle": "参考图与多素材视频",
     "title": "其他视频 · 参考素材",
     "subtitle": "JS 参考图与 Minimax 图片、视频、音频输入。",
@@ -2035,12 +2035,12 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"MinimaxH3-2K\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"video\",\n  \"model\": \"MinimaxH3-2K\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       },
       {
         "kind": "text",
@@ -2091,7 +2091,7 @@
           [
             "images",
             "否",
-            "array，参考图片，用于人物、物体、场景或画面风格；首尾帧使用带 role 的图片对象"
+            "array，参考图片；每项可为 URL 字符串、{url} 或 {b64_json,mime_type} 对象；首尾帧可加 role"
           ],
           [
             "素材别名",
@@ -2101,12 +2101,12 @@
           [
             "audios",
             "否",
-            "array，参考音频，用于声音、音乐或节奏"
+            "array，参考音频；每项可为 URL 字符串、{url} 或 {b64_json,mime_type} 对象，用于声音、音乐或节奏"
           ],
           [
             "videos",
             "否",
-            "array，参考视频，用于动作、运镜或画面内容"
+            "array，参考视频；每项可为 URL 字符串、{url} 或 {b64_json,mime_type} 对象，用于动作、运镜或画面内容"
           ]
         ]
       },
@@ -2119,7 +2119,7 @@
         "rows": [
           [
             "本地文件",
-            "读取为 Base64 data URL，放入对应素材数组；图片使用 data:image/png;base64,…，音频使用 data:audio/mpeg;base64,…，视频使用 data:video/mp4;base64,…，媒体类型与文件一致"
+            "文件上传控件生成 {\"b64_json\":\"纯 Base64\",\"mime_type\":\"image/png、video/mp4 或 audio/mpeg\"} 并放入对应数组；也可直接提交已有 URL 或 Base64 对象，网关不会默认互转"
           ],
           [
             "在线文件",
@@ -2127,7 +2127,7 @@
           ],
           [
             "素材对象",
-            "{\"url\":\"…\"} 或 {\"b64_json\":\"完整 Base64\"}；推荐使用包含媒体类型的 data URL"
+            "{\"url\":\"…\"} 或 {\"b64_json\":\"纯 Base64\",\"mime_type\":\"image/png\"}；定位字段和 MIME 字段按原样保留"
           ],
           [
             "首尾帧",
@@ -2614,12 +2614,12 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"audio.generation\",\n  \"model\": \"lyria-3.5\",\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"audio.generation\",\n  \"model\": \"lyria-3.5\",\n  \"status\": \"in_progress\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": [],\n  \"submission_phase\": \"upstream_accepted\"\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
       },
       {
         "kind": "heading",

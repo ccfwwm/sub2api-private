@@ -2,9 +2,8 @@ export const API_ORIGIN = 'https://code.aicodeme.xyz'
 export const categories = [
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
   { id:'gemini-image', title:'Gemini协议生图', sections:['gemini','gemini-result'], ops:['gemini_image'] },
-  { id:'video', title:'视频生成', sections:['omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference'], ops:['video'] },
+  { id:'video', title:'视频生成', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference'], ops:['video'] },
   { id:'audio', title:'音乐与语音', sections:['audio-chat','audio-submit','audio-compat','audio-stream','audio-speech'], ops:['audio','chat_music','speech'] },
-  { id:'grok-video', title:'Grok 视频', sections:['grok-video-submit','grok-video-image','grok-video-result'], ops:['video'] },
   { id:'guide', title:'快速开始与通用任务', sections:['start','models','tasks','errors','clients'], ops:[] },
 ]
 export function sectionMarkdown(section) {
@@ -21,8 +20,22 @@ export const fullMarkdown = sections => '# 词元互联图片、视频与音乐�
 export function endpointFor(operation, model) {
   return {image:'/v1/images/generations',image_edit:'/v1/images/edits',video:'/v1/videos',audio:'/v1/audio/generations',speech:'/v1/audio/speech',chat_music:'/v1/chat/completions',gemini_image:`/v1beta/models/${encodeURIComponent(model)}:generateContent`}[operation]
 }
+export function dataURLToMaterial(value) {
+  const match=String(value).match(/^data:([^;,]+);base64,([\s\S]*)$/)
+  if(!match)throw Error('文件 Data URL 格式无效')
+  return {b64_json:match[2],mime_type:match[1]}
+}
+export function parseMaterialText(value) {
+  const text=String(value).trim()
+  if(!text)return []
+  if(text.startsWith('['))return JSON.parse(text)
+  if(text.startsWith('{')){
+    try{return [JSON.parse(text)]}catch(error){if(!text.includes('\n'))throw error}
+  }
+  return text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>line.startsWith('{')?JSON.parse(line):line)
+}
 export function inputMaterialsFor(cap) {
-  return { ...cap.materials, ...(cap.operations.includes('image_edit') && !cap.materials?.mask ? { mask: { max_file_bytes: 50 * 1048576 } } : {}) }
+  return { ...(cap.operations.includes('video') ? {image:{},video:{},audio:{}} : {}), ...cap.materials, ...(cap.operations.includes('image_edit') && !cap.materials?.mask ? { mask: { max_file_bytes: 50 * 1048576 } } : {}) }
 }
 export function buildRequest(cap, operation, fields, materials={}) {
   const p={model:cap.model,public_profile_id:cap.profile_id,prompt:fields.prompt,async:true,n:1}
@@ -33,8 +46,11 @@ export function buildRequest(cap, operation, fields, materials={}) {
   if(p.background==='transparent' && p.output_format==='jpeg') throw Error('透明背景请选择 PNG 或 WebP')
   if(operation==='gemini_image') {
     const parts=[{text:p.prompt},...(materials.image||[]).map(value=>{
-      if(value.startsWith('data:')) {const m=value.match(/^data:([^;]+);base64,(.+)$/s);if(!m)throw Error('图片 data URL 格式错误');return {inlineData:{mimeType:m[1],data:m[2]}}}
-      return {fileData:{fileUri:value}}
+      if(typeof value==='string'&&value.startsWith('data:')) {const material=dataURLToMaterial(value);return {inlineData:{mimeType:material.mime_type,data:material.b64_json}}}
+      if(value&&typeof value==='object'&&value.b64_json) return {inlineData:{mimeType:value.mime_type||value.mimeType||'application/octet-stream',data:value.b64_json}}
+      const url=typeof value==='string'?value:value?.url
+      if(typeof url==='string')return {fileData:{fileUri:url}}
+      throw Error('Gemini 参考图需提供 URL 或 b64_json')
     })]
     return {public_profile_id:cap.profile_id,async:true,contents:[{role:'user',parts}],generationConfig:{candidateCount:1,responseModalities:(!fields.modalities||fields.modalities==='both')?['IMAGE','TEXT']:[fields.modalities],imageConfig:{...(fields.ratio?{aspectRatio:fields.ratio}:{}),...(fields.size?{imageSize:fields.size}:{})}}}
   }
@@ -54,7 +70,7 @@ export function buildRequest(cap, operation, fields, materials={}) {
   return p
 }
 const escape = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
-const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(value.startsWith('data:')||value.length>4000)?`[编码内容已省略，${value.length} 字符]`:value,2)
+const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b64_json'||(key==='data'&&/^[A-Za-z0-9+/\r\n]+={0,2}$/.test(value))||value.startsWith('data:')||value.length>4000)?`[编码内容已省略，${value.length} 字符]`:value,2)
 
 async function start() {
   const sections=await (await fetch(new URL('./content.json',import.meta.url))).json()
@@ -62,7 +78,7 @@ async function start() {
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.0<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.11<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
   const $=s=>root.querySelector(s)
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
@@ -84,10 +100,16 @@ async function start() {
   const filtered=()=>profiles.filter(p=>p.operations.some(op=>category.ops.includes(op)))
   function debug() {
     const options=filtered()
-    $('article').innerHTML=`<p>先选择模型与能力配置。点击“提交生成”会实际扣费；请求不明确时保留原幂等键，只恢复查询。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model"><option value="">请选择模型</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.profile_id.slice(-8))}</option>`).join('')}</select></label></div><div id="parameters"></div><div class="buttons"><button id="submit" class="primary" disabled>提交生成（实际计费）</button><button id="recover" ${pending?'':'disabled'}>恢复原任务查询</button><button id="stop">停止等待</button><button id="new">新任务</button></div><p class="status" id="task-status"></p><div class="debug-panels">${code({label:'请求 JSON（编码内容省略）',text:'尚未提交'})}${code({label:'响应 / SSE 文字事件',text:'尚无响应'})}</div><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
+    $('article').innerHTML=`<p>先选择模型与能力配置。点击“提交生成”会实际扣费；请求不明确时保留原幂等键，只恢复查询。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model"><option value="">请选择模型</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.profile_id.slice(-8))}</option>`).join('')}</select></label></div><div id="parameters"></div><div class="buttons"><button id="submit" class="primary" disabled>提交生成（实际计费）</button><button id="recover" ${pending?'':'disabled'}>恢复原任务查询</button><button id="stop">停止等待</button><button id="new">新任务</button></div><p class="status" id="task-status"></p><div class="debug-panels">${code({label:'提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'响应 / SSE 文字事件',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
     const codes=$('article').querySelectorAll('.code code')
     const response=v=>codes[1].textContent=typeof v==='string'?v:pretty(v)
-    const failure=e=>{$('#debug-error').textContent=e.message||String(e)}
+    const appendLog=(stage,detail)=>{
+      const row=document.createElement('li'),meta=document.createElement('div'),content=document.createElement('pre')
+      row.className='log-entry';meta.className='log-meta';meta.textContent=`${new Date().toLocaleTimeString()} · ${stage}`
+      content.textContent=typeof detail==='string'?detail:pretty(detail);row.append(meta,content);$('#debug-log-list').prepend(row)
+      while($('#debug-log-list').children.length>40)$('#debug-log-list').lastElementChild.remove()
+    }
+    const failure=e=>{$('#debug-error').textContent=e.message||String(e);appendLog('错误',e.message||String(e))}
     const model=$('#model')
     model.onchange=()=>{
       const cap=options[model.value]; if(!cap){$('#parameters').innerHTML='';$('#submit').disabled=true;return}
@@ -101,19 +123,19 @@ async function start() {
       if(cap.media_type==='audio')html+=`<label class="wide">歌词<textarea name="lyrics"></textarea></label><label>BPM<input name="bpm" type="number" min="1"></label>`+pick('instrumental','纯音乐',['true','false'])+pick('audio_format','输出格式',['mp3','wav','m4a'])
       if(cap.operations.includes('speech'))html+=`<label>声音<input name="voice" placeholder="使用管理员配置支持的声音 ID"></label><label>输出格式<input name="response_format" placeholder="如 mp3 / wav"></label><label>语速<input name="speed" type="number" min="0.01" step="0.01"></label>`
       if(cap.operations.includes('chat_music'))html+=pick('stream','Chat 返回方式',['false','true'])
-      if(cap.media_type==='video')for(const role of ['first_frame','last_frame'])html+=`<label class="wide">${role==='first_frame'?'首帧':'尾帧'}（计入参考图总数）<textarea data-material="${role}" placeholder="一个 URL 或 data URL，按所选模型素材能力填写"></textarea></label>`
+      if(cap.media_type==='video')for(const role of ['first_frame','last_frame'])html+=`<label class="wide">${role==='first_frame'?'首帧':'尾帧'}（计入参考图总数）<textarea data-material="${role}" placeholder="URL、Data URL 或素材 JSON 对象；字段按输入原样保留"></textarea></label>`
       if(cap.operations.includes('gemini_image'))html+=pick('modalities','返回模态',['TEXT','IMAGE','both'])
       const inputMaterials=inputMaterialsFor(cap)
       for(const [kind,material] of Object.entries(inputMaterials)) {
         // Missing catalogue counts do not disable unified reference inputs.
-        const base64=true
-        html+=`<label class="wide">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / Base64 对象${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="${base64?'每行一个 HTTP(S) URL 或 data URL':'仅公网 HTTP(S) 文件直链，每行一个'}"></textarea>${base64?`<input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple>`:'<small>此能力仅支持 URL，不支持 Base64 和本地上传。</small>'}</label>`
+        html+=`<label class="wide">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>上传文件将在本页转换为 b64_json 与 mime_type；不会自动改成 URL。</small></label>`
       }
       $('#parameters').innerHTML='<div class="fields">'+html+'</div>'
       $('#submit').disabled=running||!!pending
     }
     const api=async(path,method='GET',payload,headers={})=>{
       const url=new URL(path,location.origin);if(url.origin!==location.origin)throw Error('只允许请求本站 API')
+      const started=performance.now();appendLog('请求',{method,path,request:payload})
       const r=await fetch(url,{method,headers:{Authorization:'Bearer '+key,...(payload instanceof FormData?{}:{'Content-Type':'application/json'}),...headers},body:payload?(payload instanceof FormData?payload:JSON.stringify(payload)):undefined,signal:AbortSignal.any([AbortSignal.timeout(method==='POST'?185000:30000),activeController?.signal||new AbortController().signal]),credentials:'omit',cache:'no-store',redirect:'error'})
       let data
       if(r.headers.get('content-type')?.includes('text/event-stream')) {
@@ -121,6 +143,7 @@ async function start() {
         while(true){const {done,value}=await reader.read();if(done)break;text+=decoder.decode(value,{stream:true});response(text)}
         const events=text.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).filter(line=>line&&line!=='[DONE]');data=events.length?JSON.parse(events.at(-1)):{};data.sse=text
       }else{const text=await r.text();try{data=JSON.parse(text)}catch{throw Error(`HTTP ${r.status}：响应不是 JSON`)}}
+      appendLog('响应',{method,path,status:r.status,elapsed_ms:Math.round(performance.now()-started),response:data})
       if(!r.ok){const e=Error(`HTTP ${r.status}：${data.error?.message||data.message||'请求失败'}`);e.status=r.status;throw e}
       return data
     }
@@ -172,20 +195,22 @@ async function start() {
       const cap=options[model.value],fields={},materials={}
       $('#parameters').querySelectorAll('[name]').forEach(el=>fields[el.name]=el.value)
       if(!fields.prompt?.trim())throw Error('请填写提示词')
-      $('#parameters').querySelectorAll('[data-material]').forEach(el=>materials[el.dataset.material]=el.value.split('\n').map(s=>s.trim()).filter(Boolean).map(s=>s.startsWith('{')?JSON.parse(s):s))
+      $('#parameters').querySelectorAll('[data-material]').forEach(el=>materials[el.dataset.material]=parseMaterialText(el.value))
       for(const el of $('#parameters').querySelectorAll('[data-files]')) {
         const kind=el.dataset.files,material=inputMaterialsFor(cap)[kind];materials[kind]||=[]
         for(const file of el.files) {
-          if(file.size>material.max_file_bytes)throw Error('素材超过模型大小限制')
-          materials[kind].push(await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)}))
+          if(material?.max_file_bytes>0&&file.size>material.max_file_bytes)throw Error('素材超过模型大小限制')
+          const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)})
+          const converted=dataURLToMaterial(dataURL);materials[kind].push(converted);appendLog('文件已转为 Base64',{kind,file:file.name,mime_type:converted.mime_type,bytes:file.size})
         }
       }
       const payload=buildRequest(cap,fields.operation,fields,materials)
       if(fields.operation==='image_edit'&&!materials.image?.length)throw Error('图片编辑必须提供参考图')
       codes[0].textContent=pretty(payload)
+      appendLog('提交请求（Base64 已脱敏）',{endpoint:endpointFor(fields.operation,cap.model),request:payload})
       pending={key:crypto.randomUUID(),operation:fields.operation,id:null,terminal:false}
       $('#task-status').textContent='幂等键 '+pending.key+' · 提交中，请保留本页'
-      try{const result=await api(endpointFor(fields.operation,cap.model),'POST',payload,{'Idempotency-Key':pending.key});pending.id=result.task_id||result.id;response(result)}catch(e){if(e.status&&e.status<500&&e.status!==408){pending.terminal=true}throw e}
+      try{const result=await api(endpointFor(fields.operation,cap.model),'POST',payload,{'Idempotency-Key':pending.key});pending.id=result.task_id||result.id;response(result);appendLog('接口响应',result)}catch(e){if(e.status&&e.status<500&&e.status!==408){pending.terminal=true}throw e}
       $('#recover').disabled=false
       await resume(token)
     })

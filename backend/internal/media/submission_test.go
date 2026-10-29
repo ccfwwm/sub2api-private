@@ -10,9 +10,33 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestConfiguredMediaWorkersDefaultsAndBounds(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{name: "default", want: defaultMediaWorkers},
+		{name: "configured", value: "32", want: 32},
+		{name: "production capacity", value: "150", want: 150},
+		{name: "minimum", value: "1", want: 1},
+		{name: "maximum", value: "256", want: 256},
+		{name: "zero falls back", value: "0", want: defaultMediaWorkers},
+		{name: "above maximum falls back", value: "257", want: defaultMediaWorkers},
+		{name: "invalid falls back", value: "many", want: defaultMediaWorkers},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("SUB2API_MEDIA_WORKERS", test.value)
+			require.Equal(t, test.want, configuredMediaWorkers())
+		})
+	}
+}
 
 func TestWebsiteReferencesAndExtensionsReachUpstreamDespiteCatalogLimits(t *testing.T) {
 	for _, format := range []string{"v6k_url", "yunfei_multimodal"} {
@@ -138,6 +162,26 @@ func TestPublicTaskProjectionOmitsSubmissionAndPrivateRuntimeData(t *testing.T) 
 		require.NotContains(t, body, forbidden)
 	}
 	require.Contains(t, body, "public-model")
+}
+
+func TestPublicTaskDistinguishesLocalPendingSubmissionAndUpstreamAcceptance(t *testing.T) {
+	future := time.Now().Add(time.Minute)
+	for _, tc := range []struct {
+		state, upstream, phase, status string
+		lease                          *time.Time
+	}{
+		{"queued", "", "local_pending", "queued", nil},
+		{"submitting", "", "submitting", "queued", &future},
+		{"submitting", "", "reconciling", "queued", nil},
+		{"in_progress", "private-upstream-id", "upstream_accepted", "in_progress", nil},
+		{"unknown", "", "reconciling", "unknown", nil},
+	} {
+		t.Run(tc.phase, func(t *testing.T) {
+			public := publicTaskValue(StoredTask{State: tc.state, UpstreamID: tc.upstream, LeaseUntil: tc.lease}, nil)
+			require.Equal(t, tc.phase, public.SubmissionPhase)
+			require.Equal(t, tc.status, public.Status)
+		})
+	}
 }
 
 func TestNativeArkPreservesReferenceAttributesAndOptionalParameters(t *testing.T) {

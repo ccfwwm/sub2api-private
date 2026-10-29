@@ -160,7 +160,7 @@ func sameMediaOrigin(a, b *url.URL) bool {
 // Authorization is only supplied to the configured origin, never to a CDN.
 func SafeClient(allowPrivate bool) *http.Client {
 	dialer := &net.Dialer{Timeout: 15 * time.Second}
-	transport := &http.Transport{Proxy: nil, ResponseHeaderTimeout: 150 * time.Second, MaxIdleConns: 40, IdleConnTimeout: 60 * time.Second,
+	transport := &http.Transport{Proxy: nil, ResponseHeaderTimeout: 150 * time.Second, MaxIdleConns: 512, MaxIdleConnsPerHost: 128, IdleConnTimeout: 60 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, e := net.SplitHostPort(address)
 			if e != nil {

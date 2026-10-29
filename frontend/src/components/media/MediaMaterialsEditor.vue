@@ -10,11 +10,15 @@ type MaterialRule = Record<string, unknown> & {
   single?: boolean
   max_count?: number
   drop_properties?: Record<string, unknown[]>
+  map_properties?: Record<string, string>
+  property_rules?: Record<string, unknown>[]
 }
 
 const props = defineProps<{ modelValue: MaterialRule[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: MaterialRule[]] }>()
 const filterErrors = ref<Record<number, string>>({})
+const mappingErrors = ref<Record<number, string>>({})
+const propertyErrors = ref<Record<number, string>>({})
 const mediaTypes = [{ value: 'image', label: '图片' }, { value: 'video', label: '视频' }, { value: 'audio', label: '音频' }, { value: 'mask', label: '遮罩' }]
 const encodings = [{ value: 'preserve', label: '保持原样' }, { value: 'data_url', label: 'Data URL' }, { value: 'base64', label: '纯 Base64' }]
 const shapes = [
@@ -38,22 +42,48 @@ function updateFilter(index: number, event: Event) {
     filterErrors.value = { ...filterErrors.value, [index]: (error as Error).message }
   }
 }
+function updateMapping(index: number, event: Event) {
+  try {
+    const value = JSON.parse((event.target as HTMLTextAreaElement).value || '{}')
+    if (!value || Array.isArray(value) || typeof value !== 'object' || Object.values(value).some(target => typeof target !== 'string')) {
+      throw new Error('请输入 JSON 字符串映射，例如 {"role":"metadata.frame_role"}')
+    }
+    update(index, 'map_properties', value)
+    mappingErrors.value = { ...mappingErrors.value, [index]: '' }
+  } catch (error) {
+    mappingErrors.value = { ...mappingErrors.value, [index]: (error as Error).message }
+  }
+}
 function add() {
   emit('update:modelValue', [...(props.modelValue || []), { kind: 'image', target: 'images', encoding: 'preserve', shape: 'preserve' }])
+}
+function updatePropertyRules(index: number, event: Event) {
+  try {
+    const value = JSON.parse((event.target as HTMLTextAreaElement).value || '[]')
+    if (!Array.isArray(value) || value.some(rule => !rule || typeof rule !== 'object' || !['map', 'convert'].includes(rule.op) || typeof rule.source !== 'string')) {
+      throw new Error('请输入 map / convert 规则数组，并指定 source 字段路径')
+    }
+    update(index, 'property_rules', value)
+    propertyErrors.value = { ...propertyErrors.value, [index]: '' }
+  } catch (error) {
+    propertyErrors.value = { ...propertyErrors.value, [index]: (error as Error).message }
+  }
 }
 function remove(index: number) {
   emit('update:modelValue', (props.modelValue || []).filter((_, i) => i !== index))
   const errors = { ...filterErrors.value }; delete errors[index]; filterErrors.value = errors
+  const mappings = { ...mappingErrors.value }; delete mappings[index]; mappingErrors.value = mappings
 }
 function filterText(rule: MaterialRule) { return JSON.stringify(rule.drop_properties || {}, null, 2) }
+function mappingText(rule: MaterialRule) { return JSON.stringify(rule.map_properties || {}, null, 2) }
 </script>
 
 <template>
   <section class="space-y-3" aria-label="媒体素材映射编辑器">
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
-      <p class="font-semibold">素材映射设置说明</p>
-      <p class="mt-1">统一输入字段是 <code>images</code>、<code>videos</code>、<code>audios</code>。目标字段填写上游接口实际接收的字段名；编码决定 URL 或文件内容怎么发送；结构决定每项是字符串还是对象。</p>
-      <p class="mt-1">属性过滤只移除明确列出的字段和值。比如上游拒绝普通参考图里的 <code>role: reference</code>，可填 <code>{"role":["reference"]}</code>；首帧、尾帧和其他属性不会被这条规则删除。若对象还含不能丢弃的属性，选择字符串结构会报错并要求调整规则。</p>
+      <p class="font-semibold">素材默认按用户输入原样透传</p>
+      <p class="mt-1">统一输入字段是 <code>images</code>、<code>videos</code>、<code>audios</code>。默认保留每项的定位字段和值：<code>url</code> 仍是 <code>url</code>，<code>b64_json</code> 仍是 <code>b64_json</code>，素材顺序及其他属性也不变。只有明确配置编码、结构、映射或过滤规则时才改动。</p>
+      <p class="mt-1">上游目标字段填写素材数组名称。属性映射和过滤使用对象路径；例如 <code>role</code> 映射到 <code>metadata.frame_role</code>，或只过滤精确匹配的 <code>metadata.internal: true</code>。默认空映射、空过滤，不会猜测或改写上游字段。</p>
     </div>
 
     <div v-for="(rule, index) in modelValue || []" :key="index" class="space-y-3 rounded-lg border p-3 dark:border-dark-600" :aria-label="`素材映射 ${index + 1}`">
@@ -67,7 +97,11 @@ function filterText(rule: MaterialRule) { return JSON.stringify(rule.drop_proper
         <label class="text-sm">最多素材数（0 表示不额外限制）<input type="number" min="0" class="input mt-1 w-full" :value="rule.max_count ?? 0" @change="update(index, 'max_count', Number(($event.target as HTMLInputElement).value))" /></label>
         <label class="flex items-center gap-2 self-center text-sm"><input type="checkbox" :checked="rule.single === true" @change="update(index, 'single', ($event.target as HTMLInputElement).checked)" />只发送一个素材，不包装成数组</label>
       </div>
-      <label class="block text-sm">按精确值过滤属性（可选 JSON）<textarea class="input mt-1 min-h-20 w-full font-mono text-xs" :value="filterText(rule)" placeholder='{"role":["reference"]}' @change="updateFilter(index, $event)" /><span class="mt-1 block text-xs text-gray-500">字段和值都匹配时才移除。不能过滤素材 URL、Base64 内容；不匹配的属性会原样保留。</span><span v-if="filterErrors[index]" role="alert" class="text-xs text-red-600">{{ filterErrors[index] }}</span></label>
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="block text-sm">对象属性映射（可选 JSON）<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" :value="mappingText(rule)" placeholder='{"role":"metadata.frame_role","b64_json":"image.data"}' @change="updateMapping(index, $event)" /><span class="mt-1 block text-xs text-gray-500">键是用户字段路径，值是上游字段路径。对象结构下可显式映射 <code>url</code> 或 <code>b64_json</code> 定位字段；保留原字段类型和值。</span><span v-if="mappingErrors[index]" role="alert" class="text-xs text-red-600">{{ mappingErrors[index] }}</span></label>
+        <label class="block text-sm">按精确值过滤属性（可选 JSON）<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" :value="filterText(rule)" placeholder='{"metadata.internal":[true]}' @change="updateFilter(index, $event)" /><span class="mt-1 block text-xs text-gray-500">字段路径和值都匹配时才移除。不能过滤素材 URL、Base64 内容；不匹配的属性会原样保留。</span><span v-if="filterErrors[index]" role="alert" class="text-xs text-red-600">{{ filterErrors[index] }}</span></label>
+      </div>
+      <label class="block text-sm">属性值映射与类型转换（可选 JSON）<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" :value="JSON.stringify(rule.property_rules || [], null, 2)" placeholder='[{"op":"map","source":"metadata.role","values":{"reference":"input"},"on_unmapped":"preserve"},{"op":"convert","source":"metadata.weight","type":"number"}]' @change="updatePropertyRules(index, $event)" /><span class="mt-1 block text-xs text-gray-500">按过滤 → 字段映射 → 属性值规则执行。map 明确指定值映射，convert 支持 string、number、integer、boolean；未配置的属性原样保留，不改变 url / b64_json 素材内容。</span><span v-if="propertyErrors[index]" role="alert" class="text-xs text-red-600">{{ propertyErrors[index] }}</span></label>
     </div>
 
     <button type="button" class="btn btn-secondary" @click="add">添加素材映射</button>

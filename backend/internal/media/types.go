@@ -197,18 +197,19 @@ type Calculation struct {
 	Missing  []string `json:"missing_usage"`
 }
 type Task struct {
-	Submission  *Submission         `json:"-"`
-	Inputs      *PublicInputSummary `json:"inputs,omitempty"`
-	ID          string              `json:"id"`
-	Object      string              `json:"object"`
-	Model       string              `json:"model"`
-	Status      string              `json:"status"`
-	Progress    int                 `json:"progress"`
-	CreatedAt   int64               `json:"created_at"`
-	CompletedAt *int64              `json:"completed_at,omitempty"`
-	Billing     map[string]any      `json:"billing"`
-	Artifacts   []Artifact          `json:"data"`
-	Diagnostic  string              `json:"diagnostic,omitempty"`
+	Submission      *Submission         `json:"-"`
+	Inputs          *PublicInputSummary `json:"inputs,omitempty"`
+	ID              string              `json:"id"`
+	Object          string              `json:"object"`
+	Model           string              `json:"model"`
+	Status          string              `json:"status"`
+	SubmissionPhase string              `json:"submission_phase,omitempty"`
+	Progress        int                 `json:"progress"`
+	CreatedAt       int64               `json:"created_at"`
+	CompletedAt     *int64              `json:"completed_at,omitempty"`
+	Billing         map[string]any      `json:"billing"`
+	Artifacts       []Artifact          `json:"data"`
+	Diagnostic      string              `json:"diagnostic,omitempty"`
 }
 type Artifact struct {
 	Filename   string  `json:"filename,omitempty"`

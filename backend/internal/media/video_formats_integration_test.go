@@ -170,7 +170,10 @@ func TestVideoFormatsDurableEndToEnd(t *testing.T) {
 			require.Equal(t, "1.00000000", quote.Total)
 			task, err := engine.Create(ctx, cap, "video", p, nil, snap.Identity, "same-request")
 			require.NoError(t, err)
-			for i := 0; i < 2; i++ {
+			require.Equal(t, "in_progress", task.State)
+			require.NotEmpty(t, task.UpstreamID)
+			require.EqualValues(t, 1, submits.Load(), "Create submits upstream before returning")
+			for i := 0; i < 1; i++ {
 				engine = makeEngine()
 				claimed, err := engine.Store.Claim(ctx)
 				require.NoError(t, err)

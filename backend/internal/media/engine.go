@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,11 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/shopspring/decimal"
+)
+
+const (
+	defaultMediaWorkers = 128
+	maxMediaWorkers     = 256
 )
 
 type Engine struct {
@@ -33,14 +39,17 @@ type Engine struct {
 	Adapter        *Adapter
 	Lookup         AccountLookup
 	Invalidate     CacheInvalidate
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
+	// BackgroundWorkers bounds simultaneous polls, recovery and artifact work.
+	// New submissions use the account budget and never wait for this pool.
+	BackgroundWorkers int
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
 }
 
 func NewEngine(store *Store, blobs *BlobStore, lookup AccountLookup, invalidate CacheInvalidate) *Engine {
 	ctx, cancel := context.WithCancel(context.Background())
-	engine := &Engine{Store: store, Blobs: blobs, Lookup: lookup, Invalidate: invalidate, Adapter: &Adapter{SafeClient(false)}, ctx: ctx, cancel: cancel}
+	engine := &Engine{Store: store, Blobs: blobs, Lookup: lookup, Invalidate: invalidate, Adapter: &Adapter{SafeClient(false)}, BackgroundWorkers: configuredMediaWorkers(), ctx: ctx, cancel: cancel}
 	var activity bool
 	err := store.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM media_tasks) OR EXISTS(SELECT 1 FROM media_config_heads WHERE kind='capability' AND published_version IS NOT NULL)`).Scan(&activity)
 	if err == nil {
@@ -48,27 +57,84 @@ func NewEngine(store *Store, blobs *BlobStore, lookup AccountLookup, invalidate 
 	}
 	return engine
 }
-func (e *Engine) Start() {
-	for i := 0; i < 2; i++ {
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-e.ctx.Done():
-					return
-				case <-ticker.C:
-					t, err := e.Store.Claim(e.ctx)
-					if err == nil && t != nil {
-						_ = e.Process(e.ctx, *t)
-					}
-					_ = e.FlushCaches(e.ctx)
-				}
-			}
-		}()
+
+func configuredMediaWorkers() int {
+	raw := strings.TrimSpace(os.Getenv("SUB2API_MEDIA_WORKERS"))
+	if raw == "" {
+		return defaultMediaWorkers
 	}
+	workers, err := strconv.Atoi(raw)
+	if err != nil || workers < 1 || workers > maxMediaWorkers {
+		slog.Warn("media_worker_configuration_invalid", "setting", "SUB2API_MEDIA_WORKERS", "using_workers", defaultMediaWorkers, "minimum", 1, "maximum", maxMediaWorkers)
+		return defaultMediaWorkers
+	}
+	return workers
+}
+
+func (e *Engine) Start() {
+	workers := e.BackgroundWorkers
+	if workers < 1 || workers > maxMediaWorkers {
+		workers = defaultMediaWorkers
+	}
+	slots := make(chan struct{}, workers)
+	slog.Info("media_workers_started", "background_workers", workers, "submission_mode", "immediate_account_budget")
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			if e.ctx.Err() != nil {
+				return
+			}
+			// Reserve capacity before taking a durable lease. Tasks waiting for
+			// a worker must not expire while sitting in an in-memory job queue.
+			select {
+			case slots <- struct{}{}:
+			case <-e.ctx.Done():
+				return
+			}
+			t, err := e.Store.Claim(e.ctx)
+			if err == nil && t != nil {
+				if e.ctx.Err() != nil {
+					return
+				}
+				e.wg.Add(1)
+				go func(task StoredTask) {
+					defer e.wg.Done()
+					defer func() { <-slots }()
+					if err := e.Process(e.ctx, task); err != nil && e.ctx.Err() == nil {
+						slog.Error("media_worker_processing_failed", "task_id", task.ID, "account_id", task.AccountID, "error_type", fmt.Sprintf("%T", err))
+					}
+				}(*t)
+				continue
+			}
+			<-slots
+			if err != nil && e.ctx.Err() == nil {
+				slog.Error("media_worker_claim_failed", "error_type", fmt.Sprintf("%T", err))
+			}
+			select {
+			case <-e.ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	// Cache invalidation must progress even while every processing slot is busy.
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-e.ctx.Done():
+				return
+			case <-ticker.C:
+				_ = e.FlushCaches(e.ctx)
+			}
+		}
+	}()
 }
 func (e *Engine) Stop() { e.cancel(); e.wg.Wait() }
 func (e *Engine) configuration(ctx context.Context, groupID int64) ([]Capability, []PriceCard, error) {
@@ -303,7 +369,7 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 		return StoredTask{}, err
 	}
 	if previous != nil {
-		return *previous, nil
+		return e.submitPendingTask(ctx, *previous)
 	}
 	req, err := e.PrepareRequest(ctx, cap, operation, p, uploads)
 	if err != nil {
@@ -324,14 +390,63 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	snapshot.Request.Uploads = nil
 	snapshot.Request.MaterialRefs = nil
 	snapshot.Request.Wire = nil
-	task, err := e.Store.CreateTask(ctx, snapshot, accountID, idem, hash, id)
+	task, err := e.Store.CreateTaskForSubmission(ctx, snapshot, accountID, idem, hash, id)
+	if err != nil {
+		return StoredTask{}, err
+	}
+	task, err = e.submitPendingTask(ctx, task)
 	if err != nil {
 		return StoredTask{}, err
 	}
 	e.PlatformActive.Store(true)
-	_ = e.FlushCaches(ctx)
+	_ = e.FlushCaches(context.WithoutCancel(ctx))
 	return task, nil
 }
+
+func (e *Engine) submitPendingTask(ctx context.Context, task StoredTask) (StoredTask, error) {
+	shouldProcess := task.SubmissionClaim
+	if !shouldProcess && (task.State == "queued" || task.State == "submitting" && (task.LeaseUntil == nil || task.LeaseUntil.Before(time.Now())) || task.State == "unknown" && task.Settlement != "manual_review") {
+		claimed, err := e.Store.ClaimTask(ctx, task.ID)
+		if err != nil {
+			return task, err
+		}
+		if claimed == nil {
+			return e.Store.GetTask(context.WithoutCancel(ctx), task.ID)
+		}
+		task = *claimed
+		shouldProcess = true
+	}
+	if !shouldProcess {
+		return task, nil
+	}
+
+	workCtx, cancel := e.submissionContext(ctx)
+	started := time.Now()
+	slog.InfoContext(ctx, "media_submission_started", "task_id", task.ID, "account_id", task.AccountID)
+	processErr := e.Process(workCtx, task)
+	cancel()
+	if processErr != nil {
+		slog.ErrorContext(ctx, "media_immediate_submission_processing_failed", "task_id", task.ID, "error_type", fmt.Sprintf("%T", processErr))
+	}
+	current, err := e.Store.GetTask(context.WithoutCancel(ctx), task.ID)
+	if err == nil {
+		slog.InfoContext(ctx, "media_submission_completed", "task_id", task.ID, "account_id", task.AccountID, "state", current.State, "upstream_accepted", current.UpstreamID != "", "elapsed_ms", time.Since(started).Milliseconds())
+	}
+	return current, err
+}
+
+func (e *Engine) submissionContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	workCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	if e.ctx == nil {
+		return workCtx, cancel
+	}
+	stop := context.AfterFunc(e.ctx, cancel)
+	return workCtx, func() {
+		stop()
+		cancel()
+	}
+}
+
 func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 	if t.Settlement == "manual_review" {
 		return nil

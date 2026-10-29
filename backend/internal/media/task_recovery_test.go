@@ -27,14 +27,14 @@ func TestSpeechRecoveryReturnsOriginalDurableTaskWithoutMutation(t *testing.T) {
 	raw, err := json.Marshal(snapshot)
 	require.NoError(t, err)
 	quantities := []byte(`{"task_count":["1"],"input_characters":["4"]}`)
-	columns := []string{"id", "state", "settlement_state", "upstream_id", "result_path", "diagnostic", "user_id", "api_key_id", "group_id", "subscription_id", "account_id", "snapshot", "quantities", "reserved", "accepted", "captured", "released", "refunded", "version", "lease_epoch", "created_at", "completed_at"}
+	columns := []string{"id", "state", "settlement_state", "upstream_id", "result_path", "diagnostic", "user_id", "api_key_id", "group_id", "subscription_id", "account_id", "snapshot", "quantities", "reserved", "accepted", "captured", "released", "refunded", "version", "lease_epoch", "created_at", "completed_at", "lease_until"}
 	query := "SELECT " + taskSelect + " FROM media_tasks WHERE api_key_id=$1 AND operation=$2 AND idempotency_key=$3"
 	// Read-only recovery must return the same task, account and frozen billing
 	// data on every retry, even when acceptance is still uncertain. No writes
 	// or current capability/template lookups are allowed by these expectations.
 	for range 2 {
 		mock.ExpectQuery(query).WithArgs(int64(3), "speech", "original-idempotency").WillReturnRows(
-			sqlmock.NewRows(columns).AddRow("original-task", "unknown", "manual_review", "", "", "acceptance uncertain", 42, 3, 66, 0, 7, raw, quantities, "0.00400000", "0", "0", "0", "0", 5, 2, created, nil),
+			sqlmock.NewRows(columns).AddRow("original-task", "unknown", "manual_review", "", "", "acceptance uncertain", 42, 3, 66, 0, 7, raw, quantities, "0.00400000", "0", "0", "0", "0", 5, 2, created, nil, nil),
 		)
 		task, err := store.RecoverTask(ctx, 3, "speech", "original-idempotency")
 		require.NoError(t, err)

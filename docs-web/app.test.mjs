@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildRequest, endpointFor, fullMarkdown, inputMaterialsFor} from './app.mjs'
+import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, parseMaterialText} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -13,6 +13,7 @@ test('public requests preserve all references without selecting a supplier proto
   assert.deepEqual(request.audios,audios)
   assert.equal(request.reference_images,undefined)
   assert.deepEqual(buildRequest({...cap,model:'renamed',request_format:'anything'},'video',{prompt:'test'},{image:images}).images,images)
+  assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{image:[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}]}).images,[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}])
 })
 test('GPT edit, Gemini modalities, music SSE and frame roles use native fields', () => {
   const cap={model:'test',profile_id:'profile',request_format:'yunfei_multimodal'}
@@ -22,6 +23,10 @@ test('GPT edit, Gemini modalities, music SSE and frame roles use native fields',
   const gemini=buildRequest(cap,'gemini_image',{prompt:'test',modalities:'both',size:'4K'},{image:['data:image/png;base64,AA==']})
   assert.deepEqual(gemini.generationConfig.responseModalities,['IMAGE','TEXT'])
   assert.deepEqual(gemini.contents[0].parts[1],{inlineData:{mimeType:'image/png',data:'AA=='}})
+  const uploaded=dataURLToMaterial('data:image/jpeg;base64,QUJD')
+  assert.deepEqual(uploaded,{b64_json:'QUJD',mime_type:'image/jpeg'})
+  const geminiUpload=buildRequest(cap,'gemini_image',{prompt:'test'},{image:[uploaded]})
+  assert.deepEqual(geminiUpload.contents[0].parts[1],{inlineData:{mimeType:'image/jpeg',data:'QUJD'}})
   const music=buildRequest(cap,'chat_music',{prompt:'test',stream:'true'})
   assert.equal(music.async,false);assert.equal(music.stream,true)
   assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{first_frame:['https://example.org/a.png']}).images,[{url:'https://example.org/a.png',role:'first_frame'}])
@@ -31,6 +36,11 @@ test('missing model catalogue counts keep reference inputs and edit masks availa
   const materials={image:{reference_field:'images'},video:{reference_field:'videos'},audio:{reference_field:'audios'}}
   assert.deepEqual(inputMaterialsFor({operations:['video'],materials}),materials)
   assert.deepEqual(inputMaterialsFor({operations:['image_edit'],materials}).mask,{max_file_bytes:50*1048576})
+  assert.deepEqual(Object.keys(inputMaterialsFor({operations:['video']})),['image','video','audio'])
+  const refs=[{b64_json:'AA==',mime_type:'image/png',metadata:{weight:0.7}},{url:'https://example.org/second.png'}]
+  assert.deepEqual(parseMaterialText(JSON.stringify(refs,null,2)),refs)
+  assert.deepEqual(parseMaterialText(refs.map(ref=>JSON.stringify(ref)).join('\n')),refs)
+  assert.throws(()=>parseMaterialText('{"url":'))
 })
 
 test('speech uses the public speech input and configured voice', () => {
@@ -49,4 +59,11 @@ test('published document and export share one source without old branding',async
   assert.match(markdown,/4096/)
   assert.doesNotMatch(markdown,/yunfei\.best|v6k\.top|待验证|坤肉AI|云飞/)
   for(const section of content)assert.match(markdown,new RegExp(section.title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
+})
+
+test('Grok video is part of the video API category; only four media API categories are exposed',()=>{
+  const mediaCategories=categories.filter(category=>category.ops.length>0)
+  assert.equal(mediaCategories.length,4)
+  assert.equal(categories.some(category=>category.id==='grok-video'),false)
+  assert.ok(categories.find(category=>category.id==='video').sections.includes('grok-video-image'))
 })

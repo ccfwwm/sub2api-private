@@ -49,7 +49,7 @@ func PreviewInputs(req Request) ([]PreviewInput, error) {
 				item.URL = SafeReviewValue(raw, nil, 0)
 				item.SourceHash = fmt.Sprintf("%x", sha256.Sum256([]byte(raw)))
 			} else {
-				mime, data, err := decodeMaterial(raw)
+				mime, data, err := decodeReferenceMaterial(raw, referenceMIME(ref))
 				if err != nil {
 					return nil, err
 				}

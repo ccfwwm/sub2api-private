@@ -43,12 +43,12 @@ func TestUserArtifactTicketAuthorizationAndRange(t *testing.T) {
 			credential := fmt.Sprintf("%x", sha256.Sum256([]byte("u@example.org\nhash")))
 			if tc.status != 403 || tc.name == "wrong owner" {
 				mock.ExpectQuery("SELECT email,password_hash FROM users").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"email", "password_hash"}).AddRow("u@example.org", "hash"))
-				columns := make([]string, 22)
+				columns := make([]string, 23)
 				for i := range columns {
 					columns[i] = fmt.Sprint(i)
 				}
 				snapshot, _ := json.Marshal(media.Snapshot{Identity: media.Identity{UserID: tc.owner}})
-				mock.ExpectQuery("SELECT .* FROM media_tasks WHERE id").WithArgs("mt_user").WillReturnRows(sqlmock.NewRows(columns).AddRow("mt_user", "completed", "settled", "", "", "", tc.owner, 1, 19, 0, 2114, snapshot, []byte(`{}`), "0", "0", "0", "0", "0", 1, 0, time.Now(), nil))
+				mock.ExpectQuery("SELECT .* FROM media_tasks WHERE id").WithArgs("mt_user").WillReturnRows(sqlmock.NewRows(columns).AddRow("mt_user", "completed", "settled", "", "", "", tc.owner, 1, 19, 0, 2114, snapshot, []byte(`{}`), "0", "0", "0", "0", "0", 1, 0, time.Now(), nil, nil))
 			}
 			if tc.status != 403 {
 				path := filepath.Join(t.TempDir(), "artifact")

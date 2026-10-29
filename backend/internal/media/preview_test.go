@@ -43,6 +43,27 @@ func effectivePreviewFixture(t *testing.T) (*Engine, Capability, Identity) {
 	return engine, capability, Identity{UserID: 2, KeyID: 3, GroupID: 1, Multiplier: "2", TimeMultiplier: "1"}
 }
 
+func TestPreviewInputsAcceptsBase64ObjectsForEveryReferenceMediaKind(t *testing.T) {
+	image := pngFixture(t)
+	request := Request{MaterialRefs: map[string][]any{
+		"image": []any{map[string]any{"b64_json": base64.StdEncoding.EncodeToString(image), "mime_type": "image/png", "role": "first_frame"}},
+		"video": []any{map[string]any{"b64_json": "AQID", "mime_type": "video/mp4"}},
+		"audio": []any{map[string]any{"b64_json": "BAUG", "mime_type": "audio/mpeg"}},
+	}}
+	inputs, err := PreviewInputs(request)
+	require.NoError(t, err)
+	require.Len(t, inputs, 3)
+	require.Equal(t, []string{"image", "video", "audio"}, []string{inputs[0].Kind, inputs[1].Kind, inputs[2].Kind})
+	require.Equal(t, "image/png", inputs[0].MIME)
+	require.Equal(t, "video/mp4", inputs[1].MIME)
+	require.Equal(t, "audio/mpeg", inputs[2].MIME)
+	require.Equal(t, len(image), *inputs[0].Bytes)
+	require.Equal(t, 3, *inputs[1].Bytes)
+	require.Equal(t, 3, *inputs[2].Bytes)
+	require.Equal(t, "inline", inputs[1].Source)
+	require.Equal(t, "decoded", inputs[2].Measurement)
+}
+
 func TestEffectivePreviewMatchesSubmissionCompilerAndQuoteWithoutTaskWrites(t *testing.T) {
 	engine, cap, identity := effectivePreviewFixture(t)
 	rawImage := pngFixture(t)

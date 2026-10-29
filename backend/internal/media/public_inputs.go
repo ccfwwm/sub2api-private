@@ -76,7 +76,7 @@ func InputSummary(req Request) *PublicInputSummary {
 			}
 			if strings.HasPrefix(raw, "https://") {
 				item["source_hash"] = configurationDigest(raw)
-			} else if mime, data, e := decodeMaterial(raw); e == nil {
+			} else if mime, data, e := decodeReferenceMaterial(raw, referenceMIME(ref)); e == nil {
 				item["mime"] = mime
 				item["content_hash"] = fmt.Sprintf("%x", sha256.Sum256(data))
 			}

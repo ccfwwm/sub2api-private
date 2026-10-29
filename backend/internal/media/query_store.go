@@ -113,6 +113,19 @@ func publicTaskValue(t StoredTask, artifacts []Artifact) Task {
 		progress = 100
 	}
 	public := Task{ID: t.ID, Object: Object(t.Snapshot.Capability.MediaType), Model: t.Snapshot.Capability.Model, Status: status, CreatedAt: t.Created.Unix(), Progress: progress, Artifacts: artifacts, Diagnostic: publicDiagnostic(t), Billing: map[string]any{"currency": "USD", "reserved": t.Reserved, "accepted": t.Accepted, "settled": t.Captured, "released": t.Released, "refunded": t.Refunded, "maximum_charge": t.Snapshot.Maximum, "price_version": t.Snapshot.Sale.Version, "multiplier": t.Identity.Multiplier, "time_multiplier": t.Identity.TimeMultiplier, "state": t.Settlement, "quantities": t.Quantities, "version": t.Version}}
+	switch {
+	case t.UpstreamID != "":
+		public.SubmissionPhase = "upstream_accepted"
+	case t.State == "queued":
+		public.SubmissionPhase = "local_pending"
+	case t.State == "submitting":
+		public.SubmissionPhase = "submitting"
+		if t.LeaseUntil == nil || t.LeaseUntil.Before(time.Now()) {
+			public.SubmissionPhase = "reconciling"
+		}
+	case t.State == "unknown":
+		public.SubmissionPhase = "reconciling"
+	}
 	if t.Snapshot.Inputs != nil {
 		copy := *t.Snapshot.Inputs
 		copy.Stage = "unrecorded"

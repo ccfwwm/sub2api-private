@@ -77,3 +77,113 @@ func TestTemplateMaterialStringShapeRequiresExplicitExactPropertyFilter(t *testi
 	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
 	require.ErrorContains(t, err, "unrepresentable_reference")
 }
+
+func TestTemplatePreservesReferenceLocatorAndPayloadForEveryMediaKind(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{
+		{Kind: "image", Target: "reference_images", Encoding: "preserve", Shape: "preserve"},
+		{Kind: "video", Target: "reference_videos", Encoding: "preserve", Shape: "preserve"},
+		{Kind: "audio", Target: "reference_audios", Encoding: "preserve", Shape: "preserve"},
+	}
+	png := base64String(pngFixture(t))
+	input := map[string]any{
+		"model": "public", "prompt": "keep source fields", "seconds": 5,
+		"images": []any{
+			map[string]any{"b64_json": png, "mime_type": "image/png", "role": "first_frame"},
+			map[string]any{"url": "https://example.org/second.png", "role": "last_frame"},
+		},
+		"videos": []any{map[string]any{"b64_json": "AA==", "mime_type": "video/mp4", "source": "camera"}},
+		"audios": []any{map[string]any{"b64_json": "AA==", "mime_type": "audio/mpeg", "language": "zh"}},
+	}
+	cap := Capability{Model: "public", UpstreamModel: "provider", MediaType: "video", Template: &template}
+	req, err := Normalize(cap, "video", input)
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, input["images"], wire.Body["reference_images"])
+	require.Equal(t, input["videos"], wire.Body["reference_videos"])
+	require.Equal(t, input["audios"], wire.Body["reference_audios"])
+	inputs, err := PreviewInputs(req)
+	require.NoError(t, err)
+	require.Len(t, inputs, 4)
+	require.Equal(t, "video/mp4", inputs[2].MIME)
+	require.Equal(t, "audio/mpeg", inputs[3].MIME)
+}
+
+func TestTemplateExplicitNestedPropertyValueMappingAndConversion(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{Kind: "image", Target: "images", Encoding: "preserve", Shape: "preserve", PropertyRules: []ParameterRule{
+		{Op: "map", Source: "metadata.role", Values: map[string]any{"reference": "input"}, OnUnmapped: "preserve"},
+		{Op: "convert", Source: "metadata.weight", Type: "number"},
+	}}}
+	require.NoError(t, ValidateTemplate(template, false))
+	ref := map[string]any{"b64_json": base64String(pngFixture(t)), "metadata": map[string]any{"role": "reference", "weight": "0.7", "keep": true}}
+	cap := Capability{Model: "public", UpstreamModel: "provider", MediaType: "video", Template: &template}
+	req, err := Normalize(cap, "video", map[string]any{"seconds": 5, "images": []any{ref}})
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	got := wire.Body["images"].([]any)[0].(map[string]any)
+	require.Equal(t, ref["b64_json"], got["b64_json"])
+	require.Equal(t, map[string]any{"role": "input", "weight": float64(0.7), "keep": true}, got["metadata"])
+	require.Equal(t, "0.7", ref["metadata"].(map[string]any)["weight"])
+	template.Materials[0].PropertyRules = []ParameterRule{{Op: "convert", Source: "b64_json", Type: "string"}}
+	require.ErrorContains(t, ValidateTemplate(template, false), "ordinary attributes")
+}
+
+func TestTemplateExplicitlyMapsAndFiltersNestedReferenceProperties(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{
+		Kind: "image", Target: "reference_images", Encoding: "preserve", Shape: "preserve",
+		DropProperties: map[string][]any{"metadata.internal": {true}},
+		MapProperties: map[string]string{
+			"b64_json":             "image.data",
+			"metadata.description": "metadata.caption",
+			"role":                 "metadata.frame_role",
+		},
+	}}
+	cap := Capability{Model: "public", UpstreamModel: "provider", MediaType: "video", Template: &template}
+	ref := map[string]any{
+		"b64_json": "data:image/png;base64,AA==", "role": "first_frame",
+		"metadata": map[string]any{"description": "opening frame", "internal": true},
+	}
+	req := Request{Operation: "video", Model: "public", Parameters: map[string]any{"model": "public", "prompt": "frame", "seconds": 5}, MaterialRefs: map[string][]any{"image": {ref}}}
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, []any{map[string]any{
+		"image":    map[string]any{"data": "data:image/png;base64,AA=="},
+		"metadata": map[string]any{"caption": "opening frame", "frame_role": "first_frame"},
+	}}, wire.Body["reference_images"])
+	// Mapping and filtering operate on cloned metadata and never mutate a task's
+	// normalized reference snapshot.
+	require.Contains(t, ref, "b64_json")
+	require.Contains(t, ref, "role")
+	require.Equal(t, "opening frame", ref["metadata"].(map[string]any)["description"])
+}
+
+func TestTemplateMaterialPropertyMappingsAreValidated(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials[0].MapProperties = map[string]string{"role": "metadata.role"}
+	require.NoError(t, ValidateTemplate(template, false))
+	template.Materials[0].MapProperties = map[string]string{"role": "b64_json"}
+	require.ErrorContains(t, ValidateTemplate(template, false), "Only a top-level reference locator")
+	template.Materials[0].Shape = "url"
+	// Locator movement is controlled by an explicit structure, so an explicit
+	// property mapping may not compete with it.
+	template.Materials[0].MapProperties = map[string]string{"url": "b64_json"}
+	require.ErrorContains(t, ValidateTemplate(template, false), "Map reference locators")
+}
+
+func TestTemplateMapsLocatorIntoExistingNestedObjectWithoutLosingAttributes(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{Kind: "image", Target: "images", Encoding: "preserve", Shape: "preserve", MapProperties: map[string]string{"url": "image.url", "metadata.url": "metadata.source"}}}
+	require.NoError(t, ValidateTemplate(template, false))
+	ref := map[string]any{"url": "https://example.org/image.png", "image": map[string]any{"weight": 0.7}, "metadata": map[string]any{"url": "attribution"}}
+	cap := Capability{Model: "public", UpstreamModel: "provider", MediaType: "video", Template: &template}
+	req, err := Normalize(cap, "video", map[string]any{"seconds": 5, "images": []any{ref}})
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, []any{map[string]any{"image": map[string]any{"url": ref["url"], "weight": 0.7}, "metadata": map[string]any{"source": "attribution"}}}, wire.Body["images"])
+	require.Equal(t, map[string]any{"weight": 0.7}, ref["image"])
+}

@@ -36,6 +36,7 @@ describe('Public media docs', () => {
     expect(sectionMarkdown(edit)).toContain("-F 'image=@reference.png'")
     expect(sectionMarkdown(edit)).toContain("-F 'image[]=@scene.png'")
     expect(groupMarkdown('GPT 图片')).toContain(sectionMarkdown(edit))
+    expect(groupMarkdown('视频生成')).toContain(sectionMarkdown(imagevideoSections.find(section => section.id === 'grok-video-image')!))
     expect(imagevideoSections.some(s => s.id === 'clients')).toBe(true)
   })
   it('documents canonical video materials without exposing supplier configuration', () => {

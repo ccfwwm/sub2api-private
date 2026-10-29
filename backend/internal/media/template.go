@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -52,7 +53,11 @@ type MaterialRule struct {
 	MaxCount       int              `json:"max_count,omitempty"`
 	Role           string           `json:"role,omitempty"`
 	DropProperties map[string][]any `json:"drop_properties,omitempty"`
-	Wrapper        map[string]any   `json:"wrapper,omitempty"`
+	// MapProperties renames ordinary attributes inside a reference object.
+	// Locator fields can be renamed here only when Shape is preserve.
+	MapProperties map[string]string `json:"map_properties,omitempty"`
+	PropertyRules []ParameterRule   `json:"property_rules,omitempty"`
+	Wrapper       map[string]any    `json:"wrapper,omitempty"`
 }
 type TemplateResponse struct {
 	PCMToWAV *PCMToWAVConfig      `json:"pcm_to_wav,omitempty"`
@@ -224,7 +229,7 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 			return fail(400, "invalid_material_rule", "Too many material properties to filter")
 		}
 		for property, values := range m.DropProperties {
-			if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]{0,63}$`).MatchString(property) || contains([]string{"url", "b64_json"}, property) || len(values) == 0 || len(values) > 32 {
+			if !validMaterialPropertyPath(property) || materialLocatorPath(property) || len(values) == 0 || len(values) > 32 {
 				return fail(400, "invalid_material_rule", "Material property filters require a safe property name and exact values")
 			}
 			for _, value := range values {
@@ -234,6 +239,30 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 					return fail(400, "invalid_material_rule", "Material property filters only support scalar values")
 				}
 			}
+		}
+		if len(m.MapProperties) > 32 {
+			return fail(400, "invalid_material_rule", "Too many material properties to map")
+		}
+		mappedTargets := map[string]bool{}
+		for source, target := range m.MapProperties {
+			if !validMaterialPropertyPath(source) || !validMaterialPropertyPath(target) || source == target || mappedTargets[target] {
+				return fail(400, "invalid_material_rule", "Material property mappings require distinct safe source and target paths")
+			}
+			if materialLocatorPath(source) && source != "url" && source != "b64_json" {
+				return fail(400, "invalid_material_rule", "Only the top-level reference locator can be mapped")
+			}
+			if materialLocatorPath(target) && ((source != "url" && source != "b64_json") || (target != "url" && target != "b64_json")) {
+				return fail(400, "invalid_material_rule", "Only a top-level reference locator can map to url or b64_json")
+			}
+			mappedTargets[target] = true
+		}
+		for source := range m.MapProperties {
+			if materialLocatorPath(source) && m.Shape != "" && m.Shape != "preserve" {
+				return fail(400, "invalid_material_rule", "Map reference locators only with the preserve shape")
+			}
+		}
+		if err := validateMaterialPropertyRules(m.PropertyRules); err != nil {
+			return err
 		}
 		key := m.Kind + ":" + m.Role
 		if targets[key] {
@@ -275,6 +304,156 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 		}
 	}
 	return nil
+}
+
+func validMaterialPropertyPath(path string) bool {
+	return configPath.MatchString(path) && !strings.Contains(path, "[]")
+}
+
+func materialLocatorPath(path string) bool {
+	parts := pathParts(path)
+	return len(parts) > 0 && (parts[0] == "url" || parts[0] == "b64_json")
+}
+
+func materialAttributesPreserved(value, original any) bool {
+	if expected, ok := original.(map[string]any); ok {
+		actual, ok := value.(map[string]any)
+		if !ok {
+			return false
+		}
+		for key, item := range expected {
+			got, present := actual[key]
+			if !present || !materialAttributesPreserved(got, item) {
+				return false
+			}
+		}
+		return true
+	}
+	return reflect.DeepEqual(value, original)
+}
+
+func referenceLocator(ref any) string {
+	object, ok := ref.(map[string]any)
+	if !ok {
+		return ""
+	}
+	if _, present := object["url"]; present {
+		return "url"
+	}
+	if _, present := object["b64_json"]; present {
+		return "b64_json"
+	}
+	return ""
+}
+
+func cloneMaterialValue(value any) any {
+	switch node := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(node))
+		for key, item := range node {
+			out[key] = cloneMaterialValue(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(node))
+		for index, item := range node {
+			out[index] = cloneMaterialValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func cloneMaterialObject(value map[string]any) map[string]any {
+	return cloneMaterialValue(value).(map[string]any)
+}
+
+func transformMaterialProperties(ref any, m MaterialRule) (map[string]any, string, bool, error) {
+	object, ok := ref.(map[string]any)
+	if !ok {
+		return map[string]any{}, "", false, nil
+	}
+	props := cloneMaterialObject(object)
+	locator := referenceLocator(object)
+	delete(props, "url")
+	delete(props, "b64_json")
+	filtered := false
+	for property, matches := range m.DropProperties {
+		value, present := readPath(props, property)
+		if !present {
+			continue
+		}
+		for _, match := range matches {
+			if reflect.DeepEqual(value, match) {
+				if err := writePath(props, property, nil, true); err != nil {
+					return nil, "", false, err
+				}
+				filtered = true
+				break
+			}
+		}
+	}
+	payloadTarget := ""
+	for _, source := range sortedMaterialMappings(m.MapProperties) {
+		target := m.MapProperties[source]
+		if source == "url" || source == "b64_json" {
+			if source == locator {
+				payloadTarget = target
+			}
+			continue
+		}
+		value, present := readPath(props, source)
+		if !present {
+			continue
+		}
+		if _, exists := readPath(props, target); exists {
+			return nil, "", false, fail(400, "material_property_conflict", "Material property mapping target already exists: "+target)
+		}
+		if err := writePath(props, source, nil, true); err != nil {
+			return nil, "", false, err
+		}
+		if err := writePath(props, target, value, false); err != nil {
+			return nil, "", false, err
+		}
+	}
+	if len(m.PropertyRules) > 0 {
+		var err error
+		props, err = applyParameterRules(props, materialPropertyRules(m.PropertyRules), "semantic")
+		if err != nil {
+			return nil, "", false, err
+		}
+	}
+	return props, payloadTarget, filtered, nil
+}
+
+func sortedMaterialMappings(mappings map[string]string) []string {
+	keys := make([]string, 0, len(mappings))
+	for key := range mappings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func materialPropertyRules(rules []ParameterRule) []ParameterRule {
+	out := append([]ParameterRule{}, rules...)
+	for i := range out {
+		out[i].Phase = "semantic"
+	}
+	return out
+}
+
+func validateMaterialPropertyRules(rules []ParameterRule) error {
+	if len(rules) > 32 {
+		return fail(400, "invalid_material_rule", "Too many material property value rules")
+	}
+	for _, rule := range rules {
+		if !contains([]string{"map", "convert"}, rule.Op) || !validMaterialPropertyPath(rule.Source) || materialLocatorPath(rule.Source) || rule.Target != "" && rule.Target != rule.Source || len(rule.Fields) > 0 {
+			return fail(400, "invalid_material_rule", "Property value rules only map or convert ordinary attributes in place")
+		}
+	}
+	return ValidateParameterRules(materialPropertyRules(rules))
 }
 
 func validateTemplateBody(value any) error {
@@ -795,7 +974,7 @@ func normalizeTemplate(cap Capability, operation string, input map[string]any, u
 				return r, e
 			}
 			if !strings.HasPrefix(raw, "https://") {
-				mime, data, e := decodeMaterial(raw)
+				mime, data, e := decodeReferenceMaterial(raw, referenceMIME(ref))
 				if e != nil || !strings.HasPrefix(mime, kind+"/") && kind != "mask" || len(data) > 50<<20 {
 					return r, fail(400, "invalid_reference_mime", "Reference content must match its media kind")
 				}
@@ -856,10 +1035,30 @@ func decodeMaterial(raw string) (string, []byte, error) {
 	}
 	return mime, data, nil
 }
-func encodeTemplateMaterial(ctx context.Context, client *http.Client, raw, encoding string) (string, string, error) {
+func referenceMIME(ref any) string {
+	object, ok := ref.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, key := range []string{"mime_type", "mimeType"} {
+		if value, ok := object[key].(string); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func decodeReferenceMaterial(raw, mimeHint string) (string, []byte, error) {
+	if mimeHint != "" && !strings.HasPrefix(raw, "https://") && !strings.HasPrefix(raw, "data:") {
+		return decodeMaterial("data:" + mimeHint + ";base64," + raw)
+	}
+	return decodeMaterial(raw)
+}
+
+func encodeTemplateMaterial(ctx context.Context, client *http.Client, raw, encoding, mimeHint string) (string, string, error) {
 	if encoding == "preserve" {
 		if !strings.HasPrefix(raw, "https://") {
-			mime, _, err := decodeMaterial(raw)
+			mime, _, err := decodeReferenceMaterial(raw, mimeHint)
 			return raw, mime, err
 		}
 		return raw, "", nil
@@ -889,7 +1088,7 @@ func encodeTemplateMaterial(ctx context.Context, client *http.Client, raw, encod
 			mime = http.DetectContentType(data)
 		}
 	} else {
-		mime, data, err = decodeMaterial(raw)
+		mime, data, err = decodeReferenceMaterial(raw, mimeHint)
 	}
 	if err != nil || len(data) == 0 || len(data) > 50<<20 {
 		return "", "", fail(400, "invalid_reference", "Media encoding failed or exceeds 50 MiB")
@@ -977,33 +1176,21 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			if e != nil {
 				return PreparedMediaRequest{}, e
 			}
-			props := map[string]any{}
-			if obj, ok := ref.(map[string]any); ok {
-				for k, v := range obj {
-					if k != "url" && k != "b64_json" {
-						props[k] = v
-					}
-				}
-			}
-			if m.Role != "" && stringValue(props["role"]) != m.Role {
-				continue
-			}
-			filteredProperty := false
-			for property, values := range m.DropProperties {
-				value, exists := props[property]
-				if !exists {
+			if m.Role != "" {
+				object, _ := ref.(map[string]any)
+				if stringValue(object["role"]) != m.Role {
 					continue
 				}
-				for _, match := range values {
-					if reflect.DeepEqual(value, match) {
-						delete(props, property)
-						filteredProperty = true
-						break
-					}
-				}
 			}
-			attributes := cloneObject(props)
-			encoded, mime, e := encodeTemplateMaterial(ctx, client, raw, m.Encoding)
+			props, payloadTarget, filteredProperty, e := transformMaterialProperties(ref, m)
+			if e != nil {
+				return PreparedMediaRequest{}, e
+			}
+			if m.Role != "" && len(props) == 0 && referenceLocator(ref) == "" {
+				continue
+			}
+			attributes := cloneMaterialObject(props)
+			encoded, mime, e := encodeTemplateMaterial(ctx, client, raw, m.Encoding, referenceMIME(ref))
 			if e != nil {
 				return PreparedMediaRequest{}, e
 			}
@@ -1016,12 +1203,12 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "Multipart file cannot express reference attributes")
 				}
 				if strings.HasPrefix(encoded, "https://") {
-					encoded, _, e = encodeTemplateMaterial(ctx, client, encoded, "data_url")
+					encoded, _, e = encodeTemplateMaterial(ctx, client, encoded, "data_url", "")
 					if e != nil {
 						return PreparedMediaRequest{}, e
 					}
 				}
-				mime, data, e := decodeMaterial(encoded)
+				mime, data, e := decodeReferenceMaterial(encoded, mime)
 				if e != nil {
 					return PreparedMediaRequest{}, e
 				}
@@ -1031,15 +1218,21 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			}
 			switch m.Shape {
 			case "preserve":
-				if len(props) == 0 {
-					if _, ok := ref.(string); ok {
-						value = encoded
-					} else {
-						props["url"] = encoded
-						value = props
-					}
+				if _, ok := ref.(string); ok {
+					value = encoded
 				} else {
-					props["url"] = encoded
+					if payloadTarget == "" {
+						payloadTarget = referenceLocator(ref)
+					}
+					if payloadTarget == "" {
+						return PreparedMediaRequest{}, fail(400, "invalid_reference", "Reference object requires url or b64_json")
+					}
+					if _, exists := readPath(props, payloadTarget); exists {
+						return PreparedMediaRequest{}, fail(400, "material_property_conflict", "Reference payload mapping target already exists: "+payloadTarget)
+					}
+					if err := writePath(props, payloadTarget, encoded, false); err != nil {
+						return PreparedMediaRequest{}, err
+					}
 					value = props
 				}
 			case "string":
@@ -1070,7 +1263,7 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			}
 			for key, original := range attributes {
 				serialized, ok := value.(map[string]any)
-				if !ok || !reflect.DeepEqual(serialized[key], original) {
+				if !ok || !materialAttributesPreserved(serialized[key], original) {
 					return PreparedMediaRequest{}, fail(400, "unrepresentable_reference", "Material structure would replace reference attribute: "+key)
 				}
 			}

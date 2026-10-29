@@ -4164,6 +4164,13 @@ components:
           - completed
           - failed
           - unknown
+        submission_phase:
+          type: string
+          enum:
+          - local_pending
+          - submitting
+          - upstream_accepted
+          - reconciling
         progress:
           type: number
           minimum: 0
@@ -4201,10 +4208,24 @@ components:
       - type: object
         properties:
           url: *id002
+          b64_json: *id002
+          mime_type: *id002
+          mimeType: *id002
+          role: *id002
           duration_seconds: *id004
-        required:
-        - url
-        additionalProperties: false
+        required: []
+        additionalProperties: true
+        oneOf:
+        - required:
+          - url
+          not:
+            required:
+            - b64_json
+        - required:
+          - b64_json
+          not:
+            required:
+            - url
     VideoRequest:
       type: object
       properties:

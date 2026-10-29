@@ -23,21 +23,26 @@ type StoredTask struct {
 	Version, Epoch                                            int64
 	Created                                                   time.Time
 	Completed                                                 *time.Time
+	LeaseUntil                                                *time.Time
 	SubmissionClaim                                           bool `json:"-"`
 	RecoveryClaim                                             bool `json:"-"`
 }
 
-const taskSelect = `id,state,settlement_state,coalesce(upstream_id,''),coalesce(result_path,''),diagnostic,user_id,api_key_id,group_id,coalesce(subscription_id,0),account_id,snapshot,quantities,reserved::text,accepted::text,captured::text,released::text,refunded::text,version,lease_epoch,created_at,completed_at`
+const taskSelect = `id,state,settlement_state,coalesce(upstream_id,''),coalesce(result_path,''),diagnostic,user_id,api_key_id,group_id,coalesce(subscription_id,0),account_id,snapshot,quantities,reserved::text,accepted::text,captured::text,released::text,refunded::text,version,lease_epoch,created_at,completed_at,lease_until`
 
 func scanTask(row interface{ Scan(...any) error }) (StoredTask, error) {
 	var t StoredTask
 	var snap, q []byte
-	e := row.Scan(&t.ID, &t.State, &t.Settlement, &t.UpstreamID, &t.ResultPath, &t.Diagnostic, &t.Identity.UserID, &t.Identity.KeyID, &t.Identity.GroupID, &t.Identity.SubscriptionID, &t.AccountID, &snap, &q, &t.Reserved, &t.Accepted, &t.Captured, &t.Released, &t.Refunded, &t.Version, &t.Epoch, &t.Created, &t.Completed)
+	var lease sql.NullTime
+	e := row.Scan(&t.ID, &t.State, &t.Settlement, &t.UpstreamID, &t.ResultPath, &t.Diagnostic, &t.Identity.UserID, &t.Identity.KeyID, &t.Identity.GroupID, &t.Identity.SubscriptionID, &t.AccountID, &snap, &q, &t.Reserved, &t.Accepted, &t.Captured, &t.Released, &t.Refunded, &t.Version, &t.Epoch, &t.Created, &t.Completed, &lease)
 	if e != nil {
 		return t, e
 	}
 	if e = json.Unmarshal(snap, &t.Snapshot); e != nil {
 		return t, e
+	}
+	if lease.Valid {
+		t.LeaseUntil = &lease.Time
 	}
 	t.Identity = t.Snapshot.Identity
 	e = json.Unmarshal(q, &t.Quantities)
@@ -206,6 +211,17 @@ func sanitizeMediaDiagnostic(value string) string {
 }
 
 func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int64, idem, hash, id string) (StoredTask, error) {
+	return s.createTask(ctx, snapshot, accountID, idem, hash, id, false)
+}
+
+// CreateTaskForSubmission reserves the task and its worker lease atomically so
+// a background worker cannot leave a new request in the local queue. The
+// caller submits it to the upstream before returning the task to the client.
+func (s *Store) CreateTaskForSubmission(ctx context.Context, snapshot Snapshot, accountID int64, idem, hash, id string) (StoredTask, error) {
+	return s.createTask(ctx, snapshot, accountID, idem, hash, id, true)
+}
+
+func (s *Store) createTask(ctx context.Context, snapshot Snapshot, accountID int64, idem, hash, id string, submitImmediately bool) (StoredTask, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return StoredTask{}, e
@@ -310,7 +326,11 @@ func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int
 	if idem != "" {
 		idemValue = idem
 	}
-	_, e = tx.ExecContext(ctx, `INSERT INTO media_tasks(id,user_id,api_key_id,group_id,subscription_id,account_id,operation,media_type,model,idempotency_key,request_hash,snapshot,quantities,reserved) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, id, identity.UserID, identity.KeyID, identity.GroupID, sub, accountID, snapshot.Request.Operation, snapshot.Capability.MediaType, snapshot.Capability.Model, idemValue, hash, rawSnap, q, snapshot.Maximum)
+	if submitImmediately {
+		_, e = tx.ExecContext(ctx, `INSERT INTO media_tasks(id,user_id,api_key_id,group_id,subscription_id,account_id,operation,media_type,model,idempotency_key,request_hash,snapshot,quantities,reserved,state,lease_until,lease_epoch) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'submitting',now()+interval '4 minutes',1)`, id, identity.UserID, identity.KeyID, identity.GroupID, sub, accountID, snapshot.Request.Operation, snapshot.Capability.MediaType, snapshot.Capability.Model, idemValue, hash, rawSnap, q, snapshot.Maximum)
+	} else {
+		_, e = tx.ExecContext(ctx, `INSERT INTO media_tasks(id,user_id,api_key_id,group_id,subscription_id,account_id,operation,media_type,model,idempotency_key,request_hash,snapshot,quantities,reserved) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, id, identity.UserID, identity.KeyID, identity.GroupID, sub, accountID, snapshot.Request.Operation, snapshot.Capability.MediaType, snapshot.Capability.Model, idemValue, hash, rawSnap, q, snapshot.Maximum)
+	}
 	if e != nil {
 		return StoredTask{}, e
 	}
@@ -375,7 +395,11 @@ func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int
 	if e = tx.Commit(); e != nil {
 		return StoredTask{}, e
 	}
-	return s.GetTask(ctx, id)
+	task, e := s.GetTask(context.WithoutCancel(ctx), id)
+	if e == nil && submitImmediately {
+		task.SubmissionClaim = true
+	}
+	return task, e
 }
 func reserveQuota(ctx context.Context, tx *sql.Tx, taskID string, q quotaSpec, amount string, platformBaseline map[string]string) error {
 	var used string
@@ -537,12 +561,24 @@ func reserveQuota(ctx context.Context, tx *sql.Tx, taskID string, q quotaSpec, a
 
 // Claim uses database leases; a stale submitting lease is never resubmitted.
 func (s *Store) Claim(ctx context.Context) (*StoredTask, error) {
+	return s.claim(ctx, "")
+}
+
+// ClaimTask claims one durable task for immediate submission or recovery.
+func (s *Store) ClaimTask(ctx context.Context, id string) (*StoredTask, error) {
+	if id == "" {
+		return nil, fmt.Errorf("task ID is required")
+	}
+	return s.claim(ctx, id)
+}
+
+func (s *Store) claim(ctx context.Context, taskID string) (*StoredTask, error) {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return nil, e
 	}
 	defer func() { _ = tx.Rollback() }()
-	t, e := scanTask(tx.QueryRowContext(ctx, `SELECT `+taskSelect+` FROM media_tasks mt WHERE mt.settlement_state IN ('held','pending_usage') AND mt.next_poll_at<=now() AND (mt.lease_until IS NULL OR mt.lease_until<now()) AND (mt.state <> 'queued' OR (SELECT count(*) FROM media_tasks running WHERE running.account_id=mt.account_id AND running.settlement_state IN ('held','pending_usage','manual_review') AND (running.state <> 'queued' OR running.settlement_state='manual_review')) < GREATEST((SELECT concurrency FROM accounts capacity WHERE capacity.id=mt.account_id AND capacity.deleted_at IS NULL),1)) ORDER BY mt.created_at,mt.id LIMIT 1 FOR UPDATE OF mt SKIP LOCKED`))
+	t, e := scanTask(tx.QueryRowContext(ctx, `SELECT `+taskSelect+` FROM media_tasks mt WHERE ($1='' OR mt.id=$1) AND mt.settlement_state IN ('held','pending_usage') AND mt.next_poll_at<=now() AND (mt.lease_until IS NULL OR mt.lease_until<now()) AND (mt.state <> 'queued' OR (SELECT count(*) FROM media_tasks running WHERE running.account_id=mt.account_id AND running.settlement_state IN ('held','pending_usage','manual_review') AND (running.state <> 'queued' OR running.settlement_state='manual_review')) < GREATEST((SELECT concurrency FROM accounts capacity WHERE capacity.id=mt.account_id AND capacity.deleted_at IS NULL),1)) ORDER BY mt.created_at,mt.id LIMIT 1 FOR UPDATE OF mt SKIP LOCKED`, taskID))
 	if e == sql.ErrNoRows {
 		return nil, nil
 	}

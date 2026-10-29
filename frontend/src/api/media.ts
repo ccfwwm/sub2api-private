@@ -23,6 +23,7 @@ export interface MediaTask {
   id: string
   model: string
   status: string
+  submission_phase?: 'local_pending' | 'submitting' | 'upstream_accepted' | 'reconciling'
   created_at: number
   completed_at?: number
   object?: string
