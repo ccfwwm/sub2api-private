@@ -1,14 +1,14 @@
 {
-  "version": "v1.3.8",
+  "version": "v1.3.9",
   "status": "recorded",
   "acceptance_state": "pre-release-read-only-verified",
   "verified_at": "2026-10-29T01:59:24+00:00",
-  "environment": "Read-only checks of five existing production video tasks through the authenticated relay admin task API and the provider GET /v1/videos/{id} API before v1.3.8, while production runs v1.3.7. No generation was submitted. Verification status below describes completion of the read-only check, separately from the provider task status.",
+  "environment": "Read-only checks of five existing production video tasks through the authenticated relay admin task API and the provider GET /v1/videos/{id} API before v1.3.9, while production runs v1.3.7. No generation was submitted. Verification status below describes completion of the read-only check, separately from the provider task status.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
     {
-      "label": "existing-completed-video-v1.3.8",
+      "label": "existing-completed-video-v1.3.9",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
@@ -19,7 +19,7 @@
       "scope": "Existing task is completed in both relay and provider; video artifact is available. No new generation."
     },
     {
-      "label": "existing-failed-videos-v1.3.8",
+      "label": "existing-failed-videos-v1.3.9",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
