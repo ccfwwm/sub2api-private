@@ -203,6 +203,9 @@ func ValidateTemplate(t ProtocolTemplate, publish bool) error {
 	if t.ContentPath != "" && !validTemplatePath(t.ContentPath) {
 		return fail(400, "invalid_endpoint", "Invalid content path")
 	}
+	if t.Mode == "async" && t.ContentPath != "" && t.Query != nil && t.ContentPath == t.Query.Path {
+		return fail(400, "invalid_content_path", "Artifact content path must differ from the polling endpoint")
+	}
 	if publish && (len(t.Operations) == 0 || len(t.MediaTypes) == 0 || (t.Mode == "async" && t.Query == nil)) {
 		return fail(400, "incomplete_template", "Operations, media types and asynchronous query required")
 	}
@@ -1481,7 +1484,7 @@ func ParseTemplateResponse(object map[string]any, cap Capability) UpstreamResult
 		r.Status = "completed"
 	}
 	if r.Status == "completed" && len(r.Artifacts) == 0 && t.ContentPath != "" && r.ID != "" {
-		path, e := expandTemplateEndpoint(TemplateEndpoint{Path: t.ContentPath}, map[string]string{"task_id": r.ID, "model": cap.UpstreamModel})
+		path, e := expandTemplateEndpoint(TemplateEndpoint{Path: effectiveArtifactContentPath(*t)}, map[string]string{"task_id": r.ID, "model": cap.UpstreamModel})
 		if e == nil {
 			add(path)
 		}
@@ -1504,6 +1507,18 @@ func ParseTemplateResponse(object map[string]any, cap Capability) UpstreamResult
 		}
 	}
 	return r
+}
+
+// effectiveArtifactContentPath keeps older administrator-created templates
+// usable when they accidentally pointed the artifact fallback at the polling
+// JSON endpoint. New templates are rejected by ValidateTemplate, but existing
+// pinned versions must remain readable until an administrator can republish
+// their corrected configuration.
+func effectiveArtifactContentPath(t ProtocolTemplate) string {
+	if t.ContentPath != "" && t.Query != nil && t.ContentPath == t.Query.Path {
+		return strings.TrimRight(t.ContentPath, "/") + "/content"
+	}
+	return t.ContentPath
 }
 
 func isExplicitTemplateFailure(state string) bool {

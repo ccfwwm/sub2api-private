@@ -223,6 +223,24 @@ func TestTemplateDynamicResultMIMEFilenameAndMasks(t *testing.T) {
 	require.Equal(t, map[string]any{"url": full}, wire.Body["mask"])
 }
 
+func TestValidateTemplateRejectsPollingEndpointAsArtifactContentPath(t *testing.T) {
+	template := templateFixture(t, "video-reference-arrays")
+	template.ContentPath = template.Query.Path
+	err := ValidateTemplate(template, true)
+	require.ErrorContains(t, err, "invalid_content_path")
+}
+
+func TestParseTemplateResponseRepairsLegacyPollingContentPath(t *testing.T) {
+	template := templateFixture(t, "video-reference-arrays")
+	template.ContentPath = template.Query.Path
+	cap := Capability{Model: "public", UpstreamModel: "provider", MediaType: "video", Template: &template}
+	result := ParseTemplateResponse(map[string]any{"id": "task-1", "status": "completed"}, cap)
+	require.Equal(t, "completed", result.Status)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, "/v1/videos/task-1/content", result.Artifacts[0].Source)
+	require.Equal(t, "video/mp4", result.Artifacts[0].MIME)
+}
+
 func TestTemplateCanonicalSixBase64ShapesAndFiveReferences(t *testing.T) {
 	data := pngFixture(t)
 	raw := base64String(data)
