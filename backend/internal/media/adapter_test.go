@@ -62,6 +62,88 @@ func TestAdapterPreservesSanitizedUpstreamErrorMetadata(t *testing.T) {
 	require.NotContains(t, result.Diagnostic, "secret-provider-key")
 }
 
+func TestAdapterPreservesFailedPollMetadata(t *testing.T) {
+	for _, template := range []bool{false, true} {
+		name := "legacy"
+		if template {
+			name = "template"
+		}
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			body := `{"id":"provider-task","status":"failed","error":{"code":"internal_error","message":"服务内部错误 secret-provider-key","request_id":"req-provider-failure"},"padding":"` + strings.Repeat("x", 8192) + `"}`
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				require.Equal(t, http.MethodGet, r.Method)
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			cap := Capability{MediaType: "video"}
+			if template {
+				cap.Template = &ProtocolTemplate{Response: TemplateResponse{
+					TaskID: []string{"id"}, Status: []string{"status"}, Errors: []string{"error.message", "error.code"},
+				}}
+			}
+			result, err := (&Adapter{SafeClient(true)}).call(context.Background(),
+				Account{BaseURL: server.URL, Key: "secret-provider-key"}, cap, http.MethodGet, "/v1/videos/provider-task", nil, "", false)
+			require.NoError(t, err)
+			require.Equal(t, "failed", result.Status)
+			require.Equal(t, "internal_error", result.UpstreamCode)
+			require.Contains(t, result.UpstreamMessage, "服务内部错误")
+			require.Equal(t, "req-provider-failure", result.UpstreamRequestID)
+			require.Equal(t, http.StatusOK, result.UpstreamStatusCode)
+			require.NotEmpty(t, result.Diagnostic)
+			diagnostic := mediaResultDiagnostic(result)
+			require.Contains(t, diagnostic, "upstream_code=internal_error")
+			require.Contains(t, diagnostic, "upstream_request_id=req-provider-failure")
+			require.NotContains(t, diagnostic, "secret-provider-key")
+			require.False(t, result.Rejected)
+			require.False(t, result.Retryable)
+			require.Equal(t, 1, calls)
+		})
+	}
+}
+
+func TestAdapterResponseRequestIDFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name, header, body, requestID string
+		status                        int
+	}{
+		{"nested_failure", "", `{"error":{"code":"internal_error","request_id":"req-body"}}`, "req-body", 400},
+		{"uncertain_failure", "", `{"error":{"request_id":"req-uncertain"}}`, "req-uncertain", 502},
+		{"header_priority", "req-header", `{"error":{"request_id":"req-body"}}`, "req-header", 503},
+		{"root_success", "", `{"id":"task-id","status":"queued","code":0,"request_id":"req-root"}`, "req-root", 200},
+		{"task_id_is_not_request_id", "", `{"id":"task-id","status":"queued"}`, "", 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Request-ID", tc.header)
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			result, err := (&Adapter{SafeClient(true)}).Submit(context.Background(), Capability{MediaType: "video"},
+				Request{Operation: "video", Parameters: map[string]any{"model": "mock"}}, Account{BaseURL: server.URL})
+			require.NoError(t, err)
+			require.Equal(t, tc.requestID, result.UpstreamRequestID)
+			if tc.status == 200 {
+				require.Equal(t, "in_progress", result.Status)
+				require.Empty(t, result.UpstreamCode)
+				require.Empty(t, result.UpstreamMessage)
+			}
+		})
+	}
+}
+
+func TestMediaUpstreamRequestIDSanitizesProviderText(t *testing.T) {
+	requestID := mediaUpstreamRequestID(nil, map[string]any{"error": map[string]any{
+		"request_id": "req-\nsecret-provider-key\x7f" + strings.Repeat("x", 200),
+	}}, "secret-provider-key")
+	require.Len(t, []rune(requestID), 128)
+	require.NotContains(t, requestID, "secret-provider-key")
+	require.NotContains(t, requestID, "\n")
+	require.NotContains(t, requestID, "\x7f")
+}
+
 func TestAdapterOrdinary502IsAcceptanceUncertain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)

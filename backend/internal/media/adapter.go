@@ -375,11 +375,15 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			return UpstreamResult{Status: "unknown", Diagnostic: "Submission receipt could not be persisted; reconcile original task"}, nil
 		}
 	}
-	upstreamRequestID := mediaUpstreamRequestID(response)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if !submission {
 			return UpstreamResult{}, fmt.Errorf("upstream query HTTP %d", response.StatusCode)
 		}
+		var object map[string]any
+		if len(raw) <= 8192 {
+			_ = json.Unmarshal(raw, &object)
+		}
+		upstreamRequestID := mediaUpstreamRequestID(response, object, account.Key)
 		status := response.StatusCode
 		if status >= 500 || status == http.StatusRequestTimeout {
 			if nestedStatus := explicitUpstreamHTTPStatus(raw); nestedStatus == http.StatusTooManyRequests {
@@ -440,7 +444,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			return UpstreamResult{Status: "unknown", Diagnostic: "Successful response was not the configured media type; do not resubmit"}, nil
 		}
 		payload, _ := json.Marshal(map[string]any{"_media_binary": map[string]any{"mime": mime, "data": base64String(raw)}})
-		return UpstreamResult{Status: "completed", Accepted: true, Response: payload, UpstreamRequestID: mediaUpstreamRequestID(response), UpstreamStatusCode: response.StatusCode, Artifacts: []Artifact{{Key: cap.MediaType + "1", Type: cap.MediaType, MIME: mime, Source: "data:" + mime + ";base64," + base64String(raw)}}}, nil
+		return UpstreamResult{Status: "completed", Accepted: true, Response: payload, UpstreamRequestID: mediaUpstreamRequestID(response, nil, account.Key), UpstreamStatusCode: response.StatusCode, Artifacts: []Artifact{{Key: cap.MediaType + "1", Type: cap.MediaType, MIME: mime, Source: "data:" + mime + ";base64," + base64String(raw)}}}, nil
 	}
 	var object map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -449,6 +453,14 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		return UpstreamResult{Status: "unknown", Diagnostic: "Non-JSON successful response; acceptance requires reconciliation"}, nil
 	}
 	result := parseResult(object, cap)
+	// A successful poll can report a failed generation. Preserve the provider's
+	// error metadata without treating that response as a retryable submission.
+	if result.Status == "failed" {
+		result.UpstreamCode, result.UpstreamMessage = mediaUpstreamObjectErrorDetails(object, account.Key)
+		if result.Diagnostic == "" {
+			result.Diagnostic = result.UpstreamMessage
+		}
+	}
 	result.Diagnostic, _ = SafeReviewValue(result.Diagnostic, []string{account.Key}, 0).(string)
 	if submission && result.Accepted && account.ObserveSubmission != nil {
 		if err := account.ObserveSubmission(Submission{Stage: "accepted"}); err != nil {
@@ -456,7 +468,7 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 	}
 	result.Response = raw
-	result.UpstreamRequestID = mediaUpstreamRequestID(response)
+	result.UpstreamRequestID = mediaUpstreamRequestID(response, object, account.Key)
 	result.UpstreamStatusCode = response.StatusCode
 	if result.Status == "unknown" {
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"
@@ -464,22 +476,30 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	return result, nil
 }
 
-func mediaUpstreamRequestID(response *http.Response) string {
-	if response == nil {
-		return ""
+func mediaUpstreamRequestID(response *http.Response, object map[string]any, secret string) string {
+	values := []any{}
+	if response != nil {
+		for _, name := range []string{"x-request-id", "request-id", "x-correlation-id"} {
+			values = append(values, response.Header.Get(name))
+		}
 	}
-	for _, name := range []string{"x-request-id", "request-id", "x-correlation-id"} {
-		if value := strings.TrimSpace(response.Header.Get(name)); value != "" {
-			clean := strings.Map(func(r rune) rune {
-				if r < 32 || r == 127 {
-					return -1
-				}
-				return r
-			}, value)
-			if len(clean) > 128 {
-				clean = clean[:128]
+	if detail, ok := object["error"].(map[string]any); ok {
+		values = append(values, detail["request_id"])
+	}
+	values = append(values, object["request_id"])
+	for _, value := range values {
+		clean := strings.Map(func(r rune) rune {
+			if r < 32 || r == 127 {
+				return -1
 			}
-			return strings.TrimSpace(clean)
+			return r
+		}, safeMediaUpstreamText(value, secret))
+		if clean = strings.TrimSpace(clean); clean != "" {
+			runes := []rune(clean)
+			if len(runes) > 128 {
+				clean = string(runes[:128])
+			}
+			return clean
 		}
 	}
 	return ""
@@ -493,6 +513,10 @@ func mediaUpstreamErrorDetails(raw []byte, secret string) (string, string) {
 	if json.Unmarshal(raw, &detail) != nil {
 		return "", ""
 	}
+	return mediaUpstreamObjectErrorDetails(detail, secret)
+}
+
+func mediaUpstreamObjectErrorDetails(detail map[string]any, secret string) (string, string) {
 	if nested, ok := detail["error"].(map[string]any); ok {
 		detail = nested
 	}

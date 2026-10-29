@@ -1,19 +1,35 @@
 {
-  "version": "v1.3.7",
+  "version": "v1.3.8",
   "status": "recorded",
   "acceptance_state": "pre-release-read-only-verified",
-  "verified_at": "2026-10-27T13:44:18+00:00",
-  "environment": "Pre-release read-only connectivity check against the live production relay at https://code.aicodeme.xyz before v1.3.7; performed with the existing dedicated media probe key. This check used GET /v1/models only and did not submit a paid generation.",
+  "verified_at": "2026-10-29T01:59:24+00:00",
+  "environment": "Read-only checks of five existing production video tasks through the authenticated relay admin task API and the provider GET /v1/videos/{id} API before v1.3.8, while production runs v1.3.7. No generation was submitted. Verification status below describes completion of the read-only check, separately from the provider task status.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
     {
-      "label": "relay-model-list-v1.3.7",
+      "label": "existing-completed-video-v1.3.8",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
-      "models": 17,
-      "scope": "Read-only GET /v1/models with the existing Sub2API media API key; no generation submission"
+      "task_id": "mt_658d944b-a422-482d-afe8-51c678c6eb8c",
+      "provider_http": 200,
+      "provider_task_status": "completed",
+      "artifact_bytes": 4621548,
+      "scope": "Existing task is completed in both relay and provider; video artifact is available. No new generation."
+    },
+    {
+      "label": "existing-failed-videos-v1.3.8",
+      "verification": "real_connection",
+      "status": "completed",
+      "http": 200,
+      "provider_http": 200,
+      "provider_task_status": "failed",
+      "provider_error_code": "internal_error",
+      "checked_tasks": 4,
+      "sample_task_id": "mt_b10c18f7-b279-4f3c-ac81-84a055e271c3",
+      "sample_provider_request_id": "req_1793237987480714927_23422",
+      "scope": "Relay evidence and direct provider queries agree on failure. Identical model, duration, aspect ratio and resolution to the successful task; prompt contents were not compared. This check does not establish provider recovery."
     }
   ]
 }

@@ -32,6 +32,7 @@ describe('Media administrative review',()=>{
 })
 
 describe('Submission evidence', () => {
+ afterEach(() => { vi.unstubAllGlobals() })
  it.each([[null,'未记录'],['prepared','准备发送'],['attempted','已尝试发送'],['accepted','上游已受理']])('distinguishes %s from actual acceptance', async (stage,label) => {
   api.detail.mockResolvedValueOnce({record,request:{images:['draft-only']},response:{},submission:stage?{stage,references:{image:4,video:1,audio:0},request_hash:'fixture-hash',request:{future_option:true}}:null})
   const w=create();await flushPromises()
@@ -65,6 +66,29 @@ describe('Submission evidence', () => {
   await w.get('[data-testid="copy-response"]').trigger('click'); await flushPromises()
   expect(JSON.parse(writeText.mock.calls[1]![0])).toEqual({ error: 'invalid_request' })
   vi.unstubAllGlobals()
+  w.unmount()
+ })
+
+ it('keeps the accepted submission and latest failed task response independently visible and copyable', async () => {
+  const submission = { id: 'provider-task', status: 'queued' }
+  const failed = { id: 'provider-task', status: 'failed', error: { code: 'internal_error', message: '生成失败', request_id: 'req-provider-failure' } }
+  api.detail.mockResolvedValueOnce({
+   record: { ...record, task: { ...record.task, status: 'failed' } },
+   response: { status: 'stale' }, upstream_response: failed,
+   submission: { stage: 'accepted', response_status_code: 200, response: submission }
+  })
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  const w=create(); await flushPromises()
+  const latest=w.get('[data-testid="latest-response"]')
+  expect((latest.element as HTMLDetailsElement).open).toBe(true)
+  expect(latest.text()).toContain('internal_error')
+  expect(latest.text()).toContain('req-provider-failure')
+  expect(latest.text()).not.toContain('stale')
+  await w.get('[data-testid="copy-response"]').trigger('click'); await flushPromises()
+  expect(JSON.parse(writeText.mock.calls[0]![0])).toEqual(submission)
+  await w.get('[data-testid="copy-latest-response"]').trigger('click'); await flushPromises()
+  expect(JSON.parse(writeText.mock.calls[1]![0])).toEqual(failed)
   w.unmount()
  })
 })
