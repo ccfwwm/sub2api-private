@@ -11,6 +11,7 @@ type UploadedMaterial = { name: string; size: number; mime_type: string; b64_jso
 type PreviewLog = { time: string; stage: string; detail: string }
 
 const route = useRoute()
+const showKey = ref(false)
 const group = ref(String(route.query.group_id || '')), key = ref(''), account = ref(String(route.query.account_id || ''))
 const groups = ref<AdminGroup[]>([]), accounts = ref<AccountListItem[]>([]), detail = ref<Account | null>(null)
 const prompt = ref('A quiet valley'), request = ref('{\n  "model": ""\n}'), operation = ref('video'), model = ref('')
@@ -80,13 +81,17 @@ function readAsDataURL(file: File) {
 async function uploadMaterials(kind: MaterialKind, event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files || [])
+  if (!files.length) return
   error.value = ''
   uploadsPending.value++
   try {
     const materialLimit = selectedCapability.value?.materials?.[kind]?.max_file_bytes || 0
     const requestLimit = selectedCapability.value?.limits?.max_request_bytes || 0
     const maxBytes = materialLimit || requestLimit
+    const countLimit = selectedCapability.value?.materials?.[kind]?.max_count || 0
+    if (countLimit && uploaded.value[kind].length + parseMaterialInput(kind).length + files.length > countLimit) throw new Error(`当前模型最多支持 ${countLimit} 个${materialLabels[kind]}。`)
     for (const file of files) {
+      if (file.type && !file.type.startsWith(`${kind}/`)) throw new Error(`${file.name} 不是${materialLabels[kind]}文件。`)
       if (maxBytes > 0 && file.size > maxBytes) throw new Error(`${file.name} 超过当前能力的单文件限制（${maxBytes} 字节）。`)
       const dataURL = await readAsDataURL(file)
       const match = dataURL.match(/^data:([^;]+);base64,([\s\S]*)$/)
@@ -172,6 +177,8 @@ function buildPreviewRequest() {
   else body.prompt = prompt.value
   for (const kind of materialKinds) {
     const refs = [...parseMaterialInput(kind), ...uploaded.value[kind].map(({ name: _name, size: _size, ...material }) => material)]
+    const limit = selectedCapability.value?.materials?.[kind]?.max_count || 0
+    if (limit && refs.length > limit) throw new Error(`当前模型最多支持 ${limit} 个${materialLabels[kind]}。`)
     if (refs.length) body[`${kind}s`] = refs
     else delete body[`${kind}s`]
   }
@@ -187,13 +194,14 @@ async function run(effective: boolean) {
       appendLog('检查实际绑定', { group_id: Number(group.value) })
       result.value = await mediaProtocolsAPI.effective(Number(group.value))
     } else {
-      if (!Number.isSafeInteger(Number(key.value)) || Number(key.value) <= 0) throw new Error('请输入已创建的 API Key ID。')
+      if (!key.value.trim()) throw new Error('请输入当前分组的中转 API Key。')
       if (!detail.value || !detail.value.group_ids?.includes(Number(group.value))) throw new Error('请选择当前分组的账号。')
       const requestBody = buildPreviewRequest()
       previewInput.value = requestBody
       appendLog('输入请求（编码素材已脱敏）', requestBody)
-      result.value = await mediaProtocolsAPI.preview({ mode: 'effective', api_key_id: Number(key.value), group_id: Number(group.value), account_id: detail.value.id, operation: operation.value, request: requestBody, measure_media: false })
+      result.value = await mediaProtocolsAPI.preview({ mode: 'effective', api_key: key.value.trim(), group_id: Number(group.value), account_id: detail.value.id, operation: operation.value, request: requestBody, measure_media: false })
     }
+    appendLog('检查完成', { identity: 'Key 与分组匹配', binding: '已解析当前模板及账号', request_mapping: '通过', pricing: resultData.value.pricing, upstream_generation: '预览未提交生成请求' })
     appendLog('预览输出', result.value)
   } catch (cause) {
     error.value = (cause as Error).message
@@ -231,18 +239,18 @@ onMounted(async () => {
     <div class="grid gap-4 sm:grid-cols-3">
       <label class="text-sm">模型<select v-model="model" class="input mt-1 block w-full" aria-label="联调模型" @change="selectModel"><option value="">请选择模型</option><option v-for="item in models" :key="item.model" :value="item.model">{{ item.model }}{{ item.enabled ? '' : '（未启用）' }}</option></select></label>
       <label class="text-sm">请求操作<select v-model="operation" class="input mt-1 block w-full" aria-label="联调操作"><option v-for="op in operations" :key="op">{{ op }}</option></select></label>
-      <label class="text-sm">API Key ID<input v-model="key" type="number" min="1" class="input mt-1 block w-full" aria-label="联调 API Key ID" /><RouterLink to="/keys" class="mt-1 block text-xs text-primary-600">创建或查看 API 密钥</RouterLink></label>
+      <label class="text-sm">中转 API Key<div class="mt-1 flex gap-2"><input v-model="key" :type="showKey ? 'text' : 'password'" autocomplete="off" spellcheck="false" placeholder="粘贴中转密钥，如 sk-…" class="input block min-w-0 flex-1" aria-label="联调 API Key" /><button type="button" class="btn btn-secondary" @click="showKey = !showKey">{{ showKey ? '隐藏' : '显示' }}</button></div><RouterLink to="/keys" class="mt-1 block text-xs text-primary-600">创建或查看 API 密钥</RouterLink></label>
     </div>
     <p class="text-xs text-gray-500">API Key 必须属于当前分组。预览不会创建任务、扣费或调用上游生成接口。素材 URL 不会被读取；上传文件在本页转为 Base64，发送到本站预览接口校验，输入输出和日志中的编码内容会脱敏。</p>
     <label class="block text-sm">提示词<textarea v-model="prompt" class="input mt-1 min-h-24 w-full" aria-label="联调提示词" placeholder="单独输入提示词、编辑要求或语音文本" /></label>
     <label class="block text-sm">请求参数 JSON（不含提示词和参考素材）<textarea v-model="request" class="input mt-1 min-h-28 w-full font-mono text-xs" aria-label="联调请求选项" /></label>
     <div class="grid gap-4 lg:grid-cols-3">
-      <fieldset v-for="kind in materialKinds" :key="kind" class="min-w-0 space-y-2 border-t pt-3 dark:border-dark-600">
-        <legend class="text-sm font-medium">{{ materialLabels[kind] }}</legend>
+      <fieldset v-for="kind in materialKinds" :key="kind" class="min-w-0 space-y-3 rounded-xl border bg-gray-50/60 p-4 dark:border-dark-600 dark:bg-dark-900/40">
+        <legend class="text-sm font-medium">{{ materialLabels[kind] }} <span class="text-xs font-normal text-gray-500">{{ uploaded[kind].length }} 个文件</span></legend>
         <label class="block text-xs">URL、Data URL 或 JSON 素材对象<textarea v-model="materialText[kind]" class="input mt-1 min-h-24 w-full font-mono text-xs" :aria-label="`${materialLabels[kind]}输入`" placeholder="每行一个 URL；或 JSON，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;image/png&quot;}" /></label>
-        <label class="block text-xs">上传文件并转为 Base64<input class="input mt-1 w-full" type="file" multiple :accept="`${kind}/*`" :aria-label="`上传${materialLabels[kind]}`" @change="uploadMaterials(kind, $event)" /></label>
+        <label class="block text-xs">添加文件（支持多选、可分批添加）<input class="input mt-1 w-full file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-primary-700" type="file" multiple :accept="`${kind}/*`" :aria-label="`上传${materialLabels[kind]}`" @change="uploadMaterials(kind, $event)" /></label>
         <ul v-if="uploaded[kind].length" class="space-y-1 text-xs">
-          <li v-for="(file, index) in uploaded[kind]" :key="`${file.name}-${index}`" class="flex items-center justify-between gap-2">
+          <li v-for="(file, index) in uploaded[kind]" :key="`${file.name}-${index}`" class="flex items-center justify-between gap-2 rounded-lg border bg-white p-2 dark:border-dark-600 dark:bg-dark-800">
             <span class="min-w-0 truncate">{{ file.name }} · {{ file.mime_type }} · {{ file.size }} B</span>
             <button type="button" class="btn btn-secondary shrink-0" :aria-label="`移除${materialLabels[kind]} ${file.name}`" @click="removeUpload(kind, index)">移除</button>
           </li>

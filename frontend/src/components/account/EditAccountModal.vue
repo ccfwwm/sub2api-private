@@ -2,7 +2,7 @@
   <BaseDialog
     :show="show"
     :title="t('admin.accounts.editAccount')"
-    width="wide"
+    :width="account?.platform === 'imagevideo' ? 'workspace' : 'wide'"
     @close="handleClose"
   >
     <form

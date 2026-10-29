@@ -44,7 +44,7 @@ func CapabilityDefaults(c Capability) Capability {
 	if c.Limits.MaxConcurrentTasks == nil {
 		// Kept only for snapshot and admin-client compatibility. Runtime media
 		// admission is account-scoped and reads accounts.concurrency.
-		v := 2
+		v := 100
 		c.Limits.MaxConcurrentTasks = &v
 	}
 	if c.Limits.ObservationSeconds == nil {

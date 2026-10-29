@@ -10,6 +10,7 @@ vi.mock('@/api/admin',()=>({adminAPI:{accounts:accountAPI}}))
 vi.mock('vue-i18n',async original=>({...await original<Record<string,unknown>>(),useI18n:()=>({locale:{value:'zh'}})}))
 
 describe('动态媒体模板配置',()=>{
+ it('defaults new model concurrency to 100 and polling to 10 seconds',()=>{const c=newMediaCapability('new');expect(c.limits.max_concurrent_tasks).toBe(100);expect(c.delivery.poll_seconds).toBe(10)})
  it('merges every discovered model idempotently and preserves existing settings',()=>{
   const existing = newMediaCapability('public'); existing.template_ref={id:'pinned',version:3};existing.enabled=true;existing.operations=['video'];existing.template_rules=[{phase:'semantic',op:'fixed',target:'quality',value:0}]
   const merged=mergeDiscoveredMediaModels([existing],['public',' new ','new','','NEW'])
@@ -103,7 +104,7 @@ describe('账号模板输出配置',()=>{
   expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   wrapper.unmount()
  })
- it('shows the resolved template version and the binding that supplies it',async()=>{
+ it('shows the current template and the binding that supplies it',async()=>{
   templateAPI.effective.mockResolvedValueOnce([{
    model:'arbitrary-model',account_ids:[7],template_ref:{id:'multi-parts',version:2},
    execution_template:{name:'Mixed parts',status:'enabled'},
@@ -115,7 +116,7 @@ describe('账号模板输出配置',()=>{
   const wrapper=mount(MediaAccountModelsEditor,{props:{modelValue:[newMediaCapability('arbitrary-model')],accountId:7,account:{id:7,group_ids:[19]} as never,baseUrl:'https://example.invalid'},global:{stubs:{AccountTestModal:true}}})
   await flushPromises()
   expect(templateAPI.effective).toHaveBeenCalledWith(19)
-  expect(wrapper.text()).toContain('Mixed parts · v2 · 账号+模型绑定')
+  expect(wrapper.text()).toContain('Mixed parts · 账号+模型绑定')
   wrapper.unmount()
  })
  it('imports all discovered models in one action without replacing existing bindings',async()=>{

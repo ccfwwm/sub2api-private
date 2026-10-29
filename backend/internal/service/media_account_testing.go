@@ -25,6 +25,7 @@ type MediaTestResult struct {
 	ID             string           `json:"test_id"`
 	AccountID      int64            `json:"account_id"`
 	Model          string           `json:"model"`
+	UpstreamModel  string           `json:"upstream_model,omitempty"`
 	Kind           string           `json:"test_kind"`
 	Operation      string           `json:"operation"`
 	State          string           `json:"status"`
@@ -439,13 +440,13 @@ func (s *AccountTestService) testMediaAccount(c *gin.Context, account *Account, 
 		return s.sendErrorAndEnd(c, "A media test is already running; view its result instead of resubmitting")
 	}
 	id := "mt_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	summary := map[string]any{"payload_sha256": fmt.Sprintf("%x", sha256.Sum256(raw))}
+	summary := map[string]any{"upstream_model": cap.UpstreamModel, "payload_sha256": fmt.Sprintf("%x", sha256.Sum256(raw))}
 	for _, key := range []string{"model", "seconds", "size", "quality", "resolution", "ratio", "n", "instrumental"} {
 		if value, ok := p[key]; ok {
 			summary[key] = value
 		}
 	}
-	r := &mediaTestRecord{Result: MediaTestResult{ID: id, AccountID: account.ID, Model: model, Kind: opts.TestKind, Operation: op, State: "submitting", StartedAt: time.Now().UTC(), Artifacts: []media.Artifact{}, Request: summary}, Capability: cap, Fingerprint: testFingerprint(account, cap), Parameters: p, Files: map[string]string{}}
+	r := &mediaTestRecord{Result: MediaTestResult{ID: id, AccountID: account.ID, Model: model, UpstreamModel: cap.UpstreamModel, Kind: opts.TestKind, Operation: op, State: "submitting", StartedAt: time.Now().UTC(), Artifacts: []media.Artifact{}, Request: summary}, Capability: cap, Fingerprint: testFingerprint(account, cap), Parameters: p, Files: map[string]string{}}
 	if r.Result.Kind == "" {
 		r.Result.Kind = "minimal"
 	}
@@ -459,7 +460,7 @@ func (s *AccountTestService) testMediaAccount(c *gin.Context, account *Account, 
 	}
 	t.recordSummary(r)
 	go t.work(r, true)
-	s.sendEvent(c, TestEvent{Type: "test_start", Model: model, Data: map[string]any{"test_id": id, "test_kind": r.Result.Kind}})
+	s.sendEvent(c, TestEvent{Type: "test_start", Model: model, Data: map[string]any{"test_id": id, "test_kind": r.Result.Kind, "public_model": cap.Model, "upstream_model": cap.UpstreamModel}})
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	last := ""

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, parseMaterialText} from './app.mjs'
+import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, parseMaterialText, profilesForCategory} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -66,4 +66,9 @@ test('Grok video is part of the video API category; only four media API categori
   assert.equal(mediaCategories.length,4)
   assert.equal(categories.some(category=>category.id==='grok-video'),false)
   assert.ok(categories.find(category=>category.id==='video').sections.includes('grok-video-image'))
+})
+
+test('category model selection tolerates incomplete catalogs and keeps video aliases',()=>{
+ const category=categories.find(item=>item.id==='video')
+ assert.deepEqual(profilesForCategory([{model:'missing'},{model:'video-alias',operations:['video']},{model:'image',operations:['image']}],category).map(item=>item.model),['video-alias'])
 })

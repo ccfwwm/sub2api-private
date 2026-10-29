@@ -2,7 +2,7 @@
   <BaseDialog
     :show="show"
     :title="t('admin.accounts.testAccountConnection')"
-    width="normal"
+    :width="isMediaAccount ? 'extra-wide' : 'wide'"
     @close="handleClose"
   >
     <div class="space-y-4">
@@ -54,12 +54,12 @@
         <label class="text-sm">{{ tr('操作', 'Operation') }}<select v-model="testOperation" class="input"><option v-for="op in mediaCapability?.operations" :key="op">{{ op }}</option></select></label>
         <TextArea v-model="customParameters" :label="tr('参数 JSON（可选）', 'Parameters JSON (optional)')" rows="3" :disabled="status === 'connecting'" />
       </div>
-      <div v-if="savedTest" class="space-y-1 rounded-lg border p-3 text-xs">
-        <div>{{ savedTest.test_kind }} · {{ savedTest.model }} · {{ savedTest.operation }} · {{ savedTest.status }}</div>
+      <div v-if="savedTest" class="min-w-0 space-y-1 overflow-hidden rounded-lg border p-3 text-xs">
+        <div>{{ savedTest.test_kind }} · {{ tr('公开模型','Public model') }} {{ savedTest.model }} · {{ tr('上游模型','Upstream model') }} {{ savedTest.upstream_model || savedTest.request?.upstream_model || savedTest.model }} · {{ savedTest.operation }} · {{ savedTest.status }}</div>
         <div class="break-all font-mono text-gray-500">{{ tr('测试记录 ID', 'Test record ID') }}: {{ savedTest.test_id }}</div>
         <div>{{ tr('开始时间', 'Started') }}: {{ new Date(savedTest.started_at).toLocaleString() }} · {{ Math.max(0, Math.round((new Date(savedTest.completed_at || Date.now()).getTime() - new Date(savedTest.started_at).getTime()) / 1000)) }} s</div>
         <div v-if="savedTest.upstream_task_id">{{ tr('上游任务', 'Upstream task') }}: {{ savedTest.upstream_task_id }} · {{ savedTest.upstream_status }}</div>
-        <div>{{ JSON.stringify(savedTest.request) }}</div>
+        <pre class="max-h-44 overflow-auto whitespace-pre-wrap break-all">{{ JSON.stringify(savedTest.request, null, 2) }}</pre>
         <div v-if="savedTest.config_changed" class="text-amber-600">{{ tr('配置已变化，结果对应旧配置。', 'Configuration changed; result belongs to previous settings.') }}</div>
         <button type="button" class="text-primary-600" @click="viewSavedTest(savedTest.test_id)">{{ tr('刷新记录', 'Refresh record') }}</button>
       </div>
@@ -92,6 +92,10 @@
         />
       </div>
 
+      <p v-if="isMediaAccount && mediaCapability" class="rounded-lg bg-primary-50 p-3 text-sm break-all dark:bg-primary-950">
+        {{ tr('公开模型','Public model') }}：{{ mediaCapability.model }}<br />
+        {{ tr('上游模型（实际发送）','Upstream model (sent)') }}：{{ mediaCapability.upstream_model || mediaCapability.model }}
+      </p>
       <div v-if="isOpenAIAccount" class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.openai.testMode') }}
@@ -450,7 +454,7 @@ const testKind = ref<'connection' | 'minimal' | 'custom'>('minimal')
 const customParameters = ref('{}')
 const testOperation = ref('')
 interface SavedTest {
-  test_id: string; model: string; status: string; test_kind: string; operation: string
+  test_id: string; model: string; upstream_model?: string; status: string; test_kind: string; operation: string
   started_at: string; completed_at?: string; error?: string; config_changed: boolean
   upstream_task_id?: string; upstream_status?: string; request: Record<string, unknown>
   artifacts: { type: string; content_url: string; mime_type?: string; available: boolean }[]
@@ -1071,7 +1075,7 @@ const handleEvent = async (event: {
   audio_url?: string
   video_url?: string
   mime_type?: string
-  data?: SavedTest | { test_id: string; test_kind: string }
+  data?: SavedTest | { test_id: string; test_kind: string; public_model?: string; upstream_model?: string }
 }) => {
   if (event.data && 'status' in event.data) await applySavedTest(event.data)
   switch (event.type) {
@@ -1079,6 +1083,7 @@ const handleEvent = async (event: {
       addLine(t('admin.accounts.connectedToApi'), 'text-green-400')
       if (event.model) {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
+        if (event.data && 'upstream_model' in event.data && event.data.upstream_model) addLine(`${tr('上游模型（实际发送）', 'Upstream model (sent)')}: ${event.data.upstream_model}`, 'text-cyan-400')
       }
       addLine(
         testKind.value === 'connection'

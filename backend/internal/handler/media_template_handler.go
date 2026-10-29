@@ -117,6 +117,34 @@ func (h *MediaHandler) AdminProtocolList(c *gin.Context) {
 	}
 	response.Success(c, rows)
 }
+
+func (h *MediaHandler) AdminTemplateUpdate(c *gin.Context) {
+	if !requireMediaAdmin(c) {
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok {
+		c.Status(401)
+		return
+	}
+	var body struct {
+		ID       string          `json:"id"`
+		Expected int64           `json:"expected_version"`
+		Previous json.RawMessage `json:"expected_config"`
+		Config   json.RawMessage `json:"config"`
+		Delete   bool            `json:"delete"`
+	}
+	if c.ShouldBindJSON(&body) != nil || strings.TrimSpace(body.ID) == "" || body.Expected < 0 {
+		response.BadRequest(c, "请填写有效的模板信息")
+		return
+	}
+	row, err := h.Engine.Store.UpdateTemplate(c.Request.Context(), body.ID, body.Expected, body.Previous, body.Config, subject.UserID, body.Delete)
+	if err != nil {
+		mediaError(c, err)
+		return
+	}
+	response.Success(c, row)
+}
 func (h *MediaHandler) AdminProtocolHistory(c *gin.Context) {
 	if !requireMediaAdmin(c) {
 		return
@@ -273,6 +301,7 @@ func (h *MediaHandler) AdminProtocolPreview(c *gin.Context) {
 	var body struct {
 		Mode          string                 `json:"mode"`
 		KeyID         int64                  `json:"api_key_id"`
+		APIKey        string                 `json:"api_key"`
 		GroupID       int64                  `json:"group_id"`
 		AccountID     int64                  `json:"account_id"`
 		Template      media.ProtocolTemplate `json:"template"`
@@ -289,11 +318,11 @@ func (h *MediaHandler) AdminProtocolPreview(c *gin.Context) {
 		return
 	}
 	if body.Mode == "effective" {
-		if body.KeyID <= 0 || body.GroupID < 0 || body.AccountID < 0 || body.Request == nil || body.Operation == "" || body.Template.ID != "" || len(body.Rules) > 0 || body.UpstreamModel != "" {
+		if (body.KeyID <= 0 && strings.TrimSpace(body.APIKey) == "") || body.GroupID < 0 || body.AccountID < 0 || body.Request == nil || body.Operation == "" || body.Template.ID != "" || len(body.Rules) > 0 || body.UpstreamModel != "" {
 			response.BadRequest(c, "Effective preview requires an existing API key and request; draft overrides are not accepted")
 			return
 		}
-		h.adminEffectiveProtocolPreview(c, body.KeyID, body.GroupID, body.AccountID, body.Operation, body.Request, body.Measure)
+		h.adminEffectiveProtocolPreview(c, body.KeyID, body.APIKey, body.GroupID, body.AccountID, body.Operation, body.Request, body.Measure)
 		return
 	}
 	if body.Mode != "" && body.Mode != "draft" {
@@ -381,11 +410,12 @@ func (h *MediaHandler) AdminProtocolTest(c *gin.Context) {
 	}
 	var body struct {
 		KeyID     int64          `json:"api_key_id"`
+		APIKey    string         `json:"api_key"`
 		Operation string         `json:"operation"`
 		Request   map[string]any `json:"request"`
 		Confirm   bool           `json:"confirm_paid_submission"`
 	}
-	if c.ShouldBindJSON(&body) != nil || body.Request == nil || !body.Confirm || body.KeyID <= 0 || c.GetHeader("Idempotency-Key") == "" {
+	if c.ShouldBindJSON(&body) != nil || body.Request == nil || !body.Confirm || (body.KeyID <= 0 && strings.TrimSpace(body.APIKey) == "") || c.GetHeader("Idempotency-Key") == "" {
 		response.BadRequest(c, "Paid test requires explicit confirmation, an existing API key ID and an idempotency key")
 		return
 	}
@@ -393,7 +423,7 @@ func (h *MediaHandler) AdminProtocolTest(c *gin.Context) {
 		response.Error(c, 503, "Media test identity is unavailable")
 		return
 	}
-	key, err := h.keys.GetByID(c.Request.Context(), body.KeyID)
+	key, err := h.adminMediaKey(c, body.KeyID, body.APIKey)
 	if err != nil || !activeMediaAdminTestKey(key) {
 		response.BadRequest(c, "An active assigned API key is required")
 		return

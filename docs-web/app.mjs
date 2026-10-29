@@ -1,3 +1,4 @@
+export const profilesForCategory = (profiles, category) => profiles.filter(p => Array.isArray(p.operations) && p.operations.some(op => category.ops.includes(op)))
 export const API_ORIGIN = 'https://code.aicodeme.xyz'
 export const categories = [
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
@@ -74,11 +75,11 @@ const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b
 
 async function start() {
   const sections=await (await fetch(new URL('./content.json',import.meta.url))).json()
-  let category=categories[0],tab='接口文档',profiles=[],key='',pending=null,running=false,epoch=0,activeController=null,wakePoll=null
+  let category=categories[0],tab='接口文档',profiles=[],key='',pending=null,running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.11<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.12<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
   const $=s=>root.querySelector(s)
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
@@ -97,10 +98,10 @@ async function start() {
     $('#copy-group').onclick=()=>copy(selectedSections().map(sectionMarkdown).join('\n\n'))
     $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>copy(button.closest('.code').querySelector('code').textContent))
   }
-  const filtered=()=>profiles.filter(p=>p.operations.some(op=>category.ops.includes(op)))
+  const filtered=()=>profilesForCategory(profiles,category)
   function debug() {
-    const options=filtered()
-    $('article').innerHTML=`<p>先选择模型与能力配置。点击“提交生成”会实际扣费；请求不明确时保留原幂等键，只恢复查询。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model"><option value="">请选择模型</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.profile_id.slice(-8))}</option>`).join('')}</select></label></div><div id="parameters"></div><div class="buttons"><button id="submit" class="primary" disabled>提交生成（实际计费）</button><button id="recover" ${pending?'':'disabled'}>恢复原任务查询</button><button id="stop">停止等待</button><button id="new">新任务</button></div><p class="status" id="task-status"></p><div class="debug-panels">${code({label:'提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'响应 / SSE 文字事件',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
+    const options=filtered(), uploads={}, uploadJobs=new Set()
+    $('article').innerHTML=`<p>先选择模型与能力配置。点击“提交生成”会实际扣费；请求不明确时保留原幂等键，只恢复查询。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model" aria-label="选择调试模型"><option value="">${loadingModels?'正在加载模型…':options.length?'请选择模型':key?'当前分类暂无可用模型':'粘贴 API Key 后自动加载可用模型'}</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.group_name||p.profile_id?.slice(-8)||'')}</option>`).join('')}</select></label></div><p id="model-hint">${key ? (options.length ? `当前分类有 ${options.length} 个模型能力` : '请检查 Key 的分组、模型启用状态和渠道定价，或切换分类。') : '正在展示公开模型目录。输入中转 Key 后自动加载可调用能力。'}</p><div id="parameters"></div><div class="buttons"><button id="preview" disabled>校验参数与估价（不生成）</button><button id="submit" class="primary" disabled>提交生成（实际计费）</button><button id="recover" ${pending?'':'disabled'}>恢复原任务查询</button><button id="stop">停止等待</button><button id="new">新任务</button></div><p class="status" id="task-status"></p><div class="debug-panels">${code({label:'提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'响应 / SSE 文字事件',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
     const codes=$('article').querySelectorAll('.code code')
     const response=v=>codes[1].textContent=typeof v==='string'?v:pretty(v)
     const appendLog=(stage,detail)=>{
@@ -112,7 +113,8 @@ async function start() {
     const failure=e=>{$('#debug-error').textContent=e.message||String(e);appendLog('错误',e.message||String(e))}
     const model=$('#model')
     model.onchange=()=>{
-      const cap=options[model.value]; if(!cap){$('#parameters').innerHTML='';$('#submit').disabled=true;return}
+      const cap=options[model.value]; if(!cap){$('#parameters').innerHTML='';$('#submit').disabled=true;$('#preview').disabled=true;return}
+      for(const name of Object.keys(uploads))delete uploads[name]
       const pick=(name,label,values=[])=>values.length?`<label>${label}<select name="${name}"><option value="">自动 / 省略</option>${values.map(v=>`<option>${escape(v)}</option>`).join('')}</select></label>`:''
       const duration=cap.duration||{}
       const seconds=duration.default??duration.values?.[0]??duration.min??''
@@ -128,10 +130,13 @@ async function start() {
       const inputMaterials=inputMaterialsFor(cap)
       for(const [kind,material] of Object.entries(inputMaterials)) {
         // Missing catalogue counts do not disable unified reference inputs.
-        html+=`<label class="wide">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>上传文件将在本页转换为 b64_json 与 mime_type；不会自动改成 URL。</small></label>`
+        html+=`<label class="wide">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>支持多选和分批添加；文件在本页转为 Base64。</small><ul data-upload-list="${kind}" class="upload-list"></ul></label>`
       }
       $('#parameters').innerHTML='<div class="fields">'+html+'</div>'
-      $('#submit').disabled=running||!!pending
+      $('#submit').disabled=running||!!pending||!key||!!cap.catalog_only
+      $('#preview').disabled=running||!key||!!cap.catalog_only
+      if(cap.catalog_only)$('#model-hint').textContent='已选择公开目录模型。粘贴中转 Key 后自动匹配可调用配置。'
+      installUploads()
     }
     const api=async(path,method='GET',payload,headers={})=>{
       const url=new URL(path,location.origin);if(url.origin!==location.origin)throw Error('只允许请求本站 API')
@@ -179,7 +184,7 @@ async function start() {
           if(['settled','released'].includes(task.billing?.state)||task.status==='failed') {pending.terminal=true;return}
         }
         if(task.status==='unknown')throw Error('受理或费用待核对，请保留任务 ID，联系管理员；没有重新提交。')
-        await new Promise(resolve=>{const timer=setTimeout(()=>{wakePoll=null;resolve()},20000);wakePoll=()=>{clearTimeout(timer);wakePoll=null;resolve()}})
+        await new Promise(resolve=>{const timer=setTimeout(()=>{wakePoll=null;resolve()},(pending?.pollSeconds||10)*1000);wakePoll=()=>{clearTimeout(timer);wakePoll=null;resolve()}})
       }
     }
     async function resume(token) {
@@ -188,27 +193,54 @@ async function start() {
       if(!pending.id)throw Error('尚未找到原任务，请稍后恢复查询；不会重新生成。')
       await poll(token)
     }
-    const execute=async fn=>{if(running)return;running=true;activeController=new AbortController();const token=++epoch;$('#submit').disabled=true;$('#debug-error').textContent='';try{await fn(token)}catch(e){if(token===epoch)failure(e)}finally{if(token===epoch){running=false;activeController=null;$('#recover').disabled=!pending;$('#submit').disabled=!!pending||!model.value}}}
-    $('#submit').onclick=()=>execute(async token=>{
-      if(pending)throw Error('已有任务，请先恢复查询')
-      if(!key)throw Error('请先拉取模型')
+    const execute=async fn=>{if(running)return;running=true;model.disabled=true;$('#preview').disabled=true;activeController=new AbortController();const token=++epoch;$('#submit').disabled=true;$('#debug-error').textContent='';try{await fn(token)}catch(e){if(token===epoch)failure(e)}finally{if(token===epoch){running=false;model.disabled=false;activeController=null;$('#recover').disabled=!pending;$('#submit').disabled=!!pending||!model.value||!key||!!options[model.value]?.catalog_only;$('#preview').disabled=!model.value||!key||!!options[model.value]?.catalog_only}}}
+    function installUploads(){
+      for(const input of $('#parameters').querySelectorAll('[data-files]'))input.onchange=()=>{
+        const kind=input.dataset.files,files=[...input.files];input.value=''
+        const job=(async()=>{
+          for(const file of files){
+            const cap=options[model.value],rule=inputMaterialsFor(cap)[kind]
+            if(rule?.max_file_bytes>0&&file.size>rule.max_file_bytes)throw Error(`${file.name} 超过单文件大小限制`)
+            if(file.type&&!file.type.startsWith((kind==='mask'?'image':kind)+'/'))throw Error(`${file.name} 文件类型不匹配`)
+            const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)})
+            uploads[kind]||=[];uploads[kind].push({name:file.name,size:file.size,material:dataURLToMaterial(dataURL)})
+            appendLog('添加参考素材',{kind,file:file.name,bytes:file.size});renderUploads(kind)
+          }
+        })();uploadJobs.add(job);job.catch(failure).finally(()=>uploadJobs.delete(job))
+      }
+    }
+    function renderUploads(kind){
+      const list=$('#parameters').querySelector(`[data-upload-list="${kind}"]`);if(!list)return
+      list.innerHTML=(uploads[kind]||[]).map((file,index)=>`<li><span>${index+1}. ${escape(file.name)} · ${(file.size/1048576).toFixed(2)} MiB</span><button type="button" data-remove="${index}">移除</button></li>`).join('')
+      list.querySelectorAll('[data-remove]').forEach(button=>button.onclick=()=>{uploads[kind].splice(Number(button.dataset.remove),1);renderUploads(kind)})
+    }
+    async function collectRequest(){
       const cap=options[model.value],fields={},materials={}
+      if(!cap || cap.catalog_only)throw Error('请先填写中转 Key 并加载可调用模型')
+      await Promise.all([...uploadJobs])
       $('#parameters').querySelectorAll('[name]').forEach(el=>fields[el.name]=el.value)
       if(!fields.prompt?.trim())throw Error('请填写提示词')
       $('#parameters').querySelectorAll('[data-material]').forEach(el=>materials[el.dataset.material]=parseMaterialText(el.value))
-      for(const el of $('#parameters').querySelectorAll('[data-files]')) {
-        const kind=el.dataset.files,material=inputMaterialsFor(cap)[kind];materials[kind]||=[]
-        for(const file of el.files) {
-          if(material?.max_file_bytes>0&&file.size>material.max_file_bytes)throw Error('素材超过模型大小限制')
-          const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)})
-          const converted=dataURLToMaterial(dataURL);materials[kind].push(converted);appendLog('文件已转为 Base64',{kind,file:file.name,mime_type:converted.mime_type,bytes:file.size})
-        }
-      }
+      for(const [kind,files] of Object.entries(uploads))materials[kind]=[...(materials[kind]||[]),...files.map(file=>file.material)]
+      for(const [kind,refs] of Object.entries(materials)){const limit=inputMaterialsFor(cap)[kind]?.max_count;if(limit>0&&refs.length>limit)throw Error(`${kind} 最多支持 ${limit} 个素材`)}
       const payload=buildRequest(cap,fields.operation,fields,materials)
       if(fields.operation==='image_edit'&&!materials.image?.length)throw Error('图片编辑必须提供参考图')
       codes[0].textContent=pretty(payload)
+      return {cap,fields,payload}
+
+    }
+    $('#preview').onclick=()=>execute(async()=>{
+      const {fields,payload}=await collectRequest()
+      appendLog('开始联调检查',{checks:['Key 鉴权与分组','模型与操作','素材参数','渠道计费规则'],generation:false})
+      const estimate=await api('/v1/sub2api/estimates','POST',{operation:fields.operation,request:payload})
+      response(estimate);appendLog('参数校验与估价完成',estimate)
+    })
+    $('#submit').onclick=()=>execute(async token=>{
+      if(pending)throw Error('已有任务，请先恢复查询')
+      if(!key)throw Error('请先拉取模型')
+      const {cap,fields,payload}=await collectRequest()
       appendLog('提交请求（Base64 已脱敏）',{endpoint:endpointFor(fields.operation,cap.model),request:payload})
-      pending={key:crypto.randomUUID(),operation:fields.operation,id:null,terminal:false}
+      pending={key:crypto.randomUUID(),operation:fields.operation,id:null,terminal:false,pollSeconds:cap.poll_seconds||10}
       $('#task-status').textContent='幂等键 '+pending.key+' · 提交中，请保留本页'
       try{const result=await api(endpointFor(fields.operation,cap.model),'POST',payload,{'Idempotency-Key':pending.key});pending.id=result.task_id||result.id;response(result);appendLog('接口响应',result)}catch(e){if(e.status&&e.status<500&&e.status!==408){pending.terminal=true}throw e}
       $('#recover').disabled=false
@@ -218,14 +250,30 @@ async function start() {
     $('#stop').onclick=()=>{epoch++;activeController?.abort();activeController=null;wakePoll?.();running=false;$('#recover').disabled=!pending;notice('已停止轮询等待；任务仍在服务器运行，可恢复原任务查询。')}
     $('#new').onclick=()=>{if(pending&&!pending.terminal){failure(Error('原任务尚未结束或受理不明确，请恢复查询。'));return}pending=null;$('#submit').disabled=!model.value;$('#recover').disabled=true;$('#task-status').textContent='';operationCleanup()}
     function operationCleanup(){objectURLs.forEach(url=>URL.revokeObjectURL(url));objectURLs.clear();$('.artifacts').innerHTML=''}
+    if(options.length){model.value='0';model.onchange()}
     $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>copy(button.closest('.code').querySelector('code').textContent))
   }
-  $('#key').oninput=()=>{if(pending){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}key=$('#key').value.trim();profiles=[]}
-  $('#show-key').onclick=()=>{$('#key').type=$('#key').type==='password'?'text':'password';$('#show-key').textContent=$('#key').type==='password'?'显示':'隐藏'}
-  $('#load').onclick=async()=>{
-    if(!key){notice('请填写 API Key',true);return}$('#load').disabled=true
-    try{const r=await fetch('/v1/media/capabilities',{headers:{Authorization:'Bearer '+key},credentials:'omit',redirect:'error',signal:AbortSignal.timeout(30000)});const p=await r.json();if(!r.ok)throw Error(p.error?.message||'模型读取失败');profiles=p.models||[];notice(`已加载 ${profiles.length} 组模型能力，提交前请选择具体模型。`);if(tab==='在线调试'&&!running)debug()}catch(e){notice(e.message,true)}finally{$('#load').disabled=false}
+  async function loadModels(){
+    const credential=key,version=++loadEpoch
+    if(!credential){notice('请填写中转 API Key，即可加载可调用模型。',true);return}
+    loadingModels=true;$('#load').disabled=true;notice('正在验证 Key 并加载模型…')
+    try{
+      const r=await fetch('/v1/media/capabilities',{headers:{Authorization:'Bearer '+credential},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(30000)})
+      const p=await r.json();if(version!==loadEpoch||credential!==key)return
+      if(!r.ok)throw Error(p.error?.message||p.message||`模型读取失败（${r.status}）`)
+      profiles=Array.isArray(p.models)?p.models:[]
+      notice(profiles.length?`已加载 ${profiles.length} 组模型能力，可选择模型并先做免费参数校验。`:'此 Key 暂无可用模型，请检查分组、模型启用状态及渠道定价。',!profiles.length)
+    }catch(e){if(version===loadEpoch){profiles=[];notice(e.message,true)}}
+    finally{if(version===loadEpoch){loadingModels=false;$('#load').disabled=false;if(tab==='在线调试'&&!running)debug()}}
   }
+  $('#key').oninput=()=>{
+    if(pending){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}
+    key=$('#key').value.trim().replace(/^Bearer\s+/i,'');profiles=[];++loadEpoch;clearTimeout(loadTimer)
+    if(key)loadTimer=setTimeout(loadModels,450)
+    else{loadingModels=false;$('#load').disabled=false;notice('请填写中转 API Key 后加载模型。');if(tab==='在线调试')debug()}
+  }
+  $('#show-key').onclick=()=>{$('#key').type=$('#key').type==='password'?'text':'password';$('#show-key').textContent=$('#key').type==='password'?'显示':'隐藏'}
+  $('#load').onclick=()=>{clearTimeout(loadTimer);loadModels()}
   $('#copy-all').onclick=()=>copy(fullMarkdown(sections))
   $('#export').onclick=()=>{const url=URL.createObjectURL(new Blob([fullMarkdown(sections)],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='词元互联媒体接口文档.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   $('#theme').onclick=()=>{document.body.classList.toggle('dark');$('#theme').textContent=document.body.classList.contains('dark')?'☀ 浅色':'☾ 深色'}
@@ -235,5 +283,11 @@ async function start() {
   window.addEventListener('hashchange',navigate)
   window.addEventListener('pagehide',()=>{key='';$('#key').value='';epoch++;objectURLs.forEach(url=>URL.revokeObjectURL(url))})
   navigate()
+  fetch('/api/v1/model-plaza',{credentials:'omit',signal:AbortSignal.timeout(15000)}).then(r=>r.ok?r.json():null).then(catalog=>{
+    if(key||!catalog?.data?.groups)return
+    profiles=catalog.data.groups.flatMap(group=>(group.media_models||[]).map(model=>({...model,group_name:group.name,catalog_only:true})))
+    if(tab==='在线调试')debug()
+  }).catch(()=>{})
 }
+
 if(typeof document!=='undefined')start().catch(()=>{document.querySelector('#app').textContent='文档加载失败，请刷新页面。'})

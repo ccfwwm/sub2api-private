@@ -55,6 +55,7 @@ func RegisterAdminRoutes(
 				admin.GET(prefix+"/:id/history", h.Media.AdminProtocolHistory)
 				admin.GET(prefix+"/:id/export", h.Media.AdminProtocolExport)
 			}
+			admin.POST("/media/templates/current", gin.HandlerFunc(stepUpAuth), h.Media.AdminTemplateUpdate)
 			admin.POST("/media/templates/preview", h.Media.AdminProtocolPreview)
 			admin.GET("/media/bindings/effective", h.Media.AdminProtocolEffective)
 			admin.GET("/media/pricing-status", h.Media.AdminPricingStatus)

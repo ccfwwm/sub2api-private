@@ -1636,7 +1636,7 @@
       "image.max_file_bytes"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -1720,7 +1720,7 @@
       "image.max_file_bytes"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -1817,7 +1817,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -1914,7 +1914,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2011,7 +2011,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2108,7 +2108,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2205,7 +2205,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2302,7 +2302,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2399,7 +2399,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2496,7 +2496,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2593,7 +2593,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2690,7 +2690,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2780,7 +2780,7 @@
       "resolution_enum"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2884,7 +2884,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -2988,7 +2988,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3092,7 +3092,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3196,7 +3196,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3282,7 +3282,7 @@
       "resolution_enum"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3381,7 +3381,7 @@
       "real_generation"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3481,7 +3481,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3581,7 +3581,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3681,7 +3681,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3781,7 +3781,7 @@
       "allowed_material_types"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null
@@ -3881,7 +3881,7 @@
       "input_audio_duration_cap"
     ],
     "delivery": {
-      "poll_seconds": 20,
+      "poll_seconds": 10,
       "head": null,
       "range": null,
       "refresh": null

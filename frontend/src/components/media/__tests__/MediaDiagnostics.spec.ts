@@ -38,12 +38,12 @@ describe('media diagnostics selectors', () => {
   it('previews with the selected account, group, model and API key scope', async () => {
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key ID"]').setValue('123')
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.get('[aria-label="联调提示词"]').setValue('two reference frames')
     await wrapper.findAll('button').find(button => button.text() === '预览映射与渠道估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
-      mode: 'effective', api_key_id: 123, group_id: 19, account_id: 2139, operation: 'video',
+      mode: 'effective', api_key: 'sk-local-preview', group_id: 19, account_id: 2139, operation: 'video',
       request: expect.objectContaining({ model: 'video-choice', seconds: 5, prompt: 'two reference frames' }), measure_media: false
     }))
     expect(wrapper.text()).toContain('输入请求')
@@ -77,15 +77,18 @@ describe('media diagnostics selectors', () => {
       Object.defineProperty(input, 'files', { configurable: true, value: [new File([item.content], item.filename, { type: item.mime })] })
       await wrapper.get(selector).trigger('change')
       await vi.waitFor(() => expect(wrapper.text()).toContain(item.filename))
+      Object.defineProperty(input, 'files', { configurable: true, value: [new File(['second'], 'second-' + item.filename, { type: item.mime })] })
+      await wrapper.get(selector).trigger('change')
+      await vi.waitFor(() => expect(wrapper.text()).toContain('second-' + item.filename))
     }
-    await wrapper.get('[aria-label="联调 API Key ID"]').setValue('123')
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '预览映射与渠道估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
       request: expect.objectContaining({
-        images: [{ b64_json: 'aW1hZ2UtYnl0ZXM=', mime_type: 'image/png' }],
-        videos: [{ b64_json: 'dmlkZW8tYnl0ZXM=', mime_type: 'video/mp4' }],
-        audios: [{ b64_json: 'YXVkaW8tYnl0ZXM=', mime_type: 'audio/mpeg' }]
+        images: [{ b64_json: 'aW1hZ2UtYnl0ZXM=', mime_type: 'image/png' },{b64_json:'c2Vjb25k',mime_type:'image/png'}],
+        videos: [{ b64_json: 'dmlkZW8tYnl0ZXM=', mime_type: 'video/mp4' },{b64_json:'c2Vjb25k',mime_type:'video/mp4'}],
+        audios: [{ b64_json: 'YXVkaW8tYnl0ZXM=', mime_type: 'audio/mpeg' },{b64_json:'c2Vjb25k',mime_type:'audio/mpeg'}]
       })
     }))
     expect(wrapper.text()).toContain('reference.png')

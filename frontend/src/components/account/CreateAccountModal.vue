@@ -2,7 +2,7 @@
   <BaseDialog
     :show="show"
     :title="t('admin.accounts.createAccount')"
-    width="wide"
+    :width="form.platform === 'imagevideo' ? 'workspace' : 'wide'"
     @close="handleClose"
   >
     <!-- Step Indicator for OAuth accounts -->
@@ -4998,6 +4998,7 @@ watch(
       antigravityModelMappings.value = []
       antigravityModelRestrictionMode.value = 'mapping'
     }
+    if (newPlatform === 'imagevideo') form.concurrency = 100
     if (newPlatform === 'grok') {
       accountCategory.value = 'oauth-based'
       addMethod.value = 'oauth'

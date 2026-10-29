@@ -32,12 +32,10 @@ function toggleOption(path: string, option: string, checked: boolean) {
   const current = (field(path) as string[] | undefined) || []
   set(path, checked ? [...new Set([...current, option])] : current.filter(item => item !== option))
 }
-function statusLabel(status: string) { return ({ enabled: '已发布', draft: '草稿', archived: '已归档', disabled: '已停用' } as Record<string, string>)[status] || status }
-const selected = ref<MediaConfigRecord | null>(null), history = ref<MediaConfigRecord[]>([])
-const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), result = ref<unknown>()
-const review = ref(false), upgrades = ref<string[]>([]), bulkModels = ref(''), builtinFields=ref<string[]>([])
-const builtinChanges=computed(()=>Object.keys(selected.value?.builtin_current ?? {}).filter(key=>!['id','version','status'].includes(key)&&JSON.stringify(selected.value?.builtin_current?.[key])!==JSON.stringify(draft.value?.[key])))
-function loadBuiltin(all=false) {if(!draft.value||!selected.value?.builtin_current)return;const next=JSON.parse(JSON.stringify(draft.value));for(const key of all?Object.keys(selected.value.builtin_current):builtinFields.value) {if(!['id','version','status'].includes(key))next[key]=JSON.parse(JSON.stringify(selected.value.builtin_current[key]))}json.value=JSON.stringify(next,null,2)}
+function statusLabel(status: string) { return kind.value === 'templates' ? '可用' : ({ enabled: '已发布', draft: '草稿', disabled: '已停用' } as Record<string, string>)[status] || status }
+const selected = ref<MediaConfigRecord | null>(null)
+const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), notice = ref(''), result = ref<unknown>()
+const deleting = ref(false), bulkModels = ref('')
 const previewInput = ref('{"model":"preview","prompt":"参考素材测试","seconds":5,"images":[]}')
 const sample = ref('{}'), online = ref(false), operation = ref('video'), upstreamModel = ref('preview')
 const previewKeyID = ref(''), previewAccountID = ref('')
@@ -50,85 +48,75 @@ const accountFilter = ref(String(route.query.account_id || '')), groupFilter = r
 const rows = computed(() => kind.value === 'templates' ? templates.value : bindings.value.filter(row => (!accountFilter.value || String(row.config.account_id) === accountFilter.value || (groupFilter.value && !Number(row.config.account_id))) && (!groupFilter.value || String(row.config.group_id) === groupFilter.value)))
 watch(() => route.query.account_id, value => { accountFilter.value = String(value || ''); selected.value = null; json.value = '' })
 watch(() => route.query.group_id, value => { groupFilter.value = String(value || ''); effectiveGroup.value = String(value || '') })
-const affected = computed(() => bindings.value.filter(row => (row.config.template as { id?: string } | undefined)?.id === selected.value?.id && row.published_version))
-const changes = computed(() => [...new Set([...Object.keys(selected.value?.config ?? {}), ...Object.keys(draft.value ?? {})])].filter(key => JSON.stringify(selected.value?.config[key]) !== JSON.stringify(draft.value?.[key])))
 const publishedTemplates = computed(() => templates.value.filter(row => row.published_version))
 function field(path: string): unknown { return path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], draft.value) }
 function set(path: string, value: unknown) {
   if (!draft.value) return
-  const object = structuredClone(draft.value), parts = path.split('.'); let target = object
+  const object = JSON.parse(json.value) as Record<string, unknown>, parts = path.split('.'); let target = object
   for (const part of parts.slice(0, -1)) { target[part] ??= {}; target = target[part] as Record<string, unknown> }
   target[parts.at(-1)!] = value; json.value = JSON.stringify(object, null, 2)
 }
 const value = (event: Event) => (event.target as HTMLInputElement).value
 function jsonField(path: string, event: Event) { try { set(path, JSON.parse(value(event))); error.value = '' } catch { error.value = `${path} 需要有效 JSON` } }
 async function action(run: () => Promise<void>, mutation = false) {
-  busy.value = true; error.value = ''
+  busy.value = true; error.value = ''; notice.value = ''
   try { if (mutation) await stepUp.run(run); else await run() } catch (cause) { if (!isStepUpCancelled(cause)) error.value = (cause as Error).message || String(cause) } finally { busy.value = false }
 }
 async function refresh() {
   const results = await Promise.allSettled([api.list('templates'), api.list('bindings')])
   const failures: string[] = []
-  if (results[0].status === 'fulfilled') templates.value = results[0].value; else failures.push('模板：' + String(results[0].reason?.message || results[0].reason))
+  if (results[0].status === 'fulfilled') templates.value = results[0].value.filter(row => row.status !== 'archived' && row.status !== 'disabled'); else failures.push('模板：' + String(results[0].reason?.message || results[0].reason))
   if (results[1].status === 'fulfilled') bindings.value = results[1].value; else failures.push('绑定：' + String(results[1].reason?.message || results[1].reason))
   error.value = failures.join('；')
 }
-async function select(row: MediaConfigRecord) { selected.value = row; json.value = JSON.stringify(row.config, null, 2); history.value = await api.history(kind.value, row.id); review.value = false; upgrades.value = [] }
+async function select(row: MediaConfigRecord) { selected.value = row; const object = { ...row.config }; delete object.version; delete object.status; delete object.builtin_revision; json.value = JSON.stringify(object, null, 2); deleting.value = false }
 function create() {
-  selected.value = null; history.value = []; review.value = false
-  const object = kind.value === 'templates' ? { id: `custom-${Date.now()}`, name: '自定义模板', version: '1', status: 'draft', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${Date.now()}`, version: '1', status: 'draft', group_id: Number(groupFilter.value || 0), account_id: Number(accountFilter.value || 0), model: '', upstream_model: '', rules: [] }
+  selected.value = null; deleting.value = false; mode.value = 'form'; error.value = ''; notice.value = ''
+  const object = kind.value === 'templates' ? { id: `custom-${crypto.randomUUID()}`, name: '自定义协议模板', description: '', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${crypto.randomUUID()}`, group_id: Number(groupFilter.value || 0), account_id: Number(accountFilter.value || 0), model: '', upstream_model: '', rules: [] }
   json.value = JSON.stringify(object, null, 2)
 }
 function newTest() { testKey.value=crypto.randomUUID();paid.value=false }
-function copy() { if (!draft.value) return; const object = { ...draft.value, id: `${draft.value.id}-copy-${Date.now()}` }; selected.value = null; history.value = []; json.value = JSON.stringify(object, null, 2) }
-async function save(publish: boolean, sourceVersion?: number) {
-  if (!draft.value) throw new Error('需要有效 JSON')
-  const id = String(draft.value.id || '')
-  const row = await api.save(kind.value, { id, expected_version: selected.value?.id === id ? selected.value.version : 0, config: draft.value, publish, source_version: sourceVersion, upgrade_bindings: publish ? upgrades.value : [] })
-  await refresh(); await select(row)
+function copy() {
+  if (!draft.value) return
+  const object: Record<string, unknown> = { ...draft.value, id: `custom-${crypto.randomUUID()}`, name: `${draft.value.name || '协议模板'}（副本）` }
+  delete object.version; delete object.status
+  selected.value = null; deleting.value = false; json.value = JSON.stringify(object, null, 2)
+  notice.value = '已复制为新模板，可修改名称和介绍后保存。'
 }
-async function saveImported() {
-  if (!draft.value) throw new Error('需要有效 JSON')
-  const object = { ...draft.value, id: String(draft.value.id || '') }
-  if (!object.id) throw new Error('导入配置缺少 ID')
-  const row = await api.import(kind.value, { id: object.id, expected_version: 0, config: object, publish: false })
-  await refresh(); await select(row)
+async function save() {
+  if (!draft.value) throw new Error('请输入有效的配置 JSON')
+  const id = String(draft.value.id || '').trim()
+  if (!id) throw new Error('请填写模板 ID')
+  const existing = selected.value?.id === id ? selected.value : null
+  const row = kind.value === 'templates'
+    ? await api.updateTemplate({ id, expected_version: existing?.version || 0, expected_config: existing?.config, config: draft.value })
+    : await api.save(kind.value, { id, expected_version: existing?.version || 0, config: draft.value, publish: true })
+  await refresh(); await select(row); notice.value = '已保存，绑定模型使用当前模板。'
 }
-async function publishDraft() {
-  if (!draft.value) throw new Error('需要有效 JSON')
-  const id = String(draft.value.id || '')
-  if (!id) throw new Error('配置缺少 ID')
-  let current = selected.value?.id === id ? selected.value : null
-  if (!current) {
-    current = await api.save(kind.value, { id, expected_version: 0, config: draft.value, publish: false })
-    // Keep the saved draft if publication fails so retrying uses its version.
-    selected.value = current
-    json.value = JSON.stringify(current.config, null, 2)
-  }
-  const row = await api.publish(kind.value, { id, expected_version: current.version, config: draft.value, publish: true, upgrade_bindings: upgrades.value })
-  await refresh(); await select(row)
-}
-async function rollbackVersion(sourceVersion: number) {
+async function remove() {
   if (!selected.value) return
-  const row = await api.rollback(kind.value, { id: selected.value.id, expected_version: selected.value.version, source_version: sourceVersion })
-  await refresh(); await select(row)
+  if (kind.value === 'templates') await api.updateTemplate({id:selected.value.id,expected_version:selected.value.version,expected_config:selected.value.config,delete:true})
+  else await api.archive(kind.value,selected.value.id,selected.value.version)
+  selected.value = null; json.value = ''; deleting.value = false
+  await refresh(); notice.value = '已删除。'
 }
 async function download() {
-  if (!selected.value) return
-  const data = await api.export(kind.value, selected.value.id), url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
-  const link = document.createElement('a'); link.href = url; link.download = `${selected.value.id}.json`; link.click(); URL.revokeObjectURL(url)
+  if (!draft.value) return
+  const object = { ...draft.value }; delete object.version; delete object.status; delete object.builtin_revision
+  const url = URL.createObjectURL(new Blob([JSON.stringify(object, null, 2)], { type: 'application/json' }))
+  const link = document.createElement('a'); link.href = url; link.download = `${object.id}.json`; link.click(); URL.revokeObjectURL(url)
 }
 async function upload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return
   const imported = JSON.parse(await file.text()), object = imported.versions?.[0]?.config ?? imported
   if (!object || typeof object !== 'object' || !object.id) throw new Error('无效的模板或绑定文件')
-  json.value = JSON.stringify({ ...object, id: `${object.id}-import-${Date.now()}` }, null, 2); selected.value = null; history.value = []
+  json.value = JSON.stringify({ ...object, id: `${object.id}-import-${Date.now()}` }, null, 2); selected.value = null; deleting.value = false
 }
 async function preview(effective = false) {
   const request = JSON.parse(previewInput.value)
   if (effective) {
-    if (!Number.isSafeInteger(Number(previewKeyID.value)) || Number(previewKeyID.value) <= 0) throw new Error('实际绑定预览需要有效的 API Key ID')
-    result.value = await api.preview({ mode: 'effective', api_key_id: Number(previewKeyID.value), ...(previewAccountID.value ? { account_id: Number(previewAccountID.value) } : {}), operation: operation.value, request, sample_response: JSON.parse(sample.value), measure_media: online.value })
+    if (!previewKeyID.value.trim()) throw new Error('请输入中转 API Key')
+    result.value = await api.preview({ mode: 'effective', api_key: previewKeyID.value.trim(), ...(previewAccountID.value ? { account_id: Number(previewAccountID.value) } : {}), operation: operation.value, request, sample_response: JSON.parse(sample.value), measure_media: online.value })
   } else {
     result.value = await api.preview({ template: draft.value, operation: operation.value, upstream_model: upstreamModel.value, model: request.model || 'preview', request, rules: [], sample_response: JSON.parse(sample.value), measure_media: online.value })
   }
@@ -147,26 +135,27 @@ onMounted(() => action(refresh))
 </script>
 
 <template>
-  <section class="space-y-4 rounded-lg border bg-white p-5 dark:border-gray-700 dark:bg-dark-800" aria-label="管理员协议模板">
-    <header class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">{{ kind === 'bindings' ? '媒体能力 / 模型绑定' : '协议模板' }}</h2><p class="mt-1 text-sm text-gray-500">{{ kind === 'bindings' ? '查看分组和账号的有效绑定、模板版本与请求能力；账号模型页负责日常绑定和启用。' : '管理请求协议、素材映射与任务响应。模型绑定在“账号模型”中完成。' }}</p></div><div class="flex gap-2"><button class="btn btn-primary" @click="create"><Icon name="plus" size="sm" />新建</button><label class="btn btn-secondary cursor-pointer">导入<input type="file" accept="application/json,.json" class="hidden" @change="action(() => upload($event))" /></label><button class="btn btn-secondary" :title="kind === 'bindings' ? '刷新绑定' : '刷新模板'" :aria-label="kind === 'bindings' ? '刷新绑定' : '刷新模板'" :disabled="busy" @click="action(refresh)"><Icon name="refresh" size="sm" /></button></div></header>
+  <section class="space-y-4 rounded-lg border bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-dark-800" aria-label="管理员协议模板">
+    <header class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">{{ kind === 'bindings' ? '媒体能力 / 模型绑定' : '协议模板' }}</h2><p class="mt-1 text-sm text-gray-500">{{ kind === 'bindings' ? '查看分组和账号的有效绑定、模板与请求能力；账号模型页负责日常绑定和启用。' : '管理请求协议、素材映射与任务响应。模型绑定在“账号模型”中完成。' }}</p></div><div class="flex gap-2"><button class="btn btn-primary" @click="create"><Icon name="plus" size="sm" />新建</button><label class="btn btn-secondary cursor-pointer">导入<input type="file" accept="application/json,.json" class="hidden" @change="action(() => upload($event))" /></label><button class="btn btn-secondary" :title="kind === 'bindings' ? '刷新绑定' : '刷新模板'" :aria-label="kind === 'bindings' ? '刷新绑定' : '刷新模板'" :disabled="busy" @click="action(refresh)"><Icon name="refresh" size="sm" /></button></div></header>
     <div v-if="kind === 'bindings'" class="flex flex-wrap items-end gap-3"><label class="text-sm">账号筛选<input v-model="accountFilter" type="number" min="1" class="input block" aria-label="绑定账号筛选" /></label><label class="text-sm">分组筛选<input v-model="groupFilter" type="number" min="1" class="input block" /></label><RouterLink v-if="accountFilter" class="text-sm text-primary-600" :to="{path:'/admin/media',query:{tab:'accounts',account_id:accountFilter}}">编辑账号 #{{ accountFilter }} 的模型</RouterLink></div>
-    <p v-if="error" role="alert" class="text-red-600">{{ error }}</p>
+    <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950">{{ error }}</p><p v-if="notice" role="status" class="rounded-lg bg-primary-50 p-3 text-sm text-primary-700 dark:bg-primary-950">{{ notice }}</p>
     <details v-if="kind === 'bindings'"><summary>查看分组实际继承配置</summary><input v-model="effectiveGroup" type="number" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" @click="action(async()=>{effectiveResult=await api.effective(Number(effectiveGroup))})">解析当前绑定</button><pre class="max-h-96 overflow-auto text-xs">{{JSON.stringify(effectiveResult,null,2)}}</pre></details>
-    <div class="grid min-w-0 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-      <aside class="min-w-0 border-b pb-4 dark:border-dark-600 xl:border-b-0 xl:border-r xl:pr-4">
+    <div class="grid min-w-0 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside class="min-w-0 border-b pb-4 dark:border-dark-600 lg:border-b-0 lg:border-r lg:pr-4">
         <label class="relative block"><span class="sr-only">搜索模板</span><input v-model="search" class="input w-full" aria-label="搜索模板" placeholder="搜索名称或 ID" /></label>
-        <div class="my-3 grid grid-cols-2 gap-2"><select v-model="mediaFilter" class="input w-full" aria-label="模板媒体类型"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option></select><select v-model="statusFilter" class="input w-full" aria-label="模板状态"><option value="">全部状态</option><option value="enabled">已发布</option><option value="draft">草稿</option><option value="archived">已归档</option></select></div>
+        <div class="my-3 grid gap-2" :class="kind === 'bindings' ? 'grid-cols-2' : 'grid-cols-1'"><select v-model="mediaFilter" class="input w-full" aria-label="模板媒体类型"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option></select><select v-if="kind === 'bindings'" v-model="statusFilter" class="input w-full" aria-label="绑定状态"><option value="">全部状态</option><option value="enabled">已发布</option><option value="draft">草稿</option><option value="disabled">已停用</option></select></div>
         <p class="mb-2 text-xs text-gray-500">{{ visibleRows.length }} {{ kind === 'bindings' ? '个绑定' : '个模板' }}</p>
-        <div class="max-h-[650px] overflow-auto"><p v-if="!visibleRows.length" class="border border-dashed p-4 text-sm text-gray-500">{{ rows.length ? '没有符合筛选的模板。' : '暂无协议模板，点击新建或导入。' }}</p><button v-for="row in visibleRows" :key="row.id" class="block w-full border-b px-3 py-3 text-left text-sm transition-colors dark:border-dark-600" :class="selected?.id === row.id ? 'border-l-2 border-l-primary-500 bg-primary-50 dark:bg-primary-950' : 'hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="selected?.id === row.id" @click="action(() => select(row))"><span class="flex items-start justify-between gap-2"><strong class="min-w-0 break-words">{{ row.config.name || row.config.model || row.id }}</strong><span class="shrink-0 rounded px-1.5 py-0.5 text-xs" :class="row.published_version ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ statusLabel(row.status) }}</span></span><span class="mt-1 block truncate text-xs text-gray-400" :title="row.id">{{ row.id }}</span><span class="mt-2 block text-xs text-gray-500">{{ (row.config.media_types as string[] || []).join(' / ') }} · {{ row.published_version ? `发布 v${row.published_version}` : '尚未发布' }} · 草稿 v{{ row.version }}</span></button></div>
+        <div class="max-h-[650px] overflow-auto"><p v-if="!visibleRows.length" class="border border-dashed p-4 text-sm text-gray-500">{{ rows.length ? '没有符合筛选的模板。' : '暂无协议模板，点击新建或导入。' }}</p><button v-for="row in visibleRows" :key="row.id" class="block w-full border-b px-3 py-3 text-left text-sm transition-colors dark:border-dark-600" :class="selected?.id === row.id ? 'border-l-2 border-l-primary-500 bg-primary-50 dark:bg-primary-950' : 'hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="selected?.id === row.id" @click="action(() => select(row))"><span class="flex items-start justify-between gap-2"><strong class="min-w-0 break-words">{{ row.config.name || row.config.model || row.id }}</strong><span class="shrink-0 rounded px-1.5 py-0.5 text-xs" :class="row.published_version ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ statusLabel(row.status) }}</span></span><span class="mt-1 block truncate text-xs text-gray-400" :title="row.id">{{ row.id }}</span><span class="mt-2 block text-xs text-gray-500">{{ (row.config.media_types as string[] || []).join(' / ') }} · {{ row.config.description || '未填写介绍' }}</span></button></div>
       </aside>
-      <div v-if="json" class="min-w-0 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-semibold">{{ draft?.name || '新模板' }}</h3><p class="text-xs text-gray-500">{{ selected ? `当前草稿 v${selected.version} · 发布 v${selected.published_version || '—'}` : '尚未保存' }}</p></div><div class="flex gap-2"><div class="flex rounded-lg border p-1 dark:border-dark-600"><button class="rounded px-3 py-1 text-sm" :class="mode === 'form' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'form'">表单</button><button class="rounded px-3 py-1 text-sm" :class="mode === 'json' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'json'">JSON</button></div><button class="btn btn-secondary" @click="copy">复制</button><button v-if="selected" class="btn btn-secondary" @click="action(download)">导出全部历史</button></div></div>
+      <div v-if="json" class="min-w-0 space-y-4 pb-20">
+        <div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-semibold">{{ draft?.name || '新模板' }}</h3><p class="text-xs text-gray-500">{{ selected ? '编辑当前协议模板' : '新模板 · 尚未保存' }}</p></div><div class="flex gap-2"><div class="flex rounded-lg border p-1 dark:border-dark-600"><button class="rounded px-3 py-1 text-sm" :class="mode === 'form' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'form'">表单</button><button class="rounded px-3 py-1 text-sm" :class="mode === 'json' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950' : ''" @click="mode = 'json'">JSON</button></div><button class="btn btn-secondary" @click="copy">复制模板</button><button v-if="selected" class="btn btn-secondary" @click="action(download)">导出模板</button></div></div>
         <div v-if="mode === 'form' && draft" class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <h4 class="border-t pt-4 font-semibold sm:col-span-2 xl:col-span-3 dark:border-dark-600">基础信息</h4>
-          <p class="text-xs leading-relaxed text-gray-500 sm:col-span-2 xl:col-span-3">先确认模板用途、媒体类型和操作范围。配置 ID 是稳定引用名，发布后不要随意更换；账号模型和分组绑定会固定引用某个已发布版本。</p>
-          <label class="text-sm" title="稳定的内部引用标识，使用小写字母、数字和连字符">配置 ID<input class="input w-full" placeholder="例如 provider-video-v1" :value="field('id')" @change="set('id', value($event))" /></label>
+          <p class="text-xs leading-relaxed text-gray-500 sm:col-span-2 xl:col-span-3">先确认模板用途、媒体类型和操作范围。保存后供账号模型和分组直接使用。可复制模板创建另一套独立配置。</p>
+          <label class="text-sm" title="稳定的内部引用标识，使用小写字母、数字和连字符">配置 ID<input class="input w-full" :disabled="!!selected" placeholder="例如 provider-video" :value="field('id')" @change="set('id', value($event))" /></label>
           <template v-if="kind === 'templates'">
-            <label class="text-sm" title="给管理员看的模板名称，不会发送给上游">名称<input class="input w-full" placeholder="例如 视频异步任务 v1" :value="field('name')" @change="set('name', value($event))" /></label>
+            <label class="text-sm" title="给管理员看的模板名称，不会发送给上游">名称<input class="input w-full" placeholder="例如 通用视频异步协议" :value="field('name')" aria-label="模板名称" @input="set('name', value($event))" /></label>
+            <label class="text-sm sm:col-span-2 xl:col-span-3">模板介绍<textarea class="input mt-1 min-h-20 w-full" aria-label="模板介绍" placeholder="说明此协议的用途、适用渠道和注意事项" :value="String(field('description') || '')" @input="set('description', value($event))" /></label>
             <label class="text-sm" title="async 表示提交后轮询任务；sync_json 解析 JSON 结果；sync_binary 直接读取媒体响应">响应模式<select class="input w-full" :value="field('mode')" @change="set('mode', value($event))"><option value="async">异步轮询</option><option value="sync_json">同步 JSON</option><option value="sync_binary">同步媒体二进制</option></select></label>
             <fieldset class="text-sm"><legend class="mb-2">媒体类型</legend><label v-for="item in [{id:'image',name:'图片'},{id:'video',name:'视频'},{id:'audio',name:'音频'}]" :key="item.id" class="mr-4 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('media_types') as string[] || []).includes(item.id)" @change="toggleOption('media_types',item.id,($event.target as HTMLInputElement).checked)" />{{ item.name }}</label></fieldset>
             <fieldset class="text-sm"><legend class="mb-2">支持的请求操作</legend><label v-for="op in ['image','image_edit','gemini_image','video','audio','speech','chat_music']" :key="op" class="mb-2 mr-3 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('operations') as string[] || []).includes(op)" @change="toggleOption('operations',op,($event.target as HTMLInputElement).checked)" />{{ op }}</label></fieldset>
@@ -192,24 +181,30 @@ onMounted(() => action(refresh))
             <label class="text-sm">公开模型（留空为分组默认）<input class="input w-full" :value="field('model')" @change="set('model', value($event))" /></label>
             <label class="text-sm">账号 ID（0 为全部）<input type="number" class="input w-full" :value="field('account_id')" @change="set('account_id', Number(value($event)))" /></label>
             <label class="text-sm">上游模型<input class="input w-full" :value="field('upstream_model')" @change="set('upstream_model', value($event))" /></label>
-            <label class="text-sm">协议模板<select class="input w-full" :value="field('template.id')" @change="bindTemplate(value($event))"><option value="">继承账号模板</option><option v-for="row in publishedTemplates" :key="row.id" :value="row.id">{{ row.config.name }} · v{{ row.published_version }}</option></select></label>
-            <label class="text-sm">固定模板版本<input type="number" min="1" class="input w-full" :value="field('template.version')" @change="set('template.version', Number(value($event)))" /></label>
+            <label class="text-sm">协议模板<select class="input w-full" :value="field('template.id')" @change="bindTemplate(value($event))"><option value="">继承账号模板</option><option v-for="row in publishedTemplates" :key="row.id" :value="row.id">{{ row.config.name }}</option></select></label>
+
             <MediaParameterRulesEditor class="sm:col-span-2" :model-value="(field('rules') as Record<string,unknown>[]) || []" @update:model-value="set('rules',$event)" />
             <p class="text-xs text-gray-500 sm:col-span-2">继承顺序：模板 → 账号模型 → 分组默认 → 分组精确模型 → 分组精确模型与账号。相同选择器冲突时禁止发布。</p>
           </template>
-          <p class="text-xs text-gray-500 sm:col-span-2">建议顺序：先填写提交/查询路径，再设素材目标字段，然后用真实响应样例预览解析；每次发布产生固定新版本，只有明确选择绑定时才会升级绑定。模板只引用账号密钥，不能填写真实密钥。</p>
+          <p class="text-xs text-gray-500 sm:col-span-2">建议顺序：先填写提交/查询路径，再设素材目标字段，然后用真实响应样例预览解析；保存即可更新当前模板。模板只引用账号密钥，不能填写真实密钥。</p>
         </div>
         <textarea v-if="mode === 'json' || !draft" v-model="json" class="input min-h-[460px] w-full font-mono text-xs" aria-label="完整协议配置 JSON" />
-        <div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(() => save(false), true)">保存草稿</button><button class="btn btn-secondary" :disabled="busy || !draft" @click="action(saveImported, true)">作为新配置导入</button><button class="btn btn-primary" :disabled="busy || !draft" @click="review = true">审阅并发布</button><button v-if="selected" class="btn btn-secondary" :disabled="busy" @click="action(async () => { await api.archive(kind, selected!.id, selected!.version); await refresh() }, true)">归档（保留固定版本）</button></div>
-        <div v-if="review" class="space-y-2 rounded border border-blue-300 p-3"><p>变更字段：{{ changes.join(', ') || '无' }}</p><div v-for="key in changes" :key="key" class="grid gap-2 sm:grid-cols-2"><pre class="overflow-auto text-xs">{{ key }} 之前：{{ JSON.stringify(selected?.config[key], null, 2) }}</pre><pre class="overflow-auto text-xs">之后：{{ JSON.stringify(draft?.[key], null, 2) }}</pre></div><p>在途任务与未选绑定继续使用原版本。</p><label v-for="row in affected" :key="row.id" class="block text-sm"><input v-model="upgrades" type="checkbox" :value="row.id" /> 同时升级 {{ row.id }}（{{ row.config.model || '分组默认' }}）</label><button class="btn btn-primary" :disabled="busy" @click="action(publishDraft, true)">发布不可变新版本</button></div>
-        <details v-if="selected?.builtin_current"><summary>随版本提供的内置模板差异</summary><p class="text-xs">管理员配置保持不变。选择字段载入编辑器，审阅发布后才产生新版本；未选择的绑定继续固定原版本。</p><label v-for="key in builtinChanges" :key="key" class="block text-sm"><input v-model="builtinFields" type="checkbox" :value="key" /> {{key}}<pre class="overflow-auto text-xs">{{JSON.stringify(selected.builtin_current[key],null,2)}}</pre></label><button class="btn btn-secondary" @click="loadBuiltin()">合并所选内置字段</button><button class="btn btn-secondary" @click="loadBuiltin(true)">载入内置原版并审阅</button></details>
-        <details v-if="history.length"><summary>历史、内置原版对比与回滚</summary><div v-for="row in history" :key="row.version" class="my-2 rounded border p-2"><p>v{{ row.version }} · {{ row.status }} · {{ row.config.builtin_revision ? '内置来源' : '管理员配置' }}</p><button class="btn btn-secondary" @click="json = JSON.stringify(row.config, null, 2)">载入此版本并比较</button><button class="btn btn-secondary" @click="action(() => rollbackVersion(row.version), true)">以此版本回滚并发布</button><details><summary>查看配置</summary><pre class="max-h-64 overflow-auto text-xs">{{ JSON.stringify(row.config, null, 2) }}</pre></details></div></details>
-        <details v-if="kind === 'bindings'"><summary>批量发布相同模板</summary><p class="text-xs">每行一个公开模型，默认上游映射为相同 ID。每项仍独立检查账号、版本及冲突；价格保持原设置。</p><textarea v-model="bulkModels" class="input min-h-24 w-full" /><button class="btn btn-primary" :disabled="busy || !draft" @click="action(bulkBind, true)">发布这些模型的绑定</button></details>
+        <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t bg-white/95 py-4 dark:border-dark-600 dark:bg-dark-800">
+          <button class="btn btn-primary" :disabled="busy || !draft" @click="action(save, true)">{{ busy ? '处理中…' : '保存模板' }}</button>
+          <button v-if="selected" class="btn btn-secondary text-red-600" :disabled="busy" @click="deleting = true">删除模板</button>
+          <span class="text-xs text-gray-500">保存后直接生效，已有任务继续使用提交时的配置。</span>
+        </div>
+        <div v-if="deleting" role="alertdialog" aria-label="确认删除模板" class="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:bg-red-950">
+          <p class="text-sm">确认删除“{{ selected?.config.name || selected?.id }}”？使用此模板的模型将解除绑定并停用，需重新配置后启用。已有任务不受影响。</p>
+          <button class="btn btn-secondary" :disabled="busy" @click="deleting = false">取消</button>
+          <button class="btn btn-primary ml-2" :disabled="busy" @click="action(remove, true)">确认删除</button>
+        </div>
+        <details v-if="kind === 'bindings'"><summary>批量发布相同模板</summary><p class="text-xs">每行一个公开模型，默认上游映射为相同 ID。每项仍独立检查账号及冲突；价格保持原设置。</p><textarea v-model="bulkModels" class="input min-h-24 w-full" /><button class="btn btn-primary" :disabled="busy || !draft" @click="action(bulkBind, true)">发布这些模型的绑定</button></details>
         <details>
           <summary>实际绑定、估价与发送摘要（只读）</summary>
           <div class="space-y-3 py-3">
-            <p class="text-sm">按已有 API Key 的真实分组与价格解析已发布配置，展示覆盖差异、模板和绑定版本及准备发送的摘要。当前编辑中的草稿不参与；预览不预留额度、不创建任务、不调用生成接口。</p>
-            <label class="block">API Key ID<input v-model="previewKeyID" type="number" min="1" class="input" aria-label="预览 API Key ID" /></label>
+            <p class="text-sm">按已有 API Key 的真实分组与价格解析已发布配置，展示覆盖差异、模板和绑定配置及准备发送的摘要。当前编辑中的草稿不参与；预览不预留额度、不创建任务、不调用生成接口。</p>
+            <label class="block">中转 API Key<input v-model="previewKeyID" type="password" autocomplete="off" class="input" aria-label="预览 API Key" /></label>
             <label class="block">限定候选账号 ID（可选）<input v-model="previewAccountID" type="number" min="1" class="input" aria-label="预览候选账号 ID" /></label>
             <label class="block">操作<input v-model="operation" class="input" aria-label="实际绑定预览操作" /></label>
             <label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" aria-label="实际绑定预览输入" /></label>
@@ -217,7 +212,7 @@ onMounted(() => action(refresh))
             <button class="btn btn-secondary" :disabled="busy || !previewKeyID" @click="action(() => preview(true))">预览实际绑定与估价</button>
           </div>
         </details>
-        <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览</button><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过正常任务和计费链路。草稿不会直接发送。</p><input v-model="keyID" class="input" placeholder="用于记账的 API Key ID" /><label class="block text-sm"><input v-model="paid" type="checkbox" /> 确认本次生成可能收费</label><p class="break-all text-xs">幂等 ID：{{ testKey }}</p><button class="btn btn-primary" :disabled="busy || !paid || !keyID" @click="action(async () => { result = await api.test({ api_key_id: Number(keyID), operation, request: JSON.parse(previewInput), confirm_paid_submission: paid }, testKey) }, true)">提交 / 查询原测试</button><button class="btn btn-secondary" @click="newTest">明确开始另一次测试</button></div></details>
+        <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览</button><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过正常任务和计费链路。草稿不会直接发送。</p><input v-model="keyID" class="input" type="password" autocomplete="off" placeholder="输入中转 API Key" /><label class="block text-sm"><input v-model="paid" type="checkbox" /> 确认本次生成可能收费</label><p class="break-all text-xs">幂等 ID：{{ testKey }}</p><button class="btn btn-primary" :disabled="busy || !paid || !keyID" @click="action(async () => { result = await api.test({ api_key: keyID.trim(), operation, request: JSON.parse(previewInput), confirm_paid_submission: paid }, testKey) }, true)">提交 / 查询原测试</button><button class="btn btn-secondary" @click="newTest">明确开始另一次测试</button></div></details>
         <pre v-if="result" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify(result, null, 2) }}</pre>
       </div>
       <div v-else class="flex min-h-72 items-center justify-center text-sm text-gray-500">从左侧选择协议模板，或新建模板。</div>

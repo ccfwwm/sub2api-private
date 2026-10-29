@@ -32,6 +32,34 @@ type mediaTestRepo struct {
 
 type mediaTestTemplates struct{}
 
+func TestMediaGenerationSendsMappedModelExactlyOnce(t *testing.T) {
+	cap, ok := media.ModelPreset("omni-flash")
+	require.True(t, ok)
+	cap.Model = "sd-2.5-满血全参数-720p"
+	cap.UpstreamModel = "专享sd2.5(满血30-10-10/4-30秒/720p)"
+	cap.TemplateRef = &media.TemplateRef{ID: "v6k-video-reference-string", Version: 1}
+	var sent string
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts.Add(1)
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		sent, _ = body["model"].(string)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"fixture terminal rejection"}}`))
+	}))
+	defer server.Close()
+	svc, tester := testMediaTester(t, cap, server.URL)
+	svc.mediaTemplateStore = mediaTestTemplates{}
+	resolved, err := svc.resolveAccountTestTemplate(context.Background(), cap)
+	require.NoError(t, err)
+	record := testMediaRecord(t, svc, resolved)
+	tester.work(record, true)
+	require.Equal(t, cap.UpstreamModel, sent)
+	require.Equal(t, int32(1), posts.Load())
+	require.NotEqual(t, cap.Model, sent)
+}
+
 func (mediaTestTemplates) ResolveTemplates(_ context.Context, caps []media.Capability) ([]media.Capability, error) {
 	return media.ResolveTemplateBindings(caps, nil, func(ref media.TemplateRef) (media.ProtocolTemplate, error) {
 		for _, template := range media.BuiltinTemplates() {

@@ -35,6 +35,33 @@ func (s *effectivePreviewKeyRepo) GetByID(_ context.Context, id int64) (*service
 	return s.key, nil
 }
 
+func (s *effectivePreviewKeyRepo) GetByKey(_ context.Context, key string) (*service.APIKey, error) {
+	if s.key != nil && key == s.key.Key {
+		return s.key, nil
+	}
+	return nil, service.ErrAPIKeyNotFound
+}
+func (s *effectivePreviewKeyRepo) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
+	return s.GetByKey(ctx, key)
+}
+
+func TestAdminPreviewAcceptsRelayCredentialAndRejectsInvalidCredential(t *testing.T) {
+	for _, valid := range []bool{true, false} {
+		h, repo := effectivePreviewHandlerFixture(t)
+		credential := "invalid-relay-key"
+		if valid {
+			credential = "Bearer " + repo.key.Key
+		}
+		w := protocolRequest(t, "/admin/media/templates/preview", gin.H{"mode": "effective", "api_key": credential, "group_id": 7, "operation": "video", "request": gin.H{"model": "public-video", "seconds": 5}}, h.AdminProtocolPreview)
+		if valid {
+			require.Equal(t, 200, w.Code, w.Body.String())
+		} else {
+			require.Equal(t, 400, w.Code, w.Body.String())
+		}
+		require.NotContains(t, w.Body.String(), repo.key.Key)
+	}
+}
+
 func TestAdminProtocolPaidTestRejectsInactiveKeyBeforeSubmission(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

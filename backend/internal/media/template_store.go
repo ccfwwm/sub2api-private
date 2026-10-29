@@ -413,7 +413,7 @@ func ResolveTemplateBindings(caps []Capability, bindings []ModelBinding, load fu
 		cap.Adapter = "template"
 		cap.RequestFormat = "unified"
 		cap.Delivery.PollSeconds = t.PollSeconds
-		cap.Version = fmt.Sprintf("%s:t%s:%d:%s", original.Version, ref.ID, ref.Version, configurationDigest(cap.TemplateRules, cap.BindingVersions, cap.UpstreamModel))
+		cap.Version = fmt.Sprintf("%s:t%s:%d:%s", original.Version, ref.ID, ref.Version, configurationDigest(t, cap.TemplateRules, cap.BindingVersions, cap.UpstreamModel))
 		out = append(out, cap)
 	}
 	return out, nil

@@ -5,18 +5,38 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"strings"
 )
 
 func activeMediaAdminTestKey(key *service.APIKey) bool {
 	return key != nil && key.IsActive() && !key.IsExpired() && !key.IsQuotaExhausted() && key.Group != nil && key.Group.IsActive() && key.User != nil && key.User.IsActive()
 }
 
-func (h *MediaHandler) adminEffectiveProtocolPreview(c *gin.Context, keyID, groupID, accountID int64, operation string, input map[string]any, measure bool) {
+func (h *MediaHandler) adminMediaKey(c *gin.Context, keyID int64, credential string) (*service.APIKey, error) {
+	credential = strings.TrimSpace(credential)
+	if len(credential) > 7 && strings.EqualFold(credential[:7], "Bearer ") {
+		credential = strings.TrimSpace(credential[7:])
+	}
+	if credential != "" {
+		key, err := h.keys.GetByKey(c.Request.Context(), credential)
+		if err != nil {
+			return nil, err
+		}
+		// Reload complete current user/group state, as in the legacy ID path.
+		if key == nil {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		return h.keys.GetByID(c.Request.Context(), key.ID)
+	}
+	return h.keys.GetByID(c.Request.Context(), keyID)
+}
+
+func (h *MediaHandler) adminEffectiveProtocolPreview(c *gin.Context, keyID int64, credential string, groupID, accountID int64, operation string, input map[string]any, measure bool) {
 	if h.keys == nil || h.cache == nil || h.Engine == nil {
 		response.Error(c, 503, "Media preview is unavailable")
 		return
 	}
-	key, err := h.keys.GetByID(c.Request.Context(), keyID)
+	key, err := h.adminMediaKey(c, keyID, credential)
 	if err != nil || !activeMediaAdminTestKey(key) {
 		response.BadRequest(c, "An active assigned API key and user are required")
 		return

@@ -51,7 +51,7 @@ export function newMediaPricing(): MediaPricing {
   return { media_type: 'video', rules: [{ priority: 0, when: {}, charges: [newMediaCharge()] }], reservation: { maximum_charge: null, max_quantities: {}, overrun: 'cap_user_charge' }, success_policy: 'any_output' }
 }
 export function newMediaCapability(model = ''): MediaCapability {
-  const base: MediaCapability = { profile_id: `manual:${model || Date.now()}`, version: '1', model, upstream_model: model, provider: 'manual', adapter: '', media_type: '', enabled: false, status: 'enabled', validation_status: '待渠道验证', verification_evidence: '', operations: [], formats: ['json'], scenarios: [], duration: { mode: 'unknown', values: [], min: null, max: null, default: null, required: false }, resolutions: [], sizes: [], aspect_ratios: [], qualities: [], resolution_policy: 'optional', materials: {}, delivery: { poll_seconds: 10, head: true, range: true, refresh: false }, limits: { max_request_bytes: 33554432, max_concurrent_tasks: 2, observation_seconds: 3600 }, artifact_hosts: [], usage_fields: {} }
+  const base: MediaCapability = { profile_id: `manual:${model || Date.now()}`, version: '1', model, upstream_model: model, provider: 'manual', adapter: '', media_type: '', enabled: false, status: 'enabled', validation_status: '待渠道验证', verification_evidence: '', operations: [], formats: ['json'], scenarios: [], duration: { mode: 'unknown', values: [], min: null, max: null, default: null, required: false }, resolutions: [], sizes: [], aspect_ratios: [], qualities: [], resolution_policy: 'optional', materials: {}, delivery: { poll_seconds: 10, head: true, range: true, refresh: false }, limits: { max_request_bytes: 33554432, max_concurrent_tasks: 100, observation_seconds: 3600 }, artifact_hosts: [], usage_fields: {} }
   return mediaDefaults(base)
 }
 
@@ -71,7 +71,7 @@ export function mediaDefaults(c: MediaCapability): MediaCapability {
   c.status = 'enabled'
   c.limits ||= {} as MediaCapability['limits']
   c.limits.max_request_bytes ??= 33554432
-  c.limits.max_concurrent_tasks ??= 2
+  c.limits.max_concurrent_tasks ??= 100
   c.limits.observation_seconds ??= 3600
   c.delivery ||= { poll_seconds: 10, head: true, range: true, refresh: false }
   c.delivery.poll_seconds ||= 10
