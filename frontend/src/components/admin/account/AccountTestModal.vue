@@ -2,7 +2,7 @@
   <BaseDialog
     :show="show"
     :title="t('admin.accounts.testAccountConnection')"
-    :width="isMediaAccount ? 'extra-wide' : 'wide'"
+    :width="isMediaAccount ? 'workspace' : 'wide'"
     @close="handleClose"
   >
     <div class="space-y-4">
@@ -1081,9 +1081,17 @@ const handleEvent = async (event: {
   switch (event.type) {
     case 'test_start':
       addLine(t('admin.accounts.connectedToApi'), 'text-green-400')
-      if (event.model) {
+      if (isMediaAccount.value) {
+        const publicModel = event.data && 'public_model' in event.data
+          ? event.data.public_model
+          : event.model || selectedModelId.value
+        const upstreamModel = event.data && 'upstream_model' in event.data
+          ? event.data.upstream_model
+          : mediaCapability.value?.upstream_model
+        if (publicModel) addLine(`${tr('公开模型', 'Public model')}: ${publicModel}`, 'text-cyan-400')
+        if (upstreamModel) addLine(`${tr('映射后实际发送到上游', 'Mapped model sent upstream')}: ${upstreamModel}`, 'text-cyan-400')
+      } else if (event.model) {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
-        if (event.data && 'upstream_model' in event.data && event.data.upstream_model) addLine(`${tr('上游模型（实际发送）', 'Upstream model (sent)')}: ${event.data.upstream_model}`, 'text-cyan-400')
       }
       addLine(
         testKind.value === 'connection'

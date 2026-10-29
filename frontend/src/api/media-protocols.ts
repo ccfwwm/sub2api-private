@@ -13,7 +13,6 @@ export const mediaProtocolsAPI = {
   async updateTemplate(body: Record<string, unknown>) { return (await apiClient.post<MediaConfigRecord>('/admin/media/templates/current', body)).data },
  async effective(group_id: number) {return (await apiClient.get(`/admin/media/bindings/effective`,{params:{group_id}})).data},
   async list(kind: ProtocolKind) { return (await apiClient.get<MediaConfigRecord[]>(`/admin/media/${kind}`)).data },
-  async history(kind: ProtocolKind, id: string) { return (await apiClient.get<MediaConfigRecord[]>(`/admin/media/${kind}/${encodeURIComponent(id)}/history`)).data },
   async save(kind: ProtocolKind, body: Record<string, unknown>) { return (await apiClient.post<MediaConfigRecord>(`/admin/media/${kind}`, body)).data },
   async import(kind: ProtocolKind, body: Record<string, unknown>) { return (await apiClient.post<MediaConfigRecord>(`/admin/media/${kind}/import`, body)).data },
   async publish(kind: ProtocolKind, body: Record<string, unknown>) { return (await apiClient.post<MediaConfigRecord>(`/admin/media/${kind}/publish`, body)).data },

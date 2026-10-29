@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MonitorMediaConfig from '../MonitorMediaConfig.vue'
 import { newMediaCapability, type MediaCapability } from '@/types/media'
 
-const templateAPI = vi.hoisted(() => ({ list: vi.fn(), history: vi.fn() }))
+const templateAPI = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: templateAPI }))
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ locale: ref('zh') }) }))
@@ -24,7 +24,6 @@ describe('media monitor configuration', () => {
       { id: 'mixed-template', version: 1, published_version: 1, status: 'enabled', config: { name: 'Mixed', status: 'enabled', media_types: ['image', 'audio'], operations: ['image', 'audio'] } },
       { id: 'draft-only', version: 1, published_version: null, status: 'draft', config: { name: 'Draft only' } },
     ])
-    templateAPI.history.mockReset().mockResolvedValue([])
   })
   const read = (wrapper: ReturnType<typeof dialog>) => wrapper.vm.config?.media_monitor as { mode: string; models: Record<string, { capability: MediaCapability; operation: string; parameters: Record<string, unknown> }>; revision?: string }
 
@@ -64,7 +63,7 @@ describe('media monitor configuration', () => {
     expect(read(wrapper).revision).toBeTruthy()
   })
 
-  it('pins the explicitly selected published template and rejects incomplete advanced JSON', async () => {
+  it('selects the current published template without exposing versions and rejects incomplete advanced JSON', async () => {
     const wrapper = dialog(['custom-video'])
     await flushPromises()
     await wrapper.get('[data-testid="media-monitor-mode"]').setValue('generation')
@@ -73,8 +72,9 @@ describe('media monitor configuration', () => {
     const choices = wrapper.get('[data-testid="media-monitor-template"]')
     expect(choices.text()).not.toContain('Draft only')
     expect(choices.text()).not.toContain('Unsaved draft')
-    expect(choices.text()).toContain('Published video · v2')
-    await choices.setValue('video-template:2')
+    expect(choices.text()).toContain('Published video')
+    expect(choices.text()).not.toMatch(/v\d+/)
+    await choices.setValue('video-template')
     const entry = read(wrapper).models['custom-video']
     expect(entry).toMatchObject({ capability: { model: 'custom-video', upstream_model: 'omni-flash', adapter: 'template', template_ref: { id: 'video-template', version: 2 }, media_type: 'video', operations: ['video'] }, operation: 'video' })
     expect(wrapper.find('[data-testid="media-monitor-generation-blocked"]').exists()).toBe(false)
@@ -89,7 +89,7 @@ describe('media monitor configuration', () => {
     const wrapper = dialog(['looks-like-video'])
     await flushPromises()
     await wrapper.get('[data-testid="media-monitor-mode"]').setValue('generation')
-    await wrapper.get('[data-testid="media-monitor-template"]').setValue('mixed-template:1')
+    await wrapper.get('[data-testid="media-monitor-template"]').setValue('mixed-template')
     expect(read(wrapper).models['looks-like-video']).toMatchObject({ capability: { media_type: '', operations: [] }, operation: '' })
     expect(wrapper.find('[data-testid="media-monitor-generation-blocked"]').exists()).toBe(true)
     await wrapper.get('[data-testid="media-monitor-type"]').setValue('audio')
@@ -106,7 +106,8 @@ describe('media monitor configuration', () => {
     await flushPromises()
     expect(wrapper.findComponent(MonitorMediaConfig).emitted('update:modelValue')).toBeUndefined()
     expect(read(wrapper)).toEqual(initial.media_monitor)
-    expect(wrapper.get('[data-testid="media-monitor-template"]').text()).toContain('missing-template · v7')
+    expect(wrapper.get('[data-testid="media-monitor-template"]').text()).toContain('missing-template · 模板不可用')
+    expect(wrapper.get('[data-testid="media-monitor-template"]').text()).not.toContain('v7')
     expect(wrapper.find('[data-testid="media-monitor-generation-blocked"]').exists()).toBe(true)
     await wrapper.get('[data-testid="media-monitor-upstream"]').setValue('exact-upstream')
     expect(wrapper.vm.config).toHaveProperty('existing_option', { preserve: true })
@@ -115,17 +116,16 @@ describe('media monitor configuration', () => {
     expect(read(wrapper).models.saved.capability.template_ref).toEqual({ id: 'missing-template', version: 7 })
   })
 
-  it('keeps a published historical pin instead of activating the current version', async () => {
+  it('uses the current template for legacy references without loading history', async () => {
     const cap = newMediaCapability('saved')
     cap.template_ref = { id: 'video-template', version: 1 }; cap.adapter = 'template'; cap.media_type = 'audio'; cap.operations = ['audio']
-    templateAPI.history.mockResolvedValue([{ id: 'video-template', version: 1, status: 'enabled', config: { status: 'enabled', media_types: ['audio'], operations: ['audio'] } }])
     const initial = { media_monitor: { mode: 'generation', models: { saved: { capability: cap, operation: 'audio', parameters: { seconds: 5 } } } } }
     const wrapper = dialog(['saved'], initial)
     await flushPromises()
-    expect(templateAPI.history).toHaveBeenCalledWith('templates', 'video-template')
+    expect(templateAPI).not.toHaveProperty('history')
     expect(read(wrapper)).toEqual(initial.media_monitor)
-    expect(wrapper.find('[data-testid="media-monitor-generation-blocked"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="media-monitor-type"]').text()).not.toContain('video')
+    expect(wrapper.find('[data-testid="media-monitor-generation-blocked"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="media-monitor-type"]').text()).toContain('video')
   })
 
   it('does not overwrite saved configuration when the administrator catalogue fails', async () => {

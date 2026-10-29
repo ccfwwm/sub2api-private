@@ -57,6 +57,9 @@ func (s *Store) UpdateTemplate(ctx context.Context, id string, expected int64, p
 		if _, err = tx.ExecContext(ctx, `UPDATE media_config_heads h SET published_version=NULL WHERE h.kind IN ('binding','capability') AND EXISTS(SELECT 1 FROM media_config_versions v WHERE v.kind=h.kind AND v.id=h.id AND v.version=h.version AND v.status='disabled' AND coalesce(v.config#>>'{template,id}',v.config#>>'{template_ref,id}')=$1)`, id); err != nil {
 			return ConfigRecord{}, err
 		}
+		if _, err = tx.ExecContext(ctx, `UPDATE channel_monitors m SET body_override=jsonb_set(m.body_override,'{media_monitor,mode}','"connection"'::jsonb,true) WHERE jsonb_typeof(m.body_override#>'{media_monitor,models}')='object' AND EXISTS(SELECT 1 FROM jsonb_each(m.body_override#>'{media_monitor,models}') model WHERE model.value#>>'{capability,template_ref,id}'=$1)`, id); err != nil {
+			return ConfigRecord{}, err
+		}
 		if _, err = tx.ExecContext(ctx, `UPDATE media_config_versions SET status='disabled',config=jsonb_set(config,'{status}','"disabled"') WHERE kind='template' AND id=$1 AND version=$2`, id, current); err != nil {
 			return ConfigRecord{}, err
 		}
@@ -116,6 +119,9 @@ func (s *Store) UpdateTemplate(ctx context.Context, id string, expected int64, p
 		return ConfigRecord{}, err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE media_config_versions SET config=CASE WHEN kind='binding' THEN jsonb_set(config,'{template,version}',to_jsonb($2::bigint)) ELSE jsonb_set(config,'{template_ref,version}',to_jsonb($2::bigint)) END WHERE kind IN ('binding','capability') AND coalesce(config#>>'{template,id}',config#>>'{template_ref,id}')=$1`, id, current); err != nil {
+		return ConfigRecord{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE channel_monitors m SET body_override=jsonb_set(m.body_override,'{media_monitor,models}',(SELECT jsonb_object_agg(model.key,CASE WHEN model.value#>>'{capability,template_ref,id}'=$1 THEN jsonb_set(model.value,'{capability,template_ref,version}',to_jsonb($2::bigint)) ELSE model.value END) FROM jsonb_each(m.body_override#>'{media_monitor,models}') model),true) WHERE jsonb_typeof(m.body_override#>'{media_monitor,models}')='object' AND EXISTS(SELECT 1 FROM jsonb_each(m.body_override#>'{media_monitor,models}') model WHERE model.value#>>'{capability,template_ref,id}'=$1)`, id, current); err != nil {
 		return ConfigRecord{}, err
 	}
 	if err = tx.Commit(); err != nil {

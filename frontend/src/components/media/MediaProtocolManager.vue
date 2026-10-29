@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
 import MediaParameterRulesEditor from './MediaParameterRulesEditor.vue'
@@ -55,6 +55,12 @@ function set(path: string, value: unknown) {
   const object = JSON.parse(json.value) as Record<string, unknown>, parts = path.split('.'); let target = object
   for (const part of parts.slice(0, -1)) { target[part] ??= {}; target = target[part] as Record<string, unknown> }
   target[parts.at(-1)!] = value; json.value = JSON.stringify(object, null, 2)
+}
+function textField(path: string, event: Event) {
+  const input = event.target as HTMLInputElement | HTMLTextAreaElement
+  const start = input.selectionStart, end = input.selectionEnd
+  set(path, input.value)
+  void nextTick(() => input.setSelectionRange(start, end))
 }
 const value = (event: Event) => (event.target as HTMLInputElement).value
 function jsonField(path: string, event: Event) { try { set(path, JSON.parse(value(event))); error.value = '' } catch { error.value = `${path} 需要有效 JSON` } }
@@ -154,8 +160,8 @@ onMounted(() => action(refresh))
           <p class="text-xs leading-relaxed text-gray-500 sm:col-span-2 xl:col-span-3">先确认模板用途、媒体类型和操作范围。保存后供账号模型和分组直接使用。可复制模板创建另一套独立配置。</p>
           <label class="text-sm" title="稳定的内部引用标识，使用小写字母、数字和连字符">配置 ID<input class="input w-full" :disabled="!!selected" placeholder="例如 provider-video" :value="field('id')" @change="set('id', value($event))" /></label>
           <template v-if="kind === 'templates'">
-            <label class="text-sm" title="给管理员看的模板名称，不会发送给上游">名称<input class="input w-full" placeholder="例如 通用视频异步协议" :value="field('name')" aria-label="模板名称" @input="set('name', value($event))" /></label>
-            <label class="text-sm sm:col-span-2 xl:col-span-3">模板介绍<textarea class="input mt-1 min-h-20 w-full" aria-label="模板介绍" placeholder="说明此协议的用途、适用渠道和注意事项" :value="String(field('description') || '')" @input="set('description', value($event))" /></label>
+            <label class="text-sm" title="给管理员看的模板名称，不会发送给上游">名称<input class="input w-full" placeholder="例如 通用视频异步协议" :value="field('name')" aria-label="模板名称" @input="textField('name', $event)" /></label>
+            <label class="text-sm sm:col-span-2 xl:col-span-3">模板介绍<textarea class="input mt-1 min-h-20 w-full" aria-label="模板介绍" placeholder="说明此协议的用途、适用渠道和注意事项" :value="String(field('description') || '')" @input="textField('description', $event)" /></label>
             <label class="text-sm" title="async 表示提交后轮询任务；sync_json 解析 JSON 结果；sync_binary 直接读取媒体响应">响应模式<select class="input w-full" :value="field('mode')" @change="set('mode', value($event))"><option value="async">异步轮询</option><option value="sync_json">同步 JSON</option><option value="sync_binary">同步媒体二进制</option></select></label>
             <fieldset class="text-sm"><legend class="mb-2">媒体类型</legend><label v-for="item in [{id:'image',name:'图片'},{id:'video',name:'视频'},{id:'audio',name:'音频'}]" :key="item.id" class="mr-4 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('media_types') as string[] || []).includes(item.id)" @change="toggleOption('media_types',item.id,($event.target as HTMLInputElement).checked)" />{{ item.name }}</label></fieldset>
             <fieldset class="text-sm"><legend class="mb-2">支持的请求操作</legend><label v-for="op in ['image','image_edit','gemini_image','video','audio','speech','chat_music']" :key="op" class="mb-2 mr-3 inline-flex items-center gap-1.5"><input type="checkbox" :checked="(field('operations') as string[] || []).includes(op)" @change="toggleOption('operations',op,($event.target as HTMLInputElement).checked)" />{{ op }}</label></fieldset>

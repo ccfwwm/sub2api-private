@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.12",
+  "version": "v1.3.13",
   "status": "recorded",
   "acceptance_state": "pre-release-read-only-verified-no-new-generation",
-  "verified_at": "2026-10-29T16:45:24.065489+00:00",
+  "verified_at": "2026-10-30T02:17:00.554698+08:00",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "environment": "Production v1.3.11 existing completed video and public authenticated artifact verified read-only. New template CRUD, mapped-model wire requests, uploads and UI are validated with isolated PostgreSQL, mock providers and browser fixtures. This does not claim a new provider generation.",

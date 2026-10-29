@@ -403,6 +403,17 @@
     @apply flex flex-col;
   }
 
+  .modal-content-workspace {
+    width: min(1800px, calc(100vw - 2rem));
+    max-width: 1800px;
+  }
+
+  @media (max-width: 640px) {
+    .modal-content-workspace {
+      width: calc(100vw - 1rem);
+    }
+  }
+
   .modal-header {
     @apply border-b border-gray-200 px-4 py-3 dark:border-dark-700;
     @apply sm:px-6 sm:py-4;

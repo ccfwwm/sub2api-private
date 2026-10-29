@@ -77,7 +77,10 @@ function mountModal(account: Record<string, unknown> = {
     } as any,
     global: {
       stubs: {
-        BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+        BaseDialog: {
+          props: ['width'],
+          template: '<div data-testid="base-dialog" :data-width="width"><slot /><slot name="footer" /></div>'
+        },
         Select: { template: '<div class="select-stub"></div>' },
         TextArea: {
           props: ['modelValue'],
@@ -253,20 +256,30 @@ describe('AccountTestModal', () => {
     expect((wrapper.vm as any).status).toBe('connecting')
     wrapper.unmount()
   })
-  it('关闭且无售价的媒体模型支持自定义参数，并拒绝非对象 JSON', async () => {
+  it('媒体测试按公开模型选择，显示并发送映射上游模型', async () => {
     const cap=newMediaCapability('omni-flash')
+    cap.model='public-video'
+    cap.upstream_model='provider-video-v2'
     cap.media_type='video';cap.operations=['video'];cap.adapter='template';cap.template_ref={id:'configured-video',version:2}
     getAvailableModels.mockResolvedValue([{id:cap.model,display_name:cap.model}])
     global.fetch=vi.fn().mockImplementation((_url,opts)=>opts?.method==='POST'
-      ? Promise.resolve(createStreamResponse(['data: {"type":"test_complete","success":false,"error":"failed"}\n']))
+      ? Promise.resolve(createStreamResponse([
+        `data: ${JSON.stringify({type:'test_start',model:cap.model,data:{public_model:cap.model,upstream_model:cap.upstream_model}})}\n`,
+        'data: {"type":"test_complete","success":true}\n'
+      ]))
       : Promise.resolve({ok:false,status:404})) as any
     const wrapper=mountModal({id:42,name:'Media',platform:'imagevideo',type:'apikey',status:'active',extra:{media_models:[cap]}})
     await wrapper.setProps({show:true});await flushPromises()
+    expect(wrapper.get('[data-testid="base-dialog"]').attributes('data-width')).toBe('workspace')
     expect((wrapper.vm as any).testOperation).toBe('video')
+    expect(wrapper.text()).toContain(cap.upstream_model)
     ;(wrapper.vm as any).testKind='custom';(wrapper.vm as any).customParameters='{"seconds":6}'
     await (wrapper.vm as any).startTest();await flushPromises()
     const post=(global.fetch as any).mock.calls.find((call:any[])=>call[1]?.method==='POST')
     expect(JSON.parse(post[1].body)).toMatchObject({test_kind:'custom',operation:'video',model_id:cap.model,parameters:{seconds:6}})
+    expect(wrapper.text()).toContain(`${cap.upstream_model}`)
+    expect(wrapper.text()).toContain('上游模型（实际发送）')
+    expect(wrapper.text()).toContain(`映射后实际发送到上游: ${cap.upstream_model}`)
     ;(wrapper.vm as any).customParameters='[]'
     const calls=(global.fetch as any).mock.calls.length
     await (wrapper.vm as any).startTest();expect((global.fetch as any).mock.calls.length).toBe(calls)

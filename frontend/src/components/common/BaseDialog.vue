@@ -11,7 +11,11 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div
+          ref="dialogRef"
+          :class="['modal-content', widthClasses, { 'modal-content-workspace': props.width === 'workspace' }]"
+          @click.stop
+        >
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -95,7 +99,7 @@ const widthClasses = computed(() => {
   // wide=multi-section forms or rich content, extra-wide=analytics/tables,
   // full=full-screen or very dense layouts.
   const widths: Record<DialogWidth, string> = {
-    workspace: 'w-full max-w-none sm:max-w-[96vw] 2xl:max-w-[1600px]',
+    workspace: 'w-full max-w-[1800px]',
     narrow: 'max-w-md',
     normal: 'max-w-lg',
     wide: 'w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl',

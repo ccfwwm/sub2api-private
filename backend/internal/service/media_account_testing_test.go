@@ -49,15 +49,22 @@ func TestMediaGenerationSendsMappedModelExactlyOnce(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"message":"fixture terminal rejection"}}`))
 	}))
 	defer server.Close()
-	svc, tester := testMediaTester(t, cap, server.URL)
+	svc, _ := testMediaTester(t, cap, server.URL)
 	svc.mediaTemplateStore = mediaTestTemplates{}
-	resolved, err := svc.resolveAccountTestTemplate(context.Background(), cap)
+	svc.cfg = &config.Config{}
+	svc.cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	response := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(response)
+	c.Request = httptest.NewRequest(http.MethodPost, "/admin/accounts/42/test", nil).WithContext(ctx)
+	err := svc.TestAccountConnection(c, 42, cap.Model, "mapped model test", "", AccountTestOptions{TestKind: "minimal", Operation: "video"})
 	require.NoError(t, err)
-	record := testMediaRecord(t, svc, resolved)
-	tester.work(record, true)
 	require.Equal(t, cap.UpstreamModel, sent)
 	require.Equal(t, int32(1), posts.Load())
 	require.NotEqual(t, cap.Model, sent)
+	require.Contains(t, response.Body.String(), `"public_model":"`+cap.Model+`"`)
+	require.Contains(t, response.Body.String(), `"upstream_model":"`+cap.UpstreamModel+`"`)
 }
 
 func (mediaTestTemplates) ResolveTemplates(_ context.Context, caps []media.Capability) ([]media.Capability, error) {

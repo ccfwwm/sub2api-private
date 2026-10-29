@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCcSwitchImportDeeplink } from '../ccswitchImport'
+import { buildCcSwitchImportDeeplink, CLAUDE_CC_SWITCH_MODEL } from '../ccswitchImport'
 
 describe('Antigravity CC Switch endpoint', () => {
   it.each([
@@ -16,7 +16,13 @@ describe('Antigravity CC Switch endpoint', () => {
       expect(url.searchParams.get('endpoint')).toBe(endpoint)
       expect(url.searchParams.get('app')).toBe(clientType)
       expect(url.searchParams.get('homepage')).toBe(baseUrl)
-      expect(url.searchParams.has('model')).toBe(false)
+      if (clientType === 'claude') {
+        expect(url.searchParams.get('model')).toBe(CLAUDE_CC_SWITCH_MODEL)
+        expect(url.searchParams.get('opusModel')).toBe(CLAUDE_CC_SWITCH_MODEL)
+      } else {
+        expect(url.searchParams.has('model')).toBe(false)
+        expect(url.searchParams.has('opusModel')).toBe(false)
+      }
     }
   })
 })

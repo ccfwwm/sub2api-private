@@ -15,40 +15,24 @@ const selected = ref(''), error = ref(''), advanced = ref('')
 const config = computed<MediaConfig>(() => (props.modelValue?.media_monitor as MediaConfig) || { mode: 'connection', models: {} })
 const models = computed(() => [...new Set(props.models.map(m => m.trim()).filter(Boolean))])
 const templates = ref<MediaConfigRecord[]>([]), loadingTemplates = ref(true), templateError = ref('')
-const pinnedTemplates = ref<Record<string, Record<string, unknown> | null>>({})
 const publishedTemplates = computed(() => templates.value.filter(row => row.published_version && (row.published_config ?? row.config).status === 'enabled'))
-const refKey = (ref: NonNullable<MediaCapability['template_ref']>) => `${ref.id}:${ref.version}`
 function templateFor(cap: MediaCapability): Record<string, unknown> | undefined {
   if (!cap.template_ref) return
-  const row = publishedTemplates.value.find(row => row.id === cap.template_ref?.id && row.published_version === cap.template_ref.version)
-  return row ? row.published_config ?? row.config : pinnedTemplates.value[refKey(cap.template_ref)] ?? undefined
+  const row = publishedTemplates.value.find(row => row.id === cap.template_ref?.id)
+  return row ? row.published_config ?? row.config : undefined
 }
 const options = (cap: MediaCapability, field: 'media_types' | 'operations'): string[] => {
   const values = templateFor(cap)?.[field]
   return Array.isArray(values) ? values.filter((value): value is string => typeof value === 'string') : []
 }
-async function loadPinnedTemplates() {
-  for (const entry of Object.values(config.value.models)) {
-    const cap = entry.capability, reference = cap?.template_ref
-    if (!cap || !reference || templateFor(cap) || refKey(reference) in pinnedTemplates.value) continue
-    pinnedTemplates.value[refKey(reference)] = null
-    const history = await mediaProtocolsAPI.history('templates', reference.id)
-    const pinned = history.find(row => row.version === reference.version && row.status === 'enabled')
-    if (pinned) pinnedTemplates.value[refKey(reference)] = pinned.config
-  }
-}
 async function loadTemplates() {
-  loadingTemplates.value = true; templateError.value = ''; pinnedTemplates.value = {}
+  loadingTemplates.value = true; templateError.value = ''
   try {
     templates.value = await mediaProtocolsAPI.list('templates')
-    await loadPinnedTemplates()
   } catch { templateError.value = tr('模板目录加载失败；已保存配置保留，请重试。', 'Template catalogue failed to load. Saved settings are preserved; retry loading.') }
   finally { loadingTemplates.value = false }
 }
 onMounted(loadTemplates)
-watch(() => JSON.stringify(Object.values(config.value.models).map(entry => entry.capability?.template_ref)), () => {
-  if (!loadingTemplates.value) void loadPinnedTemplates().catch(() => { templateError.value = tr('固定模板版本加载失败；已保存配置保留。', 'Pinned template failed to load. Saved settings are preserved.') })
-})
 watch(models, all => { if (!all.includes(selected.value)) selected.value = all[0] || '' }, { immediate: true })
 const entry = computed(() => config.value.models[selected.value] || { capability: newMediaCapability(selected.value), parameters: {} })
 const capability = computed(() => {
@@ -62,7 +46,7 @@ const durations = computed(() => capability.value.duration.values || [])
 const minimumSeconds = computed(() => durations.value.length ? Math.min(...durations.value) : capability.value.duration.min || 5)
 const generationIssue = computed(() => {
   if (config.value.mode !== 'generation') return ''
-  if (loadingTemplates.value) return tr('正在核验固定模板版本；不会生成。', 'Verifying pinned templates; generation is blocked.')
+  if (loadingTemplates.value) return tr('正在确认当前协议模板；不会生成。', 'Checking the current protocol template; generation is blocked.')
   if (templateError.value) return templateError.value
   if (!models.value.length) return tr('请先配置模型；不会生成。', 'Configure a model before generation.')
   for (const model of models.value) {
@@ -70,7 +54,7 @@ const generationIssue = computed(() => {
     if (!cap || cap.model !== model || typeof cap.upstream_model !== 'string' || !cap.upstream_model.trim() || !cap.template_ref || !templateFor(cap)
       || !options(cap, 'media_types').includes(cap.media_type) || !entry.operation
       || !Array.isArray(cap.operations) || !cap.operations.includes(entry.operation) || !options(cap, 'operations').includes(entry.operation)) {
-      return `${model}: ` + tr('请明确配置已发布的固定模板版本、输出类型和操作；未配置时不会生成。', 'Choose a published pinned template, output type and operation before generation.')
+      return `${model}: ` + tr('请明确配置当前协议模板、输出类型和操作；未配置时不会生成。', 'Choose the current protocol template, output type and operation before generation.')
     }
   }
   return ''
@@ -92,7 +76,7 @@ function edit(fn: (c: ModelConfig) => void) {
 }
 function parameter(key: string, value: unknown) { edit(c => { c.parameters ||= {}; if (value === '') delete c.parameters[key]; else c.parameters[key] = value }) }
 function chooseTemplate(value: string) {
-  const row = publishedTemplates.value.find(row => `${row.id}:${row.published_version}` === value)
+  const row = publishedTemplates.value.find(row => row.id === value)
   if (!row?.published_version) return
   const version = row.published_version
   edit(c => {
@@ -148,7 +132,7 @@ const val = (e: Event) => (e.target as HTMLInputElement).value
     <p v-if="templateError" role="alert" class="text-xs text-red-600">{{ templateError }} <button type="button" @click="loadTemplates">{{ tr('重试加载', 'Retry loading') }}</button></p>
     <p v-if="generationIssue" role="alert" data-testid="media-monitor-generation-blocked" class="text-xs text-amber-600">{{ generationIssue }}</p>
     <div v-if="selected" class="grid gap-3 sm:grid-cols-2">
-      <label class="input-label">{{ tr('协议模板', 'Protocol template') }}<select class="input mt-1" data-testid="media-monitor-template" :disabled="loadingTemplates || !!templateError" :value="capability.template_ref ? refKey(capability.template_ref) : ''" @change="chooseTemplate(val($event))"><option value="">{{ tr('请选择已发布模板', 'Choose a published template') }}</option><option v-if="capability.template_ref && !publishedTemplates.some(row => row.id === capability.template_ref?.id && row.published_version === capability.template_ref.version)" :value="refKey(capability.template_ref)">{{ capability.template_ref.id }} · v{{ capability.template_ref.version }} · {{ tr('已存固定版本', 'Saved pinned version') }}</option><option v-for="row in publishedTemplates" :key="row.id" :value="`${row.id}:${row.published_version}`">{{ (row.published_config ?? row.config).name }} · v{{ row.published_version }}</option></select></label>
+      <label class="input-label">{{ tr('协议模板', 'Protocol template') }}<select class="input mt-1" data-testid="media-monitor-template" :disabled="loadingTemplates || !!templateError" :value="capability.template_ref?.id || ''" @change="chooseTemplate(val($event))"><option value="">{{ tr('请选择当前模板', 'Choose a current template') }}</option><option v-if="capability.template_ref && !publishedTemplates.some(row => row.id === capability.template_ref?.id)" :value="capability.template_ref.id">{{ capability.template_ref.id }} · {{ tr('模板不可用', 'Template unavailable') }}</option><option v-for="row in publishedTemplates" :key="row.id" :value="row.id">{{ (row.published_config ?? row.config).name }}</option></select></label>
       <label class="input-label">{{ tr('上游模型', 'Upstream model') }}<input data-testid="media-monitor-upstream" class="input mt-1" :value="capability.upstream_model" @change="upstreamModel(val($event))" /></label>
       <template v-if="capability.template_ref">
         <label class="input-label">{{ tr('输出媒体类型', 'Output media type') }}<select class="input mt-1" data-testid="media-monitor-type" :value="capability.media_type" @change="chooseMediaType(val($event))"><option value="">{{ tr('请选择类型', 'Choose a type') }}</option><option v-if="capability.media_type && !options(capability, 'media_types').includes(capability.media_type)" :value="capability.media_type">{{ capability.media_type }} · {{ tr('已存配置', 'Saved setting') }}</option><option v-for="type in options(capability, 'media_types')" :key="type">{{ type }}</option></select></label>

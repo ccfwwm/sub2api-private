@@ -67,9 +67,13 @@ const BaseDialogStub = defineComponent({
     show: {
       type: Boolean,
       default: false
+    },
+    width: {
+      type: String,
+      default: 'normal'
     }
   },
-  template: '<div v-if="show"><slot /><slot name="footer" /></div>'
+  template: '<div v-if="show" :data-width="width"><slot /><slot name="footer" /></div>'
 })
 
 const ModelWhitelistSelectorStub = defineComponent({
@@ -319,6 +323,7 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
     global: {
       stubs: {
         BaseDialog: BaseDialogStub,
+        MediaAccountModelsEditor: true,
         Select: SelectStub,
         Icon: true,
         ProxySelector: true,
@@ -335,6 +340,17 @@ describe('EditAccountModal', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('uses workspace width for media account editing', () => {
+    const account = buildAccount()
+    account.platform = 'imagevideo'
+    account.extra = { media_models: [] }
+
+    const wrapper = mountModal(account)
+
+    expect(wrapper.get('[data-width]').attributes('data-width')).toBe('workspace')
+    wrapper.unmount()
+  })
 
   it('passes existing non-identity mappings to the whitelist selector and preserves them on save', async () => {
     const account = buildAccount()

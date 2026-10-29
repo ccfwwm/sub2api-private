@@ -20,6 +20,10 @@ beforeEach(() => {
 describe('simple protocol template management', () => {
   it('creates and edits title and introduction through the form, then saves directly', async () => {
     const wrapper = mount(MediaProtocolManager, options); await flushPromises(); await click(wrapper, '新建')
+    const title = wrapper.get('[aria-label="模板名称"]'), titleInput = title.element as HTMLInputElement
+    titleInput.value = '自x定义协议'; titleInput.setSelectionRange(2, 2)
+    await title.trigger('input'); await flushPromises()
+    expect(titleInput.selectionStart).toBe(2)
     await wrapper.get('[aria-label="模板名称"]').setValue('自建视频协议')
     await wrapper.get('[aria-label="模板介绍"]').setValue('支持多个图片、视频和音频')
     await click(wrapper, '保存模板')

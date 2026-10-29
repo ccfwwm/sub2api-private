@@ -3,7 +3,7 @@ import {flushPromises,mount} from '@vue/test-utils'
 import {accountMediaCapabilities,mergeDiscoveredMediaModels,newMediaCapability} from '@/types/media'
 import MediaAccountModelsEditor from '../MediaAccountModelsEditor.vue'
 
-const templateAPI = vi.hoisted(() => ({list:vi.fn(),history:vi.fn(),effective:vi.fn()}))
+const templateAPI = vi.hoisted(() => ({list:vi.fn(),effective:vi.fn()}))
 vi.mock('@/api/media-protocols',()=>({mediaProtocolsAPI:templateAPI}))
 const accountAPI = vi.hoisted(() => ({ syncUpstreamModels: vi.fn(), syncUpstreamModelsPreview: vi.fn() }))
 vi.mock('@/api/admin',()=>({adminAPI:{accounts:accountAPI}}))
@@ -42,7 +42,6 @@ describe('动态媒体模板配置',()=>{
 
 describe('账号模板输出配置',()=>{
  beforeEach(()=>{
-  templateAPI.history.mockResolvedValue([])
   templateAPI.effective.mockResolvedValue([])
   templateAPI.list.mockImplementation(async (kind: string) => kind === 'bindings' ? [] : [
    {id:'multi-parts',published_version:2,config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']},published_config:{name:'Mixed parts',media_types:['image','audio'],operations:['image','audio']}},
@@ -93,14 +92,13 @@ describe('账号模板输出配置',()=>{
   expect(selected[0]).toMatchObject({media_type:'audio',operations:['audio']})
   wrapper.unmount()
  })
- it('uses the pinned historical template choices instead of the latest published version',async()=>{
-  templateAPI.history.mockResolvedValue([{id:'multi-parts',version:1,config:{media_types:['audio'],operations:['speech']}}])
+ it('uses the current template for legacy references without loading history',async()=>{
   const cap=newMediaCapability('public');cap.adapter='template';cap.template_ref={id:'multi-parts',version:1};cap.media_type='audio';cap.operations=['speech']
   const wrapper=await editor(cap)
   await wrapper.findAll('button').find(button=>button.text()==='配置请求能力')!.trigger('click')
-  expect(templateAPI.history).toHaveBeenCalledWith('templates','multi-parts')
-  expect((wrapper.get('[aria-label="启用操作 speech"]').element as HTMLInputElement).checked).toBe(true)
-  expect(wrapper.find('[aria-label="启用操作 image"]').exists()).toBe(false)
+  expect(templateAPI).not.toHaveProperty('history')
+  expect(wrapper.find('[aria-label="启用操作 speech"]').exists()).toBe(false)
+  expect(wrapper.find('[aria-label="启用操作 image"]').exists()).toBe(true)
   expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   wrapper.unmount()
  })

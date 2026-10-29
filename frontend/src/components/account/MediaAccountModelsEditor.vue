@@ -18,19 +18,11 @@ let retryTimer: ReturnType<typeof setInterval> | undefined
 const advanced = ref<number | null>(props.modelValue[0]?.adapter ? null : 0), testingModel = ref<string | null>(null)
 const templates = ref<MediaConfigRecord[]>([])
 const importNotice = ref(''), bulkTemplate = ref(''), selectedModels = ref<string[]>([])
-const pinnedTemplates = ref<Record<string, Record<string, unknown>>>({})
 const effectiveTemplates = ref<Record<string, string>>({})
 const effectiveTemplateState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
 onMounted(async () => {
   try {
     templates.value = await mediaProtocolsAPI.list('templates')
-    for (const capability of props.modelValue) {
-      const ref = capability.template_ref, row = templates.value.find(item => item.id === ref?.id)
-      if (!ref || row?.published_version === ref.version || pinnedTemplates.value[`${ref.id}:${ref.version}`]) continue
-      const history = await mediaProtocolsAPI.history('templates', ref.id)
-      const pinned = history.find(item => item.version === ref.version)
-      if (pinned) pinnedTemplates.value[`${ref.id}:${ref.version}`] = pinned.config
-    }
     await loadEffectiveTemplates()
   } catch (e) {
     effectiveTemplateState.value = 'error'
@@ -106,7 +98,6 @@ function bindSelected() {
 }
 function selectedTemplate(c: MediaCapability): Record<string, unknown> | undefined {
   const row = templates.value.find(item => item.id === c.template_ref?.id)
-  if (c.template_ref && row?.published_version !== c.template_ref.version) return pinnedTemplates.value[`${c.template_ref.id}:${c.template_ref.version}`]
   return row?.published_config ?? row?.config
 }
 function templateOptions(c: MediaCapability, field: 'media_types' | 'operations'): string[] {
@@ -209,10 +200,10 @@ function testStatus(c: MediaCapability) {
     <p v-if="!modelValue.length" class="text-sm text-gray-500">{{ tr('先同步候选模型或手动添加。','Discover models or add one manually.') }}</p>
     <div v-else class="space-y-4"><template v-for="(c,i) in modelValue" :key="i">
       <article class="min-w-0 rounded-xl border p-4 dark:border-dark-600">
-        <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px]">
+        <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(180px,0.7fr)]">
           <label class="min-w-0 text-xs text-gray-500"><span class="mb-1.5 flex items-center gap-2"><input v-model="selectedModels" type="checkbox" :value="c.model" :aria-label="'选择模型 ' + c.model" />{{ tr('公开模型名称','Public model') }}</span><input class="input w-full min-w-0" :title="c.model" :aria-label="tr('模型名称','Model')" :value="c.model" @change="edit(i,c => modelID(c,val($event)))" /></label>
           <label class="min-w-0 text-xs text-gray-500">{{ tr('上游映射（实际发送）','Upstream model (sent to provider)') }}<input class="input mt-1.5 w-full min-w-0" :title="c.upstream_model" :aria-label="tr('上游映射','Upstream mapping')" :value="c.upstream_model" @change="edit(i,c => c.upstream_model = val($event).trim())" /></label>
-          <div class="flex items-end gap-3 text-xs"><span>{{ c.media_type || tr('待选接口','Choose interface') }}</span><label class="inline-flex items-center gap-1.5"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" :disabled="!c.template_ref || !c.media_type || !c.operations.length" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" />{{ tr('启用','Enabled') }}</label></div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"><span class="break-words">{{ c.media_type || tr('待选接口','Choose interface') }}</span><label class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"><input type="checkbox" :aria-label="tr('启用模型','Enable model')" :checked="c.enabled" :disabled="!c.template_ref || !c.media_type || !c.operations.length" @change="edit(i,c => c.enabled = ($event.target as HTMLInputElement).checked)" />{{ tr('启用','Enabled') }}</label></div>
         </div>
         <div class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3 dark:border-dark-600">
           <div class="min-w-0 space-y-1 text-xs"><p class="break-words text-gray-600 dark:text-gray-300">{{ effectiveTemplateLabel(c) }}</p><p class="text-gray-400">{{ testStatus(c) }}</p></div>
