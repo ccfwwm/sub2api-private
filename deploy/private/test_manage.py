@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from controller import atomic_json, file_hash
-from manage import Manager, ident, DOCS_PROXY_SNIPPET, LEGACY_DOCS_PROXY_SNIPPET, V1219_DOCS_PROXY_SNIPPET
+from manage import Manager, ident, archive_application_data, DOCS_PROXY_SNIPPET, LEGACY_DOCS_PROXY_SNIPPET, V1219_DOCS_PROXY_SNIPPET
 
 
 class ManagementSafetyTests(unittest.TestCase):
@@ -19,6 +19,53 @@ class ManagementSafetyTests(unittest.TestCase):
         for value in ['../backup', 'id;reboot', '/etc', 'latest', 'a' * 33]:
             with self.assertRaises(ValueError):
                 ident(value)
+
+    def test_application_data_archive_uses_fixed_non_recursive_inventory(self):
+        source = self.root / 'data'
+        (source / 'logs').mkdir(parents=True)
+        (source / 'media').mkdir()
+        (source / 'logs' / 'rolling.log').write_text('live log')
+        (source / 'media' / 'old file.mp4').write_bytes(b'original')
+        archive, inventory = self.root / 'data.tar.gz', self.root / 'data.list'
+        commands = []
+
+        def fake_run(args, *, stdout=None, **kwargs):
+            commands.append(args)
+            if args[0] == 'find':
+                self.assertEqual(kwargs['cwd'], str(source))
+                stdout.write(b'.\0./media\0./media/old file.mp4\0')
+                return b''
+            self.assertEqual(args[0], 'tar')
+            self.assertIn('--no-recursion', args)
+            self.assertIn('--null', args)
+            self.assertLess(args.index('-C'), args.index('--files-from'))
+            listed = Path(args[args.index('--files-from') + 1]).read_bytes().split(b'\0')
+            self.assertIn(b'./media/old file.mp4', listed)
+            self.assertNotIn(b'./logs/rolling.log', listed)
+            (source / 'media' / 'new during archive.mp4').write_bytes(b'new')
+            self.assertNotIn(b'./media/new during archive.mp4', listed)
+            return b''
+
+        with patch('manage.run', side_effect=fake_run):
+            archive_application_data(source, archive, inventory)
+        self.assertEqual([command[0] for command in commands], ['find', 'tar'])
+        self.assertFalse(inventory.exists())
+
+    def test_application_data_archive_fails_closed_if_tar_fails(self):
+        source = self.root / 'data'
+        source.mkdir()
+        inventory = self.root / 'data.list'
+
+        def fake_run(args, *, stdout=None, **kwargs):
+            if args[0] == 'find':
+                stdout.write(b'.\0./file\0')
+                return b''
+            raise RuntimeError('tar failed')
+
+        with patch('manage.run', side_effect=fake_run):
+            with self.assertRaisesRegex(RuntimeError, 'tar failed'):
+                archive_application_data(source, self.root / 'data.tar.gz', inventory)
+        self.assertFalse(inventory.exists())
 
     def test_target_preserves_recovered_stores(self):
         previous = {'services': {'sub2api': {'environment': {'DATABASE_HOST': 'recovered-pg'},

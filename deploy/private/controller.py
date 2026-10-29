@@ -66,10 +66,10 @@ def atomic_json(path, data):
     os.replace(tmp, path)
 
 
-def run(args, *, stdin=None, stdout=None, timeout=1800):
+def run(args, *, stdin=None, stdout=None, timeout=1800, cwd=None):
     # Command output can contain environment secrets; never include it in errors.
     result = subprocess.run(args, input=stdin, stdout=stdout or subprocess.PIPE,
-                            stderr=subprocess.PIPE, timeout=timeout, check=False)
+                            stderr=subprocess.PIPE, timeout=timeout, check=False, cwd=cwd)
     if result.returncode:
         if COMMAND_ERROR_LOG:
             # Diagnostics stay on the host in a root-only file; never return raw

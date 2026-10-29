@@ -1,14 +1,14 @@
 {
-  "version": "v1.3.9",
+  "version": "v1.3.10",
   "status": "recorded",
-  "acceptance_state": "pre-release-read-only-verified",
+  "acceptance_state": "pre-release-read-only-verified-with-unchanged-application",
   "verified_at": "2026-10-29T01:59:24+00:00",
-  "environment": "Read-only checks of five existing production video tasks through the authenticated relay admin task API and the provider GET /v1/videos/{id} API before v1.3.9, while production runs v1.3.7. No generation was submitted. Verification status below describes completion of the read-only check, separately from the provider task status.",
+  "environment": "Read-only checks of five existing production video tasks through the authenticated relay admin task API and the provider GET /v1/videos/{id} API, while production runs v1.3.7. No generation was submitted. This evidence is reused for v1.3.10 because its application code is unchanged from v1.3.9; this release changes only production deployment tooling. Verification status below describes completion of the read-only check, separately from the provider task status.",
   "new_paid_submissions": 0,
   "credentials_recorded": false,
   "cases": [
     {
-      "label": "existing-completed-video-v1.3.9",
+      "label": "existing-completed-video-unchanged-app-v1.3.10",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
@@ -16,10 +16,10 @@
       "provider_http": 200,
       "provider_task_status": "completed",
       "artifact_bytes": 4621548,
-      "scope": "Existing task is completed in both relay and provider; video artifact is available. No new generation."
+      "scope": "Existing task was verified completed in both relay and provider; video artifact was available. Evidence is reused because v1.3.10 does not change application code. No new generation."
     },
     {
-      "label": "existing-failed-videos-v1.3.9",
+      "label": "existing-failed-videos-unchanged-app-v1.3.10",
       "verification": "real_connection",
       "status": "completed",
       "http": 200,
@@ -29,7 +29,7 @@
       "checked_tasks": 4,
       "sample_task_id": "mt_b10c18f7-b279-4f3c-ac81-84a055e271c3",
       "sample_provider_request_id": "req_1793237987480714927_23422",
-      "scope": "Relay evidence and direct provider queries agree on failure. Identical model, duration, aspect ratio and resolution to the successful task; prompt contents were not compared. This check does not establish provider recovery."
+      "scope": "Relay evidence and direct provider queries agreed on failure. Identical model, duration, aspect ratio and resolution to the successful task; prompt contents were not compared. Evidence is reused because v1.3.10 does not change application code. This check does not establish provider recovery."
     }
   ]
 }

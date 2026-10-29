@@ -91,6 +91,19 @@ def inspect(name):
     return json.loads(run(['docker', 'inspect', name]))[0]
 
 
+def archive_application_data(source, archive, inventory):
+    """Archive a fixed pathname inventory so concurrent new media files are ignored."""
+    source, archive, inventory = Path(source), Path(archive), Path(inventory)
+    try:
+        with inventory.open('wb') as output:
+            run(['find', '.', '-path', './logs', '-prune', '-o', '-print0'],
+                stdout=output, timeout=1800, cwd=str(source))
+        run(['tar', '-C', str(source), '--no-recursion', '--null',
+             '-czf', str(archive), '--files-from', str(inventory)], timeout=1800)
+    finally:
+        inventory.unlink(missing_ok=True)
+
+
 class Manager:
     def __init__(self, state=STATE, production=PRODUCTION, docs_proxy_enabled=True,
                  nginx_vhost='/etc/nginx/conf.d/sub2api-code-xyz-https.conf',
@@ -214,8 +227,10 @@ class Manager:
         data = [m['Source'] for m in original['Mounts'] if m['Destination'] == '/app/data']
         if len(data) != 1:
             raise ValueError('expected one application data mount')
-        # Live rolling logs are not restore inputs and change during tar reads.
-        run(['tar', '--exclude=./logs', '-czf', str(folder / 'application-data.tar.gz'), '-C', data[0], '.'])
+        # Live rolling logs are not restore inputs. A fixed file inventory also
+        # keeps newly created media jobs from changing directory mtimes during
+        # recursive tar traversal; files in the inventory remain fully checked.
+        archive_application_data(data[0], folder / 'application-data.tar.gz', folder / 'application-data.list')
         run(['tar', '-czf', str(folder / 'configuration.tar.gz'), '-C', str(self.production),
              '.env', 'docker-compose.yml', 'docker-compose.override.yml', 'pricing-overlay'])
         redis = self.active()['x-ops']['redis']
