@@ -1,13 +1,13 @@
 {
-  "version": "v1.3.17",
+  "version": "v1.3.19",
   "status": "recorded",
-  "acceptance_state": "upstream-contract-and-local-binding-mapping-verified-production-v1.3.17-online-verified",
-  "production_verified_at": "2026-10-30T12:08:13Z",
-  "verified_at": "2026-10-30T08:17:02Z",
+  "acceptance_state": "upstream-contract-and-local-binding-mapping-verified-pre-release-v1.3.19",
+  "production_verified_at": null,
+  "verified_at": "2026-10-30T16:49:48Z",
   "new_paid_submissions": 1,
   "credentials_recorded": false,
-  "environment": "Pre-release v1.3.17 validation. Direct supplier contract smoke used the supplied upstream credential without recording it: GET /v1/models listed gemini-omni-1.1-flash; POST /v1/videos used integer duration and an Alias.images single-image data URL string mapped from an image object input; the task completed and GET /v1/videos/{id}/content returned HTTP 200 video/mp4. The first explicitly rejected request used duration as a string and returned HTTP 400 without a task ID; it was corrected once and no accepted task was resubmitted. Local binding tests verify the scalar mapping is explicit per binding, rejects unsupported multi-image input before task creation, and leaves other models' array mappings unchanged. Production v1.3.17 completed immediate deployment with online_verified status and all three production entry points returned HTTP 200. The public docs script badge remains hard-coded to v1.3.16 and is deferred to the next release; this does not affect documented API behavior.",
-  "source_release": "v1.3.17",
+  "environment": "Pre-release v1.3.19 validation. Direct Foxrouter contract smoke used the supplied upstream credential without recording it: one and two Base64 Data URL strings in Alias.images were accepted with HTTP 200 and task IDs; a single unwrapped string was rejected with HTTP 400, confirming the upstream []string contract. Local binding tests verify the account-specific mapping converts image objects to Data URL strings, preserves one or many images, and leaves other models' array mappings unchanged. No production verification is claimed until the v1.3.19 cutover completes.",
+  "source_release": "v1.3.19",
   "reused_for_release": false,
   "cases": [
     {
@@ -46,6 +46,17 @@
       "artifact_count": 1,
       "artifact_http": 206,
       "artifact_header_valid": true
+    },
+    {
+      "label": "foxrouter-gemini-omni-flash-image-string-array-contract",
+      "verification": "real_connection",
+      "status": "completed",
+      "endpoint": "https://foxrouter.org",
+      "model": "gemini-omni-flash",
+      "input_contract": "one and two image objects mapped to Base64 Data URL strings under Alias.images string array",
+      "submission_attempts": 2,
+      "accepted_shapes": ["one-image", "two-image"],
+      "credentials_recorded": false
     }
   ]
 }
