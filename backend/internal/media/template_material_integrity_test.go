@@ -159,15 +159,16 @@ func TestFoxrouterTemplateMapsBase64ImageObjectsToStringArray(t *testing.T) {
 
 		raw, err := json.Marshal(wire.Body)
 		require.NoError(t, err)
-		var upstream struct {
-			Alias struct {
-				Images []string `json:"images"`
-			} `json:"Alias"`
+		// Alias in a Go decoder error names its embedded type, not a JSON
+		// envelope. Decode the same flat contract the real supplier accepts.
+		type Alias struct {
+			Images []string `json:"images"`
 		}
+		upstream := struct{ *Alias }{Alias: &Alias{}}
 		require.NoError(t, json.Unmarshal(raw, &upstream))
-		require.NotContains(t, wire.Body, "images")
-		require.Len(t, upstream.Alias.Images, count)
-		for _, image := range upstream.Alias.Images {
+		require.NotContains(t, wire.Body, "Alias")
+		require.Len(t, upstream.Images, count)
+		for _, image := range upstream.Images {
 			require.Equal(t, want, image)
 		}
 	}

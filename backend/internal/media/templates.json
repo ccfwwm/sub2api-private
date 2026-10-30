@@ -301,7 +301,7 @@
     "materials": [
       {
         "kind": "image",
-        "target": "Alias.images",
+        "target": "images",
         "shape": "string",
         "encoding": "data_url"
       },
