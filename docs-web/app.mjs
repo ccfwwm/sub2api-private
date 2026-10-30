@@ -1,6 +1,25 @@
 export const profilesForCategory = (profiles, category) => profiles.filter(p => Array.isArray(p.operations) && p.operations.some(op => category.ops.includes(op)))
 export const optionValues = values => Array.isArray(values) ? values : []
 export const API_ORIGIN = 'https://code.aicodeme.xyz'
+export function docsVersionBadge(version) {
+  const value=typeof version==='string'?version.trim():''
+  if(!/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value))return 'MEDIA API'
+  return `MEDIA API · ${value.startsWith('v')?value:`v${value}`}`
+}
+export async function loadDocsVersion(fetcher=globalThis.fetch,origin=globalThis.location?.origin) {
+  if(typeof fetcher!=='function')return docsVersionBadge()
+  const origins=[...new Set([origin,API_ORIGIN].filter(value=>typeof value==='string'&&/^https?:\/\//.test(value)))]
+  for(const base of origins) {
+    try {
+      const response=await fetcher(`${base}/api/v1/settings/public`,{credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(5000)})
+      if(!response.ok)continue
+      const payload=await response.json()
+      const badge=docsVersionBadge(payload?.data?.version)
+      if(badge!=='MEDIA API')return badge
+    } catch {}
+  }
+  return docsVersionBadge()
+}
 export const categories = [
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
   { id:'gemini-image', title:'Gemini协议生图', sections:['gemini','gemini-result'], ops:['gemini_image'] },
@@ -114,8 +133,9 @@ async function start() {
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.16<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot"><span id="api-version">MEDIA API</span><a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
   const $=s=>root.querySelector(s)
+  loadDocsVersion().then(label=>{const badge=$('#api-version');if(badge)badge.textContent=label})
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
   const selectedSections=()=>sections.filter(s=>category.sections.includes(s.id))

@@ -46,6 +46,11 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 	last := map[string]any{"url": imageURL, "role": "last_frame"}
 	frameImages := []any{first, last}
 	referenceImage := map[string]any{"url": imageURL, "role": "reference"}
+	base64Image := "data:image/png;base64," + base64String(png)
+	base64ImageObjects := []any{
+		map[string]any{"mime_type": "image/png", "b64_json": base64String(png)},
+		map[string]any{"mime_type": "image/png", "b64_json": base64String(png)},
+	}
 	type contract struct {
 		id, operation, mediaType, submit, query, encoding string
 		refs, expected                                    map[string]any
@@ -58,6 +63,7 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 		{id: "video-arrays", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": images, "videos": videos, "audios": audios}, expected: map[string]any{"images": images, "videos": videos, "audios": audios, "seconds": float64(5), "ratio": "16:9"}},
 		{id: "v6k-video-reference-string", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": []any{referenceImage}}, expected: map[string]any{"images": []any{imageURL}}},
 		{id: "video-reference-arrays", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": images, "videos": videos, "audios": audios}, expected: map[string]any{"reference_images": images, "reference_videos": videos, "reference_audios": audios, "duration": float64(5), "aspect_ratio": "16:9"}, absent: []string{"images", "videos", "audios", "seconds", "ratio"}},
+		{id: "foxrouter-video-base64-image-strings", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": base64ImageObjects}, expected: map[string]any{"Alias": map[string]any{"images": []any{base64Image, base64Image}}, "duration": float64(5), "aspect_ratio": "16:9"}, absent: []string{"images"}},
 		{id: "video-single-image", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": []any{imageURL}}, expected: map[string]any{"image": map[string]any{"url": imageURL}}, absent: []string{"images"}},
 		{id: "video-frame-roles", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": frameImages}, expected: map[string]any{"images": frameImages}},
 		{id: "video-frame-fields", operation: "video", mediaType: "video", submit: "/v1/videos", query: "/v1/videos/job/a", refs: map[string]any{"images": frameImages}, expected: map[string]any{"first_frame": first, "last_frame": last}, absent: []string{"images"}},
@@ -247,7 +253,7 @@ func TestBuiltinTemplateNativeHTTPContracts(t *testing.T) {
 				sum := sha256.Sum256(output)
 				require.Equal(t, hex.EncodeToString(sum[:]), hash)
 				downloadPath := "/generated/contract"
-				if strings.HasPrefix(tc.id, "video-") || tc.id == "v6k-video-reference-string" {
+				if strings.HasPrefix(tc.id, "video-") || tc.id == "v6k-video-reference-string" || tc.id == "foxrouter-video-base64-image-strings" {
 					downloadPath = "/v1/videos/job/a/content"
 				}
 				expectedCalls = append(expectedCalls, "GET "+downloadPath)

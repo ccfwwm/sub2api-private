@@ -218,6 +218,123 @@
     ]
   },
   {
+    "id": "foxrouter-video-base64-image-strings",
+    "version": "1",
+    "status": "enabled",
+    "schema_version": 1,
+    "name": "Foxrouter 视频 · Base64 图片字符串数组",
+    "description": "输入图片对象数组转换为含 MIME 的 Base64 Data URL 字符串数组，仅用于契约匹配的上游模型。",
+    "media_types": [
+      "video"
+    ],
+    "operations": [
+      "video"
+    ],
+    "mode": "async",
+    "auth": {
+      "mode": "bearer"
+    },
+    "discovery": {
+      "method": "GET",
+      "path": "/v1/models"
+    },
+    "model_ids": [
+      "data[].id"
+    ],
+    "submit": {
+      "method": "POST",
+      "path": "/v1/videos",
+      "encoding": "json"
+    },
+    "query": {
+      "method": "GET",
+      "path": "/v1/videos/{task_id}"
+    },
+    "response": {
+      "task_id": [
+        "id",
+        "task_id",
+        "data.id"
+      ],
+      "status": [
+        "status",
+        "state",
+        "data.status"
+      ],
+      "errors": [
+        "error.message",
+        "error.code",
+        "message"
+      ],
+      "states": {
+        "queued": "in_progress",
+        "pending": "in_progress",
+        "running": "in_progress",
+        "processing": "in_progress",
+        "in_progress": "in_progress",
+        "succeeded": "completed",
+        "success": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "error": "failed",
+        "cancelled": "failed",
+        "canceled": "failed"
+      },
+      "urls": [
+        "url",
+        "data.url",
+        "data[].url",
+        "output.url",
+        "output.video_url"
+      ],
+      "base64": [
+        "data[].b64_json"
+      ],
+      "mime": "video/mp4",
+      "progress": [
+        "progress",
+        "data.progress"
+      ]
+    },
+    "poll_seconds": 10,
+    "builtin_revision": "1.3.18",
+    "materials": [
+      {
+        "kind": "image",
+        "target": "Alias.images",
+        "shape": "string",
+        "encoding": "data_url"
+      },
+      {
+        "kind": "video",
+        "target": "videos",
+        "shape": "preserve",
+        "encoding": "preserve"
+      },
+      {
+        "kind": "audio",
+        "target": "audios",
+        "shape": "preserve",
+        "encoding": "preserve"
+      }
+    ],
+    "content_path": "/v1/videos/{task_id}/content",
+    "rules": [
+      {
+        "phase": "wire",
+        "op": "rename",
+        "source": "seconds",
+        "target": "duration"
+      },
+      {
+        "phase": "wire",
+        "op": "rename",
+        "source": "ratio",
+        "target": "aspect_ratio"
+      }
+    ]
+  },
+  {
     "id": "video-single-image",
     "version": "1",
     "status": "enabled",

@@ -70,7 +70,7 @@ describe('media diagnostics selectors', () => {
       request: expect.objectContaining({ model: 'video-choice', seconds: 5, prompt: 'two reference frames' }), measure_media: false
     }))
     expect(wrapper.text()).toContain('输入请求')
-    expect(wrapper.text()).toContain('联调日志')
+    expect(wrapper.text()).toContain('预估流程')
     expect(wrapper.find('details[open]').exists()).toBe(false)
     wrapper.unmount()
   })
@@ -192,6 +192,46 @@ describe('media diagnostics selectors', () => {
     await flushPromises()
     expect(api.test).toHaveBeenCalledTimes(2)
     expect(api.test.mock.calls[1][1]).toBe(idempotencyKey)
+    wrapper.unmount()
+  })
+
+  it('submits a paid test directly without requiring a free preview', async () => {
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.get('[aria-label="联调提示词"]').setValue('direct request')
+    await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
+    await flushPromises()
+
+    expect(api.preview).not.toHaveBeenCalled()
+    expect(api.test).toHaveBeenCalledWith(expect.objectContaining({
+      api_key: 'sk-local-preview', confirm_paid_submission: true,
+      request: expect.objectContaining({ model: 'video-choice', prompt: 'direct request' })
+    }), expect.any(String))
+    expect(wrapper.text()).toContain('任务 ID：task-91')
+    wrapper.unmount()
+  })
+
+  it('keeps paid submission available while a free preview is still running', async () => {
+    let finishPreview!: (value: unknown) => void
+    api.preview.mockReturnValueOnce(new Promise(resolve => { finishPreview = resolve }))
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
+    expect(wrapper.text()).toContain('预估处理中…')
+
+    await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
+    const submit = wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!
+    expect((submit.element as HTMLButtonElement).disabled).toBe(false)
+    await submit.trigger('click')
+    await flushPromises()
+
+    expect(api.test).toHaveBeenCalledTimes(1)
+    expect(api.preview).toHaveBeenCalledTimes(1)
+    finishPreview({ paid_submission: false, request: { model: 'upstream-video' } })
+    await flushPromises()
     wrapper.unmount()
   })
 

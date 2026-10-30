@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -130,6 +131,46 @@ func TestBindingMapsScreenshotImageObjectToProviderString(t *testing.T) {
 	require.NoError(t, err)
 	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
 	require.ErrorContains(t, err, "template_reference_limit")
+}
+
+func TestFoxrouterTemplateMapsBase64ImageObjectsToStringArray(t *testing.T) {
+	var template ProtocolTemplate
+	for _, candidate := range BuiltinTemplates() {
+		if candidate.ID == "foxrouter-video-base64-image-strings" {
+			template = candidate
+			break
+		}
+	}
+	require.NotEmpty(t, template.ID)
+	require.NoError(t, ValidateTemplate(template, true))
+
+	png := base64String(pngFixture(t))
+	want := "data:image/png;base64," + png
+	for _, count := range []int{1, 2} {
+		images := make([]any, count)
+		for i := range images {
+			images[i] = map[string]any{"mime_type": "image/png", "b64_json": png}
+		}
+		cap := Capability{Model: "gemini-omni-flash", UpstreamModel: "gemini-omni-flash", MediaType: "video", Template: &template}
+		req, err := Normalize(cap, "video", map[string]any{"seconds": 4, "prompt": "test", "images": images})
+		require.NoError(t, err)
+		wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+		require.NoError(t, err)
+
+		raw, err := json.Marshal(wire.Body)
+		require.NoError(t, err)
+		var upstream struct {
+			Alias struct {
+				Images []string `json:"images"`
+			} `json:"Alias"`
+		}
+		require.NoError(t, json.Unmarshal(raw, &upstream))
+		require.NotContains(t, wire.Body, "images")
+		require.Len(t, upstream.Alias.Images, count)
+		for _, image := range upstream.Alias.Images {
+			require.Equal(t, want, image)
+		}
+	}
 }
 
 func TestScalarDataURLMappingPreservesMIMEAndRejectsUnrepresentedAttributes(t *testing.T) {

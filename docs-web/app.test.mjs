@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, optionValues, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
+import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, fullMarkdown, inputMaterialsFor, loadDocsVersion, optionValues, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -14,6 +14,27 @@ test('public requests preserve all references without selecting a supplier proto
   assert.equal(request.reference_images,undefined)
   assert.deepEqual(buildRequest({...cap,model:'renamed',request_format:'anything'},'video',{prompt:'test'},{image:images}).images,images)
   assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{image:[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}]}).images,[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}])
+})
+
+test('documentation sidebar version follows public settings and has a safe fallback', async()=>{
+  assert.equal(docsVersionBadge('v1.3.18'),'MEDIA API · v1.3.18')
+  assert.equal(docsVersionBadge('1.3.18'),'MEDIA API · v1.3.18')
+  assert.equal(docsVersionBadge('<script>'),'MEDIA API')
+  assert.equal(await loadDocsVersion(async(url,options)=>{
+    assert.match(url,/\/api\/v1\/settings\/public$/)
+    assert.equal(options.credentials,'omit')
+    return {ok:true,json:async()=>({data:{version:'v1.3.18'}})}
+  }),'MEDIA API · v1.3.18')
+  const attempted=[]
+  assert.equal(await loadDocsVersion(async url=>{
+    attempted.push(url)
+    return url.startsWith('https://local.example')
+      ? {ok:false,json:async()=>({})}
+      : {ok:true,json:async()=>({data:{version:'1.3.18'}})}
+  },'https://local.example'),'MEDIA API · v1.3.18')
+  assert.equal(attempted[0],'https://local.example/api/v1/settings/public')
+  assert.equal(attempted[1],`${API_ORIGIN}/api/v1/settings/public`)
+  assert.equal(await loadDocsVersion(async()=>{throw new Error('offline')}),'MEDIA API')
 })
 
 test('managed music uses the asynchronous task path and does not request SSE',async()=>{
