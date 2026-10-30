@@ -54,10 +54,16 @@ jobs:
           SSH=(ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST")
           DEPLOY_COMMAND="deploy $VERSION"
           if [ "$IMMEDIATE" = true ]; then DEPLOY_COMMAND+=" --immediate"; fi
-          "${SSH[@]}" "$DEPLOY_COMMAND" > "$RUNNER_TEMP/deploy.json"
+          if ! "${SSH[@]}" "$DEPLOY_COMMAND" > "$RUNNER_TEMP/deploy.json" 2> "$RUNNER_TEMP/ssh-error.log"; then
+            cat "$RUNNER_TEMP/ssh-error.log" >&2
+            exit 1
+          fi
           JOB=$(python3 -c 'import json,sys,re; j=json.load(open(sys.argv[1])); assert re.fullmatch("[0-9a-f]{32}",j["id"]); print(j["id"])' "$RUNNER_TEMP/deploy.json")
           for attempt in $(seq 1 1000); do
-            "${SSH[@]}" "status $JOB" > "$RUNNER_TEMP/deploy.json"
+            if ! "${SSH[@]}" "status $JOB" > "$RUNNER_TEMP/deploy.json" 2> "$RUNNER_TEMP/ssh-error.log"; then
+              cat "$RUNNER_TEMP/ssh-error.log" >&2
+              exit 1
+            fi
             STATUS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/deploy.json")
             cat "$RUNNER_TEMP/deploy.json"
             if [ "$STATUS" = succeeded ]; then
