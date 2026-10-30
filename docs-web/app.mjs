@@ -1,4 +1,5 @@
 export const profilesForCategory = (profiles, category) => profiles.filter(p => Array.isArray(p.operations) && p.operations.some(op => category.ops.includes(op)))
+export const optionValues = values => Array.isArray(values) ? values : []
 export const API_ORIGIN = 'https://code.aicodeme.xyz'
 export const categories = [
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
@@ -36,7 +37,8 @@ export function parseMaterialText(value) {
   return text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>line.startsWith('{')?JSON.parse(line):line)
 }
 export function inputMaterialsFor(cap) {
-  return { ...(cap.operations.includes('video') ? {image:{},video:{},audio:{}} : {}), ...cap.materials, ...(cap.operations.includes('image_edit') && !cap.materials?.mask ? { mask: { max_file_bytes: 50 * 1048576 } } : {}) }
+  const operations=optionValues(cap.operations),materials=cap.materials&&typeof cap.materials==='object'&&!Array.isArray(cap.materials)?cap.materials:{}
+  return { ...(operations.includes('video') ? {image:{},video:{},audio:{}} : {}), ...Object.fromEntries(Object.entries(materials).map(([kind,rule])=>[kind,rule&&typeof rule==='object'&&!Array.isArray(rule)?rule:{}])), ...(operations.includes('image_edit') && !materials.mask ? { mask: { max_file_bytes: 50 * 1048576 } } : {}) }
 }
 export function buildRequest(cap, operation, fields, materials={}) {
   const p={model:cap.model,public_profile_id:cap.profile_id,prompt:fields.prompt,async:true,n:1}
@@ -79,7 +81,7 @@ async function start() {
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.12<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.14<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
   const $=s=>root.querySelector(s)
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
@@ -115,22 +117,23 @@ async function start() {
     model.onchange=()=>{
       const cap=options[model.value]; if(!cap){$('#parameters').innerHTML='';$('#submit').disabled=true;$('#preview').disabled=true;return}
       for(const name of Object.keys(uploads))delete uploads[name]
-      const pick=(name,label,values=[])=>values.length?`<label>${label}<select name="${name}"><option value="">自动 / 省略</option>${values.map(v=>`<option>${escape(v)}</option>`).join('')}</select></label>`:''
+      const pick=(name,label,values=[])=>{const choices=optionValues(values);return choices.length?`<label>${label}<select name="${name}"><option value="">自动 / 省略</option>${choices.map(v=>`<option>${escape(v)}</option>`).join('')}</select></label>`:''}
       const duration=cap.duration||{}
       const seconds=duration.default??duration.values?.[0]??duration.min??''
-      let html=`<label>调用场景<select name="operation">${cap.operations.filter(op=>category.ops.includes(op)).map(op=>`<option value="${op}">${escape({image:'文字生图',image_edit:'参考图编辑',gemini_image:'Gemini 生图 / 编辑',video:'视频生成',audio:'专用音乐接口',chat_music:'Chat 音乐接口',speech:'语音合成'}[op])}</option>`).join('')}</select></label><label class="wide">提示词<textarea name="prompt" placeholder="输入生成描述或编辑要求" required></textarea></label>`
+      const operations=optionValues(cap.operations)
+      let html=`<label>调用场景<select name="operation">${operations.filter(op=>category.ops.includes(op)).map(op=>`<option value="${op}">${escape({image:'文字生图',image_edit:'参考图编辑',gemini_image:'Gemini 生图 / 编辑',video:'视频生成',audio:'专用音乐接口',chat_music:'Chat 音乐接口',speech:'语音合成'}[op])}</option>`).join('')}</select></label><label class="wide">提示词<textarea name="prompt" placeholder="输入生成描述或编辑要求" required></textarea></label>`
       html+=pick('size','尺寸 / 分辨率档位',cap.sizes)+pick('quality','画质',cap.qualities)+pick('background','背景',cap.backgrounds)+pick('output_format','图片输出格式',cap.output_formats)+pick('resolution','视频清晰度',cap.resolutions)+pick('ratio','画面比例',cap.aspect_ratios)
-      if((cap.media_type==='video'||cap.media_type==='audio')&&!cap.operations.every(op=>op==='speech')) html+=`<label>时长（秒）<input name="seconds" type="number" value="${escape(seconds)}" min="1"><small>目录建议：${escape(duration.values?.join(' / ')||'由所选配置决定')}；由上游确认支持范围</small></label>`
+      if((cap.media_type==='video'||cap.media_type==='audio')&&!operations.every(op=>op==='speech')) html+=`<label>时长（秒）<input name="seconds" type="number" value="${escape(seconds)}" min="1"><small>目录建议：${escape(duration.values?.join(' / ')||'由所选配置决定')}；由上游确认支持范围</small></label>`
       if(cap.media_type==='video')html+=pick('generate_audio','生成声音',['true','false'])
       if(cap.media_type==='audio')html+=`<label class="wide">歌词<textarea name="lyrics"></textarea></label><label>BPM<input name="bpm" type="number" min="1"></label>`+pick('instrumental','纯音乐',['true','false'])+pick('audio_format','输出格式',['mp3','wav','m4a'])
-      if(cap.operations.includes('speech'))html+=`<label>声音<input name="voice" placeholder="使用管理员配置支持的声音 ID"></label><label>输出格式<input name="response_format" placeholder="如 mp3 / wav"></label><label>语速<input name="speed" type="number" min="0.01" step="0.01"></label>`
-      if(cap.operations.includes('chat_music'))html+=pick('stream','Chat 返回方式',['false','true'])
+      if(operations.includes('speech'))html+=`<label>声音<input name="voice" placeholder="使用管理员配置支持的声音 ID"></label><label>输出格式<input name="response_format" placeholder="如 mp3 / wav"></label><label>语速<input name="speed" type="number" min="0.01" step="0.01"></label>`
+      if(operations.includes('chat_music'))html+=pick('stream','Chat 返回方式',['false','true'])
       if(cap.media_type==='video')for(const role of ['first_frame','last_frame'])html+=`<label class="wide">${role==='first_frame'?'首帧':'尾帧'}（计入参考图总数）<textarea data-material="${role}" placeholder="URL、Data URL 或素材 JSON 对象；字段按输入原样保留"></textarea></label>`
-      if(cap.operations.includes('gemini_image'))html+=pick('modalities','返回模态',['TEXT','IMAGE','both'])
+      if(operations.includes('gemini_image'))html+=pick('modalities','返回模态',['TEXT','IMAGE','both'])
       const inputMaterials=inputMaterialsFor(cap)
       for(const [kind,material] of Object.entries(inputMaterials)) {
         // Missing catalogue counts do not disable unified reference inputs.
-        html+=`<label class="wide">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>支持多选和分批添加；文件在本页转为 Base64。</small><ul data-upload-list="${kind}" class="upload-list"></ul></label>`
+        html+=`<label class="wide material-drop-zone" data-drop-zone="${kind}">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>支持多选、分批添加或拖入文件；提交参数和日志会脱敏 Base64。</small><ul data-upload-list="${kind}" class="upload-list"></ul></label>`
       }
       $('#parameters').innerHTML='<div class="fields">'+html+'</div>'
       $('#submit').disabled=running||!!pending||!key||!!cap.catalog_only
@@ -195,18 +198,31 @@ async function start() {
     }
     const execute=async fn=>{if(running)return;running=true;model.disabled=true;$('#preview').disabled=true;activeController=new AbortController();const token=++epoch;$('#submit').disabled=true;$('#debug-error').textContent='';try{await fn(token)}catch(e){if(token===epoch)failure(e)}finally{if(token===epoch){running=false;model.disabled=false;activeController=null;$('#recover').disabled=!pending;$('#submit').disabled=!!pending||!model.value||!key||!!options[model.value]?.catalog_only;$('#preview').disabled=!model.value||!key||!!options[model.value]?.catalog_only}}}
     function installUploads(){
-      for(const input of $('#parameters').querySelectorAll('[data-files]'))input.onchange=()=>{
-        const kind=input.dataset.files,files=[...input.files];input.value=''
+      const queue=(kind,files,input)=>{
+        if(input)input.value=''
+        if(!files.length)return
         const job=(async()=>{
+          const cap=options[model.value],rule=inputMaterialsFor(cap)[kind],field=$('#parameters').querySelector(`[data-material="${kind}"]`)
+          const typedCount=parseMaterialText(field?.value||'').length
+          if(rule?.max_count>0&&typedCount+(uploads[kind]?.length||0)+files.length>rule.max_count)throw Error(`${kind} 最多支持 ${rule.max_count} 个素材`)
           for(const file of files){
-            const cap=options[model.value],rule=inputMaterialsFor(cap)[kind]
             if(rule?.max_file_bytes>0&&file.size>rule.max_file_bytes)throw Error(`${file.name} 超过单文件大小限制`)
             if(file.type&&!file.type.startsWith((kind==='mask'?'image':kind)+'/'))throw Error(`${file.name} 文件类型不匹配`)
-            const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)})
-            uploads[kind]||=[];uploads[kind].push({name:file.name,size:file.size,material:dataURLToMaterial(dataURL)})
-            appendLog('添加参考素材',{kind,file:file.name,bytes:file.size});renderUploads(kind)
           }
+          const additions=await Promise.all(files.map(async file=>{
+            const dataURL=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('文件读取失败'));reader.readAsDataURL(file)})
+            return {name:file.name,size:file.size,material:dataURLToMaterial(dataURL)}
+          }))
+          uploads[kind]=[...(uploads[kind]||[]),...additions]
+          for(const file of additions)appendLog('添加参考素材',{kind,file:file.name,bytes:file.size})
+          renderUploads(kind)
         })();uploadJobs.add(job);job.catch(failure).finally(()=>uploadJobs.delete(job))
+      }
+      for(const input of $('#parameters').querySelectorAll('[data-files]'))input.onchange=()=>queue(input.dataset.files,[...input.files],input)
+      for(const zone of $('#parameters').querySelectorAll('[data-drop-zone]')){
+        zone.ondragenter=zone.ondragover=event=>{event.preventDefault();zone.classList.add('drag-over')}
+        zone.ondragleave=event=>{if(!zone.contains(event.relatedTarget))zone.classList.remove('drag-over')}
+        zone.ondrop=event=>{event.preventDefault();zone.classList.remove('drag-over');queue(zone.dataset.dropZone,[...(event.dataTransfer?.files||[])])}
       }
     }
     function renderUploads(kind){

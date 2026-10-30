@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import MediaDiagnostics from '../MediaDiagnostics.vue'
 
-const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), getAllIncludingInactive: vi.fn(), effective: vi.fn(), preview: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), getAllIncludingInactive: vi.fn(), effective: vi.fn(), preview: vi.fn(), test: vi.fn(), detail: vi.fn(), artifactAccess: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { accounts: api, groups: api } }))
-vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: { effective: api.effective, preview: api.preview } }))
+vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: { effective: api.effective, preview: api.preview, test: api.test } }))
+vi.mock('@/api/media', () => ({ mediaAPI: { detail: api.detail, artifactAccess: api.artifactAccess } }))
+vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run: (action: () => Promise<void>) => action() }), isStepUpCancelled: () => false }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: { group_id: '19', account_id: '2139' } }) }))
 
 const capabilities = [
@@ -12,7 +14,18 @@ const capabilities = [
   { model: 'music-choice', media_type: 'audio', enabled: true, operations: ['chat_music'], duration: {} }
 ]
 const account = () => ({ id: 2139, name: 'Linked account', platform: 'imagevideo', group_ids: [19], extra: { media_models: capabilities }, credentials: {} })
-const options = { global: { stubs: { RouterLink: true } } }
+const options = { global: { stubs: { RouterLink: true, TotpStepUpDialog: true } } }
+const submittedTask = () => ({ id: 'task-91', model: 'video-choice', status: 'completed', submission_phase: 'upstream_accepted', data: [{ key: 'result-1', type: 'video', mime_type: 'video/mp4', size_bytes: 12, available: true }] })
+const taskReview = () => ({
+  record: { task: submittedTask() },
+  incoming_request: { model: 'video-choice', prompt: 'test prompt' },
+  normalized_request: { model: 'video-choice', prompt: 'test prompt' },
+  prepared_request: { model: 'upstream-video', prompt: 'test prompt' },
+  upstream_request: { method: 'POST', path: '/generate', body: { model: 'upstream-video' } },
+  submission: { stage: 'accepted', response: { accepted: true } },
+  submission_status: 'accepted',
+  upstream_response: { status: 'completed', result: 'actual-output' }
+})
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -20,7 +33,10 @@ beforeEach(() => {
   api.getById.mockResolvedValue(account())
   api.list.mockResolvedValue({ items: [], total: 0 })
   api.effective.mockResolvedValue({})
-  api.preview.mockResolvedValue({ paid_submission: false })
+  api.preview.mockResolvedValue({ paid_submission: false, normalized: { model: 'video-choice' }, request: { model: 'upstream-video' }, pricing: { maximum_charge: '0.25' } })
+  api.test.mockResolvedValue(submittedTask())
+  api.detail.mockResolvedValue(taskReview())
+  api.artifactAccess.mockResolvedValue({ url: '/api/v1/admin/media/playback/task-91/result-1?access=signed', expires_at: 9999999999 })
 })
 
 describe('media diagnostics selectors', () => {
@@ -40,7 +56,7 @@ describe('media diagnostics selectors', () => {
     await flushPromises()
     await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.get('[aria-label="联调提示词"]').setValue('two reference frames')
-    await wrapper.findAll('button').find(button => button.text() === '预览映射与渠道估价')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
       mode: 'effective', api_key: 'sk-local-preview', group_id: 19, account_id: 2139, operation: 'video',
@@ -82,7 +98,7 @@ describe('media diagnostics selectors', () => {
       await vi.waitFor(() => expect(wrapper.text()).toContain('second-' + item.filename))
     }
     await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
-    await wrapper.findAll('button').find(button => button.text() === '预览映射与渠道估价')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
       request: expect.objectContaining({
@@ -94,6 +110,63 @@ describe('media diagnostics selectors', () => {
     expect(wrapper.text()).toContain('reference.png')
     expect(wrapper.text()).toContain('reference.mp4')
     expect(wrapper.text()).toContain('reference.mp3')
+    wrapper.unmount()
+  })
+
+  it('accepts multiple dragged references and includes them in the request', async () => {
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    const drops = [
+      { kind: '图片', field: 'images', mime: 'image/png', files: [['one', 'drop-one.png'], ['two', 'drop-two.png']] },
+      { kind: '视频', field: 'videos', mime: 'video/mp4', files: [['three', 'drop-three.mp4'], ['four', 'drop-four.mp4']] },
+      { kind: '音频', field: 'audios', mime: 'audio/mpeg', files: [['five', 'drop-five.mp3'], ['six', 'drop-six.mp3']] }
+    ] as const
+    for (const item of drops) {
+      const files = item.files.map(([content, name]) => new File([content], name, { type: item.mime }))
+      const event = new Event('drop', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'dataTransfer', { value: { files } })
+      wrapper.get(`[aria-label="参考${item.kind}拖放区域"]`).element.dispatchEvent(event)
+      await vi.waitFor(() => expect(wrapper.text()).toContain(item.files[1][1]))
+    }
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
+    await flushPromises()
+    const expected = Object.fromEntries(drops.map(item => [item.field, item.files.map(([content]) => ({
+      b64_json: Buffer.from(content).toString('base64'), mime_type: item.mime
+    }))]))
+    expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({ request: expect.objectContaining(expected) }))
+    wrapper.unmount()
+  })
+
+  it('submits a paid test with an idempotency key, displays evidence, and recovers the same task', async () => {
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.get('[aria-label="联调提示词"]').setValue('test prompt')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
+    await flushPromises()
+
+    expect(api.test).toHaveBeenCalledTimes(1)
+    expect(api.test).toHaveBeenCalledWith(expect.objectContaining({
+      api_key: 'sk-local-preview', operation: 'video', confirm_paid_submission: true,
+      request: expect.objectContaining({ model: 'video-choice', prompt: 'test prompt' })
+    }), expect.any(String))
+    const idempotencyKey = api.test.mock.calls[0][1]
+    expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i)
+    expect(api.detail).toHaveBeenCalledWith('task-91')
+    expect(api.artifactAccess).toHaveBeenCalledWith('task-91', 'result-1', true)
+    expect(wrapper.text()).toContain('真实请求结果')
+    expect(wrapper.text()).toContain('actual-output')
+    expect(wrapper.get('video').attributes('src')).toContain('access=signed')
+    expect(wrapper.get('video').attributes('controls')).toBeDefined()
+
+    await wrapper.findAll('button').find(button => button.text() === '恢复 / 查询原测试')!.trigger('click')
+    await flushPromises()
+    expect(api.test).toHaveBeenCalledTimes(2)
+    expect(api.test.mock.calls[1][1]).toBe(idempotencyKey)
     wrapper.unmount()
   })
 })

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, parseMaterialText, profilesForCategory} from './app.mjs'
+import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, optionValues, parseMaterialText, profilesForCategory} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -41,6 +41,15 @@ test('missing model catalogue counts keep reference inputs and edit masks availa
   assert.deepEqual(parseMaterialText(JSON.stringify(refs,null,2)),refs)
   assert.deepEqual(parseMaterialText(refs.map(ref=>JSON.stringify(ref)).join('\n')),refs)
   assert.throws(()=>parseMaterialText('{"url":'))
+})
+
+test('optional capability lists accept null and malformed values',()=>{
+ assert.deepEqual(optionValues(null),[])
+ assert.deepEqual(optionValues({values:['720p']}),[])
+ assert.deepEqual(inputMaterialsFor({operations:null,materials:null}),{})
+ assert.deepEqual(inputMaterialsFor({operations:['video'],materials:null}),{image:{},video:{},audio:{}})
+ assert.deepEqual(inputMaterialsFor({operations:['video'],materials:{image:null,video:['invalid']}}),{image:{},video:{},audio:{}})
+ assert.deepEqual(inputMaterialsFor({operations:['image_edit'],materials:null}).mask,{max_file_bytes:50*1048576})
 })
 
 test('speech uses the public speech input and configured voice', () => {
