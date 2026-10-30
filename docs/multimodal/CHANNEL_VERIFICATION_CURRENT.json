@@ -1,12 +1,12 @@
 {
-  "version": "v1.3.16",
+  "version": "v1.3.17",
   "status": "recorded",
   "acceptance_state": "upstream-contract-and-local-binding-mapping-verified-production-release-pending",
   "verified_at": "2026-10-30T08:17:02Z",
   "new_paid_submissions": 1,
   "credentials_recorded": false,
-  "environment": "Pre-release v1.3.16 validation. Direct supplier contract smoke used the supplied upstream credential without recording it: GET /v1/models listed gemini-omni-1.1-flash; POST /v1/videos used integer duration and an Alias.images single-image data URL string mapped from an image object input; the task completed and GET /v1/videos/{id}/content returned HTTP 200 video/mp4. The first explicitly rejected request used duration as a string and returned HTTP 400 without a task ID; it was corrected once and no accepted task was resubmitted. Local binding tests verify the scalar mapping is explicit per binding, rejects unsupported multi-image input before task creation, and leaves other models' array mappings unchanged. Production release and three-origin health checks are pending.",
-  "source_release": "v1.3.16",
+  "environment": "Pre-release v1.3.17 validation. Direct supplier contract smoke used the supplied upstream credential without recording it: GET /v1/models listed gemini-omni-1.1-flash; POST /v1/videos used integer duration and an Alias.images single-image data URL string mapped from an image object input; the task completed and GET /v1/videos/{id}/content returned HTTP 200 video/mp4. The first explicitly rejected request used duration as a string and returned HTTP 400 without a task ID; it was corrected once and no accepted task was resubmitted. Local binding tests verify the scalar mapping is explicit per binding, rejects unsupported multi-image input before task creation, and leaves other models' array mappings unchanged. Production release and three-origin health checks are pending.",
+  "source_release": "v1.3.17",
   "reused_for_release": false,
   "cases": [
     {

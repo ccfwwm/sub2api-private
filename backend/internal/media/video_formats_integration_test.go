@@ -43,8 +43,9 @@ func (t videoReferenceTransport) RoundTrip(r *http.Request) (*http.Response, err
 	return t.base.RoundTrip(r)
 }
 
-// Exercises both new wire formats through durable reservation, worker restart,
-// polling, artifact download/probe and settlement. No supplier calls are made.
+// Exercises both new wire formats through durable reservation, asynchronous
+// worker submission, polling, artifact download/probe and settlement. No
+// supplier calls are made.
 func TestVideoFormatsDurableEndToEnd(t *testing.T) {
 	for _, tool := range []string{"ffmpeg", "ffprobe"} {
 		_, err := exec.LookPath(tool)
@@ -170,17 +171,29 @@ func TestVideoFormatsDurableEndToEnd(t *testing.T) {
 			require.Equal(t, "1.00000000", quote.Total)
 			task, err := engine.Create(ctx, cap, "video", p, nil, snap.Identity, "same-request")
 			require.NoError(t, err)
-			require.Equal(t, "in_progress", task.State)
-			require.NotEmpty(t, task.UpstreamID)
-			require.EqualValues(t, 1, submits.Load(), "Create submits upstream before returning")
-			for i := 0; i < 1; i++ {
-				engine = makeEngine()
-				claimed, err := engine.Store.Claim(ctx)
-				require.NoError(t, err)
-				require.NotNil(t, claimed)
-				require.Equal(t, task.ID, claimed.ID)
-				require.NoError(t, engine.Process(ctx, *claimed))
-			}
+			require.Equal(t, "queued", task.State)
+			require.Empty(t, task.UpstreamID)
+			require.EqualValues(t, 0, submits.Load(), "Create must return before upstream submission")
+			engine = makeEngine()
+			claimed, err := engine.Store.Claim(ctx)
+			require.NoError(t, err)
+			require.NotNil(t, claimed)
+			require.Equal(t, task.ID, claimed.ID)
+			require.True(t, claimed.SubmissionClaim)
+			require.NoError(t, engine.Process(ctx, *claimed))
+			submitted, err := engine.Store.GetTask(ctx, task.ID)
+			require.NoError(t, err)
+			require.Equal(t, "in_progress", submitted.State)
+			require.NotEmpty(t, submitted.UpstreamID)
+			require.EqualValues(t, 1, submits.Load())
+			require.Zero(t, polls.Load(), "the first worker pass submits, it does not poll")
+			engine = makeEngine()
+			claimed, err = engine.Store.Claim(ctx)
+			require.NoError(t, err)
+			require.NotNil(t, claimed)
+			require.Equal(t, task.ID, claimed.ID)
+			require.False(t, claimed.SubmissionClaim)
+			require.NoError(t, engine.Process(ctx, *claimed))
 			done, err := engine.Store.GetTask(ctx, task.ID)
 			require.NoError(t, err)
 			require.Equal(t, "completed", done.State)
