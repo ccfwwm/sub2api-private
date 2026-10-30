@@ -1,11 +1,13 @@
 {
-  "version": "v1.3.13",
+  "version": "v1.3.15",
   "status": "recorded",
   "acceptance_state": "production-deployed-and-real-mapped-generation-verified",
   "verified_at": "2026-10-29T19:21:04.8037405+00:00",
   "new_paid_submissions": 1,
   "credentials_recorded": false,
-  "environment": "Production v1.3.13 verified across all three public origins. Real single-submit video generation succeeded using the configured upstream model, and authenticated artifact Range access returned HTTP 206 with a valid MP4 header. Existing task snapshots and PostgreSQL/Redis containers are unchanged. Upload combinations and template CRUD were validated with isolated PostgreSQL and browser fixtures.",
+  "environment": "Release v1.3.15 reuses the completed real-channel verification recorded for production v1.3.13 across all three public origins. No new paid generation is submitted for this UI-only release; the prior single-submit video generation and authenticated artifact Range access (HTTP 206 with a valid MP4 header) remain the real-channel baseline. Existing task snapshots and PostgreSQL/Redis containers are unchanged. Upload combinations and template CRUD are validated with isolated PostgreSQL and browser fixtures.",
+  "source_release": "v1.3.13",
+  "reused_for_release": true,
   "cases": [
     {
       "label": "existing-completed-video-and-public-artifact",
