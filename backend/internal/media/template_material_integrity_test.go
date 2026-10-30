@@ -97,7 +97,9 @@ func TestBindingMapsImageObjectArrayToProviderScalarOnlyWhenConfigured(t *testin
 	// A supplier binding that declares a scalar cannot silently flatten a
 	// multi-image request. Reject it while preparing the request, before a task
 	// or billing reservation is created.
-	request["images"] = append(request["images"].([]any), map[string]any{"url": "https://example.org/second.png", "weight": 0.7})
+	images, ok := request["images"].([]any)
+	require.True(t, ok)
+	request["images"] = append(images, map[string]any{"url": "https://example.org/second.png", "weight": 0.7})
 	req, err = Normalize(cap, "video", request)
 	require.NoError(t, err)
 	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
@@ -121,7 +123,9 @@ func TestBindingMapsScreenshotImageObjectToProviderString(t *testing.T) {
 	require.Equal(t, map[string]any{"images": "data:image/png;base64," + png}, wire.Body["Alias"])
 
 	// A provider binding with a scalar field cannot flatten multiple images.
-	request["images"] = append(request["images"].([]any), map[string]any{"mime_type": "image/png", "b64_json": png})
+	images, ok := request["images"].([]any)
+	require.True(t, ok)
+	request["images"] = append(images, map[string]any{"mime_type": "image/png", "b64_json": png})
 	req, err = Normalize(cap, "video", request)
 	require.NoError(t, err)
 	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
@@ -148,7 +152,9 @@ func TestScalarDataURLMappingPreservesMIMEAndRejectsUnrepresentedAttributes(t *t
 	require.NoError(t, err)
 	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
 	require.NoError(t, err)
-	require.Equal(t, "data:image/png;base64,"+png, wire.Body["Alias"].(map[string]any)["images"])
+	alias, ok := wire.Body["Alias"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "data:image/png;base64,"+png, alias["images"])
 }
 
 func TestTemplatePreservesReferenceLocatorAndPayloadForEveryMediaKind(t *testing.T) {
