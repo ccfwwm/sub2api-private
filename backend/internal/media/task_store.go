@@ -214,9 +214,9 @@ func (s *Store) CreateTask(ctx context.Context, snapshot Snapshot, accountID int
 	return s.createTask(ctx, snapshot, accountID, idem, hash, id, false)
 }
 
-// CreateTaskForSubmission reserves the task and its worker lease atomically so
-// a background worker cannot leave a new request in the local queue. The
-// caller submits it to the upstream before returning the task to the client.
+// CreateTaskForSubmission reserves a worker lease atomically for callers that
+// explicitly own synchronous submission. Standard gateway requests should use
+// CreateTask so the durable background worker owns upstream submission.
 func (s *Store) CreateTaskForSubmission(ctx context.Context, snapshot Snapshot, accountID int64, idem, hash, id string) (StoredTask, error) {
 	return s.createTask(ctx, snapshot, accountID, idem, hash, id, true)
 }

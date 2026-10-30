@@ -78,6 +78,79 @@ func TestTemplateMaterialStringShapeRequiresExplicitExactPropertyFilter(t *testi
 	require.ErrorContains(t, err, "unrepresentable_reference")
 }
 
+func TestBindingMapsImageObjectArrayToProviderScalarOnlyWhenConfigured(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{
+		Kind: "image", Target: "Alias.images", Encoding: "preserve", Shape: "string", Single: true,
+		DropProperties: map[string][]any{"weight": {0.7}},
+	}}
+	cap := Capability{Model: "public", UpstreamModel: "configured", MediaType: "video", Template: &template}
+	request := map[string]any{"seconds": 5, "images": []any{
+		map[string]any{"url": "https://example.org/reference.png", "weight": 0.7},
+	}}
+	req, err := Normalize(cap, "video", request)
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"images": "https://example.org/reference.png"}, wire.Body["Alias"])
+
+	// A supplier binding that declares a scalar cannot silently flatten a
+	// multi-image request. Reject it while preparing the request, before a task
+	// or billing reservation is created.
+	request["images"] = append(request["images"].([]any), map[string]any{"url": "https://example.org/second.png", "weight": 0.7})
+	req, err = Normalize(cap, "video", request)
+	require.NoError(t, err)
+	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.ErrorContains(t, err, "template_reference_limit")
+}
+
+func TestBindingMapsScreenshotImageObjectToProviderString(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{
+		Kind: "image", Target: "Alias.images", Encoding: "data_url", Shape: "string", Single: true,
+	}}
+	cap := Capability{Model: "public", UpstreamModel: "configured", MediaType: "video", Template: &template}
+	png := base64String(pngFixture(t))
+	request := map[string]any{"seconds": 4, "images": []any{
+		map[string]any{"mime_type": "image/png", "b64_json": png},
+	}}
+	req, err := Normalize(cap, "video", request)
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"images": "data:image/png;base64," + png}, wire.Body["Alias"])
+
+	// A provider binding with a scalar field cannot flatten multiple images.
+	request["images"] = append(request["images"].([]any), map[string]any{"mime_type": "image/png", "b64_json": png})
+	req, err = Normalize(cap, "video", request)
+	require.NoError(t, err)
+	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.ErrorContains(t, err, "template_reference_limit")
+}
+
+func TestScalarDataURLMappingPreservesMIMEAndRejectsUnrepresentedAttributes(t *testing.T) {
+	template := templateFixture(t, "video-arrays")
+	template.Materials = []MaterialRule{{
+		Kind: "image", Target: "Alias.images", Encoding: "data_url", Shape: "string", Single: true,
+	}}
+	cap := Capability{Model: "public", UpstreamModel: "configured", MediaType: "video", Template: &template}
+	png := base64String(pngFixture(t))
+	request := map[string]any{"seconds": 4, "images": []any{
+		map[string]any{"mime_type": "image/png", "b64_json": png, "role": "unexpected"},
+	}}
+	req, err := Normalize(cap, "video", request)
+	require.NoError(t, err)
+	_, err = BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.ErrorContains(t, err, "unrepresentable_reference")
+
+	request["images"] = []any{map[string]any{"mime_type": "image/png", "b64_json": png}}
+	req, err = Normalize(cap, "video", request)
+	require.NoError(t, err)
+	wire, err := BuildTemplateRequest(context.Background(), nil, cap, req)
+	require.NoError(t, err)
+	require.Equal(t, "data:image/png;base64,"+png, wire.Body["Alias"].(map[string]any)["images"])
+}
+
 func TestTemplatePreservesReferenceLocatorAndPayloadForEveryMediaKind(t *testing.T) {
 	template := templateFixture(t, "video-arrays")
 	template.Materials = []MaterialRule{

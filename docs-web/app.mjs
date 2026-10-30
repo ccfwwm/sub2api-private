@@ -5,7 +5,7 @@ export const categories = [
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
   { id:'gemini-image', title:'Gemini协议生图', sections:['gemini','gemini-result'], ops:['gemini_image'] },
   { id:'video', title:'视频生成', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference'], ops:['video'] },
-  { id:'audio', title:'音乐与语音', sections:['audio-chat','audio-submit','audio-compat','audio-stream','audio-speech'], ops:['audio','chat_music','speech'] },
+  { id:'audio', title:'音乐与语音', sections:['audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'], ops:['audio','chat_music','speech'] },
   { id:'guide', title:'快速开始与通用任务', sections:['start','models','tasks','errors','clients'], ops:[] },
 ]
 export function sectionMarkdown(section) {
@@ -21,6 +21,36 @@ export function sectionMarkdown(section) {
 export const fullMarkdown = sections => '# 词元互联图片、视频与音乐接口文档\n\n根地址：'+API_ORIGIN+'\n\n'+sections.map(sectionMarkdown).join('\n\n')
 export function endpointFor(operation, model) {
   return {image:'/v1/images/generations',image_edit:'/v1/images/edits',video:'/v1/videos',audio:'/v1/audio/generations',speech:'/v1/audio/speech',chat_music:'/v1/chat/completions',gemini_image:`/v1beta/models/${encodeURIComponent(model)}:generateContent`}[operation]
+}
+export function previewRequestTimeoutMs(payload) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength
+  return Math.min(180000, 30000 + Math.ceil(bytes / (128 * 1024)) * 1000)
+}
+export function requestTimeoutMs(method, path, payload) {
+  if (path === '/v1/sub2api/estimates' || method === 'POST' && payload?.async === true) return previewRequestTimeoutMs(payload || {})
+  if (method === 'POST' && path === '/v1/chat/completions' && payload?.stream) return 185000
+  return 30000
+}
+export function taskPhaseLabel(task) {
+  if (task?.status === 'completed') return '生成已完成'
+  if (task?.status === 'failed') return '生成失败'
+  if (task?.status === 'unknown') return '上游受理结果待核对'
+  return ({local_pending:'本站已受理，等待后台提交上游',submitting:'本站正在提交上游',upstream_accepted:'上游已受理，正在生成',reconciling:'正在核对上游是否已受理'})[task?.submission_phase] || (task?.status === 'queued' ? '本站任务排队中' : '任务处理中')
+}
+export function taskBillingSummary(billing) {
+  if (!billing) return '账单信息暂不可用'
+  return `账单 ${billing.state||'未知'} · 预留 ${billing.reserved??'0'} · 已接受 ${billing.accepted??'0'} · 已结算 ${billing.settled??'0'} · 已释放 ${billing.released??'0'}`
+}
+export function parsePendingRecovery(value) {
+  try {
+    const item=JSON.parse(value)
+    if(item?.version!==1||typeof item.key!=='string'||typeof item.operation!=='string')return null
+    return {key:item.key,operation:item.operation,id:typeof item.id==='string'?item.id:null,terminal:item.terminal===true,pollSeconds:Number(item.pollSeconds)||10}
+  } catch { return null }
+}
+export function serializePendingRecovery(pending) {
+  if(!pending?.key||!pending?.operation)return ''
+  return JSON.stringify({version:1,key:pending.key,operation:pending.operation,id:pending.id||null,terminal:pending.terminal===true,pollSeconds:pending.pollSeconds||10})
 }
 export function dataURLToMaterial(value) {
   const match=String(value).match(/^data:([^;,]+);base64,([\s\S]*)$/)
@@ -69,7 +99,10 @@ export function buildRequest(cap, operation, fields, materials={}) {
       p.images.push(typeof reference==='string'?{url:reference,role}:{...reference,role})
     }
   }
-  if(operation==='chat_music' && fields.stream==='true') {p.stream=true;p.async=false}
+  // Managed media always uses the durable task protocol. Keep `stream` as a
+  // compatibility input for clients, but do not advertise a direct SSE
+  // response when the gateway returns HTTP 202 and a task ID.
+  if(operation==='chat_music') p.stream=false
   return p
 }
 const escape = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
@@ -77,11 +110,11 @@ const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b
 
 async function start() {
   const sections=await (await fetch(new URL('./content.json',import.meta.url))).json()
-  let category=categories[0],tab='接口文档',profiles=[],key='',pending=null,running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0
+  let category=categories[0],tab='接口文档',profiles=[],key='',pending=parsePendingRecovery(localStorage.getItem('media-docs.pending-task.v1')||''),running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.15<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot">MEDIA API · v1.3.16<a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
   const $=s=>root.querySelector(s)
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
@@ -103,8 +136,12 @@ async function start() {
   const filtered=()=>profilesForCategory(profiles,category)
   function debug() {
     const options=filtered(), uploads={}, uploadJobs=new Set()
-    $('article').innerHTML=`<p>先选择模型与能力配置。点击“提交生成”会实际扣费；请求不明确时保留原幂等键，只恢复查询。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model" aria-label="选择调试模型"><option value="">${loadingModels?'正在加载模型…':options.length?'请选择模型':key?'当前分类暂无可用模型':'粘贴 API Key 后自动加载可用模型'}</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.group_name||p.profile_id?.slice(-8)||'')}</option>`).join('')}</select></label></div><p id="model-hint">${key ? (options.length ? `当前分类有 ${options.length} 个模型能力` : '请检查 Key 的分组、模型启用状态和渠道定价，或切换分类。') : '正在展示公开模型目录。输入中转 Key 后自动加载可调用能力。'}</p><div id="parameters"></div><div class="buttons"><button id="preview" disabled>校验参数与估价（不生成）</button><button id="submit" class="primary" disabled>提交生成（实际计费）</button><button id="recover" ${pending?'':'disabled'}>恢复原任务查询</button><button id="stop">停止等待</button><button id="new">新任务</button></div><p class="status" id="task-status"></p><div class="debug-panels">${code({label:'提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'响应 / SSE 文字事件',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
+    $('article').innerHTML=`<p>流程：标准操作请求 → 免费预览与估价 → 本站返回任务 ID → 查询提交阶段 → 查看成品与账单。免费预览不会创建生成任务或扣费；真实提交只有收到 HTTP 202 并保存任务 ID 后才表示本站已受理。连接中断时保留原幂等 ID，按同一操作的恢复端点查询，不自动再次 POST。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model" aria-label="选择调试模型"><option value="">${loadingModels?'正在加载模型…':options.length?'请选择模型':key?'当前分类暂无可用模型':'粘贴 API Key 后自动加载可用模型'}</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.group_name||p.profile_id?.slice(-8)||'')}</option>`).join('')}</select></label></div><p id="model-hint">${key ? (options.length ? `当前分类有 ${options.length} 个模型能力` : '请检查 Key 的分组、模型启用状态和渠道定价，或切换分类。') : '正在展示公开模型目录。输入中转 Key 后自动加载可调用能力。'}</p><div id="parameters"></div><div class="buttons"><button id="preview" disabled>免费预览映射与估价</button><button id="submit" class="primary" disabled>提交真实生成（可能收费）</button><button id="recover" ${pending?'':'disabled'}>恢复 / 查询原任务</button><button id="stop">停止轮询</button><button id="new">开始新任务</button></div><p class="status task-summary" id="task-status" role="status" aria-live="polite">${pending?.id?`已有任务 ${escape(pending.id)}，点击“恢复 / 查询原任务”。`:'尚未提交真实生成请求。'}</p><details class="debug-evidence"><summary>原始请求、响应与联调日志（默认折叠，Base64 已脱敏）</summary><div class="debug-panels">${code({label:'标准提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'任务查询响应',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section></details><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
     const codes=$('article').querySelectorAll('.code code')
+    const confirmation=document.createElement('label'), confirmPaid=document.createElement('input')
+    confirmation.className='confirm-paid';confirmPaid.id='confirm-paid';confirmPaid.type='checkbox'
+    confirmation.append(confirmPaid,document.createTextNode('我确认本次真实生成可能收费'))
+    $('#submit').before(confirmation)
     const response=v=>codes[1].textContent=typeof v==='string'?v:pretty(v)
     const appendLog=(stage,detail)=>{
       const row=document.createElement('li'),meta=document.createElement('div'),content=document.createElement('pre')
@@ -127,7 +164,7 @@ async function start() {
       if(cap.media_type==='video')html+=pick('generate_audio','生成声音',['true','false'])
       if(cap.media_type==='audio')html+=`<label class="wide">歌词<textarea name="lyrics"></textarea></label><label>BPM<input name="bpm" type="number" min="1"></label>`+pick('instrumental','纯音乐',['true','false'])+pick('audio_format','输出格式',['mp3','wav','m4a'])
       if(operations.includes('speech'))html+=`<label>声音<input name="voice" placeholder="使用管理员配置支持的声音 ID"></label><label>输出格式<input name="response_format" placeholder="如 mp3 / wav"></label><label>语速<input name="speed" type="number" min="0.01" step="0.01"></label>`
-      if(operations.includes('chat_music'))html+=pick('stream','Chat 返回方式',['false','true'])
+      if(operations.includes('chat_music'))html+='<p class="wide"><small>音乐按本站异步任务流程返回 HTTP 202；保存任务 ID 后查询状态与音频制品。此入口不提供 SSE 直返。</small></p>'
       if(cap.media_type==='video')for(const role of ['first_frame','last_frame'])html+=`<label class="wide">${role==='first_frame'?'首帧':'尾帧'}（计入参考图总数）<textarea data-material="${role}" placeholder="URL、Data URL 或素材 JSON 对象；字段按输入原样保留"></textarea></label>`
       if(operations.includes('gemini_image'))html+=pick('modalities','返回模态',['TEXT','IMAGE','both'])
       const inputMaterials=inputMaterialsFor(cap)
@@ -136,7 +173,7 @@ async function start() {
         html+=`<label class="wide material-drop-zone" data-drop-zone="${kind}">${escape({image:'参考图片',video:'参考视频',audio:'参考音频',mask:'编辑遮罩（透明 PNG，与第一张原图同尺寸）'}[kind]||kind)} · URL / Data URL / b64_json${material.max_file_bytes?` · 每个最多 ${Math.floor(material.max_file_bytes/1048576)} MiB`:''}<textarea data-material="${kind}" placeholder="每行一个 URL，或粘贴 JSON 对象，如 {&quot;b64_json&quot;:&quot;...&quot;,&quot;mime_type&quot;:&quot;${kind==='image'?'image/png':kind==='video'?'video/mp4':'audio/mpeg'}&quot;}"></textarea><input data-files="${kind}" type="file" accept="${kind==='mask'?'image/png':kind+'/*'}" multiple><small>支持多选、分批添加或拖入文件；提交参数和日志会脱敏 Base64。</small><ul data-upload-list="${kind}" class="upload-list"></ul></label>`
       }
       $('#parameters').innerHTML='<div class="fields">'+html+'</div>'
-      $('#submit').disabled=running||!!pending||!key||!!cap.catalog_only
+      $('#submit').disabled=running||!!pending||!key||!$('#confirm-paid').checked||!!cap.catalog_only
       $('#preview').disabled=running||!key||!!cap.catalog_only
       if(cap.catalog_only)$('#model-hint').textContent='已选择公开目录模型。粘贴中转 Key 后自动匹配可调用配置。'
       installUploads()
@@ -144,7 +181,8 @@ async function start() {
     const api=async(path,method='GET',payload,headers={})=>{
       const url=new URL(path,location.origin);if(url.origin!==location.origin)throw Error('只允许请求本站 API')
       const started=performance.now();appendLog('请求',{method,path,request:payload})
-      const r=await fetch(url,{method,headers:{Authorization:'Bearer '+key,...(payload instanceof FormData?{}:{'Content-Type':'application/json'}),...headers},body:payload?(payload instanceof FormData?payload:JSON.stringify(payload)):undefined,signal:AbortSignal.any([AbortSignal.timeout(method==='POST'?185000:30000),activeController?.signal||new AbortController().signal]),credentials:'omit',cache:'no-store',redirect:'error'})
+      const timeoutMs=requestTimeoutMs(method,path,payload)
+      const r=await fetch(url,{method,headers:{Authorization:'Bearer '+key,...(payload instanceof FormData?{}:{'Content-Type':'application/json'}),...headers},body:payload?(payload instanceof FormData?payload:JSON.stringify(payload)):undefined,signal:AbortSignal.any([AbortSignal.timeout(timeoutMs),activeController?.signal||new AbortController().signal]),credentials:'omit',cache:'no-store',redirect:'error'})
       let data
       if(r.headers.get('content-type')?.includes('text/event-stream')) {
         const reader=r.body.getReader(),decoder=new TextDecoder();let text=''
@@ -181,12 +219,17 @@ async function start() {
     async function poll(token) {
       while(token===epoch && pending?.id) {
         const task=await api(`/v1/tasks/${encodeURIComponent(pending.id)}`);if(token!==epoch)return;response(task)
-        $('#task-status').textContent=`任务 ${pending.id} · ${task.status} · ${task.billing?.state||''}`
+        const progress=task.progress===undefined?'':` · 进度 ${task.progress}%`
+        const stage=taskPhaseLabel(task)
+        const diagnostic=task.diagnostic?` · 原因：${task.diagnostic}`:''
+        const next=task.status==='unknown'||['submitting','reconciling'].includes(task.submission_phase)?'保留任务 ID 并继续查询；不要重新提交。':task.status==='failed'?'查看失败原因与账单。':task.status==='completed'?'成品已就绪，查看下方文件并核对账单。':'后台会继续处理，可安全刷新当前任务。'
+        $('#task-status').textContent=`${stage} · 任务 ID ${pending.id} · 状态 ${task.status}${progress} · ${taskBillingSummary(task.billing)}${diagnostic} · ${next}`
         if(['completed','failed'].includes(task.status)) {
           if(task.status==='completed')await artifacts(pending.id)
-          if(['settled','released'].includes(task.billing?.state)||task.status==='failed') {pending.terminal=true;return}
+          if(['settled','released'].includes(task.billing?.state)||task.status==='failed') {pending.terminal=true;localStorage.setItem('media-docs.pending-task.v1',serializePendingRecovery(pending));return}
         }
-        if(task.status==='unknown')throw Error('受理或费用待核对，请保留任务 ID，联系管理员；没有重新提交。')
+        localStorage.setItem('media-docs.pending-task.v1',serializePendingRecovery(pending))
+        if(task.status==='unknown')throw Error('上游受理结果仍待核对。请保留任务 ID，继续恢复查询或联系管理员；系统没有重新提交。')
         await new Promise(resolve=>{const timer=setTimeout(()=>{wakePoll=null;resolve()},(pending?.pollSeconds||10)*1000);wakePoll=()=>{clearTimeout(timer);wakePoll=null;resolve()}})
       }
     }
@@ -196,7 +239,7 @@ async function start() {
       if(!pending.id)throw Error('尚未找到原任务，请稍后恢复查询；不会重新生成。')
       await poll(token)
     }
-    const execute=async fn=>{if(running)return;running=true;model.disabled=true;$('#preview').disabled=true;activeController=new AbortController();const token=++epoch;$('#submit').disabled=true;$('#debug-error').textContent='';try{await fn(token)}catch(e){if(token===epoch)failure(e)}finally{if(token===epoch){running=false;model.disabled=false;activeController=null;$('#recover').disabled=!pending;$('#submit').disabled=!!pending||!model.value||!key||!!options[model.value]?.catalog_only;$('#preview').disabled=!model.value||!key||!!options[model.value]?.catalog_only}}}
+    const execute=async fn=>{if(running)return;running=true;model.disabled=true;$('#preview').disabled=true;activeController=new AbortController();const token=++epoch;$('#submit').disabled=true;$('#debug-error').textContent='';try{await fn(token)}catch(e){if(token===epoch)failure(e)}finally{if(token===epoch){running=false;model.disabled=false;activeController=null;$('#recover').disabled=!pending;$('#submit').disabled=!!pending||!model.value||!key||!$('#confirm-paid').checked||!!options[model.value]?.catalog_only;$('#preview').disabled=!model.value||!key||!!options[model.value]?.catalog_only}}}
     function installUploads(){
       const queue=(kind,files,input)=>{
         if(input)input.value=''
@@ -248,23 +291,29 @@ async function start() {
     $('#preview').onclick=()=>execute(async()=>{
       const {fields,payload}=await collectRequest()
       appendLog('开始联调检查',{checks:['Key 鉴权与分组','模型与操作','素材参数','渠道计费规则'],generation:false})
-      const estimate=await api('/v1/sub2api/estimates','POST',{operation:fields.operation,request:payload})
+      let estimate
+      try{estimate=await api('/v1/sub2api/estimates','POST',{operation:fields.operation,request:payload})}catch(error){const e=error instanceof Error?error:Error(String(error));e.message=`免费预览失败：${e.message}。本次没有创建生成任务、没有扣费，可修正后安全重试。`;throw e}
       response(estimate);appendLog('参数校验与估价完成',estimate)
     })
+    $('#confirm-paid').onchange=()=>{$('#submit').disabled=running||!!pending||!model.value||!key||!$('#confirm-paid').checked||!!options[model.value]?.catalog_only}
     $('#submit').onclick=()=>execute(async token=>{
       if(pending)throw Error('已有任务，请先恢复查询')
       if(!key)throw Error('请先拉取模型')
+      if(!$('#confirm-paid').checked)throw Error('请先确认真实生成可能收费')
       const {cap,fields,payload}=await collectRequest()
       appendLog('提交请求（Base64 已脱敏）',{endpoint:endpointFor(fields.operation,cap.model),request:payload})
       pending={key:crypto.randomUUID(),operation:fields.operation,id:null,terminal:false,pollSeconds:cap.poll_seconds||10}
-      $('#task-status').textContent='幂等键 '+pending.key+' · 提交中，请保留本页'
-      try{const result=await api(endpointFor(fields.operation,cap.model),'POST',payload,{'Idempotency-Key':pending.key});pending.id=result.task_id||result.id;response(result);appendLog('接口响应',result)}catch(e){if(e.status&&e.status<500&&e.status!==408){pending.terminal=true}throw e}
+      localStorage.setItem('media-docs.pending-task.v1',serializePendingRecovery(pending))
+      $('#task-status').textContent='本站正在持久化请求与计费预留 · 幂等 ID '+pending.key+' · 正在等待 HTTP 202；此时还不能认为上游已受理。'
+      try{const result=await api(endpointFor(fields.operation,cap.model),'POST',payload,{'Idempotency-Key':pending.key});pending.id=result.task_id||result.id;localStorage.setItem('media-docs.pending-task.v1',serializePendingRecovery(pending));response(result);appendLog('接口响应',result)}catch(e){if(e.status&&e.status<500&&e.status!==408){pending.terminal=true;localStorage.setItem('media-docs.pending-task.v1',serializePendingRecovery(pending));throw e}const reason=e.name==='TimeoutError'?'请求传输超时':e.message||'网络连接中断';throw Error(`提交结果尚未确认（${reason}）。已保留原幂等 ID；请点“恢复 / 查询原任务”，不要新建请求。`)}
+      if(!pending.id)throw Error('HTTP 请求已返回，但响应中没有任务 ID。保留原幂等 ID，点击“恢复 / 查询原任务”；不要再次提交。')
+      $('#task-status').textContent=`本站已受理 · 任务 ID ${pending.id} · 正在读取提交阶段。HTTP 202 不代表上游已受理。`
       $('#recover').disabled=false
       await resume(token)
     })
     $('#recover').onclick=()=>execute(resume)
     $('#stop').onclick=()=>{epoch++;activeController?.abort();activeController=null;wakePoll?.();running=false;$('#recover').disabled=!pending;notice('已停止轮询等待；任务仍在服务器运行，可恢复原任务查询。')}
-    $('#new').onclick=()=>{if(pending&&!pending.terminal){failure(Error('原任务尚未结束或受理不明确，请恢复查询。'));return}pending=null;$('#submit').disabled=!model.value;$('#recover').disabled=true;$('#task-status').textContent='';operationCleanup()}
+    $('#new').onclick=()=>{if(pending&&!pending.terminal){failure(Error('原任务尚未结束或受理不明确，请恢复查询。'));return}pending=null;localStorage.removeItem('media-docs.pending-task.v1');$('#confirm-paid').checked=false;$('#submit').disabled=true;$('#recover').disabled=true;$('#task-status').textContent='尚未提交真实生成请求。';operationCleanup()}
     function operationCleanup(){objectURLs.forEach(url=>URL.revokeObjectURL(url));objectURLs.clear();$('.artifacts').innerHTML=''}
     if(options.length){model.value='0';model.onchange()}
     $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>copy(button.closest('.code').querySelector('code').textContent))
@@ -283,7 +332,7 @@ async function start() {
     finally{if(version===loadEpoch){loadingModels=false;$('#load').disabled=false;if(tab==='在线调试'&&!running)debug()}}
   }
   $('#key').oninput=()=>{
-    if(pending){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}
+    if(pending&&key){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}
     key=$('#key').value.trim().replace(/^Bearer\s+/i,'');profiles=[];++loadEpoch;clearTimeout(loadTimer)
     if(key)loadTimer=setTimeout(loadModels,450)
     else{loadingModels=false;$('#load').disabled=false;notice('请填写中转 API Key 后加载模型。');if(tab==='在线调试')debug()}

@@ -531,38 +531,11 @@ func (h *MediaHandler) TrySubmit(c *gin.Context, operation string) bool {
 		return true
 	}
 	setOpsSelectedAccount(c, task.AccountID, service.PlatformImageVideo)
-	if operation == "video" || p["async"] == true {
-		h.writeTask(c, task)
-		return true
-	}
-	// Synchronous protocols wait on the same durable task; disconnecting does not cancel it.
-	timer := time.NewTimer(175 * time.Second)
-	defer timer.Stop()
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		current, err := h.Engine.Store.GetTask(c.Request.Context(), task.ID)
-		if err != nil {
-			mediaError(c, err)
-			return true
-		}
-		if current.Settlement == "settled" || current.Settlement == "released" {
-			h.writeSynchronous(c, current, operation, p)
-			return true
-		}
-		if current.Settlement == "manual_review" {
-			h.writeTask(c, current)
-			return true
-		}
-		select {
-		case <-c.Request.Context().Done():
-			return true
-		case <-timer.C:
-			h.writeTask(c, current)
-			return true
-		case <-ticker.C:
-		}
-	}
+	// Managed media operations always use the standard durable task protocol.
+	// HTTP 202 means this service has persisted and reserved the task; only a
+	// later status query can report whether the upstream accepted it.
+	h.writeTask(c, task)
+	return true
 }
 func (h *MediaHandler) writeTask(c *gin.Context, t media.StoredTask) {
 	public, err := h.Engine.Store.PublicTask(c.Request.Context(), t)

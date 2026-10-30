@@ -6,6 +6,11 @@ on:
         description: 'Approved formal release vMAJOR.MINOR.PATCH (backup, restore rehearsal, drain, application cutover)'
         required: true
         type: string
+      immediate:
+        description: 'Skip waiting for idle and drain before the application cutover'
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -20,6 +25,7 @@ jobs:
       - name: Validate formal Release, submit restricted host job and wait for online verification
         env:
           VERSION: ${{ inputs.version }}
+          IMMEDIATE: ${{ inputs.immediate }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ccfwwm/sub2api-private
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -46,7 +52,9 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/sub2api-ssh/known_hosts"
           trap 'rm -rf "$RUNNER_TEMP/sub2api-ssh"' EXIT
           SSH=(ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST")
-          "${SSH[@]}" "deploy $VERSION" > "$RUNNER_TEMP/deploy.json"
+          DEPLOY_COMMAND="deploy $VERSION"
+          if [ "$IMMEDIATE" = true ]; then DEPLOY_COMMAND+=" --immediate"; fi
+          "${SSH[@]}" "$DEPLOY_COMMAND" > "$RUNNER_TEMP/deploy.json"
           JOB=$(python3 -c 'import json,sys,re; j=json.load(open(sys.argv[1])); assert re.fullmatch("[0-9a-f]{32}",j["id"]); print(j["id"])' "$RUNNER_TEMP/deploy.json")
           for attempt in $(seq 1 1000); do
             "${SSH[@]}" "status $JOB" > "$RUNNER_TEMP/deploy.json"

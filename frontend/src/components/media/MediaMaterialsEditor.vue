@@ -83,19 +83,20 @@ function mappingText(rule: MaterialRule) { return JSON.stringify(rule.map_proper
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
       <p class="font-semibold">素材默认按用户输入原样透传</p>
       <p class="mt-1">统一输入字段是 <code>images</code>、<code>videos</code>、<code>audios</code>。默认保留每项的定位字段和值：<code>url</code> 仍是 <code>url</code>，<code>b64_json</code> 仍是 <code>b64_json</code>，素材顺序及其他属性也不变。只有明确配置编码、结构、映射或过滤规则时才改动。</p>
-      <p class="mt-1">上游目标字段填写素材数组名称。属性映射和过滤使用对象路径；例如 <code>role</code> 映射到 <code>metadata.frame_role</code>，或只过滤精确匹配的 <code>metadata.internal: true</code>。默认空映射、空过滤，不会猜测或改写上游字段。</p>
+      <p class="mt-1">上游目标字段填写 JSON 路径，可以是 <code>images</code> 或嵌套字段 <code>Alias.images</code>。若供应商字段明确要求一个字符串，选择“字符串 URL / 数据”并勾选“只发送一个素材”；多张输入会在计费前拒绝，不会被悄悄拼接。选择 Data URL 时，匹配的 <code>mime_type</code> 会由 Data URL 本身表达，其他属性仍需显式映射或精确过滤。</p>
+      <p class="mt-1">属性映射和过滤使用对象路径；例如 <code>role</code> 映射到 <code>metadata.frame_role</code>，或只过滤精确匹配的 <code>metadata.internal: true</code>。默认空映射、空过滤，不会猜测或改写上游字段。</p>
     </div>
 
     <div v-for="(rule, index) in modelValue || []" :key="index" class="space-y-3 rounded-lg border p-3 dark:border-dark-600" :aria-label="`素材映射 ${index + 1}`">
       <div class="flex items-center justify-between"><strong>素材映射 {{ index + 1 }}</strong><button type="button" class="btn btn-secondary" @click="remove(index)">删除</button></div>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <label class="text-sm">输入类型<select class="input mt-1 w-full" :value="rule.kind || 'image'" @change="update(index, 'kind', ($event.target as HTMLSelectElement).value)"><option v-for="item in mediaTypes" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
-        <label class="text-sm">上游目标字段<input class="input mt-1 w-full" :value="rule.target || ''" placeholder="例如 images、reference_images" @change="update(index, 'target', ($event.target as HTMLInputElement).value)" /></label>
+        <label class="text-sm">上游目标 JSON 路径<input class="input mt-1 w-full" :value="rule.target || ''" placeholder="例如 images、Alias.images" @change="update(index, 'target', ($event.target as HTMLInputElement).value)" /></label>
         <label class="text-sm">素材编码<select class="input mt-1 w-full" :value="rule.encoding || 'preserve'" @change="update(index, 'encoding', ($event.target as HTMLSelectElement).value)"><option v-for="item in encodings" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
         <label class="text-sm">每项数据结构<select class="input mt-1 w-full" :value="rule.shape || 'preserve'" @change="update(index, 'shape', ($event.target as HTMLSelectElement).value)"><option v-for="item in shapes" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
         <label class="text-sm">只选择此 role（可留空）<input class="input mt-1 w-full" :value="rule.role || ''" placeholder="例如 first_frame" @change="update(index, 'role', ($event.target as HTMLInputElement).value)" /><span class="mt-1 block text-xs text-gray-500">留空表示处理该类型的全部素材；填写后只处理完全匹配的 role。</span></label>
         <label class="text-sm">最多素材数（0 表示不额外限制）<input type="number" min="0" class="input mt-1 w-full" :value="rule.max_count ?? 0" @change="update(index, 'max_count', Number(($event.target as HTMLInputElement).value))" /></label>
-        <label class="flex items-center gap-2 self-center text-sm"><input type="checkbox" :checked="rule.single === true" @change="update(index, 'single', ($event.target as HTMLInputElement).checked)" />只发送一个素材，不包装成数组</label>
+        <label class="flex items-center gap-2 self-center text-sm"><input type="checkbox" :checked="rule.single === true" @change="update(index, 'single', ($event.target as HTMLInputElement).checked)" />只发送一个素材，不包装成数组<span class="text-xs text-gray-500">仅当上游契约要求单值时启用</span></label>
       </div>
       <div class="grid gap-3 md:grid-cols-2">
         <label class="block text-sm">对象属性映射（可选 JSON）<textarea class="input mt-1 min-h-24 w-full font-mono text-xs" :value="mappingText(rule)" placeholder='{"role":"metadata.frame_role","b64_json":"image.data"}' @change="updateMapping(index, $event)" /><span class="mt-1 block text-xs text-gray-500">键是用户字段路径，值是上游字段路径。对象结构下可显式映射 <code>url</code> 或 <code>b64_json</code> 定位字段；保留原字段类型和值。</span><span v-if="mappingErrors[index]" role="alert" class="text-xs text-red-600">{{ mappingErrors[index] }}</span></label>

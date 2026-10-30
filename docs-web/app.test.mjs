@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, optionValues, parseMaterialText, profilesForCategory} from './app.mjs'
+import {buildRequest, categories, dataURLToMaterial, endpointFor, fullMarkdown, inputMaterialsFor, optionValues, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -15,6 +15,15 @@ test('public requests preserve all references without selecting a supplier proto
   assert.deepEqual(buildRequest({...cap,model:'renamed',request_format:'anything'},'video',{prompt:'test'},{image:images}).images,images)
   assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{image:[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}]}).images,[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}])
 })
+
+test('managed music uses the asynchronous task path and does not request SSE',async()=>{
+  const request=buildRequest({model:'lyria-3.5',profile_id:'profile'},'chat_music',{prompt:'test',stream:'true'})
+  assert.equal(request.async,true)
+  assert.equal(request.stream,false)
+  const content=JSON.parse(await readFile(new URL('../docs/multimodal/imagevideo-content.json',import.meta.url),'utf8'))
+  assert.match(fullMarkdown(content),/托管音乐请求统一先持久化并返回 HTTP 202/)
+  assert.doesNotMatch(fullMarkdown(content),/流式响应仍按其协议返回/)
+})
 test('GPT edit, Gemini modalities, music SSE and frame roles use native fields', () => {
   const cap={model:'test',profile_id:'profile',request_format:'yunfei_multimodal'}
   assert.equal(endpointFor('image_edit','test'),'/v1/images/edits')
@@ -28,7 +37,7 @@ test('GPT edit, Gemini modalities, music SSE and frame roles use native fields',
   const geminiUpload=buildRequest(cap,'gemini_image',{prompt:'test'},{image:[uploaded]})
   assert.deepEqual(geminiUpload.contents[0].parts[1],{inlineData:{mimeType:'image/jpeg',data:'QUJD'}})
   const music=buildRequest(cap,'chat_music',{prompt:'test',stream:'true'})
-  assert.equal(music.async,false);assert.equal(music.stream,true)
+  assert.equal(music.async,true);assert.equal(music.stream,false)
   assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{first_frame:['https://example.org/a.png']}).images,[{url:'https://example.org/a.png',role:'first_frame'}])
 })
 
@@ -68,6 +77,31 @@ test('published document and export share one source without old branding',async
   assert.match(markdown,/4096/)
   assert.doesNotMatch(markdown,/yunfei\.best|v6k\.top|待验证|坤肉AI|云飞/)
   for(const section of content)assert.match(markdown,new RegExp(section.title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
+})
+
+test('async task labels distinguish local acceptance from upstream acceptance and show billing',()=>{
+  assert.equal(taskPhaseLabel({status:'queued',submission_phase:'local_pending'}),'本站已受理，等待后台提交上游')
+  assert.equal(taskPhaseLabel({status:'in_progress',submission_phase:'upstream_accepted'}),'上游已受理，正在生成')
+  assert.match(taskBillingSummary({state:'held',reserved:'0.04',accepted:'0.00',settled:'0.00',released:'0.00'}),/预留 0\.04.*已结算 0\.00/)
+})
+
+test('large free previews get a bounded timeout and recovery metadata excludes credentials and prompts',()=>{
+  assert.equal(previewRequestTimeoutMs({prompt:'small'}),31000)
+  assert.equal(previewRequestTimeoutMs({images:[{b64_json:'x'.repeat(5*1024*1024)}]}),71000)
+  assert.equal(previewRequestTimeoutMs({images:[{b64_json:'x'.repeat(40*1024*1024)}]}),180000)
+  const pending={key:'idem-1',operation:'image_edit',id:'task-1',pollSeconds:7}
+  const serialized=serializePendingRecovery(pending)
+  assert.deepEqual(parsePendingRecovery(serialized),{key:'idem-1',operation:'image_edit',id:'task-1',terminal:false,pollSeconds:7})
+  assert.doesNotMatch(serialized,/api_key|prompt|secret/i)
+  assert.equal(parsePendingRecovery(serializePendingRecovery({...pending,terminal:true})).terminal,true)
+  assert.equal(parsePendingRecovery('{broken'),null)
+})
+
+test('large async submissions get a bounded upload timeout and retain a recovery path',()=>{
+  assert.equal(requestTimeoutMs('POST','/v1/videos',{async:true,prompt:'small'}),31000)
+  assert.equal(requestTimeoutMs('POST','/v1/images/edits',{async:true,images:[{b64_json:'x'.repeat(5*1024*1024)}]}),71000)
+  assert.equal(requestTimeoutMs('POST','/v1/videos',{async:true,images:[{b64_json:'x'.repeat(40*1024*1024)}]}),180000)
+  assert.equal(requestTimeoutMs('GET','/v1/tasks/task-1'),30000)
 })
 
 test('Grok video is part of the video API category; only four media API categories are exposed',()=>{

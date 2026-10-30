@@ -48,7 +48,7 @@ def check_order(requested, current):
         raise ValueError('older releases cannot replace newer deployments')
 
 def clean_status(job):
-    return {k: job[k] for k in ('id', 'version', 'digest', 'commit', 'status', 'phase', 'manager_job', 'backup_id', 'error') if k in job}
+    return {k: job[k] for k in ('id', 'version', 'immediate', 'digest', 'commit', 'status', 'phase', 'manager_job', 'backup_id', 'error') if k in job}
 
 def save(job, status=None, phase=None):
     if status: job['status'] = status
@@ -185,7 +185,7 @@ def worker(job):
             launcher = Path('/root/sub2api-manage').read_text()
             manager_path = re.search(r'(/root/sub2api-ops/releases/[0-9a-f]+/manage.py)', launcher).group(1)
             job['manager_job'] = uuid.uuid4().hex
-            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':False, 'docs_image': docs_image}
+            manager_job = {'id': job['manager_job'], 'action':'upgrade', 'target':job['version'], 'immediate':job.get('immediate', False), 'docs_image': docs_image}
             save(job, phase='backup_restore_and_cutover')
             # Import the verified installed module in an isolated Python process;
             # execute directly because this worker already owns operations.lock.
@@ -215,9 +215,10 @@ def worker(job):
         raise
 
 def dispatch(words):
-    if len(words) != 2 or words[0] not in ('deploy','status'): raise ValueError('allowed commands: deploy stable-version; status job-id')
+    if not words or words[0] not in ('deploy','status'): raise ValueError('allowed commands: deploy stable-version [--immediate]; status job-id')
     AUTO.mkdir(parents=True, exist_ok=True, mode=0o700)
     if words[0] == 'status':
+        if len(words) != 2: raise ValueError('allowed commands: deploy stable-version [--immediate]; status job-id')
         if not re.fullmatch(r'[0-9a-f]{32}', words[1]): raise ValueError('invalid job id')
         job = read(AUTO / (words[1] + '.json'))
         if job['status'] not in TERMINAL:
@@ -226,6 +227,8 @@ def dispatch(words):
                 job.update(status='failed', error='worker not running; inspect host log')
                 save(job)
         return clean_status(job)
+    if len(words) not in (2, 3) or len(words) == 3 and words[2] != '--immediate':
+        raise ValueError('allowed commands: deploy stable-version [--immediate]; status job-id')
     version_tuple(words[1])
     with (AUTO / 'dispatch.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -234,7 +237,7 @@ def dispatch(words):
             job = read(path)
             if 'id' in job and job.get('version') == words[1] and job.get('status') not in TERMINAL:
                 return clean_status(job)
-        job={'id':uuid.uuid4().hex,'version':words[1],'status':'queued'}; save(job)
+        job={'id':uuid.uuid4().hex,'version':words[1],'immediate':len(words) == 3,'status':'queued'}; save(job)
         log=AUTO / (job['id'] + '.log'); log.touch(mode=0o600)
         subprocess.run(['systemd-run','--unit=sub2api-auto-' + job['id'],'--collect','--property=Type=exec','--property=UMask=0077','--setenv=HOME=/root','--setenv=XDG_CONFIG_HOME=/root/.config','--property=StandardOutput=append:' + str(log),'--property=StandardError=append:' + str(log),sys.executable,str(Path(__file__).resolve()),'_worker',job['id']],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         return clean_status(job)

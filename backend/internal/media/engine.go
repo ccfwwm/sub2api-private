@@ -369,7 +369,10 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 		return StoredTask{}, err
 	}
 	if previous != nil {
-		return e.submitPendingTask(ctx, *previous)
+		// Idempotent retries only recover the original durable task. In
+		// particular, an HTTP retry must never take over a submission or create
+		// another supplier job; the worker owns all new submissions.
+		return *previous, nil
 	}
 	req, err := e.PrepareRequest(ctx, cap, operation, p, uploads)
 	if err != nil {
@@ -390,61 +393,15 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	snapshot.Request.Uploads = nil
 	snapshot.Request.MaterialRefs = nil
 	snapshot.Request.Wire = nil
-	task, err := e.Store.CreateTaskForSubmission(ctx, snapshot, accountID, idem, hash, id)
-	if err != nil {
-		return StoredTask{}, err
-	}
-	task, err = e.submitPendingTask(ctx, task)
+	// Persist the frozen request, reservation and queued task before returning.
+	// The durable worker will submit it independently of the client connection.
+	task, err := e.Store.CreateTask(ctx, snapshot, accountID, idem, hash, id)
 	if err != nil {
 		return StoredTask{}, err
 	}
 	e.PlatformActive.Store(true)
 	_ = e.FlushCaches(context.WithoutCancel(ctx))
 	return task, nil
-}
-
-func (e *Engine) submitPendingTask(ctx context.Context, task StoredTask) (StoredTask, error) {
-	shouldProcess := task.SubmissionClaim
-	if !shouldProcess && (task.State == "queued" || task.State == "submitting" && (task.LeaseUntil == nil || task.LeaseUntil.Before(time.Now())) || task.State == "unknown" && task.Settlement != "manual_review") {
-		claimed, err := e.Store.ClaimTask(ctx, task.ID)
-		if err != nil {
-			return task, err
-		}
-		if claimed == nil {
-			return e.Store.GetTask(context.WithoutCancel(ctx), task.ID)
-		}
-		task = *claimed
-		shouldProcess = true
-	}
-	if !shouldProcess {
-		return task, nil
-	}
-
-	workCtx, cancel := e.submissionContext(ctx)
-	started := time.Now()
-	slog.InfoContext(ctx, "media_submission_started", "task_id", task.ID, "account_id", task.AccountID)
-	processErr := e.Process(workCtx, task)
-	cancel()
-	if processErr != nil {
-		slog.ErrorContext(ctx, "media_immediate_submission_processing_failed", "task_id", task.ID, "error_type", fmt.Sprintf("%T", processErr))
-	}
-	current, err := e.Store.GetTask(context.WithoutCancel(ctx), task.ID)
-	if err == nil {
-		slog.InfoContext(ctx, "media_submission_completed", "task_id", task.ID, "account_id", task.AccountID, "state", current.State, "upstream_accepted", current.UpstreamID != "", "elapsed_ms", time.Since(started).Milliseconds())
-	}
-	return current, err
-}
-
-func (e *Engine) submissionContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	workCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	if e.ctx == nil {
-		return workCtx, cancel
-	}
-	stop := context.AfterFunc(e.ctx, cancel)
-	return workCtx, func() {
-		stop()
-		cancel()
-	}
 }
 
 func (e *Engine) Process(ctx context.Context, t StoredTask) error {

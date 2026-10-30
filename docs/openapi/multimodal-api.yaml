@@ -171,7 +171,7 @@ paths:
   /v1/images/generations:
     post:
       operationId: createImage
-      summary: 同步图像生成
+      summary: 异步任务式图像生成
       description: 具体模型能力、价卡与渠道验证完成后才开放。
       tags:
       - Media
@@ -238,8 +238,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '202':
+          description: 本站任务已持久化并受理；不表示上游已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
         '200':
-          description: 成功
+          description: 未由媒体任务接管时的兼容响应
           content:
             application/json:
               schema:
@@ -253,7 +259,7 @@ paths:
   /v1/images/edits:
     post:
       operationId: editImage
-      summary: 同步图像编辑
+      summary: 异步任务式图像编辑
       description: 具体模型能力、价卡与渠道验证完成后才开放。
       tags:
       - Media
@@ -320,8 +326,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '202':
+          description: 本站任务已持久化并受理；不表示上游已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
         '200':
-          description: 成功
+          description: 未由媒体任务接管时的兼容响应
           content:
             application/json:
               schema:
@@ -375,7 +387,7 @@ paths:
   /v1beta/models/{model}:generateContent:
     post:
       operationId: geminiImage
-      summary: Gemini原生图像
+      summary: Gemini原生图像异步任务
       description: 具体模型能力、价卡与渠道验证完成后才开放。
       tags:
       - Media
@@ -442,8 +454,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '202':
+          description: 本站任务已持久化并受理；不表示上游已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
         '200':
-          description: 成功
+          description: 未由媒体任务接管时的兼容响应
           content:
             application/json:
               schema:
@@ -1193,8 +1211,8 @@ paths:
   /v1/chat/completions:
     post:
       operationId: chatOrMusic
-      summary: 聊天/已声明的音乐协议
-      description: 现有聊天保留。Lyria非流式保留choices与data；SSE待渠道验证且默认关闭；TEXT进度不等于实时音频。
+      summary: 聊天/托管音乐任务
+      description: 已配置托管音乐能力始终返回本站HTTP 202任务；stream固定false，不返回SSE。普通聊天模型继续使用兼容响应。
       tags:
       - Media
       x-implementation-status: implemented-model-gated
@@ -1260,8 +1278,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '202':
+          description: 已配置托管音乐能力先持久化任务；不表示上游已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
         '200':
-          description: 成功
+          description: 普通聊天模型兼容响应
           content:
             application/json:
               schema:
@@ -1269,7 +1293,7 @@ paths:
             text/event-stream:
               schema:
                 type: string
-              x-status: implemented-completion-chunks-not-audio-stream
+              x-status: ordinary-chat-only; managed music tasks return JSON HTTP 202
       requestBody:
         required: true
         content:
@@ -4364,6 +4388,8 @@ components:
             type: object
         stream:
           type: boolean
+          description: Managed music tasks use stream=false and return an asynchronous
+            task; compatible chat may use streaming.
         public_profile_id:
           type: string
           pattern: ^mp_[0-9a-f]{64}$

@@ -1201,6 +1201,24 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			if e != nil {
 				return PreparedMediaRequest{}, e
 			}
+			// A scalar data URL already carries its MIME type. Treat an exactly
+			// matching input mime_type/mimeType as represented by that URL so a
+			// binding can safely map {b64_json,mime_type} to one provider string.
+			// Keep mismatched or additional attributes intact; scalar mappings
+			// will reject them below instead of silently discarding provider data.
+			if m.Shape == "string" && strings.HasPrefix(encoded, "data:") && mime != "" {
+				if object, ok := ref.(map[string]any); ok {
+					for _, key := range []string{"mime_type", "mimeType"} {
+						if supplied, ok := object[key].(string); ok && canonicalMediaMIME(supplied) == canonicalMediaMIME(mime) {
+							if _, present := props[key]; present {
+								delete(props, key)
+								delete(attributes, key)
+								filteredProperty = true
+							}
+						}
+					}
+				}
+			}
 			if mime != "" && !strings.HasPrefix(mime, m.Kind+"/") && m.Kind != "mask" {
 				return PreparedMediaRequest{}, fail(400, "invalid_reference_mime", "Material kind differs from MIME")
 			}
@@ -1288,8 +1306,11 @@ func BuildTemplateRequest(ctx context.Context, client *http.Client, cap Capabili
 			sentMaterials = append(sentMaterials, value)
 			used[m.Kind]++
 		}
-		if m.MaxCount > 0 && len(values) > m.MaxCount || m.Single && len(values) > 1 {
-			return PreparedMediaRequest{}, fail(400, "template_reference_limit", "Template material count exceeded")
+		if m.Single && len(values) > 1 {
+			return PreparedMediaRequest{}, fail(400, "template_reference_limit", fmt.Sprintf("Material target %s accepts one %s value; received %d", m.Target, m.Kind, len(values)))
+		}
+		if m.MaxCount > 0 && len(values) > m.MaxCount {
+			return PreparedMediaRequest{}, fail(400, "template_reference_limit", fmt.Sprintf("Material target %s accepts at most %d %s values; received %d", m.Target, m.MaxCount, m.Kind, len(values)))
 		}
 		if len(values) == 0 {
 			if m.Role == "" && endpoint.Encoding != "multipart" {

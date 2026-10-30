@@ -14,7 +14,7 @@ from auto_deploy import check_order, dispatch, release_assets, stage_reviewed_mi
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
- def test_publishing_cannot_call_production_workflow_and_manual_deploy_drains(self):
+ def test_publishing_cannot_call_production_workflow_and_manual_deploy_selects_cutover_mode(self):
   root=Path(__file__).resolve().parents[2]
   release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
   deploy=(root/'.github/workflows/deploy-production.yml').read_text(encoding='utf-8')
@@ -22,8 +22,10 @@ class AutomaticDeployTests(unittest.TestCase):
   self.assertNotIn('uses: ./.github/workflows/deploy-production.yml',release)
   self.assertNotIn('  workflow_call:',deploy)
   self.assertIn('  workflow_dispatch:',deploy)
-  self.assertIn("'immediate':False",source)
-  self.assertNotIn("'immediate':True",source)
+  self.assertIn("'immediate':job.get('immediate', False)",source)
+  self.assertIn("'immediate':len(words) == 3",source)
+  self.assertIn('      immediate:',deploy)
+  self.assertIn('DEPLOY_COMMAND+=" --immediate"',deploy)
  def test_release_assets_downloads_docs_receipt_before_checksum_validation(self):
   version='v1.2.7'; commit='a'*40; docs_name='docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
   verification=json.dumps({'version':version,'status':'recorded'}).encode()
@@ -92,7 +94,7 @@ class AutomaticDeployTests(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'older'):check_order('v1.1.7','v1.2.0')
   check_order('v1.2.0','v1.2.0');check_order('v1.3.0','v1.2.0')
  def test_ssh_no_arbitrary_commands(self):
-  for words in [['bash','-c','id'],['deploy','v1.2.0;id'],['deploy','v1.2.0-rc'],['status','../state'],['deploy','v1.2.0','extra']]:
+  for words in [['bash','-c','id'],['deploy','v1.2.0;id'],['deploy','v1.2.0-rc'],['status','../state'],['deploy','v1.2.0','extra'],['deploy','v1.2.0','--immediate;id']]:
    with tempfile.TemporaryDirectory() as root,patch.object(auto_deploy,'AUTO',Path(root)):
     with self.assertRaises(ValueError):dispatch(words)
  def test_duplicate_reuses_durable_job(self):
@@ -101,6 +103,14 @@ class AutomaticDeployTests(unittest.TestCase):
    atomic_json(Path(root)/(job['id']+'.json'),job)
    atomic_json(Path(root)/'deployed.json',{'version':'v1.1.7'})
    self.assertEqual(dispatch(['deploy','v1.2.0']),job);run.assert_not_called()
+ def test_immediate_deploy_is_explicit_and_persisted_in_restricted_job(self):
+  with tempfile.TemporaryDirectory() as root,patch.object(auto_deploy,'AUTO',Path(root)),patch('auto_deploy.subprocess.run') as run:
+   atomic_json(Path(root)/'deployed.json',{'version':'v1.3.15'})
+   job=dispatch(['deploy','v1.3.16','--immediate'])
+   self.assertTrue(job['immediate'])
+   self.assertTrue(run.called)
+   saved=json.loads((Path(root)/(job['id']+'.json')).read_text())
+   self.assertTrue(saved['immediate'])
  def test_immediate_skips_drain_but_retains_health_and_protection(self):
   from manage import Manager
   with tempfile.TemporaryDirectory() as root:

@@ -1,5 +1,8 @@
 import { apiClient } from './client'
 import type { MediaConfigRecord } from './media'
+import { mediaPreviewTimeoutMs } from '@/utils/mediaPreview'
+
+export { mediaPreviewTimeoutMs } from '@/utils/mediaPreview'
 
 export type ProtocolKind = 'templates' | 'bindings'
 export interface ProtocolTemplate {
@@ -19,7 +22,7 @@ export const mediaProtocolsAPI = {
   async rollback(kind: ProtocolKind, body: Record<string, unknown>) { return (await apiClient.post<MediaConfigRecord>(`/admin/media/${kind}/rollback`, body)).data },
   async archive(kind: ProtocolKind, id: string, expected_version: number) { return (await apiClient.post(`/admin/media/${kind}/archive`, { id, expected_version })).data },
   async export(kind: ProtocolKind, id: string) { return (await apiClient.get(`/admin/media/${kind}/${encodeURIComponent(id)}/export`)).data },
-  async preview(body: Record<string, unknown>) { return (await apiClient.post('/admin/media/templates/preview', body)).data },
+  async preview(body: Record<string, unknown>) { return (await apiClient.post('/admin/media/templates/preview', body, { timeout: mediaPreviewTimeoutMs(body) })).data },
   async discover(body: Record<string, unknown>) { return (await apiClient.post<{ models: string[] }>('/admin/media/templates/discover', body)).data },
-  async test(body: Record<string, unknown>, idempotencyKey: string) { return (await apiClient.post('/admin/media/templates/test', body, { headers: { 'Idempotency-Key': idempotencyKey } })).data }
+  async test(body: Record<string, unknown>, idempotencyKey: string) { return (await apiClient.post('/admin/media/templates/test', body, { timeout: mediaPreviewTimeoutMs(body), headers: { 'Idempotency-Key': idempotencyKey } })).data }
 }

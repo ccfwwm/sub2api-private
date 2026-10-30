@@ -376,7 +376,7 @@ def openapi():
         "ImageResponse": {"type": "object", "properties": {"created": {"type": "integer"}, "data": arr({"type": "object", "properties": {"url": TEXT, "b64_json": TEXT}})}},
         "GeminiRequest": obj({"contents": arr({"type": "object"}), "generationConfig": {"type": "object"}}, ["contents"]),
         "NativeResponse": {"type": "object", "additionalProperties": True},
-        "ChatRequest": {"type": "object", "required": ["model", "messages"], "properties": {"model": TEXT, "messages": {"type": "array", "minItems": 1, "items": {"type": "object"}}, "stream": {"type": "boolean"}}, "additionalProperties": True},
+        "ChatRequest": {"type": "object", "required": ["model", "messages"], "properties": {"model": TEXT, "messages": {"type": "array", "minItems": 1, "items": {"type": "object"}}, "stream": {"type": "boolean", "description": "Managed music tasks use stream=false and return an asynchronous task; compatible chat may use streaming."}}, "additionalProperties": True},
         "MusicRequest": obj({"model": TEXT, "prompt": {"type": "string", "minLength": 1, "maxLength": 10000},
                              "title": {"type": "string", "maxLength": 160}, "instrumental": {"type": "boolean", "default": False},
                              "lyrics": {"type": "string", "maxLength": 20000}, "duration": {"type": "integer", "minimum": 5, "maximum": 300},
@@ -444,13 +444,13 @@ def openapi():
         return op
     add("/v1/models", "get", "listModels", "当前Key模型发现", status="existing-foundation", responses={"200": response("Models")})
     add("/v1/tasks/{id}", "get", "getOwnedMediaTask", "统一查询当前Key所属媒体任务；不重新提交或收费", responses={"200": response("Task")})
-    add("/v1/images/generations", "post", "createImage", "同步图像生成", "ImageRequest", "existing-foundation", {"200": response("ImageResponse")})
-    op = add("/v1/images/edits", "post", "editImage", "同步图像编辑", status="existing-foundation", responses={"200": response("ImageResponse")})
+    add("/v1/images/generations", "post", "createImage", "异步任务式图像生成", "ImageRequest", "existing-foundation-extension", {"202": response("Task", "本站任务已持久化并受理；不表示上游已受理"), "200": response("ImageResponse", "未由媒体任务接管时的兼容响应")})
+    op = add("/v1/images/edits", "post", "editImage", "异步任务式图像编辑", status="existing-foundation-extension", responses={"202": response("Task", "本站任务已持久化并受理；不表示上游已受理"), "200": response("ImageResponse", "未由媒体任务接管时的兼容响应")})
     edit = copy.deepcopy(schemas["ImageRequest"])
     edit["properties"].update({"image": {"type": "string", "format": "binary"}, "image[]": arr({"type": "string", "format": "binary"}), "mask": {"type": "string", "format": "binary", "description": "可选的单张PNG mask，仅支持GPT图片编辑。"}})
     edit["anyOf"] = [{"required": ["image"]}, {"required": ["image[]"]}]
     op["requestBody"] = {"required": True, "content": {"multipart/form-data": {"schema": edit}}}
-    op = add("/v1beta/models/{model}:generateContent", "post", "geminiImage", "Gemini原生图像", "GeminiRequest", "existing-foundation", {"200": response("NativeResponse")})
+    op = add("/v1beta/models/{model}:generateContent", "post", "geminiImage", "Gemini原生图像异步任务", "GeminiRequest", "existing-foundation-extension", {"202": response("Task", "本站任务已持久化并受理；不表示上游已受理"), "200": response("NativeResponse", "未由媒体任务接管时的兼容响应")})
     op["security"] = [{"DownstreamKey": []}, {"GeminiKey": []}]
     op = add("/v1/videos", "post", "createVideo", "通用异步视频", "VideoRequest", "existing-foundation-extension-proposed", {"202": response("Task", "新通用任务已落库；保留本地ID"), "200": response("Task", "已有路径保留响应约定")}, "旧Grok路径保留；新通用任务202本地ID。未知受理结果进入unknown；同幂等键不同参数409；不自动重提。")
     op["parameters"] = [{"name": "Idempotency-Key", "in": "header", "schema": TEXT, "description": "建议必传；服务端以Key+规范化operation+请求hash约束。"}]
@@ -473,8 +473,8 @@ def openapi():
     content("/v1/videos/{id}/content", "headVideo", head=True)
     add("/v1/tasks/{id}/artifacts", "get", "listArtifacts", "列出任务制品", responses={"200": response("Artifacts")})
     content("/v1/tasks/{id}/artifacts/{key}/content", "downloadArtifact")
-    op = add("/v1/chat/completions", "post", "chatOrMusic", "聊天/已声明的音乐协议", "ChatRequest", "existing-foundation-music-proposed", {"200": response("NativeResponse")}, "现有聊天保留。Lyria非流式保留choices与data；SSE待渠道验证且默认关闭；TEXT进度不等于实时音频。")
-    op["responses"]["200"]["content"]["text/event-stream"] = {"schema": {"type": "string"}, "x-status": "unverified-disabled"}
+    op = add("/v1/chat/completions", "post", "chatOrMusic", "聊天/托管音乐任务", "ChatRequest", "existing-foundation-music-proposed", {"202": response("Task", "已配置托管音乐能力先持久化任务；不表示上游已受理"), "200": response("NativeResponse", "普通聊天模型兼容响应")}, "已配置托管音乐能力始终返回本站HTTP 202任务；stream固定false，不返回SSE。普通聊天模型继续使用兼容响应。")
+    op["responses"]["200"]["content"]["text/event-stream"] = {"schema": {"type": "string"}, "x-status": "ordinary-chat-only; managed music tasks return JSON HTTP 202"}
     for path, oid in [("/v1/audio/generations", "createMusic"), ("/v1/music/generations", "createMusicAlias")]:
         op = add(path, "post", oid, "音乐生成（来源专用路径未开放）", "MusicRequest", responses={"202": response("Task", "async=true本地任务"), "200": response("Task", "async=false同任务等待完成")}, description="两个入口规范化为同一operation进行幂等去重；来源404不能当作已可用。duration是提示不是输出上限。")
         op["parameters"] = [{"name": "Idempotency-Key", "in": "header", "schema": TEXT}]
@@ -526,7 +526,6 @@ def openapi():
                     response_value["content"]["application/json"]["schema"] = {"oneOf": [sr("Error"), sr("AdminError")]}
     for path in api["paths"].values():
         for operation in path.values(): operation["x-implementation-status"]="implemented-model-gated"
-    api["paths"]["/v1/chat/completions"]["post"]["responses"]["200"]["content"]["text/event-stream"]["x-status"]="implemented-completion-chunks-not-audio-stream"
     return api
 
 

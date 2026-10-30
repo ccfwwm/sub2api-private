@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewRequestsSubmitImmediatelyAndIdempotentRetriesDoNotResubmit(t *testing.T) {
+func TestNewRequestsReturnPersistedTasksBeforeUpstreamSubmission(t *testing.T) {
 	db := testDB(t)
 	snap := fixture(t, db, "100")
 	defer cleanupMediaTasks(t, db, snap.Identity.UserID)
@@ -59,47 +59,99 @@ func TestNewRequestsSubmitImmediatelyAndIdempotentRetriesDoNotResubmit(t *testin
 		return []media.Capability{cap}, []media.PriceCard{card}, nil
 	}
 	input := map[string]any{"model": cap.Model, "prompt": "fixture", "seconds": 5}
-	type result struct {
-		task media.StoredTask
-		err  error
-	}
-	results := make(chan result, 10)
+	started := time.Now()
+	tasks := make([]media.StoredTask, 0, 10)
 	for i := 0; i < 10; i++ {
-		go func(i int) {
-			task, err := engine.Create(ctx, cap, "video", input, nil, snap.Identity, fmt.Sprintf("immediate-%d", i))
-			results <- result{task, err}
-		}(i)
+		task, err := engine.Create(ctx, cap, "video", input, nil, snap.Identity, fmt.Sprintf("async-%d", i))
+		require.NoError(t, err)
+		require.Equal(t, "queued", task.State)
+		tasks = append(tasks, task)
 	}
+	require.Less(t, time.Since(started), 10*time.Second, "task creation must not wait for a delayed upstream")
+	select {
+	case <-entered:
+		t.Fatal("Create reached the upstream before a background worker was started")
+	default:
+	}
+	var queued int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_tasks WHERE account_id=$1 AND state='queued'`, snap.Capability.AccountIDs[0]).Scan(&queued))
+	require.Equal(t, 10, queued)
+	// Same-key recovery returns the durable local task without claiming or
+	// resubmitting it, and does not create another hold.
+	again, err := engine.Create(ctx, cap, "video", input, nil, snap.Identity, "async-0")
+	require.NoError(t, err)
+	require.Equal(t, tasks[0].ID, again.ID)
+	require.Equal(t, "queued", again.State)
+	require.Zero(t, submits.Load())
+
+	engine.Start()
 	for i := 0; i < 10; i++ {
 		select {
 		case <-entered:
 		case <-time.After(10 * time.Second):
-			t.Fatal("new requests waited for a local worker instead of reaching the upstream concurrently")
+			t.Fatal("background workers did not submit the persisted tasks")
 		}
 	}
-	var queued int
-	require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_tasks WHERE account_id=$1 AND state='queued'`, snap.Capability.AccountIDs[0]).Scan(&queued))
-	require.Zero(t, queued)
-	// The same idempotency key returns its original leased task while the POST
-	// is in flight and does not create another supplier job or another hold.
-	again, err := engine.Create(ctx, cap, "video", input, nil, snap.Identity, "immediate-0")
+	again, err = engine.Create(ctx, cap, "video", input, nil, snap.Identity, "async-0")
 	require.NoError(t, err)
+	require.Equal(t, tasks[0].ID, again.ID)
 	require.Equal(t, "submitting", again.State)
 	require.EqualValues(t, 10, submits.Load())
 	once.Do(func() { close(release) })
-	for i := 0; i < 10; i++ {
-		select {
-		case result := <-results:
-			require.NoError(t, result.err)
-			require.Equal(t, "in_progress", result.task.State)
-			require.NotEmpty(t, result.task.UpstreamID)
-		case <-time.After(10 * time.Second):
-			t.Fatal("immediate request did not return the accepted task")
-		}
-	}
+	require.Eventually(t, func() bool {
+		var accepted int
+		err := db.QueryRow(`SELECT count(*) FROM media_tasks WHERE account_id=$1 AND state='in_progress' AND upstream_id IS NOT NULL`, snap.Capability.AccountIDs[0]).Scan(&accepted)
+		return err == nil && accepted == 10
+	}, 10*time.Second, 20*time.Millisecond)
 	var held string
 	require.NoError(t, db.QueryRow(`SELECT frozen_balance::text FROM users WHERE id=$1`, snap.Identity.UserID).Scan(&held))
 	require.Equal(t, "10.00000000", held)
+}
+
+func TestBackgroundWorkerPublishesUpstreamRejectionAndReleasesReservation(t *testing.T) {
+	db := testDB(t)
+	snap := fixture(t, db, "10")
+	defer cleanupMediaTasks(t, db, snap.Identity.UserID)
+	snap.Capability.Adapter, snap.Capability.RequestFormat = "v6k_video_gateway", "v6k_url"
+	snap.Capability.Limits.ObservationSeconds = ptr(600)
+	var submits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		submits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"invalid_images","message":"Alias.images must be a string"}}`))
+	}))
+	defer upstream.Close()
+	blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("r", 32))
+	require.NoError(t, err)
+	engine := media.NewEngine(&media.Store{DB: db}, blobs, func(id, group int64) (media.Account, error) {
+		return media.Account{ID: id, BaseURL: upstream.URL, Key: "isolated-test", Allowed: true}, nil
+	}, nil)
+	engine.Adapter.Client = media.SafeClient(true)
+	engine.Config = func(context.Context, int64) ([]media.Capability, []media.PriceCard, error) {
+		return []media.Capability{snap.Capability}, []media.PriceCard{saleCardForIntegration(snap.Capability, snap.SaleRule, snap.Identity.GroupID)}, nil
+	}
+	task, err := engine.Create(context.Background(), snap.Capability, "video", map[string]any{"model": snap.Capability.Model, "prompt": "fixture", "seconds": 5}, nil, snap.Identity, "reject-once")
+	require.NoError(t, err)
+	require.Equal(t, "queued", task.State)
+	engine.Start()
+	defer engine.Stop()
+	require.Eventually(t, func() bool {
+		current, getErr := engine.Store.GetTask(context.Background(), task.ID)
+		return getErr == nil && current.State == "failed" && current.Settlement == "released" && strings.Contains(current.Diagnostic, "Alias.images must be a string")
+	}, 10*time.Second, 20*time.Millisecond)
+	require.EqualValues(t, 1, submits.Load())
+	var balance, frozen string
+	require.NoError(t, db.QueryRow(`SELECT balance::text,frozen_balance::text FROM users WHERE id=$1`, snap.Identity.UserID).Scan(&balance, &frozen))
+	require.Equal(t, "10.00000000", balance)
+	require.Equal(t, "0.00000000", frozen)
+}
+
+func saleCardForIntegration(cap media.Capability, rule media.Rule, groupID int64) media.PriceCard {
+	card := media.PriceCard{ID: "integration-sale", Version: "1", Status: "enabled", Purpose: "sale", MediaType: cap.MediaType, Operation: "video", Currency: "USD", Rules: []media.Rule{rule}, MultiplierPolicy: "effective_media_then_time", SuccessPolicy: "all_outputs"}
+	card.ModelMatch.Kind, card.ModelMatch.Value = "exact", cap.Model
+	card.Scope.Kind, card.Scope.Reference = "group", fmt.Sprint(groupID)
+	return card
 }
 
 func TestBackgroundSchedulerDoesNotSerializeBehindTwoSlowSubmissions(t *testing.T) {

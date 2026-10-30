@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminAPI } from '@/api/admin'
-import { mediaProtocolsAPI } from '@/api/media-protocols'
+import { mediaProtocolsAPI, mediaPreviewTimeoutMs } from '@/api/media-protocols'
 import { mediaAPI, type MediaArtifact, type MediaTask, type MediaTaskReview } from '@/api/media'
 import { accountMediaCapabilities } from '@/types/media'
 import type { Account, AccountListItem, AdminGroup } from '@/types'
@@ -32,6 +32,8 @@ const draggingKind = ref<MaterialKind | null>(null)
 const resultData = computed(() => result.value && typeof result.value === 'object' && !Array.isArray(result.value) ? result.value as Record<string, unknown> : {})
 const busy = ref(false), loading = ref(false), error = ref(''), scopeError = ref('')
 const uploadsPending = ref(0)
+const previewStage = ref<'idle' | 'preparing' | 'sending' | 'ready' | 'failed' | 'stale'>('idle')
+const previewBytes = ref(0)
 const page = ref(1), total = ref(0)
 const models = computed(() => accountMediaCapabilities(detail.value?.extra, detail.value?.credentials))
 const selectedCapability = computed(() => models.value.find(item => item.model === model.value))
@@ -44,7 +46,32 @@ let taskGeneration = 0
 let taskTimer: ReturnType<typeof setTimeout> | undefined
 
 const previewReady = computed(() => previewRevision.value === inputRevision.value && !!result.value)
-const taskPending = computed(() => !!task.value && (['queued', 'in_progress'].includes(task.value.status) || ['submitting', 'reconciling'].includes(task.value.submission_phase || '')))
+const taskPending = computed(() => !!task.value && (['queued', 'in_progress', 'unknown'].includes(task.value.status) || ['submitting', 'reconciling'].includes(task.value.submission_phase || '')))
+const taskStageLabel = computed(() => {
+  if (!task.value) return ''
+  if (task.value.status === 'completed') return '生成已完成'
+  if (task.value.status === 'failed') return '生成失败'
+  if (task.value.status === 'unknown') return '受理结果待核对'
+  switch (task.value.submission_phase) {
+    case 'local_pending': return '本站已受理，等待后台提交上游'
+    case 'submitting': return '本站正在提交上游'
+    case 'upstream_accepted': return '上游已受理，正在生成'
+    case 'reconciling': return '正在核对上游是否已受理'
+    default: return task.value.status === 'queued' ? '本站任务已排队' : '任务处理中'
+  }
+})
+const taskNextStep = computed(() => {
+  if (!task.value) return ''
+  if (task.value.status === 'completed') return '查看下方成品并核对账单。'
+  if (task.value.status === 'failed') return '查看失败原因和账单；预留额度会按任务结算状态处理。'
+  if (task.value.status === 'unknown' || ['reconciling', 'submitting'].includes(task.value.submission_phase || '')) return '保留当前测试 ID，刷新查询原任务；不要重新提交生成。'
+  return '本站后台会继续处理；可以刷新状态，重复使用当前测试 ID 只会查询原任务。'
+})
+const taskBillingSummary = computed(() => {
+  const billing = task.value?.billing
+  if (!billing) return '账单信息暂不可用'
+  return `账单 ${billing.state} · 预留 ${billing.reserved} · 已接受 ${billing.accepted} · 已结算 ${billing.settled} · 已释放 ${billing.released}`
+})
 
 watch([
   group, account, model, operation, prompt, request, key,
@@ -53,6 +80,7 @@ watch([
 ], () => {
   inputRevision.value++
   previewRevision.value = -1
+  previewStage.value = 'idle'
   if (submissionAttempted.value) submissionInputChanged.value = true
 })
 
@@ -229,6 +257,8 @@ async function run(effective: boolean) {
   if (uploadsPending.value) return
   busy.value = true; error.value = ''; result.value = undefined; logs.value = []
   previewRevision.value = -1
+  previewBytes.value = 0
+  previewStage.value = effective ? 'idle' : 'preparing'
   try {
     if (!Number.isSafeInteger(Number(group.value)) || Number(group.value) <= 0) throw new Error('请选择分组。')
     if (effective) {
@@ -240,14 +270,32 @@ async function run(effective: boolean) {
       const requestBody = buildPreviewRequest()
       const revision = inputRevision.value
       previewInput.value = requestBody
+      const previewPayload = { mode: 'effective', api_key: key.value.trim(), group_id: Number(group.value), account_id: detail.value.id, operation: operation.value, request: requestBody, measure_media: false }
+      previewBytes.value = new TextEncoder().encode(JSON.stringify(previewPayload)).byteLength
+      const timeoutMs = mediaPreviewTimeoutMs(previewPayload)
+      previewStage.value = 'sending'
+      appendLog('发送免费预览', { request_bytes: previewBytes.value, timeout_ms: timeoutMs, generation: false, billing: false })
       appendLog('输入请求（编码素材已脱敏）', requestBody)
-      result.value = await mediaProtocolsAPI.preview({ mode: 'effective', api_key: key.value.trim(), group_id: Number(group.value), account_id: detail.value.id, operation: operation.value, request: requestBody, measure_media: false })
-      if (revision === inputRevision.value) previewRevision.value = revision
+      result.value = await mediaProtocolsAPI.preview(previewPayload)
+      if (revision === inputRevision.value) {
+        previewRevision.value = revision
+        previewStage.value = 'ready'
+      } else previewStage.value = 'stale'
     }
     appendLog('检查完成', { identity: 'Key 与分组匹配', binding: '已解析当前模板及账号', request_mapping: '通过', pricing: resultData.value.pricing, upstream_generation: effective ? '预览未提交生成请求' : '实际生成需单独确认并提交' })
     appendLog('预览输出', result.value)
   } catch (cause) {
-    error.value = (cause as Error).message
+    if (effective) error.value = (cause as Error).message
+    else {
+      previewStage.value = 'failed'
+      const failure = cause as { message?: string; code?: string; response?: unknown }
+      const message = failure.message || String(cause)
+      const timeout = ['ECONNABORTED', 'ETIMEDOUT'].includes(failure.code || '') || /timeout|timed out/i.test(message)
+      const disconnected = !failure.response && /network error|failed to fetch|network request failed/i.test(message)
+      error.value = timeout || disconnected
+        ? `免费预览${timeout ? '超时' : '连接失败'}。大素材上传或网络延迟可能导致请求未完成；本次没有创建生成任务、没有扣费，可以安全重试。`
+        : `免费预览失败：${message}。本次没有创建生成任务、没有扣费；修正输入后可以重新预览。`
+    }
     appendLog('预览错误', error.value)
   } finally { busy.value = false }
 }
@@ -262,6 +310,7 @@ function newTest() {
   task.value = null
   taskReview.value = null
   taskError.value = ''
+  previewStage.value = 'idle'
   artifactAccess.value = {}
   artifactErrors.value = {}
 }
@@ -420,36 +469,53 @@ onMounted(async () => {
       <button type="button" class="btn btn-secondary" :disabled="busy || loading || uploadsPending > 0 || !detail || !model || !operation" @click="run(false)">{{ uploadsPending ? '正在读取素材…' : busy ? '处理中…' : '免费预览映射与估价' }}</button>
       <label class="flex items-center gap-2 text-sm"><input v-model="paid" type="checkbox" aria-label="确认真实生成可能收费" class="accent-primary-600" />我确认真实生成可能收费</label>
       <button type="button" class="btn btn-primary" :disabled="busy || stepUpPending || loading || uploadsPending > 0 || !detail || !model || !operation || !key || !paid || !previewReady || submissionInputChanged" @click="runPaidTest">{{ stepUpPending ? '等待安全验证…' : busy ? '提交中…' : submissionAttempted ? '恢复 / 查询原测试' : '提交真实生成请求' }}</button>
-      <button v-if="submissionAttempted" type="button" class="btn btn-secondary" :disabled="busy || stepUpPending" @click="newTest">开始新测试</button>
+      <button v-if="submissionAttempted" type="button" class="btn btn-secondary" :disabled="busy || stepUpPending || taskPending" @click="newTest">开始新测试</button>
       <span v-if="submissionAttempted" class="text-xs text-gray-500">测试 ID：{{ testKey }} · 重试只恢复原任务</span>
+    </div>
+    <div v-if="previewStage !== 'idle'" class="rounded-lg border p-3 text-sm dark:border-dark-600" :class="previewStage === 'failed' ? 'border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' : 'bg-gray-50 text-gray-700 dark:bg-dark-900 dark:text-gray-300'" role="status" aria-live="polite">
+      <strong>{{ ({ preparing: '正在准备免费预览', sending: '已发送免费预览，正在校验映射与估价', ready: '免费预览完成', failed: '免费预览未完成', stale: '预览完成，但输入已变化' } as Record<string, string>)[previewStage] }}</strong>
+      <span v-if="previewBytes"> · 请求约 {{ (previewBytes / 1048576).toFixed(2) }} MiB</span>
+      <span v-if="previewStage === 'sending'"> · 此阶段不会创建生成任务或扣费</span>
+      <span v-else-if="previewStage === 'failed'"> · 没有提交生成请求，可安全重试</span>
     </div>
     <p v-if="!previewReady && !submissionAttempted" class="text-xs text-gray-500">当前输入需要先完成一次免费预览，预览后修改任何字段都需要重新预览。</p>
     <p v-if="submissionInputChanged" role="status" class="text-sm text-amber-700 dark:text-amber-400">当前参数与已提交任务不同。为避免重复收费，请点击“开始新测试”后重新预览，再提交。</p>
     <p v-if="error" role="alert" class="text-red-600">{{ error }}</p>
-    <div v-if="previewInput || result" class="grid gap-4 xl:grid-cols-2">
-      <section v-if="previewInput" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">输入请求 · 编码内容已脱敏</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON(previewInput) }}</pre></section>
-      <section v-if="result" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">规范化参数与实际请求映射</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ normalized: resultData.normalized, upstream_request: resultData.request, effective: resultData.effective, inputs: resultData.inputs }) }}</pre></section>
-      <section v-if="result" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">估价、匹配规则与预览状态</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ pricing: resultData.pricing, rule_provenance: resultData.rule_provenance, override_diff: resultData.override_diff, request_complete: resultData.request_complete, measurement_required: resultData.measurement_required, paid_submission: resultData.paid_submission }) }}</pre></section>
-      <section v-if="logs.length" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">联调日志</h3><ol class="max-h-[480px] space-y-3 overflow-auto"> <li v-for="(entry, index) in logs" :key="index" class="border-l-2 border-primary-500 pl-3"><div class="flex gap-2 text-xs"><time class="text-gray-500">{{ entry.time }}</time><strong>{{ entry.stage }}</strong></div><pre class="mt-1 whitespace-pre-wrap break-all text-xs">{{ entry.detail }}</pre></li></ol></section>
-    </div>
+    <details v-if="previewInput || result || logs.length" class="rounded-lg border p-3 dark:border-dark-600">
+      <summary class="cursor-pointer text-sm font-medium">免费预览证据 · 输入、映射、估价与日志（默认折叠）</summary>
+      <div class="mt-3 grid gap-4 xl:grid-cols-2">
+        <section v-if="previewInput" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">输入请求 · 编码内容已脱敏</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON(previewInput) }}</pre></section>
+        <section v-if="result" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">规范化参数与实际请求映射</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ normalized: resultData.normalized, upstream_request: resultData.request, effective: resultData.effective, inputs: resultData.inputs }) }}</pre></section>
+        <section v-if="result" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">估价、匹配规则与预览状态</h3><pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ pricing: resultData.pricing, rule_provenance: resultData.rule_provenance, override_diff: resultData.override_diff, request_complete: resultData.request_complete, measurement_required: resultData.measurement_required, paid_submission: resultData.paid_submission }) }}</pre></section>
+        <section v-if="logs.length" class="min-w-0 border-t pt-3 dark:border-dark-600"><h3 class="mb-2 text-sm font-semibold">联调日志</h3><ol class="max-h-[480px] space-y-3 overflow-auto"> <li v-for="(entry, index) in logs" :key="index" class="border-l-2 border-primary-500 pl-3"><div class="flex gap-2 text-xs"><time class="text-gray-500">{{ entry.time }}</time><strong>{{ entry.stage }}</strong></div><pre class="mt-1 whitespace-pre-wrap break-all text-xs">{{ entry.detail }}</pre></li></ol></section>
+      </div>
+    </details>
     <section v-if="task" class="space-y-4 border-t pt-4 dark:border-dark-600" aria-label="真实请求测试结果">
       <header class="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 class="text-base font-semibold">真实请求结果</h3><p class="mt-1 break-all text-xs text-gray-500">任务 {{ task.id }} · {{ task.model }} · {{ task.status }}<span v-if="task.submission_phase"> · {{ task.submission_phase }}</span></p></div>
+        <div><h3 class="text-base font-semibold">真实请求结果</h3><p class="mt-1 break-all text-xs text-gray-500">任务 ID：{{ task.id }} · {{ task.model }}</p></div>
         <button type="button" class="btn btn-secondary" :disabled="taskLoading" @click="refreshTask()">{{ taskLoading ? '正在刷新…' : '刷新任务' }}</button>
       </header>
-      <p class="text-xs text-gray-500">本次已进入真实生成链路。继续使用相同测试 ID 只查询原任务；需要另一次生成时，请先开始新测试。</p>
+      <div class="rounded-lg border p-3 dark:border-dark-600" role="status" aria-live="polite">
+        <p class="font-semibold text-gray-900 dark:text-gray-100">{{ taskStageLabel }} <span v-if="task.progress !== undefined">· {{ task.progress }}%</span></p>
+        <p class="mt-1 text-xs">状态：{{ task.status }} · 阶段：{{ task.submission_phase || '历史任务' }}</p>
+        <p class="mt-1 text-xs">{{ taskBillingSummary }}</p>
+        <p class="mt-1 text-xs">{{ taskNextStep }}</p>
+      </div>
       <p v-if="taskError" role="alert" class="text-sm text-red-600">读取任务详情失败：{{ taskError }}</p>
       <p v-if="task.diagnostic" class="text-sm text-amber-700 dark:text-amber-400">{{ task.diagnostic }}</p>
-      <div class="grid gap-4 xl:grid-cols-2">
-        <section class="min-w-0 space-y-2 border-t pt-3 dark:border-dark-600">
-          <h4 class="text-sm font-semibold">请求参数与上游映射</h4>
-          <pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ incoming_request: taskReview?.incoming_request, normalized_request: taskReview?.normalized_request, prepared_request: taskReview?.prepared_request, upstream_request: taskReview?.upstream_request, submission_status: taskReview?.submission_status }) }}</pre>
-        </section>
-        <section class="min-w-0 space-y-2 border-t pt-3 dark:border-dark-600">
-          <h4 class="text-sm font-semibold">任务响应与上游结果</h4>
-          <pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ task: taskReview?.record.task || task, submission_response: taskReview?.submission?.response, upstream_response: taskReview?.upstream_response || taskReview?.response }) }}</pre>
-        </section>
-      </div>
+      <details class="rounded-lg border p-3 dark:border-dark-600">
+        <summary class="cursor-pointer text-sm font-medium">上下游请求、响应与诊断证据（默认折叠）</summary>
+        <div class="mt-3 grid gap-4 xl:grid-cols-2">
+          <section class="min-w-0 space-y-2 border-t pt-3 dark:border-dark-600">
+            <h4 class="text-sm font-semibold">请求参数与上游映射</h4>
+            <pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ incoming_request: taskReview?.incoming_request, normalized_request: taskReview?.normalized_request, prepared_request: taskReview?.prepared_request, upstream_request: taskReview?.upstream_request, submission_status: taskReview?.submission_status }) }}</pre>
+          </section>
+          <section class="min-w-0 space-y-2 border-t pt-3 dark:border-dark-600">
+            <h4 class="text-sm font-semibold">任务响应与上游结果</h4>
+            <pre class="max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ displayJSON({ task: taskReview?.record.task || task, submission_response: taskReview?.submission?.response, upstream_response: taskReview?.upstream_response || taskReview?.response }) }}</pre>
+          </section>
+        </div>
+      </details>
       <section v-if="(taskReview?.record.task.data || task.data || []).length" class="space-y-3 border-t pt-3 dark:border-dark-600">
         <h4 class="text-sm font-semibold">生成成品</h4>
         <article v-for="artifact in (taskReview?.record.task.data || task.data || [])" :key="artifact.key" class="min-w-0 space-y-2 border-b pb-3 last:border-0 dark:border-dark-600">

@@ -127,7 +127,7 @@
       },
       {
         "kind": "text",
-        "text": "HTTP 200 时读取 data[].url 或解码 data[].b64_json。本站 URL 通常是相对路径，拼接本站根地址并携带创建任务的原 API Key 下载。同步等待约 175 秒，也可能返回 HTTP 202 任务状态，此时保存 id 并继续查询。async:true 可立即返回任务状态；客户端断开不取消任务。"
+        "text": "托管媒体请求统一先在本站创建并持久化任务，快速返回 HTTP 202 和本站任务 ID；这表示本站已受理，不表示上游已受理。保存 id 后查询 GET /v1/tasks/{id}，客户端断开不取消任务。完成后读取 data[].url 或解码 data[].b64_json；本站相对 URL 携带创建任务的原 API Key 下载。"
       },
       {
         "kind": "heading",
@@ -451,7 +451,7 @@
             "async",
             "boolean",
             "否",
-            "true 立即返回任务状态；表单使用字符串 true"
+            "托管模型现在无论该兼容字段取值如何，都会先持久化并返回 HTTP 202 任务；保留此字段供旧客户端兼容"
           ]
         ]
       },
@@ -477,13 +477,13 @@
         "kind": "code",
         "language": "json",
         "text": "{\n  \"id\": \"task_example\",\n  \"created\": 1791936000,\n  \"data\": [\n    {\n      \"url\": \"/v1/tasks/task_example/artifacts/output-0/content\"\n    }\n  ]\n}",
-        "label": "URL 格式 · HTTP 200"
+        "label": "URL 格式 · 兼容即时响应；托管模型返回 HTTP 202"
       },
       {
         "kind": "code",
         "language": "json",
         "text": "{\n  \"id\": \"task_example\",\n  \"created\": 1791936000,\n  \"data\": [\n    {\n      \"b64_json\": \"<Base64 图片内容>\"\n    }\n  ]\n}",
-        "label": "Base64 格式 · HTTP 200"
+        "label": "Base64 格式 · 兼容即时响应；托管模型返回 HTTP 202"
       },
       {
         "kind": "code",
@@ -493,7 +493,7 @@
       },
       {
         "kind": "text",
-        "text": "HTTP 200 时读取 data[].url 或解码 data[].b64_json。本站 URL 通常是相对路径，拼接本站根地址并携带创建任务的原 API Key 下载。同步等待约 175 秒，也可能返回 HTTP 202 任务状态，此时保存 id 并继续查询。async:true 可立即返回任务状态；客户端断开不取消任务。"
+        "text": "托管媒体请求统一先在本站创建并持久化任务，快速返回 HTTP 202 和本站任务 ID；这表示本站已受理，不表示上游已受理。保存 id 后查询 GET /v1/tasks/{id}，客户端断开不取消任务。完成后读取 data[].url 或解码 data[].b64_json；本站相对 URL 携带创建任务的原 API Key 下载。"
       },
       {
         "kind": "heading",
@@ -684,7 +684,7 @@
             "async",
             "boolean",
             "否",
-            "true 立即返回任务状态；表单使用字符串 true"
+            "托管模型现在无论该兼容字段取值如何，都会先持久化并返回 HTTP 202 任务；保留此字段供旧客户端兼容"
           ],
           [
             "mask",
@@ -736,13 +736,13 @@
         "kind": "code",
         "language": "json",
         "text": "{\n  \"id\": \"task_example\",\n  \"created\": 1791936000,\n  \"data\": [\n    {\n      \"url\": \"/v1/tasks/task_example/artifacts/output-0/content\"\n    }\n  ]\n}",
-        "label": "URL 格式 · HTTP 200"
+        "label": "URL 格式 · 兼容即时响应；托管模型返回 HTTP 202"
       },
       {
         "kind": "code",
         "language": "json",
         "text": "{\n  \"id\": \"task_example\",\n  \"created\": 1791936000,\n  \"data\": [\n    {\n      \"b64_json\": \"<Base64 图片内容>\"\n    }\n  ]\n}",
-        "label": "Base64 格式 · HTTP 200"
+        "label": "Base64 格式 · 兼容即时响应；托管模型返回 HTTP 202"
       },
       {
         "kind": "code",
@@ -752,7 +752,7 @@
       },
       {
         "kind": "text",
-        "text": "HTTP 200 时读取 data[].url 或解码 data[].b64_json。本站 URL 通常是相对路径，拼接本站根地址并携带创建任务的原 API Key 下载。同步等待约 175 秒，也可能返回 HTTP 202 任务状态，此时保存 id 并继续查询。async:true 可立即返回任务状态；客户端断开不取消任务。"
+        "text": "托管媒体请求统一先在本站创建并持久化任务，快速返回 HTTP 202 和本站任务 ID；这表示本站已受理，不表示上游已受理。保存 id 后查询 GET /v1/tasks/{id}，客户端断开不取消任务。完成后读取 data[].url 或解码 data[].b64_json；本站相对 URL 携带创建任务的原 API Key 下载。"
       },
       {
         "kind": "heading",
@@ -845,7 +845,7 @@
       },
       {
         "kind": "text",
-        "text": "URL 下载按实际 Content-Type 选择 .png / .jpg / .webp。Base64 内容是文件编码，解码后保存，无需再次请求 URL。同步响应带任务 ID 时，可用本页客户端 resume 统一查询并保存制品。"
+        "text": "管理后的媒体能力会先返回 HTTP 202 和本站任务 ID，不等待上游生成。使用 GET /v1/tasks/{id} 查询阶段和账单；completed 后按 data[].content_url 下载，或解码兼容响应中的 data[].b64_json。HTTP 202 只代表本站持久化受理。"
       }
     ]
   },
@@ -1236,7 +1236,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       },
       {
         "kind": "heading",
@@ -1460,7 +1460,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       }
     ]
   },
@@ -1601,7 +1601,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       }
     ]
   },
@@ -1749,7 +1749,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       }
     ]
   },
@@ -1915,7 +1915,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       },
       {
         "kind": "text",
@@ -2040,7 +2040,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       },
       {
         "kind": "text",
@@ -2256,7 +2256,7 @@
     "group": "Lyria 音乐",
     "navTitle": "Chat Completions",
     "title": "Lyria · Chat Completions",
-    "subtitle": "用文字消息生成音乐，支持 JSON 或文字 SSE。",
+    "subtitle": "用文字消息提交音乐生成任务，通过任务 ID 查询状态与音频制品。",
     "blocks": [
       {
         "kind": "endpoint",
@@ -2298,13 +2298,13 @@
             "stream",
             "boolean",
             "否",
-            "false 返回 JSON；true 在生成结束后发送文字 SSE"
+            "固定为 false；托管音乐统一返回 HTTP 202 任务，不提供 SSE 直返。"
           ],
           [
             "async",
             "boolean",
             "否",
-            "true 返回任务；省略 / false 同步等待"
+            "兼容字段；本站先持久化任务并返回 HTTP 202，再由后台提交上游。"
           ]
         ]
       },
@@ -2325,12 +2325,12 @@
       {
         "kind": "code",
         "language": "json",
-        "text": "{\n  \"id\": \"task_example\",\n  \"task_id\": \"task_example\",\n  \"object\": \"chat.completion\",\n  \"model\": \"lyria-3.5\",\n  \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\": \"assistant\",\n        \"content\": \"音乐生成完成\"\n      },\n      \"finish_reason\": \"stop\"\n    }\n  ],\n  \"data\": [\n    {\n      \"url\": \"/v1/tasks/task_example/artifacts/output-0/content\"\n    }\n  ]\n}",
+        "text": "{\n  \"id\": \"task_example\",\n  \"object\": \"audio.generation\",\n  \"model\": \"lyria-3.5\",\n  \"status\": \"queued\",\n  \"submission_phase\": \"local_pending\",\n  \"progress\": 0,\n  \"created_at\": 1791936000,\n  \"billing\": {\n    \"currency\": \"USD\",\n    \"state\": \"held\",\n    \"reserved\": \"0.04\",\n    \"accepted\": \"0.00\",\n    \"settled\": \"0.00\",\n    \"released\": \"0.00\",\n    \"refunded\": \"0.00\",\n    \"maximum_charge\": \"0.04\",\n    \"version\": 1,\n    \"quantities\": {}\n  },\n  \"data\": []\n}",
         "label": "JSON 响应示例"
       },
       {
         "kind": "text",
-        "text": "优先保存 task_id 查询音乐制品。choices[].message.content 是文字，不是音频。实际 usage 若存在，以返回为准。同步等待可能回退为 HTTP 202 任务 JSON。"
+        "text": "托管音乐请求统一先持久化并返回 HTTP 202 和本站任务 ID；该状态不表示上游已受理。读取 GET /v1/tasks/{id} 跟踪上游提交、生成进度与账单，完成后读取 data[].content_url 或 GET /v1/tasks/{id}/artifacts。此托管任务接口不支持 SSE 直返；不要等待 chat.completion JSON 或 SSE 作为完成信号。"
       },
       {
         "kind": "heading",
@@ -2597,7 +2597,7 @@
             "async",
             "boolean",
             "否",
-            "true 返回任务；省略 / false 同步等待"
+            "托管媒体任务统一异步返回 HTTP 202；兼容字段不改变本站持久化入队行为"
           ]
         ]
       },
@@ -2619,7 +2619,7 @@
       },
       {
         "kind": "text",
-        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求直接提交上游后返回任务。submission_phase=upstream_accepted 表示上游已受理；submitting 是正在等待提交响应，reconciling 是受理核对，local_pending 是历史本地待提交；queued 状态本身不代表上游排队。请使用幂等键恢复原请求，避免重复生成。"
+        "text": "返回 HTTP 202 后保存 id，每隔 10–20 秒查询 GET /v1/tasks/{id}。completed 时读取 data[].content_url，携带原 API Key 下载；queued / in_progress 继续等待。failed 查看 diagnostic；unknown 保存任务 ID 并联系支持核对受理结果。不要因客户端超时重复生成。金额和时间仅为格式示例。 新请求先持久化本站任务与计费预留，再返回 HTTP 202；后台 worker 随后提交上游。submission_phase=local_pending 表示本站已受理、等待后台提交；submitting 表示正在提交上游；upstream_accepted 表示上游已受理；reconciling 表示正在只读核对受理结果。queued 本身不代表上游排队。超时后使用原幂等键和恢复接口找回任务，绝不自动再次 POST。"
       },
       {
         "kind": "heading",
@@ -2731,32 +2731,33 @@
     ]
   },
   {
-    "id": "audio-stream",
+    "id": "audio-task-flow",
     "group": "Lyria 音乐",
-    "navTitle": "读取文字 SSE",
-    "title": "Lyria · 文字 SSE",
-    "subtitle": "按事件读取生成完成后的文字消息。",
+    "navTitle": "异步任务查询",
+    "title": "Lyria · 异步任务与制品",
+    "subtitle": "托管音乐生成不使用 SSE；按本站任务 ID 读取阶段和结果。",
     "blocks": [
       {
+        "kind": "text",
+        "text": "该媒体能力通过标准 POST /v1/chat/completions 提交，并返回 HTTP 202 与本站任务 ID。提交成功只说明本站已持久化；查询任务后，submission_phase=upstream_accepted 才表示上游已受理。"
+      },
+      {
         "kind": "endpoint",
-        "method": "POST",
-        "path": "/v1/chat/completions"
+        "method": "GET",
+        "path": "/v1/tasks/{id}"
       },
       {
         "kind": "text",
-        "text": "先检查 HTTP 状态与 Content-Type；202 或 application/json 是任务 JSON，保存 id / task_id。text/event-stream 逐事件读取 choices[].delta.content。SSE 是文字；最终音频用任务 ID 下载。"
+        "text": "轮询同一个本站任务 ID，检查 status、submission_phase、diagnostic 与 billing。客户端断开不会取消任务，也不要重复 POST。"
       },
       {
-        "kind": "code",
-        "language": "bash",
-        "text": "curl -N 'https://code.aicodeme.xyz/v1/chat/completions' \\\n  -H \"Authorization: Bearer $MEDIA_API_KEY\" -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"lyria-3.5\",\"messages\":[{\"role\":\"user\",\"content\":\"生成舒缓钢琴音乐\"}],\"stream\":true}'",
-        "label": "音乐文字 SSE"
+        "kind": "endpoint",
+        "method": "GET",
+        "path": "/v1/tasks/{id}/artifacts"
       },
       {
-        "kind": "code",
-        "language": "javascript",
-        "text": "// 服务端示例：fetch 后先检查状态及 Content-Type。\nif (!response.ok) throw new Error('HTTP ' + response.status);\nif (response.status === 202 || response.headers.get('content-type')?.includes('application/json')) {\n  const task = await response.json(); console.log(task.id || task.task_id);\n} else {\n  const reader = response.body.getReader(), decoder = new TextDecoder();\n  let buffer = '';\n  while (true) {\n    const { value, done } = await reader.read();\n    buffer += decoder.decode(value, { stream: !done });\n    buffer = buffer.replace(/\\r\\n/g, '\\n');\n    let end;\n    while ((end = buffer.indexOf('\\n\\n')) >= 0) {\n      const event = buffer.slice(0, end); buffer = buffer.slice(end + 2);\n      const data = event.split('\\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('\\n');\n      if (data && data !== '[DONE]') console.log(JSON.parse(data).choices?.[0]?.delta?.content || '');\n    }\n    if (done) break;\n  }\n}",
-        "label": "按文字事件读取 SSE"
+        "kind": "text",
+        "text": "任务完成后读取 data[].content_url，或列出制品并调用对应 content 端点下载。下载继续使用原 API Key；成品未就绪时稍后重新查询。"
       }
     ]
   },
@@ -2903,7 +2904,7 @@
       },
       {
         "kind": "text",
-        "text": "在提交前保存 Idempotency-Key、operation 和请求内容。提交响应丢失时，只调用恢复接口；查询仅在当前 Key 的任务中查找，不会创建新任务。暂时 404 可能是原请求尚未落库，请稍后查询并保留原请求；不要用新幂等键自动重试生成。查询到 id 后按该 id 继续轮询。"
+        "text": "提交前保存 Idempotency-Key、operation 和请求内容。标准提交端点先持久化任务与计费预留，立即返回 HTTP 202 和本站任务 ID；HTTP 202 不表示上游已受理。按任务阶段查询 GET /v1/tasks/{id}，并通过标准 artifacts/content 路径读取成品。提交响应丢失时只调用恢复接口；暂时 404 时保留原幂等键并稍后查询，不要自动再次提交。"
       },
       {
         "kind": "code",
@@ -3006,7 +3007,7 @@
     "blocks": [
       {
         "kind": "text",
-        "text": "Python 3.10+ 仅用标准库；JavaScript 使用 Node.js 20+，在服务端运行。将上方任一 JSON 请求保存为 request.json。GPT 编辑使用 --image 上传本地图片，可重复两次；文字参数另存为 edit.json。脚本分为 submit 与 resume：每个状态文件只提交一次；resume 完成轮询与制品下载。异步响应、同步成功及同步回退 202 均通过任务 ID 汇合到同一流程。脚本不消费 Chat SSE，使用 stream:false。"
+        "text": "Python 3.10+ 仅用标准库；JavaScript 使用 Node.js 20+，在服务端运行。将上方任一 JSON 请求保存为 request.json。GPT 编辑使用 --image 上传本地图片，可重复两次；文字参数另存为 edit.json。脚本分为 submit 与 resume：每个状态文件只提交一次；resume 完成轮询与制品下载。提交 POST 快速返回本站任务 ID；resume 只查询任务状态并下载制品，不会重复 POST。脚本不消费 Chat SSE，使用 stream:false。"
       },
       {
         "kind": "code",
@@ -3042,7 +3043,7 @@
       },
       {
         "kind": "text",
-        "text": "输入使用 model、input、voice 及可选 response_format、speed。async:true 返回持久任务，通过通用任务接口查询并鉴权下载音频；同步模式返回有效音频。声音、输出格式和可选参数由所选模型配置决定。字符计价按有效 input 的 Unicode 码点计数，由管理员配置单价，不隐含免费价格。"
+        "text": "输入使用 model、input、voice 及可选 response_format、speed。托管语音请求先持久化并返回 HTTP 202，通过通用任务接口查询并鉴权下载音频；async 字段仅为兼容保留。声音、输出格式和可选参数由所选模型配置决定。字符计价按有效 input 的 Unicode 码点计数，由管理员配置单价，不隐含免费价格。"
       },
       {
         "kind": "code",

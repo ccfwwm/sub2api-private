@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import MediaDiagnostics from '../MediaDiagnostics.vue'
+import { mediaPreviewTimeoutMs } from '@/utils/mediaPreview'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), getAllIncludingInactive: vi.fn(), effective: vi.fn(), preview: vi.fn(), test: vi.fn(), detail: vi.fn(), artifactAccess: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { accounts: api, groups: api } }))
-vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: { effective: api.effective, preview: api.preview, test: api.test } }))
+vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: { effective: api.effective, preview: api.preview, test: api.test }, mediaPreviewTimeoutMs: () => 30000 }))
 vi.mock('@/api/media', () => ({ mediaAPI: { detail: api.detail, artifactAccess: api.artifactAccess } }))
 vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run: (action: () => Promise<void>) => action() }), isStepUpCancelled: () => false }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: { group_id: '19', account_id: '2139' } }) }))
@@ -40,6 +41,12 @@ beforeEach(() => {
 })
 
 describe('media diagnostics selectors', () => {
+  it('extends large free-preview timeouts while keeping a hard cap', () => {
+    expect(mediaPreviewTimeoutMs({ request: { prompt: 'short' } })).toBe(31000)
+    expect(mediaPreviewTimeoutMs({ request: { images: [{ b64_json: 'x'.repeat(5 * 1024 * 1024) }] } })).toBe(71000)
+    expect(mediaPreviewTimeoutMs({ request: { images: [{ b64_json: 'x'.repeat(40 * 1024 * 1024) }] } })).toBe(180000)
+  })
+
   it('keeps a linked account outside the current account page and loads its model choices', async () => {
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
@@ -64,6 +71,20 @@ describe('media diagnostics selectors', () => {
     }))
     expect(wrapper.text()).toContain('输入请求')
     expect(wrapper.text()).toContain('联调日志')
+    expect(wrapper.find('details[open]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('explains preview timeouts as safe to retry without creating or billing a task', async () => {
+    api.preview.mockRejectedValueOnce(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('没有创建生成任务、没有扣费')
+    expect(wrapper.text()).toContain('可以安全重试')
+    expect(wrapper.text()).toContain('没有提交生成请求')
     wrapper.unmount()
   })
 
@@ -159,7 +180,11 @@ describe('media diagnostics selectors', () => {
     expect(api.detail).toHaveBeenCalledWith('task-91')
     expect(api.artifactAccess).toHaveBeenCalledWith('task-91', 'result-1', true)
     expect(wrapper.text()).toContain('真实请求结果')
+    expect(wrapper.text()).toContain('任务 ID：task-91')
+    expect(wrapper.text()).toContain('生成已完成')
+    expect(wrapper.text()).toContain('账单')
     expect(wrapper.text()).toContain('actual-output')
+    expect(wrapper.findAll('details[open]')).toHaveLength(0)
     expect(wrapper.get('video').attributes('src')).toContain('access=signed')
     expect(wrapper.get('video').attributes('controls')).toBeDefined()
 
@@ -167,6 +192,24 @@ describe('media diagnostics selectors', () => {
     await flushPromises()
     expect(api.test).toHaveBeenCalledTimes(2)
     expect(api.test.mock.calls[1][1]).toBe(idempotencyKey)
+    wrapper.unmount()
+  })
+
+  it('does not enable a new test while the original submission result is unknown', async () => {
+    const unresolved = { ...submittedTask(), status: 'unknown', submission_phase: 'reconciling', data: [], billing: { state: 'manual_review', reserved: '0.25', accepted: '0.00', settled: '0.00', released: '0.00' } }
+    api.test.mockResolvedValueOnce(unresolved)
+    api.detail.mockResolvedValueOnce({ record: { task: unresolved }, incoming_request: { model: 'video-choice' } })
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
+    await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('受理结果待核对')
+    const newTest = wrapper.findAll('button').find(button => button.text() === '开始新测试')!
+    expect((newTest.element as HTMLButtonElement).disabled).toBe(true)
     wrapper.unmount()
   })
 })

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
 import MediaParameterRulesEditor from './MediaParameterRulesEditor.vue'
 import MediaMaterialsEditor from './MediaMaterialsEditor.vue'
 import MediaResponseEditor from './MediaResponseEditor.vue'
-import { mediaProtocolsAPI as api, type ProtocolKind } from '@/api/media-protocols'
-import type { MediaConfigRecord } from '@/api/media'
+import { mediaProtocolsAPI as api, mediaPreviewTimeoutMs, type ProtocolKind } from '@/api/media-protocols'
+import { mediaAPI, type MediaConfigRecord, type MediaTask, type MediaTaskReview } from '@/api/media'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
 
@@ -37,10 +37,19 @@ const selected = ref<MediaConfigRecord | null>(null)
 const json = ref(''), mode = ref('form'), busy = ref(false), error = ref(''), notice = ref(''), result = ref<unknown>()
 const deleting = ref(false), bulkModels = ref('')
 const previewInput = ref('{"model":"preview","prompt":"参考素材测试","seconds":5,"images":[]}')
+const previewStage = ref<'idle' | 'preparing' | 'sending' | 'ready' | 'failed'>('idle'), previewBytes = ref(0)
+const previewTimeoutMs = ref(30000)
+const previewReady = ref(false)
 const sample = ref('{}'), online = ref(false), operation = ref('video'), upstreamModel = ref('preview')
 const previewKeyID = ref(''), previewAccountID = ref('')
 const effectiveGroup=ref(String(route.query.group_id || '')), effectiveResult=ref<unknown>()
 const keyID = ref(''), paid = ref(false), discoveryAccount = ref(''), discoveryGroup = ref('')
+const paidTask = ref<MediaTask | null>(null), paidTaskReview = ref<MediaTaskReview | null>(null), paidTaskError = ref(''), paidTaskLoading = ref(false)
+const paidArtifactAccess = ref<Record<string, { url: string; expires_at: number }>>({}), paidArtifactErrors = ref<Record<string, string>>({}), paidArtifactLoading = ref('')
+const paidSubmitState = ref<'idle' | 'sending' | 'uncertain' | 'rejected'>('idle'), paidRequestBytes = ref(0)
+const paidRecoveryBody = ref<Record<string, unknown> | null>(null)
+let paidTaskTimer: ReturnType<typeof setTimeout> | undefined
+let paidTaskGeneration = 0
 // Retain the key after a timeout: clicking again cannot create another paid task.
 const testKey = ref(crypto.randomUUID())
 const draft = computed<Record<string, unknown> | null>(() => { try { const value = JSON.parse(json.value); return value && !Array.isArray(value) && typeof value === 'object' ? value : null } catch { return null } })
@@ -49,6 +58,28 @@ const rows = computed(() => kind.value === 'templates' ? templates.value : bindi
 watch(() => route.query.account_id, value => { accountFilter.value = String(value || ''); selected.value = null; json.value = '' })
 watch(() => route.query.group_id, value => { groupFilter.value = String(value || ''); effectiveGroup.value = String(value || '') })
 const publishedTemplates = computed(() => templates.value.filter(row => row.published_version))
+const paidTaskStage = computed(() => {
+  if (!paidTask.value) return ''
+  if (paidTask.value.status === 'completed') return '生成已完成'
+  if (paidTask.value.status === 'failed') return '生成失败'
+  if (paidTask.value.status === 'unknown') return '上游受理结果待核对'
+  return ({ local_pending: '本站已受理，等待后台提交上游', submitting: '本站正在提交上游', upstream_accepted: '上游已受理，正在生成', reconciling: '正在核对上游是否已受理' } as Record<string, string>)[paidTask.value.submission_phase || ''] || (paidTask.value.status === 'queued' ? '本站任务排队中' : '任务处理中')
+})
+const paidTaskBilling = computed(() => {
+  const bill = paidTask.value?.billing
+  return bill ? `账单 ${bill.state} · 预留 ${bill.reserved} · 已接受 ${bill.accepted} · 已结算 ${bill.settled} · 已释放 ${bill.released}` : ''
+})
+// An unknown task is still financially unresolved; keep the operator on its
+// original task instead of enabling a second paid generation.
+const paidTaskPending = computed(() => !!paidTask.value && !['completed', 'failed'].includes(paidTask.value.status))
+const previewSummary = computed(() => {
+  if (!previewReady.value || !result.value || typeof result.value !== 'object') return ''
+  const row = result.value as Record<string, unknown>
+  const receipt = row.request && typeof row.request === 'object' ? row.request as Record<string, unknown> : {}
+  const refs = receipt.references && typeof receipt.references === 'object' ? Object.entries(receipt.references as Record<string, unknown>).map(([kind, count]) => `${kind} ${count}`).join('、') : ''
+  const route = typeof receipt.path === 'string' ? `映射接口 ${String(receipt.method || 'POST')} ${receipt.path}` : (row.mode === 'effective' ? '已解析实际绑定' : '已完成模板映射')
+  return [`免费检查完成 · ${route}`, refs ? `素材：${refs}` : '', '未调用生成接口 · 未创建任务 · 未扣费'].filter(Boolean).join(' · ')
+})
 function field(path: string): unknown { return path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], draft.value) }
 function set(path: string, value: unknown) {
   if (!draft.value) return
@@ -81,7 +112,73 @@ function create() {
   const object = kind.value === 'templates' ? { id: `custom-${crypto.randomUUID()}`, name: '自定义协议模板', description: '', schema_version: 1, media_types: ['video'], operations: ['video'], mode: 'async', auth: { mode: 'bearer' }, submit: { method: 'POST', path: '/v1/videos', encoding: 'json' }, query: { method: 'GET', path: '/v1/videos/{task_id}' }, response: { task_id: ['id'], status: ['status'], states: { queued: 'in_progress', completed: 'completed', failed: 'failed' }, urls: ['url'] }, poll_seconds: 10, materials: [], rules: [] } : { id: `binding-${crypto.randomUUID()}`, group_id: Number(groupFilter.value || 0), account_id: Number(accountFilter.value || 0), model: '', upstream_model: '', rules: [] }
   json.value = JSON.stringify(object, null, 2)
 }
-function newTest() { testKey.value=crypto.randomUUID();paid.value=false }
+onBeforeUnmount(() => { paidTaskGeneration++; if (paidTaskTimer) clearTimeout(paidTaskTimer) })
+function newTest() { if (paidTaskPending.value || paidSubmitState.value === 'sending') return; if (paidTaskTimer) clearTimeout(paidTaskTimer); paidTask.value=null; paidTaskReview.value=null; paidTaskError.value=''; paidArtifactAccess.value={}; paidArtifactErrors.value={}; paidRecoveryBody.value=null; paidSubmitState.value='idle'; testKey.value=crypto.randomUUID();paid.value=false }
+function schedulePaidTaskRefresh(id: string) {
+  if (paidTaskTimer) clearTimeout(paidTaskTimer)
+  if (!paidTaskPending.value || paidTask.value?.id !== id) return
+  paidTaskTimer = setTimeout(() => { void refreshPaidTask(id) }, 3000)
+}
+async function refreshPaidTask(id = paidTask.value?.id) {
+  if (!id) return
+  const version = paidTaskGeneration
+  paidTaskLoading.value = true; paidTaskError.value = ''
+  try {
+    const review = await mediaAPI.detail(id)
+    if (version !== paidTaskGeneration || paidTask.value?.id !== id) return
+    paidTaskReview.value = review
+    paidTask.value = review.record.task
+  } catch (cause) { if (version === paidTaskGeneration) paidTaskError.value = (cause as Error).message || String(cause) }
+  finally { if (version === paidTaskGeneration) { paidTaskLoading.value = false; schedulePaidTaskRefresh(id) } }
+}
+async function loadPaidArtifact(artifact: MediaTask['data'][number]) {
+  const id = paidTask.value?.id
+  if (!id || !artifact.available) return
+  paidArtifactLoading.value = artifact.key
+  paidArtifactErrors.value = { ...paidArtifactErrors.value, [artifact.key]: '' }
+  try { paidArtifactAccess.value = { ...paidArtifactAccess.value, [artifact.key]: await mediaAPI.artifactAccess(id, artifact.key, true) } }
+  catch (cause) { paidArtifactErrors.value = { ...paidArtifactErrors.value, [artifact.key]: (cause as Error).message || String(cause) } }
+  finally { paidArtifactLoading.value = '' }
+}
+async function sendPaidTest(body: Record<string, unknown>) {
+  const version = ++paidTaskGeneration
+  paidSubmitState.value = 'sending'; paidTaskError.value = ''
+  try {
+    const task = await api.test(body, testKey.value) as MediaTask
+    if (version !== paidTaskGeneration) return
+    if (!task?.id) throw new Error('响应中没有任务 ID；保留当前幂等 ID，再点“恢复 / 查询原任务”，不要新建请求。')
+    paidTask.value = task
+    paidTaskReview.value = null
+    paidSubmitState.value = 'idle'
+    await refreshPaidTask(task.id)
+  } catch (cause) {
+    if (version === paidTaskGeneration) {
+      const message = (cause as Error).message || String(cause)
+      const failure = cause as { response?: { status?: number }; status?: number }
+      const status = failure.response?.status || failure.status
+      const definiteRejection = typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 409
+      paidSubmitState.value = definiteRejection ? 'rejected' : 'uncertain'
+      paidTaskError.value = definiteRejection
+        ? `本站拒绝了提交（HTTP ${status}）：${message}。没有返回任务 ID；修正问题后请明确开始新的测试。`
+        : `本站受理结果尚未确认：${message}。已保留幂等 ID 和原请求内容；使用“恢复 / 查询原任务”安全重试同一请求，不会创建第二个任务。`
+    }
+    throw cause
+  }
+}
+async function submitPaidTest() {
+  if (!paid.value) throw new Error('请先确认本次真实生成可能收费。')
+  if (!keyID.value.trim()) throw new Error('请输入中转 API Key。')
+  if (paidTask.value) throw new Error('当前测试已经创建任务；请查询原任务或明确开始另一次测试。')
+  const body = { api_key: keyID.value.trim(), operation: operation.value, request: JSON.parse(previewInput.value), confirm_paid_submission: true }
+  paidRequestBytes.value = new TextEncoder().encode(JSON.stringify(body)).byteLength
+  paidRecoveryBody.value = body
+  paidArtifactAccess.value = {}; paidArtifactErrors.value = {}
+  await sendPaidTest(body)
+}
+async function recoverPaidTest() {
+  if (!paidRecoveryBody.value) throw new Error('没有可恢复的原请求，请先提交一次真实测试。')
+  await sendPaidTest(paidRecoveryBody.value)
+}
 function copy() {
   if (!draft.value) return
   const object: Record<string, unknown> = { ...draft.value, id: `custom-${crypto.randomUUID()}`, name: `${draft.value.name || '协议模板'}（副本）` }
@@ -119,12 +216,36 @@ async function upload(event: Event) {
   json.value = JSON.stringify({ ...object, id: `${object.id}-import-${Date.now()}` }, null, 2); selected.value = null; deleting.value = false
 }
 async function preview(effective = false) {
-  const request = JSON.parse(previewInput.value)
-  if (effective) {
-    if (!previewKeyID.value.trim()) throw new Error('请输入中转 API Key')
-    result.value = await api.preview({ mode: 'effective', api_key: previewKeyID.value.trim(), ...(previewAccountID.value ? { account_id: Number(previewAccountID.value) } : {}), operation: operation.value, request, sample_response: JSON.parse(sample.value), measure_media: online.value })
-  } else {
-    result.value = await api.preview({ template: draft.value, operation: operation.value, upstream_model: upstreamModel.value, model: request.model || 'preview', request, rules: [], sample_response: JSON.parse(sample.value), measure_media: online.value })
+  previewStage.value = 'preparing'; previewBytes.value = 0; previewReady.value = false
+  try {
+    const request = JSON.parse(previewInput.value)
+    let payload: Record<string, unknown>
+    if (effective) {
+      if (!previewKeyID.value.trim()) throw new Error('请输入中转 API Key')
+      payload = { mode: 'effective', api_key: previewKeyID.value.trim(), ...(previewAccountID.value ? { account_id: Number(previewAccountID.value) } : {}), operation: operation.value, request, sample_response: JSON.parse(sample.value), measure_media: online.value }
+    } else {
+      payload = { template: draft.value, operation: operation.value, upstream_model: upstreamModel.value, model: request.model || 'preview', request, rules: [], sample_response: JSON.parse(sample.value), measure_media: online.value }
+    }
+    previewBytes.value = new TextEncoder().encode(JSON.stringify(payload)).byteLength
+    previewTimeoutMs.value = mediaPreviewTimeoutMs(payload)
+    previewStage.value = 'sending'
+    try {
+      result.value = await api.preview(payload)
+      previewStage.value = 'ready'
+      previewReady.value = true
+    } catch (cause) {
+      const failure = cause as { message?: string; code?: string; response?: unknown }
+      const message = failure.message || String(cause)
+      const timeout = ['ECONNABORTED', 'ETIMEDOUT'].includes(failure.code || '') || /timeout|timed out/i.test(message)
+      const disconnected = !failure.response && /network error|failed to fetch|network request failed/i.test(message)
+      previewStage.value = 'failed'
+      throw new Error(timeout || disconnected
+        ? `免费预览${timeout ? '超时' : '连接失败'}。大素材上传或网络延迟可能导致请求未完成；本次没有创建生成任务、没有扣费，可以安全重试。`
+        : `免费预览失败：${message}。本次没有创建生成任务、没有扣费；修正输入后可以重新预览。`)
+    }
+  } catch (cause) {
+    previewStage.value = 'failed'
+    throw cause
   }
 }
 function bindTemplate(id: string) { const row = templates.value.find(item => item.id === id); set('template', row ? { id, version: row.published_version } : null) }
@@ -218,8 +339,9 @@ onMounted(() => action(refresh))
             <button class="btn btn-secondary" :disabled="busy || !previewKeyID" @click="action(() => preview(true))">预览实际绑定与估价</button>
           </div>
         </details>
-        <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览</button><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过正常任务和计费链路。草稿不会直接发送。</p><input v-model="keyID" class="input" type="password" autocomplete="off" placeholder="输入中转 API Key" /><label class="block text-sm"><input v-model="paid" type="checkbox" /> 确认本次生成可能收费</label><p class="break-all text-xs">幂等 ID：{{ testKey }}</p><button class="btn btn-primary" :disabled="busy || !paid || !keyID" @click="action(async () => { result = await api.test({ api_key: keyID.trim(), operation, request: JSON.parse(previewInput), confirm_paid_submission: paid }, testKey) }, true)">提交 / 查询原测试</button><button class="btn btn-secondary" @click="newTest">明确开始另一次测试</button></div></details>
-        <pre v-if="result" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify(result, null, 2) }}</pre>
+        <p v-if="previewSummary" class="rounded border p-3 text-sm dark:border-dark-600" role="status" aria-live="polite">{{ previewSummary }}</p>
+        <details v-if="kind === 'templates'"><summary>免费预览、模型发现与付费测试</summary><div class="space-y-3 py-3"><label class="block">操作<input v-model="operation" class="input" /></label><label class="block">上游模型<input v-model="upstreamModel" class="input" /></label><label class="block">统一输入<textarea v-model="previewInput" class="input min-h-28 w-full font-mono text-xs" /></label><label class="block">响应样例<textarea v-model="sample" class="input min-h-20 w-full font-mono text-xs" /></label><label class="block text-sm"><input v-model="online" type="checkbox" aria-label="允许素材 GET" /> 允许为编码转换执行素材 GET（不会调用生成接口）</label><button class="btn btn-secondary" :disabled="busy" @click="action(preview)">免费预览（不建任务、不扣费）</button><p v-if="previewStage !== 'idle'" class="rounded border p-3 text-sm dark:border-dark-600" role="status" aria-live="polite"><strong>{{ ({ preparing: '正在准备免费预览', sending: '正在上传素材并进行免费预览', ready: '免费预览完成', failed: '免费预览未完成' } as Record<string, string>)[previewStage] }}</strong><br>请求约 {{ (previewBytes / 1048576).toFixed(2) }} MiB · 超时上限 {{ Math.round(previewTimeoutMs / 1000) }} 秒。预览只做参数/映射/估价检查，不创建任务、不扣费；超时后可以安全重试。</p><div class="flex flex-wrap gap-2"><input v-model="discoveryAccount" class="input" placeholder="账号 ID" /><input v-model="discoveryGroup" class="input" placeholder="分组 ID" /><button class="btn btn-secondary" :disabled="busy" @click="action(async () => { result = await api.discover({ template: draft, account_id: Number(discoveryAccount), group_id: Number(discoveryGroup) }) })">发现候选模型（不启用）</button></div><p class="text-sm">真实测试使用 API Key 对应的已发布绑定及价格，通过标准媒体提交端点和任务查询链路。草稿不会直接发送；HTTP 202 只表示本站已持久化受理。</p><input v-model="keyID" class="input" type="password" autocomplete="off" placeholder="输入中转 API Key" /><label class="block text-sm"><input v-model="paid" type="checkbox" aria-label="确认本次生成可能收费" /> 确认本次生成可能收费</label><p class="break-all text-xs">请求约 {{ (paidRequestBytes / 1048576).toFixed(2) }} MiB · 幂等 ID：{{ testKey }} · 恢复时重用当前请求和此 ID</p><div class="flex flex-wrap gap-2"><button class="btn btn-primary" :disabled="busy || !paid || !keyID || !!paidTask || paidSubmitState === 'uncertain' || paidSubmitState === 'sending'" @click="action(submitPaidTest, true)">提交真实生成请求</button><button v-if="paidSubmitState === 'uncertain'" class="btn btn-secondary" :disabled="busy" @click="action(recoverPaidTest, true)">恢复 / 查询原任务</button><button v-if="paidTask" class="btn btn-secondary" :disabled="paidTaskLoading" @click="action(() => refreshPaidTask())">{{ paidTaskLoading ? '正在查询…' : '查询原任务' }}</button><button class="btn btn-secondary" :disabled="paidTaskPending || paidSubmitState === 'sending' || paidSubmitState === 'uncertain'" @click="newTest">明确开始另一次测试</button></div><p v-if="paidSubmitState === 'sending'" class="rounded border p-3 text-sm dark:border-dark-600" role="status" aria-live="polite">正在向本站标准媒体接口提交。素材较大时会按请求体大小延长传输超时；任务 ID 返回后再由后台提交上游。</p><p v-if="paidSubmitState === 'uncertain'" class="rounded border p-3 text-sm text-amber-700 dark:border-dark-600" role="status" aria-live="polite">本站受理结果不明确。不要新建请求；恢复操作会重用相同请求体和幂等 ID。</p><p v-if="paidSubmitState === 'rejected'" class="rounded border p-3 text-sm text-red-700 dark:border-dark-600" role="status" aria-live="polite">本站明确拒绝了请求；此状态没有任务 ID。修正输入或绑定后可明确开始新测试。</p><p v-if="paidTask" class="rounded border p-3 text-sm dark:border-dark-600" role="status" aria-live="polite"><strong>{{ paidTaskStage }}</strong><br>任务 ID：{{ paidTask.id }} · 状态：{{ paidTask.status }} · 阶段：{{ paidTask.submission_phase || '历史任务' }}<br>{{ paidTaskBilling }}<br>{{ paidTask.status === 'failed' ? paidTask.diagnostic || '查看失败原因与账单。' : paidTask.status === 'completed' ? '成品已就绪，请查看下方文件并核对账单。' : '本站后台会继续处理；刷新只查询原任务，不会重复提交。' }}</p><div v-if="paidTask?.data?.length" class="space-y-2 rounded border p-3 dark:border-dark-600"><h4 class="font-medium">成品与下载</h4><div v-for="artifact in paidTask.data" :key="artifact.key" class="flex flex-wrap items-center gap-2 text-sm"><span>{{ artifact.key }} · {{ artifact.mime_type }} · {{ artifact.size_bytes ?? '未知' }} B · {{ artifact.available ? '可用' : '处理中或不可用' }}</span><button v-if="artifact.available" class="btn btn-secondary" :disabled="paidArtifactLoading === artifact.key" @click="loadPaidArtifact(artifact)">{{ paidArtifactLoading === artifact.key ? '正在准备…' : paidArtifactAccess[artifact.key] ? '刷新下载链接' : '获取成品链接' }}</button><a v-if="paidArtifactAccess[artifact.key]?.url" class="btn btn-primary" :href="paidArtifactAccess[artifact.key].url" target="_blank" rel="noopener">打开 / 下载成品</a><span v-if="paidArtifactErrors[artifact.key]" class="text-red-600">{{ paidArtifactErrors[artifact.key] }}</span></div></div><p v-if="paidTaskError" role="alert" class="text-sm text-red-600">{{ paidTaskError }}</p><p v-if="paidTask?.diagnostic" class="text-sm text-amber-700">失败诊断：{{ paidTask.diagnostic }}</p></div></details>
+        <details v-if="result || paidTaskReview" class="rounded-lg border p-3 dark:border-dark-600"><summary>预览和任务的完整 JSON / 上下游证据（默认折叠）</summary><div class="mt-3 grid gap-3"><pre v-if="result" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify(result, null, 2) }}</pre><pre v-if="paidTaskReview" class="max-h-96 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-gray-900">{{ JSON.stringify({ incoming_request: paidTaskReview.incoming_request, normalized_request: paidTaskReview.normalized_request, prepared_request: paidTaskReview.prepared_request, upstream_request: paidTaskReview.upstream_request, submission: paidTaskReview.submission, upstream_response: paidTaskReview.upstream_response, task: paidTaskReview.record.task }, null, 2) }}</pre></div></details>
       </div>
       <div v-else class="flex min-h-72 items-center justify-center text-sm text-gray-500">从左侧选择协议模板，或新建模板。</div>
     </div>
