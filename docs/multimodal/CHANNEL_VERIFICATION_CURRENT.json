@@ -1,13 +1,13 @@
 {
   "version": "v1.3.21",
   "status": "recorded",
-  "acceptance_state": "real-channel-probe-failed-with-http-502; v1.3.21-candidate-not-yet-cut-over; v1.3.20-deployment-rejected-before-backup",
+  "acceptance_state": "production-v1.3.21-cut-over-and-verified; historical-real-channel-probe-on-v1.3.19-failed-http-502; no-successful-generation-verified-on-v1.3.21",
   "previous_production_verified_at": "2026-10-30T17:43:40Z",
-  "verified_at": "2026-10-31T13:50:37Z",
+  "verified_at": "2026-10-31T18:01:24Z",
   "new_paid_submissions": 0,
   "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.21 production test. The v1.3.20 source tests, isolated image/database/Redis smoke and restore rehearsal passed, but its manager archive contained three files rejected by the production v1.3.19 bootstrap allowlist. Deployment run 41202956295 confirms rejection during validating_release with no backup_id, before backup or application cutover; the earlier SSH-disconnected attempt 41202034674 has no recorded receipt. v1.3.21 automated tests, isolated image/database/Redis smoke, restore rehearsal and legacy six-member archive checks passed. Deployment run 41206331677 reached fixed-digest image preflight and failed with RuntimeError before backup; run 41206992378 failed during release validation with RuntimeError before digest verification. Both have no backup_id and no application cutover. All three public entry points were rechecked at 2026-10-31 13:50 UTC: health ok and version 1.3.19. Root-only host command diagnostics are not available through the restricted deploy/status SSH interface, so no further cutover attempt is being made without that diagnosis.",
+  "environment": "The media verification cases below are historical and mostly ran on production v1.3.19. The low-cost Anthropic Messages request returned HTTP 502 with Upstream request failed and no usage payload; its temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. It is a failed real-channel attempt, not successful generation and not a v1.3.21 channel test. Production was subsequently switched to v1.3.21 using its published fixed application and documentation image digests. The host manager upgrade succeeded after backup and isolated restore/rollback rehearsal. The database contains 309 migrations, exactly matching all 309 filename/checksum entries in the v1.3.21 manifest. All three public entry points return HTTP 200 health and public settings with version 1.3.21; their documentation pages, scripts and public documentation APIs return HTTP 200. The browser-rendered documentation badge is MEDIA API · v1.3.21. No paid generation was submitted during cutover; no successful generation has been verified on v1.3.21.",
   "source_release": "v1.3.19",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": false,
@@ -169,14 +169,22 @@
       }
     ],
     "published": true,
-    "production_cutover": false,
+    "production_cutover": true,
     "real_channel_tested": false
   },
   "production_state_after_attempts": {
-    "version": "v1.3.19",
-    "public_health": "all three entry points returned HTTP 200 with health ok at 2026-10-31 13:50 UTC",
+    "version": "v1.3.21",
+    "public_health": "all three entry points returned HTTP 200 with health ok and public version 1.3.21 during verification on 2026-10-31 18:01 UTC",
     "identified_preflight_failures_have_backup_id": false,
     "first_ssh_disconnected_attempt_host_state": "unknown_without_host_log",
-    "public_version_cutover_observed": false
+    "public_version_cutover_observed": true,
+    "cutover_task": "a234f692dd92450abef63c869b80adb7",
+    "cutover_status": "succeeded",
+    "backup_id": "ad52ef93992e4502ae9c27116d76d9b3",
+    "application_digest": "sha256:983add395ca89187b8f8e7c49cdf951b3d6409b5b726810c9feb166ddafe8d16",
+    "documentation_digest": "sha256:04455f8957d1bf2d0f29c8883dd89bd0a9e8c6e075e238fb93315896d96e87a4",
+    "database_migration_manifest_count": 309,
+    "database_migration_checksums_match": true,
+    "protected_containers_unchanged": true
   }
 }
