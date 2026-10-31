@@ -1,13 +1,15 @@
 {
-  "version": "v1.3.19",
+  "version": "v1.3.20",
   "status": "recorded",
-  "acceptance_state": "production-v1.3.19-online-verified-image-contract-fixed-supplier-generation-failed",
-  "production_verified_at": "2026-10-30T17:43:40Z",
-  "verified_at": "2026-10-30T17:43:40Z",
-  "new_paid_submissions": 4,
+  "acceptance_state": "real-channel-probe-completed-with-http-502; v1.3.20-candidate-not-yet-cut-over",
+  "previous_production_verified_at": "2026-10-30T17:43:40Z",
+  "verified_at": "2026-10-31T11:52:28Z",
+  "new_paid_submissions": 0,
+  "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "Foxrouter contract verification used two direct accepted image requests and two standard production requests, with one image and two images respectively. The actual supplier JSON field is top-level images containing Base64 Data URL strings; Alias in the Go decoder error is an internal type name, not a JSON envelope. All four image jobs eventually failed inside the supplier AI Studio generation backend with the same upstream_error. This verifies request parsing, acceptance, task queries and failure accounting, not successful image-conditioned generation. The two Sub2API tasks each released their entire USD 0.85 reservation and settled zero. A separate historical completed video passed standard query and Range download. Production v1.3.19 completed immediate cutover, all three entry points report 1.3.19, the browser docs badge displays v1.3.19, and PostgreSQL/Redis container identities and start times are unchanged.",
+  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.20 production test. Candidate v1.3.20 automated source tests and isolated image/database/Redis smoke passed in GitHub Actions run 41194396182; that release run stopped before publishing because this record did not yet exist. No production v1.3.20 cutover has occurred.",
   "source_release": "v1.3.19",
+  "prior_cases_source_release": "v1.3.19",
   "reused_for_release": false,
   "cases": [
     {
@@ -68,10 +70,31 @@
       "artifact_range_bytes": 32,
       "artifact_header_valid": true,
       "credentials_recorded": false
+    },
+    {
+      "label": "anthropic-claude-haiku-low-cost-real-channel-probe",
+      "verification": "real_generation",
+      "status": "completed",
+      "running_version": "v1.3.19",
+      "target_release": "v1.3.20",
+      "candidate_release_tested": false,
+      "endpoint": "https://code.aicodeme.xyz/v1/messages",
+      "model": "claude-haiku-4-5",
+      "max_tokens": 8,
+      "client_retries": 0,
+      "request_id": "b425bdc9-b131-4a6f-a07b-fe889536b0f5",
+      "response_http": 502,
+      "generation_status": "failed",
+      "upstream_error": "Upstream request failed",
+      "usage_returned": false,
+      "api_key_spend_usd": "0.0000",
+      "api_key_limit_usd": "0.05",
+      "temporary_test_key_deleted": true,
+      "credentials_recorded": false
     }
   ],
-  "release_commit": "b4ab17e61afb4fb213e16157882e840deb361a31",
-  "production": {
+  "source_release_commit": "b4ab17e61afb4fb213e16157882e840deb361a31",
+  "previous_production": {
     "automatic_job": "b7d487f997df49d9a3d6c6bb0f42aca7",
     "manager_job": "9588e292f20f4b8b81cc80db1b8bd9ac",
     "backup_id": "4eb9eaa0b5da46e896fa2df6b73129be",
@@ -86,5 +109,14 @@
     "template_target": "images",
     "shared_template_unchanged": true,
     "duplicate_tasks": 0
+  },
+  "candidate_build": {
+    "run_id": 41194396182,
+    "source_commit": "5a8d9b9e66a79052789cbf90c47b06d37070c197",
+    "application_digest": "sha256:5a5b102084ab03a6275274f6623c0bd4cb0324c92fabc008bb425c3dcab23500",
+    "documentation_digest": "sha256:e85ba5700b867379dd024cf3bd9fff39bdc4635075103fbeaca8236f9901a215",
+    "automated_source_and_isolated_smoke": "passed",
+    "published": false,
+    "real_channel_tested": false
   }
 }
