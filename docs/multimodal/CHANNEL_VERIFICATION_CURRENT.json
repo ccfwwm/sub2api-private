@@ -1,13 +1,13 @@
 {
-  "version": "v1.3.20",
+  "version": "v1.3.21",
   "status": "recorded",
-  "acceptance_state": "real-channel-probe-completed-with-http-502; v1.3.20-candidate-not-yet-cut-over",
+  "acceptance_state": "real-channel-probe-failed-with-http-502; v1.3.21-candidate-not-yet-cut-over; v1.3.20-deployment-rejected-before-backup",
   "previous_production_verified_at": "2026-10-30T17:43:40Z",
-  "verified_at": "2026-10-31T11:52:28Z",
+  "verified_at": "2026-10-31T13:00:55Z",
   "new_paid_submissions": 0,
   "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.20 production test. Candidate v1.3.20 automated source tests and isolated image/database/Redis smoke passed in GitHub Actions run 41194396182; that release run stopped before publishing because this record did not yet exist. No production v1.3.20 cutover has occurred.",
+  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.21 production test. The v1.3.20 source tests, isolated image/database/Redis smoke and restore rehearsal passed, but its manager archive contained three files rejected by the production v1.3.19 bootstrap allowlist. Deployment run 41202956295 confirms rejection during validating_release with no backup_id, before backup or application cutover; the earlier SSH-disconnected attempt 41202034674 has no recorded receipt. Public production remained on v1.3.19. v1.3.21 fixes the archive compatibility and has not yet been built or deployed.",
   "source_release": "v1.3.19",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": false,
@@ -76,7 +76,7 @@
       "verification": "real_generation",
       "status": "completed",
       "running_version": "v1.3.19",
-      "target_release": "v1.3.20",
+      "target_release": "v1.3.21",
       "candidate_release_tested": false,
       "endpoint": "https://code.aicodeme.xyz/v1/messages",
       "model": "claude-haiku-4-5",
@@ -110,13 +110,25 @@
     "shared_template_unchanged": true,
     "duplicate_tasks": 0
   },
-  "candidate_build": {
-    "run_id": 41194396182,
+  "previous_release": {
+    "version": "v1.3.20",
+    "release_run_id": 41201388963,
+    "build_run_id": 41198859313,
     "source_commit": "5a8d9b9e66a79052789cbf90c47b06d37070c197",
     "application_digest": "sha256:5a5b102084ab03a6275274f6623c0bd4cb0324c92fabc008bb425c3dcab23500",
     "documentation_digest": "sha256:e85ba5700b867379dd024cf3bd9fff39bdc4635075103fbeaca8236f9901a215",
-    "automated_source_and_isolated_smoke": "passed",
-    "published": false,
+    "automated_source_isolated_smoke_and_restore_rehearsal": "passed",
+    "published": true,
+    "production_deployment_run": 41202956295,
+    "production_deployment_job": "0b6b7a7e365f45a7bed8abb8925fdffe",
+    "production_deployment_status": "failed_before_backup",
+    "production_deployment_error": "invalid management archive",
     "real_channel_tested": false
+  },
+  "production_state_after_attempts": {
+    "version": "v1.3.19",
+    "public_health": "all three entry points returned HTTP 200",
+    "database_backup_or_migration_started": false,
+    "application_cutover_started": false
   }
 }

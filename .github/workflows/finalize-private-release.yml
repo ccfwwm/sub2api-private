@@ -98,7 +98,7 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 tooling/deploy/private/rehearse_fixture.py --manifest deployment.json
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 tooling/deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           git rev-parse HEAD > management-source.txt
-          tar -czf server-management.tar.gz -C "$GITHUB_WORKSPACE/deploy/private" manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py capacity_collect.py capacity_report.py -C "$GITHUB_WORKSPACE/deploy" docker-compose.capacity.yml
+          python3 deploy/private/package_manager.py --output server-management.tar.gz
           sha256sum deployment.json docs-image-inspect.json > checksums.txt
           cp backend/migrations/24{3,4,5,6,7}_*.sql .
           cp backend/migrations/248_public_imagevideo_docs.sql .
