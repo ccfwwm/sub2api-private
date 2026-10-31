@@ -3,11 +3,11 @@
   "status": "recorded",
   "acceptance_state": "real-channel-probe-failed-with-http-502; v1.3.21-candidate-not-yet-cut-over; v1.3.20-deployment-rejected-before-backup",
   "previous_production_verified_at": "2026-10-30T17:43:40Z",
-  "verified_at": "2026-10-31T13:00:55Z",
+  "verified_at": "2026-10-31T13:50:37Z",
   "new_paid_submissions": 0,
   "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.21 production test. The v1.3.20 source tests, isolated image/database/Redis smoke and restore rehearsal passed, but its manager archive contained three files rejected by the production v1.3.19 bootstrap allowlist. Deployment run 41202956295 confirms rejection during validating_release with no backup_id, before backup or application cutover; the earlier SSH-disconnected attempt 41202034674 has no recorded receipt. Public production remained on v1.3.19. v1.3.21 fixes the archive compatibility and has not yet been built or deployed.",
+  "environment": "The existing media verification cases below are from production v1.3.19. A new low-cost Anthropic Messages request was made through https://code.aicodeme.xyz while production still ran v1.3.19; it returned HTTP 502 with Upstream request failed and no usage payload. The temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a completed real-channel request attempt, not successful generation and not a v1.3.21 production test. The v1.3.20 source tests, isolated image/database/Redis smoke and restore rehearsal passed, but its manager archive contained three files rejected by the production v1.3.19 bootstrap allowlist. Deployment run 41202956295 confirms rejection during validating_release with no backup_id, before backup or application cutover; the earlier SSH-disconnected attempt 41202034674 has no recorded receipt. v1.3.21 automated tests, isolated image/database/Redis smoke, restore rehearsal and legacy six-member archive checks passed. Deployment run 41206331677 reached fixed-digest image preflight and failed with RuntimeError before backup; run 41206992378 failed during release validation with RuntimeError before digest verification. Both have no backup_id and no application cutover. All three public entry points were rechecked at 2026-10-31 13:50 UTC: health ok and version 1.3.19. Root-only host command diagnostics are not available through the restricted deploy/status SSH interface, so no further cutover attempt is being made without that diagnosis.",
   "source_release": "v1.3.19",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": false,
@@ -125,9 +125,40 @@
     "production_deployment_error": "invalid management archive",
     "real_channel_tested": false
   },
+  "candidate_release": {
+    "version": "v1.3.21",
+    "release_run_id": 41203819601,
+    "source_commit": "49d508b06682fc66e1b00110ff4dafced2d1e029",
+    "application_digest": "sha256:983add395ca89187b8f8e7c49cdf951b3d6409b5b726810c9feb166ddafe8d16",
+    "documentation_digest": "sha256:04455f8957d1bf2d0f29c8883dd89bd0a9e8c6e075e238fb93315896d96e87a4",
+    "source_tests_and_lint": "passed",
+    "isolated_image_and_restore_rehearsal": "passed",
+    "legacy_manager_archive_compatibility": "passed",
+    "production_deployment_attempts": [
+      {
+        "run_id": 41206331677,
+        "job_id": "03c236757f9c4e7c869ca7b19c5f80d0",
+        "status": "failed_before_backup",
+        "phase": "pulling_fixed_digest",
+        "error": "RuntimeError",
+        "backup_id": null
+      },
+      {
+        "run_id": 41206992378,
+        "job_id": "717278243ba74493a6bff8428fa2130f",
+        "status": "failed_before_backup",
+        "phase": "validating_release",
+        "error": "RuntimeError",
+        "backup_id": null
+      }
+    ],
+    "published": true,
+    "production_cutover": false,
+    "real_channel_tested": false
+  },
   "production_state_after_attempts": {
     "version": "v1.3.19",
-    "public_health": "all three entry points returned HTTP 200",
+    "public_health": "all three entry points returned HTTP 200 with health ok at 2026-10-31 13:50 UTC",
     "database_backup_or_migration_started": false,
     "application_cutover_started": false
   }
