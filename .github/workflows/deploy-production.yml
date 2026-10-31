@@ -51,14 +51,27 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/sub2api-ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/sub2api-ssh/known_hosts"
           trap 'rm -rf "$RUNNER_TEMP/sub2api-ssh"' EXIT
-          SSH=(ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST")
+          SSH=(ssh -i "$RUNNER_TEMP/sub2api-ssh/key" -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 -o UserKnownHostsFile="$RUNNER_TEMP/sub2api-ssh/known_hosts" "$DEPLOY_USER@$DEPLOY_HOST")
           DEPLOY_COMMAND="deploy $VERSION"
           if [ "$IMMEDIATE" = true ]; then DEPLOY_COMMAND+=" --immediate"; fi
-          if ! "${SSH[@]}" "$DEPLOY_COMMAND" > "$RUNNER_TEMP/deploy.json" 2> "$RUNNER_TEMP/ssh-error.log"; then
+          SSH_STATUS=0
+          "${SSH[@]}" "$DEPLOY_COMMAND" > "$RUNNER_TEMP/deploy.json" 2> "$RUNNER_TEMP/ssh-error.log" || SSH_STATUS=$?
+          if ! JOB=$(python3 -c 'import json,sys,re; j=json.load(open(sys.argv[1])); assert re.fullmatch("[0-9a-f]{32}",j.get("id","")); print(j["id"])' "$RUNNER_TEMP/deploy.json"); then
+            python3 - "$RUNNER_TEMP/deploy.json" <<'PY' >&2 || true
+          import json,sys
+          try:
+              result=json.load(open(sys.argv[1]))
+              print(json.dumps({k:result[k] for k in ('status','error','version','phase') if k in result}))
+          except Exception:
+              print('Remote deployment command returned no valid job receipt.')
+          PY
             cat "$RUNNER_TEMP/ssh-error.log" >&2
             exit 1
           fi
-          JOB=$(python3 -c 'import json,sys,re; j=json.load(open(sys.argv[1])); assert re.fullmatch("[0-9a-f]{32}",j["id"]); print(j["id"])' "$RUNNER_TEMP/deploy.json")
+          if [ "$SSH_STATUS" -ne 0 ]; then
+            echo "SSH ended with status $SSH_STATUS after returning job $JOB; continue checking its durable status."
+            cat "$RUNNER_TEMP/ssh-error.log" >&2
+          fi
           for attempt in $(seq 1 1000); do
             if ! "${SSH[@]}" "status $JOB" > "$RUNNER_TEMP/deploy.json" 2> "$RUNNER_TEMP/ssh-error.log"; then
               cat "$RUNNER_TEMP/ssh-error.log" >&2
