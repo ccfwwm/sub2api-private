@@ -123,6 +123,22 @@
     "production_deployment_job": "0b6b7a7e365f45a7bed8abb8925fdffe",
     "production_deployment_status": "failed_before_backup",
     "production_deployment_error": "invalid management archive",
+    "production_deployment_attempts": [
+      {
+        "run_id": 41202034674,
+        "job_id": null,
+        "status": "ssh_disconnected_without_receipt",
+        "backup_or_cutover_state": "unknown_without_host_log"
+      },
+      {
+        "run_id": 41202956295,
+        "job_id": "0b6b7a7e365f45a7bed8abb8925fdffe",
+        "status": "failed_before_backup",
+        "phase": "validating_release",
+        "error": "invalid management archive",
+        "backup_id": null
+      }
+    ],
     "real_channel_tested": false
   },
   "candidate_release": {
@@ -159,7 +175,8 @@
   "production_state_after_attempts": {
     "version": "v1.3.19",
     "public_health": "all three entry points returned HTTP 200 with health ok at 2026-10-31 13:50 UTC",
-    "database_backup_or_migration_started": false,
-    "application_cutover_started": false
+    "identified_preflight_failures_have_backup_id": false,
+    "first_ssh_disconnected_attempt_host_state": "unknown_without_host_log",
+    "public_version_cutover_observed": false
   }
 }
