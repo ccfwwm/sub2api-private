@@ -263,7 +263,7 @@ jobs:
           sha256sum 252_media_account_concurrency_diagnostics.sql >> checksums.txt
           sha256sum 253_scoped_admin_api_keys.sql 254_group_image_count_billing.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
-          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py capacity_collect.py capacity_report.py -C deploy docker-compose.capacity.yml
+          tar -czf server-management.tar.gz -C "$GITHUB_WORKSPACE/deploy/private" manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py capacity_collect.py capacity_report.py -C "$GITHUB_WORKSPACE/deploy" docker-compose.capacity.yml
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
             gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $TAG" --notes-file "docs/multimodal/RELEASE-$TAG.md"
