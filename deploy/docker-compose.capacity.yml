@@ -1,0 +1,51 @@
+# Capacity overlay: every value is required so sizing cannot be applied by accident.
+# Use only after the seven-day report, backup/isolated restore, and 1.5x peak test.
+services:
+  sub2api:
+    deploy:
+      resources:
+        limits:
+          cpus: '${CAPACITY_APP_CPUS:?set CAPACITY_APP_CPUS from the capacity report}'
+          memory: '${CAPACITY_APP_MEMORY:?set CAPACITY_APP_MEMORY from the capacity report}'
+        reservations:
+          cpus: '${CAPACITY_APP_CPU_RESERVATION:?set CAPACITY_APP_CPU_RESERVATION}'
+          memory: '${CAPACITY_APP_MEMORY_RESERVATION:?set CAPACITY_APP_MEMORY_RESERVATION}'
+    environment:
+      DATABASE_MAX_OPEN_CONNS: '${CAPACITY_DATABASE_MAX_OPEN_CONNS:?coordinate with PostgreSQL max_connections}'
+      DATABASE_MAX_IDLE_CONNS: '${CAPACITY_DATABASE_MAX_IDLE_CONNS:?set an evidence-based idle pool}'
+      REDIS_POOL_SIZE: '${CAPACITY_REDIS_POOL_SIZE:?coordinate with Redis maxclients}'
+      REDIS_MIN_IDLE_CONNS: '${CAPACITY_REDIS_MIN_IDLE_CONNS:?set an evidence-based idle pool}'
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: '${CAPACITY_POSTGRES_CPUS:?set CAPACITY_POSTGRES_CPUS}'
+          memory: '${CAPACITY_POSTGRES_MEMORY:?set CAPACITY_POSTGRES_MEMORY}'
+        reservations:
+          cpus: '${CAPACITY_POSTGRES_CPU_RESERVATION:?set CAPACITY_POSTGRES_CPU_RESERVATION}'
+          memory: '${CAPACITY_POSTGRES_MEMORY_RESERVATION:?set CAPACITY_POSTGRES_MEMORY_RESERVATION}'
+    command: >-
+      postgres
+      -c max_connections=${CAPACITY_POSTGRES_MAX_CONNECTIONS:?coordinate with application pool}
+      -c shared_buffers=${CAPACITY_POSTGRES_SHARED_BUFFERS:?set from memory budget}
+      -c effective_cache_size=${CAPACITY_POSTGRES_EFFECTIVE_CACHE_SIZE:?set from host memory budget}
+      -c maintenance_work_mem=${CAPACITY_POSTGRES_MAINTENANCE_WORK_MEM:?set from maintenance budget}
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '${CAPACITY_REDIS_CPUS:?set CAPACITY_REDIS_CPUS}'
+          memory: '${CAPACITY_REDIS_MEMORY:?set CAPACITY_REDIS_MEMORY}'
+        reservations:
+          cpus: '${CAPACITY_REDIS_CPU_RESERVATION:?set CAPACITY_REDIS_CPU_RESERVATION}'
+          memory: '${CAPACITY_REDIS_MEMORY_RESERVATION:?set CAPACITY_REDIS_MEMORY_RESERVATION}'
+    command: >-
+      sh -c '
+        redis-server \
+        --save 60 1 \
+        --appendonly yes \
+        --appendfsync everysec \
+        --maxclients ${CAPACITY_REDIS_MAXCLIENTS:?coordinate with REDIS_POOL_SIZE} \
+        --maxmemory ${CAPACITY_REDIS_MAXMEMORY:?set below the Redis container limit} \
+        --maxmemory-policy ${CAPACITY_REDIS_MAXMEMORY_POLICY:?choose after reviewing Redis key semantics} \
+        $${REDISCLI_AUTH:+--requirepass "$$REDISCLI_AUTH"}'

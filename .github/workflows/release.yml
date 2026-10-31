@@ -251,6 +251,8 @@ jobs:
           cp backend/migrations/250_migrate_legacy_media_template_refs.sql ./250_migrate_legacy_media_template_refs.sql
           cp backend/migrations/251_media_group_availability.sql ./251_media_group_availability.sql
           cp backend/migrations/252_media_account_concurrency_diagnostics.sql ./252_media_account_concurrency_diagnostics.sql
+          cp backend/migrations/253_scoped_admin_api_keys.sql ./253_scoped_admin_api_keys.sql
+          cp backend/migrations/254_group_image_count_billing.sql ./254_group_image_count_billing.sql
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
           sha256sum 247_media_task_list_indexes.sql >> checksums.txt
@@ -259,8 +261,9 @@ jobs:
           sha256sum 250_migrate_legacy_media_template_refs.sql >> checksums.txt
           sha256sum 251_media_group_availability.sql >> checksums.txt
           sha256sum 252_media_account_concurrency_diagnostics.sql >> checksums.txt
+          sha256sum 253_scoped_admin_api_keys.sql 254_group_image_count_billing.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
-          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py
+          tar -czf server-management.tar.gz -C deploy/private manage.py controller.py media_migrate.py install-manager.sh SERVER-MANAGEMENT.md auto_deploy.py capacity_collect.py capacity_report.py -C deploy docker-compose.capacity.yml
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
           if [ "$CANDIDATE" != true ]; then
             gh release create "$TAG" deployment.json docs-image-inspect.json checksums.txt *.sql server-management.tar.gz management-source.txt management-checksums.txt --verify-tag --latest --target "$SHA" --title "Sub2API $TAG" --notes-file "docs/multimodal/RELEASE-$TAG.md"
@@ -281,4 +284,6 @@ jobs:
             250_migrate_legacy_media_template_refs.sql
             251_media_group_availability.sql
             252_media_account_concurrency_diagnostics.sql
+            253_scoped_admin_api_keys.sql
+            254_group_image_count_billing.sql
             docs-image-inspect.json

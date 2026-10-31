@@ -11,6 +11,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,6 +21,19 @@ import (
 
 func float64Ptr(v float64) *float64 { return &v }
 func intPtr(v int) *int             { return &v }
+
+func TestChannelModelPricingRequestAcceptsImageBillingMode(t *testing.T) {
+	validate := validator.New()
+	validate.SetTagName("binding")
+	require.NoError(t, validate.Struct(channelModelPricingRequest{
+		Models:      []string{"gpt-image-2"},
+		BillingMode: string(service.BillingModeImage),
+	}))
+	require.Error(t, validate.Struct(channelModelPricingRequest{
+		Models:      []string{"gpt-image-2"},
+		BillingMode: "unsupported",
+	}))
+}
 
 // ---------------------------------------------------------------------------
 // 1. channelToResponse

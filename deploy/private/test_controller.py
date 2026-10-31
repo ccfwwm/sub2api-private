@@ -26,6 +26,15 @@ class DeploymentTests(unittest.TestCase):
                 self.controller.submit({'action': 'prepare', 'version': 'v1.0.0', 'confirm': True})
             command.assert_not_called()
 
+    def test_capacity_compose_overlay_is_applied_after_active_compose_state(self):
+        active = Path(self.tmp.name) / 'active.json'
+        capacity = Path(self.tmp.name) / 'capacity-compose.yml'
+        active.touch()
+        capacity.touch()
+        args = self.controller.compose(active)
+        self.assertLess(args.index(str(active)), args.index(str(capacity)))
+        self.assertEqual(args[-2:], ['-f', str(capacity)])
+
     def test_no_commands_urls_or_unconfirmed_requests(self):
         for value in ['v1.0.0;id', '../v1.0.0', 'latest', 'https://evil/image', 'v1.0.0-rc1']:
             with self.assertRaises(ValueError):
@@ -84,8 +93,27 @@ class DeploymentTests(unittest.TestCase):
                 self.controller.apply_reviewed_media_migration(bad)
                 command.assert_not_called()
 
+    def test_upstream_v0_2_19_migration_uses_exact_reviewed_transaction(self):
+        import hashlib
+        from media_migrate import upstream_v0_2_19_transaction, UPSTREAM_V0_2_19_FILES
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        files = {}
+        for name in UPSTREAM_V0_2_19_FILES:
+            sql = (root / name).read_text(encoding='utf-8').strip()
+            files[name] = (sql, hashlib.sha256(sql.encode()).hexdigest())
+        transaction = upstream_v0_2_19_transaction(files)
+        with patch('controller.run') as command:
+            self.controller.apply_reviewed_media_migration(transaction)
+            command.assert_called_once()
+        for bad in (transaction.replace('DEFAULT false', 'DEFAULT true'),
+                    transaction.replace(' COMMIT;', ' DROP TABLE users; COMMIT;')):
+            with patch('controller.run') as command, self.assertRaisesRegex(ValueError, 'reviewed atomic'):
+                self.controller.apply_reviewed_media_migration(bad)
+                command.assert_not_called()
+
     def test_task_index_rehearsal_can_fingerprint_media_but_not_arbitrary_tables(self):
-        for table in ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):
+        for table in ('billing_usage_entries', 'user_affiliate_ledger', 'media_tasks',
+                      'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):
             self.assertIn('"' + table + '"', self.controller.fingerprint_sql(table))
         with self.assertRaises(ValueError): self.controller.fingerprint_sql('unreviewed_table')
 

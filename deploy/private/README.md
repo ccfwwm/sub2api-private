@@ -1,7 +1,7 @@
 # Sub2API 公开版本发布与生产交接
 
 从 `v1.2.19` 起，源码仓库、正式 GitHub Release、应用镜像和文档镜像均公开发布。源码仓库为 `ccfwwm/sub2api-private`，镜像为 `ghcr.io/ccfwwm/sub2api-private` 和 `ghcr.io/ccfwwm/sub2api-private-docs`；名称中的 `private` 以及现有部署目录仅为兼容历史清单和回滚引用而保留，不代表可见性。当前发布规则见 [Public releases](../../.github/RELEASE.md)。
-上游基线仍为 `v0.2.15`，版本说明记录在 `deploy/private-release.json`。旧版本及其恢复材料保留历史用途，不能代替当前发布流程。
+当前私有代码基于上游 `v0.2.19`，精确提交和版本说明记录在 `deploy/private-release.json`。旧版本及其恢复材料保留历史用途，不能代替当前发布流程。
 
 ## 发布不等于部署
 
@@ -70,7 +70,7 @@ GitHub Actions 手动填写 `action=prepare`、`target=v1.0.0`、`confirmation=C
 
 镜像覆盖文件保存在 `/var/lib/sub2api-deployer/active-image.json`，控制器以现有 Compose 文件叠加该覆盖文件，仅执行 `up -d --no-deps --pull never sub2api`。不执行 Compose down、删卷或数据库重建。
 
-**以后不能直接使用旧 Compose 的官方 latest 镜像重建应用。** 手工检查或维护应用时，必须使用同样的 Compose 叠加参数；覆盖文件必须最后出现：
+**以后不能直接使用旧 Compose 的官方 latest 镜像重建应用。** 手工检查或维护应用时，必须使用同样的 Compose 叠加参数：活动镜像覆盖文件放在基础 Compose 文件和可选本地 override 之后。如果已经安装并启用容量覆盖文件，容量覆盖必须再放在活动镜像覆盖之后并作为最后一个文件；管理器会按这个顺序追加它。
 
 ```sh
 docker compose --project-name sub2api-deploy --project-directory /root/sub2api-deploy \
@@ -79,6 +79,8 @@ docker compose --project-name sub2api-deploy --project-directory /root/sub2api-d
   -f /root/sub2api-deploy/docker-compose.override.yml \
   -f /var/lib/sub2api-deployer/active-image.json ps
 ```
+
+启用容量覆盖后，在 `active-image.json` 后追加 `-f /var/lib/sub2api-deployer/capacity-compose.yml`；未安装该文件时不要添加此项。
 
 失败时在确认数据库结构兼容的前提下恢复本次捕获的应急镜像；不恢复覆盖生产数据库。需要人工回滚时使用 `action=rollback` 和成功任务的 job ID。回滚也会备份、排空和短暂停服。
 

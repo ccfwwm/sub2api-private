@@ -39,7 +39,7 @@ func (r *BatchImageModelPricingResolver) BatchImageUnitPrice(ctx context.Context
 		return 0, ErrBatchImageSettlementPricingMissing
 	}
 	switch resolved.Mode {
-	case BillingModePerRequest:
+	case BillingModePerRequest, BillingModeImage:
 		if resolved.DefaultPerRequestPrice > 0 {
 			return resolved.DefaultPerRequestPrice, nil
 		}

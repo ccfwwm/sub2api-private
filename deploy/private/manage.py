@@ -348,12 +348,16 @@ class Manager:
         if reviewed:
             if not all(test.get(k) for k in ('restore_verified', 'rollback_verified', 'additive_data_verified')):
                 raise ValueError('incomplete additive migration rehearsal')
+            if reviewed['filename'] == 'upstream-v0.2.19' and not all(
+                    test.get(k) for k in ('scoped_admin_keys_schema_verified', 'image_count_default_verified')):
+                raise ValueError('upstream v0.2.19 migration evidence is incomplete')
             if reviewed['filename'] == 'media-protocol-templates' and not test.get('template_data_verified'):
                 raise ValueError('exact media template account projection was not verified')
             field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
                      else 'monitor_migration' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
                      else 'group_availability_migration' if reviewed['filename'] == '251_media_group_availability.sql'
                     else 'ops_diagnostics_migration' if reviewed['filename'] == '252_media_account_concurrency_diagnostics.sql'
+                    else 'upstream_migrations' if reviewed['filename'] == 'upstream-v0.2.19'
                      else 'template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'docs_migration')
             job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
@@ -361,6 +365,10 @@ class Manager:
             if reviewed['filename'] == 'media-protocol-templates':
                 job[field].update(files=reviewed['files'], exact_account_projection_verified=True,
                                   task_snapshots_and_other_business_data_unchanged=True)
+            if reviewed['filename'] == 'upstream-v0.2.19':
+                job[field].update(files=reviewed['files'], scoped_admin_keys_schema_verified=True,
+                                  image_count_default_verified=True,
+                                  billing_and_media_data_unchanged=True)
         # The controller adds an evidence file; retain the original backup seal.
         (folder / 'restored-fingerprints.json').unlink(missing_ok=True)
 
@@ -769,6 +777,7 @@ class Manager:
                      else 'applying_reviewed_monitor_enum_expansion' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
                      else 'applying_reviewed_media_group_availability' if reviewed['filename'] == '251_media_group_availability.sql'
                      else 'applying_reviewed_media_account_diagnostics' if reviewed['filename'] == '252_media_account_concurrency_diagnostics.sql'
+                     else 'applying_reviewed_upstream_v0_2_19_migrations' if reviewed['filename'] == 'upstream-v0.2.19'
                      else 'applying_reviewed_media_template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'applying_reviewed_public_documentation_migration')
             self.save(job, phase)

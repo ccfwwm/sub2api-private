@@ -39,6 +39,8 @@ JOB = re.compile(r"[0-9a-f]{32}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 PROTECTED = ("users", "accounts", "api_keys", "groups", "settings", "user_subscriptions",
              "payment_orders", "channel_model_pricing", "channel_account_stats_model_pricing", "security_secrets")
+REVIEWED_DATA_TABLES = ('billing_usage_entries', 'user_affiliate_ledger', 'media_tasks',
+                        'media_ledger_entries', 'media_cost_entries', 'media_artifacts')
 COMMAND_ERROR_LOG = None
 
 
@@ -177,6 +179,9 @@ class Controller:
                 args += ["-f", str(path)]
         if override:
             args += ["-f", str(override)]
+        capacity_overlay = self.state / "capacity-compose.yml"
+        if capacity_overlay.is_file():
+            args += ["-f", str(capacity_overlay)]
         return args
 
     def save(self, job, status=None):
@@ -282,7 +287,8 @@ class Controller:
                                    validate_task_index_transaction, validate_docs_transaction,
                                    validate_template_transaction, validate_legacy_transaction,
                                    validate_group_availability_transaction,
-                                   validate_ops_diagnostics_transaction)
+                                   validate_ops_diagnostics_transaction,
+                                   validate_upstream_v0_2_19_transaction)
         legacy = validate_legacy_transaction(transaction)
         reviewed = (legacy or validate_unified_transaction(transaction) or
                     validate_monitor_transaction(transaction) or
@@ -290,6 +296,7 @@ class Controller:
                     validate_docs_transaction(transaction) or validate_template_transaction(transaction))
         reviewed = reviewed or validate_group_availability_transaction(transaction)
         reviewed = reviewed or validate_ops_diagnostics_transaction(transaction)
+        reviewed = reviewed or validate_upstream_v0_2_19_transaction(transaction)
         if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not reviewed:
             raise ValueError("reviewed atomic media transaction required")
         container = container or self.config.get("database_container", "sub2api-postgres")
@@ -420,7 +427,7 @@ class Controller:
 
     @staticmethod
     def fingerprint_sql(table):
-        if table not in PROTECTED + ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts',
+        if table not in PROTECTED + REVIEWED_DATA_TABLES + ('media_tasks', 'media_ledger_entries', 'media_cost_entries', 'media_artifacts',
                                      'media_config_versions', 'media_config_heads'):
             raise ValueError("table not allowed")
         return (f'SELECT count(*)::text || \'|\' || md5(coalesce(string_agg(h, \'\' ORDER BY h), \'\')) '
@@ -462,7 +469,7 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql", "252_media_account_concurrency_diagnostics.sql"):
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql", "252_media_account_concurrency_diagnostics.sql", "upstream-v0.2.19"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
@@ -502,6 +509,13 @@ class Controller:
                     # Adding the column changes row_to_json(*), so seal the
                     # original group projection before applying the migration.
                     expected_after["groups"] = self.sql(comparison["groups"], pg)
+                if reviewed['filename'] == 'upstream-v0.2.19':
+                    columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='groups';", pg)
+                    comparison['groups'] = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT " + columns + " FROM groups ORDER BY id) t) fingerprint_rows;"
+                    expected_after['groups'] = self.sql(comparison['groups'], pg)
+                    for table in REVIEWED_DATA_TABLES:
+                        query = self.fingerprint_sql(table)
+                        monitor_before[query] = self.sql(query, pg)
                 self.apply_reviewed_media_migration(reviewed["transaction"], pg)
                 if self.migrations(pg) != reviewed["expected_migrations"]:
                     raise ValueError("reviewed migration inventory mismatch")
@@ -519,6 +533,24 @@ class Controller:
                                  "AND pg_get_constraintdef(oid) LIKE '%unavailable%';")
                     if self.sql(constraint, pg) != "1":
                         raise ValueError("media group availability database constraint was not restored")
+                if reviewed['filename'] == 'upstream-v0.2.19':
+                    key_columns = self.sql("SELECT string_agg(column_name,',' ORDER BY column_name) FROM information_schema.columns WHERE table_schema='public' AND table_name='scoped_admin_api_keys';", pg)
+                    expected_key_columns = ('allowed_ips,created_at,created_by,deleted_at,description,enabled,expires_at,id,'
+                                            'key_hash,key_prefix,last_used_at,last_used_ip,name,policy,revoked_at,updated_at')
+                    if key_columns != expected_key_columns:
+                        raise ValueError('scoped administrator key table columns differ')
+                    if self.sql("SELECT count(*) FROM scoped_admin_api_keys;", pg) != '0':
+                        raise ValueError('new scoped administrator key table is not empty')
+                    if self.sql("SELECT count(*) FROM pg_constraint WHERE conrelid='scoped_admin_api_keys'::regclass AND contype='p';", pg) != '1':
+                        raise ValueError('scoped administrator key primary key is missing')
+                    if self.sql("SELECT count(*) FROM pg_constraint WHERE conrelid='scoped_admin_api_keys'::regclass AND confrelid='users'::regclass AND contype='f';", pg) != '1':
+                        raise ValueError('scoped administrator key owner constraint is missing')
+                    if self.sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='groups' AND column_name='image_count_billing' AND column_default='false';", pg) != '1':
+                        raise ValueError('image-count billing default is not disabled')
+                    if self.sql("SELECT count(*) FROM groups WHERE image_count_billing IS DISTINCT FROM false;", pg) != '0':
+                        raise ValueError('image-count billing is enabled for an existing group')
+                    job['scoped_admin_keys_schema_verified'] = True
+                    job['image_count_default_verified'] = True
                 job["additive_data_verified"] = True
                 if reviewed['filename'] == 'media-protocol-templates':
                     if LEGACY_TEMPLATE_FILE in files and self.sql(legacy_accounts_fingerprint_sql(files[LEGACY_TEMPLATE_FILE][0]), pg) != expected_after['accounts']:

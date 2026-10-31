@@ -24,6 +24,8 @@ REVIEWED_MIGRATION_ASSETS = (
     '250_migrate_legacy_media_template_refs.sql',
     '251_media_group_availability.sql',
     '252_media_account_concurrency_diagnostics.sql',
+    '253_scoped_admin_api_keys.sql',
+    '254_group_image_count_billing.sql',
 )
 
 def stage_reviewed_migrations(assets, release):
@@ -176,7 +178,8 @@ def worker(job):
             # archive paths or commands supplied through the SSH request.
             import tarfile
             tooling = folder / 'manager'; tooling.mkdir(mode=0o700)
-            allowed = {'manage.py','controller.py','media_migrate.py','install-manager.sh','SERVER-MANAGEMENT.md','auto_deploy.py'}
+            allowed = {'manage.py','controller.py','media_migrate.py','install-manager.sh','SERVER-MANAGEMENT.md','auto_deploy.py',
+                       'capacity_collect.py','capacity_report.py','docker-compose.capacity.yml'}
             with tarfile.open(folder / 'server-management.tar.gz') as archive:
                 if any(m.name not in allowed or not m.isfile() for m in archive.getmembers()): raise ValueError('invalid management archive')
                 archive.extractall(tooling, filter='data')

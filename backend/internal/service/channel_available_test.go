@@ -225,7 +225,7 @@ func TestSynthesizePricingFromLiteLLM_ImageGenerationMode(t *testing.T) {
 	}
 	got := synthesizePricingFromLiteLLM(lp, nil)
 	require.NotNil(t, got)
-	require.Equal(t, BillingModePerRequest, got.BillingMode)
+	require.Equal(t, BillingModeImage, got.BillingMode)
 	require.Nil(t, got.PerRequestPrice)
 	require.NotNil(t, got.ImageOutputPrice)
 }

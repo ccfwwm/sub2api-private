@@ -240,7 +240,9 @@ func TestBillingModeIsValid(t *testing.T) {
 	}{
 		{"token", BillingModeToken, true},
 		{"per_request", BillingModePerRequest, true},
-		{"image", BillingModePerRequest, true},
+		{"image", BillingModeImage, true},
+		{"video", BillingModeVideo, true},
+		{"characters", BillingModeCharacters, true},
 		{"empty", BillingMode(""), true},
 		{"unknown", BillingMode("unknown"), false},
 		{"random", BillingMode("xyz"), false},
@@ -249,6 +251,28 @@ func TestBillingModeIsValid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, tt.mode.IsValid())
+		})
+	}
+}
+
+func TestBillingModeIsValidUsageFilter(t *testing.T) {
+	tests := []struct {
+		name string
+		mode BillingMode
+		want bool
+	}{
+		{"token", BillingModeToken, true},
+		{"per_request", BillingModePerRequest, true},
+		{"image", BillingModeImage, true},
+		{"video", BillingModeVideo, true},
+		{"characters", BillingModeCharacters, true},
+		{"empty", BillingMode(""), true},
+		{"unknown", BillingMode("unknown"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.mode.IsValidUsageFilter())
 		})
 	}
 }

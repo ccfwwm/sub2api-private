@@ -12,9 +12,77 @@ from media_migrate import (group_availability_transaction, validate_group_availa
 from media_migrate import (TEMPLATE_FILES, TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE, TEMPLATE_UPGRADE,
                           template_transaction, template_transaction_files, validate_template_transaction,
                           legacy_accounts_fingerprint_sql)
+from media_migrate import (SCOPED_ADMIN_KEYS_FILE, IMAGE_COUNT_BILLING_FILE, UPSTREAM_V0_2_19_FILES,
+                           UPSTREAM_V0_2_19_UPGRADE, upstream_v0_2_19_statements,
+                           upstream_v0_2_19_transaction, validate_upstream_v0_2_19_transaction)
 import tempfile
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def upstream_files(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        return {name: ((root / name).read_text(encoding='utf-8').strip(),
+                       hashlib.sha256((root / name).read_text(encoding='utf-8').strip().encode()).hexdigest())
+                for name in UPSTREAM_V0_2_19_FILES}
+
+    def test_upstream_v0_2_19_migrations_are_exact_atomic_and_default_image_billing_off(self):
+        files = self.upstream_files()
+        transaction = upstream_v0_2_19_transaction(files)
+        self.assertTrue(validate_upstream_v0_2_19_transaction(transaction))
+        self.assertIn('REFERENCES users(id)', transaction)
+        self.assertIn('ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ', transaction)
+        self.assertIn('image_count_billing BOOLEAN NOT NULL DEFAULT false', transaction)
+        self.assertFalse(validate_upstream_v0_2_19_transaction(transaction.replace(' DEFAULT false', ' DEFAULT true')))
+        self.assertFalse(validate_upstream_v0_2_19_transaction(transaction.replace(' COMMIT;', ' DROP TABLE users; COMMIT;')))
+        expected = upstream_v0_2_19_statements()
+        for name, (sql, checksum) in files.items():
+            bad = sql + ' DELETE FROM users;'
+            modified = dict(files)
+            modified[name] = (bad, hashlib.sha256(bad.encode()).hexdigest())
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                upstream_v0_2_19_transaction(modified)
+            self.assertIn(name, expected)
+
+    def test_upstream_v0_2_19_upgrade_preserves_old_checksums_and_requires_both_files(self):
+        files = self.upstream_files()
+        before = {'247_media_task_list_indexes.sql': 'b' * 64, '252_media_account_concurrency_diagnostics.sql': 'c' * 64}
+        target = {**before, **{name: checksum for name, (_, checksum) in files.items()}}
+        with tempfile.TemporaryDirectory() as folder:
+            for name, (sql, _) in files.items():
+                Path(folder, name).write_text(sql, encoding='utf-8')
+            reviewed = reviewed_upgrade(before, target, folder)
+            self.assertEqual(reviewed['filename'], UPSTREAM_V0_2_19_UPGRADE)
+            self.assertEqual(reviewed['files'], list(UPSTREAM_V0_2_19_FILES))
+            self.assertEqual(reviewed['expected_migrations'], target)
+            self.assertEqual({k: v for k, v in reviewed['expected_migrations'].items() if k in before}, before)
+            self.assertIsNone(reviewed_upgrade(target, target, folder))
+            for bad in ({**target, '247_media_task_list_indexes.sql': 'd' * 64},
+                        {**before, SCOPED_ADMIN_KEYS_FILE: target[SCOPED_ADMIN_KEYS_FILE]},
+                        {**target, IMAGE_COUNT_BILLING_FILE: 'e' * 64},
+                        {**target, 'unexpected.sql': 'f' * 64}):
+                with self.subTest(target=bad), self.assertRaises(ValueError):
+                    reviewed_upgrade(before, bad, folder)
+
+    def test_old_worker_loads_upstream_migrations_only_from_matching_release_assets(self):
+        files = self.upstream_files()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, **{name: checksum for name, (_, checksum) in files.items()}}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release, assets = state / 'releases/v1.3.20', state / 'automatic/receipt-assets'
+            release.mkdir(parents=True)
+            assets.mkdir(parents=True)
+            for name, (sql, _) in files.items():
+                (assets / name).write_text(sql, encoding='utf-8')
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.20', 'migrations': target}))
+            result = reviewed_upgrade(before, target, release)
+            self.assertTrue(validate_upstream_v0_2_19_transaction(result['transaction']))
+            (assets / IMAGE_COUNT_BILLING_FILE).write_text(files[IMAGE_COUNT_BILLING_FILE][0] + ' DROP TABLE users;')
+            with self.assertRaises(ValueError):
+                reviewed_upgrade(before, target, release)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.19', 'migrations': target}))
+            with self.assertRaises(FileNotFoundError):
+                reviewed_upgrade(before, target, release)
+
     @staticmethod
     def template_files():
         root = Path(__file__).resolve().parents[2] / 'backend/migrations'

@@ -83,7 +83,7 @@ func TestRecordUsage_ImageReasoningPricing(t *testing.T) {
 							require.InDelta(t, wantTotal*wantRate, userRepo.lastAmount, 1e-12)
 							require.Equal(t, forwardedEffort, usageRepo.lastLog.ReasoningEffort)
 							require.Equal(t, 2, usageRepo.lastLog.ImageCount)
-							require.Equal(t, string(mode), *usageRepo.lastLog.BillingMode)
+							require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
 						})
 					}
 				}
@@ -131,7 +131,7 @@ func TestCalculateRecordUsageCost_MediaReasoningPricing(t *testing.T) {
 					}
 					var err error
 					cost, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey,
-						[]string{model}, 0.5, 0.5, 0.5, 0.5, UsageTokens{}, "", nil, time.Time{})
+						[]string{model}, 0.5, 0.5, 0.5, 0.5, UsageTokens{}, "", nil, false, time.Time{})
 					require.NoError(t, err)
 				}
 				require.NotNil(t, cost)

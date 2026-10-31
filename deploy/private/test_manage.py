@@ -246,6 +246,31 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertTrue(result['task_snapshots_and_other_business_data_unchanged'])
         self.assertEqual(result['files'], reviewed['files'])
 
+    def test_upstream_migration_rehearsal_requires_schema_and_default_evidence(self):
+        backup = self.root / 'fixture-backup'
+        backup.mkdir()
+        meta = {'runtime_image': 'captured-old-runtime', 'migrations': {'old.sql': 'a' * 64}}
+        reviewed = {'filename': 'upstream-v0.2.19',
+                    'files': ['253_scoped_admin_api_keys.sql', '254_group_image_count_billing.sql'],
+                    'transaction': 'sealed', 'expected_migrations': {}}
+
+        def report(test, folder, verified=False):
+            test.update(restore_verified=True, rollback_verified=True, additive_data_verified=True)
+            if verified:
+                test.update(scoped_admin_keys_schema_verified=True, image_count_default_verified=True)
+
+        with patch.object(self.manager.c, 'rehearse', side_effect=report):
+            with self.assertRaisesRegex(ValueError, 'evidence is incomplete'):
+                self.manager.rehearse({'id': 'a' * 32}, backup, meta, 'candidate', 'v1.3.20', reviewed)
+        job = {'id': 'b' * 32}
+        with patch.object(self.manager.c, 'rehearse', side_effect=lambda test, folder: report(test, folder, True)):
+            self.manager.rehearse(job, backup, meta, 'candidate', 'v1.3.20', reviewed)
+        result = job['upstream_migrations']
+        self.assertEqual(result['files'], reviewed['files'])
+        self.assertTrue(result['scoped_admin_keys_schema_verified'])
+        self.assertTrue(result['image_count_default_verified'])
+        self.assertTrue(result['billing_and_media_data_unchanged'])
+
     def test_failed_drain_probe_restores_admission(self):
         with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
                 'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \

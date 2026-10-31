@@ -21,9 +21,9 @@
 # 用备份实际恢复临时数据库，核对核心表指纹并验证程序启动
 /root/sub2api-manage verify <备份ID> --confirm VERIFY
 # 仅做升级前准备：备份并验证指定新镜像，不排空请求、不切换容器
-/root/sub2api-manage prepare v0.2.15 --confirm PREPARE
+/root/sub2api-manage prepare v1.3.20 --confirm PREPARE
 # 升级到已经预置且注册了发布清单的私有镜像
-/root/sub2api-manage upgrade v0.2.15 --confirm UPGRADE
+/root/sub2api-manage upgrade v1.3.20 --confirm UPGRADE
 # 只回滚程序到某次备份捕获的实际运行版本，保留当前数据库
 /root/sub2api-manage rollback <备份ID> --confirm ROLLBACK
 ```
@@ -60,7 +60,7 @@ rescue 不依赖当前应用健康，只允许最近一次已开始的切换任�
 
 - 只管理 Sub2API 应用和本工具创建的恢复环境，不重启原 PostgreSQL、Redis、定价服务，不执行 Compose down、删卷或全局 prune。
 - 运行镜像、备份、日志可能含密钥，禁止上传 GitHub或发送给他人。备份和应急镜像不自动删除。
-- 当前镜像/恢复库覆盖配置保存在 `/root/sub2api-ops/state/active.json`。以后使用 Compose 维护时必须最后叠加该文件，否则可能切回旧官方镜像和原数据库。日常操作请统一使用此脚本。
+- 当前镜像/恢复库覆盖配置保存在 `/root/sub2api-ops/state/active.json`。以后使用 Compose 维护时必须在基础文件和可选本地 override 之后叠加该文件，否则可能切回旧官方镜像和原数据库；若已启用容量策略，再将 `/root/sub2api-ops/state/capacity-compose.yml` 叠加在其后。日常操作请统一使用此脚本。
 - 此脚本与 `/opt/sub2api-deployer` Web 控制器互斥，避免两套部署入口同时修改应用。当前以命令行脚本为生产入口，后台镜像面板尚未连接控制器。
 - 后续版本须先发布、下载并验证镜像，把对应的 `deployment.json` 和 `image-inspect.json` 放在 `/root/sub2api-ops/state/releases/<版本>/`，再调用 upgrade。脚本拒绝未登记的版本，当前已备好的版本无需联网下载。
 
@@ -119,6 +119,54 @@ Release 必须包含 `249_media_protocol_templates.sql`、`250_migrate_legacy_me
 ## v1.3.2 媒体分组可用状态
 
 正式 Release 应包含 `251_media_group_availability.sql` 及 checksum。管理器仅接受在 `groups` 增加 `media_availability VARCHAR(20) NOT NULL DEFAULT 'available'` 并限制为 `available` / `unavailable` 的固定语句；迁移清单必须只有该项新增，SQL 在锁超时与语句超时保护下原子执行。旧 worker 只会从匹配版本、匹配迁移清单的已校验 Release assets 取回迁移文件。先完成备份副本演练，再按 `prepare v1.3.2 --confirm PREPARE` 和 `upgrade v1.3.2 --confirm UPGRADE` 执行，不要手工运行 SQL。
+
+## 单机容量基线与扩容
+
+本仓库提供容量采集器和 Compose 资源覆盖层；它们不包含机器规格、连接池或数据库参数的预设值。Compose 基础文件的默认池值只是开发/通用默认值，不能作为线上容量证据。维持单台宿主机、一个应用实例、一个 PostgreSQL 和一个 Redis；本流程不启动第二副本，也不引入外部数据库。
+
+安装包含容量工具的正式管理包后，在 Linux 宿主机以 root 运行七天采样。每分钟记录宿主机 CPU、内存、文件系统和块设备 I/O、应用健康探针延迟、各容器 CPU/内存/重启/OOM 状态、PostgreSQL 连接及等待、运行超过 1 秒的查询、可选 `pg_stat_statements` 慢查询指纹，以及 Redis 内存、客户端、拒绝连接、淘汰键和探针延迟。采集结果是 JSONL，不保存 SQL 正文、环境变量或凭据；输出文件应由 root 私有保存。
+
+```sh
+umask 077
+/root/sub2api-capacity-collect \
+  --output /root/sub2api-ops/capacity-baseline.jsonl \
+  --interval-seconds 60 \
+  --duration-seconds 604800 \
+  --health-url 'https://<现有公网域名>/health' \
+  --data-path / \
+  --data-path /var/lib/docker
+/root/sub2api-capacity-report /root/sub2api-ops/capacity-baseline.jsonl \
+  > /root/sub2api-ops/capacity-baseline-report.json
+```
+
+将健康探针 URL 指向现有公网入口可把反向代理和公网路径纳入采样；若只能使用 `http://127.0.0.1:8080/health`，报告仅代表本机应用入口。`--data-path` 应覆盖实际 Docker 数据目录和应用数据目录。报告只有在观测跨度达到七天、采样间隔没有超过两倍的缺口且采集器无错误时才开放容量评审门；可通过 `--expected-interval-seconds` 调整报告检查间隔。若 PostgreSQL 未预先启用 `pg_stat_statements`，报告仍包含长时间运行查询采样，并标明扩展统计不可用；采集器不会启用或修改扩展。
+
+容量决策按下列次序完成：
+
+1. 按业务高峰对齐应用延迟、CPU/内存、宿主机 I/O wait 与设备忙碌时间、数据库连接等待/慢查询、Redis 延迟/内存及 OOM/重启。先定位高延迟发生时的饱和资源，不以平均值或单次尖峰定机器规格。
+2. 用观测到的峰值构造至少 30 分钟、达到观测峰值 1.5 倍的模拟上游负载。记录与基线同口径的 p50/p95/p99 延迟、错误率、数据库锁和连接等待、Redis 延迟、容器内存和 OOM；未达 SLO 或仍有 OOM 时不进入上线。
+3. 先增加宿主机 CPU、内存或磁盘 IOPS/容量中被证实不足的资源，再依据 1.5 倍负载下的容器工作集设置资源 reservation/limit。应用、PostgreSQL、Redis 与系统服务合计至少保留宿主机 20% 的 CPU 和内存余量；磁盘容量另须覆盖数据库、媒体文件、日志及备份增长。
+4. 按单个应用实例的 `DATABASE_MAX_OPEN_CONNS` 总预算设置 PostgreSQL `max_connections`，另外扣除迁移、管理及其他数据库客户端的连接预留。不要为了消除连接等待盲目扩大连接池；先检查查询耗时、锁等待和连接占用。结合实测内存预算选择 `shared_buffers`、`effective_cache_size` 和 `maintenance_work_mem`，确保 PostgreSQL 后台、并发查询和系统缓存同时落在容器/宿主机内存预算内。
+5. 按该应用实例的 `REDIS_POOL_SIZE`、运维探针及其他客户端总数协调 Redis `maxclients`。根据 key 的持久性和业务语义确定 `maxmemory-policy`；资源覆盖要求显式设置策略和 `maxmemory`，不会替用户选择。Redis `maxmemory` 必须低于容器内存限制并给复制/AOF 缓冲和进程开销留出余量。核实淘汰、拒绝写入和 AOF/RDB 持久化状态。
+
+扩容前执行 `backup` 和 `verify <备份ID>`，再在隔离恢复副本上验证本次数据库/Redis 备份及关键业务数据。取得实测值并通过 1.5 倍负载门禁后，将 `CAPACITY_*` 值追加到 `/root/sub2api-deploy/.env`，保留原有变量并维持 root-only 权限；不要用容量文件替换现有 `.env`。资源限制模板位于发布管理包中的 `docker-compose.capacity.yml`。将它复制为 `/root/sub2api-ops/state/capacity-compose.yml`，权限设为 `0600`。管理器检测到该文件后，会在每次 Compose 调用中将它追加到基础文件、可选 `docker-compose.override.yml` 和当前 `/root/sub2api-ops/state/active.json` 之后，使容量策略在后续应用升级时继续生效。
+
+应用容量配置前，用生产项目目录与 `.env` 检查最终合成文件，顺序必须是基础 Compose、可选本地 override、`active.json`、`capacity-compose.yml`；这样活动镜像、恢复库连接和应用配置先被恢复，再由容量策略覆盖对应资源与池参数。验证时用 `docker compose ... config --quiet`，避免将展开后的密钥打印到终端或日志。模板中的所有 `CAPACITY_*` 参数均为必填，Redis `maxclients` 必须与应用 `REDIS_POOL_SIZE` 及额外客户端总数协调；不得直接套用 `.env.example` 或本地示例中的高连接数。
+
+完成七天容量评审、1.5 倍负载测试、备份和隔离恢复后，确认没有部署管理任务正在运行，并在低峰时段停止新流量、等待在途请求排空。下面的命令先验证合成配置，再重建应用、PostgreSQL 和 Redis 容器以应用资源限制及参数；数据库和 Redis 会短暂断连，不要在门禁完成前执行：
+
+```bash
+cd /root/sub2api-deploy
+compose=(docker compose --project-name sub2api-deploy --project-directory /root/sub2api-deploy --env-file /root/sub2api-deploy/.env -f /root/sub2api-deploy/docker-compose.yml)
+if [ -f /root/sub2api-deploy/docker-compose.override.yml ]; then
+  compose+=(-f /root/sub2api-deploy/docker-compose.override.yml)
+fi
+compose+=(-f /root/sub2api-ops/state/active.json -f /root/sub2api-ops/state/capacity-compose.yml)
+"${compose[@]}" config --quiet
+"${compose[@]}" up -d --no-deps --pull never sub2api postgres redis
+```
+
+PostgreSQL 参数、Redis 启动命令或容器资源限制变化会重建相应容器并造成短时连接中断。上线时选低峰，先停止新流量并确认在途请求已排空；一次只应用经恢复验证的容量配置，随后检查 Compose 最终配置、应用/数据库/Redis 健康、PostgreSQL 与 Redis 持久化、外部 API 关键业务请求和账务/媒体任务一致性。对比同一负载和时间窗口下的延迟、错误率、连接等待、I/O 与内存。失败时按变更前记录恢复容器参数和资源配置，不恢复旧业务数据库覆盖新写入。容量观测、隔离恢复和 1.5 倍负载门禁完成前，不进行生产资源调整。
 
 ## 媒体账号并发诊断字段
 

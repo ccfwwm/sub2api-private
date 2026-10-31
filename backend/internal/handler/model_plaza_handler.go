@@ -256,10 +256,9 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 
 	visible := filterPlazaVisibleGroups(groups, allowedGroups, restrictPublicGroups)
 
-	out := make([]modelPlazaGroup, 0, len(visible))
-	for i := range visible {
-		out = append(out, toModelPlazaGroupDTO(&visible[i], userRates))
-	}
+	// Localized text varies by request language; preserve CORS's existing Vary values.
+	c.Writer.Header().Add("Vary", "Accept-Language")
+	out := toLocalizedModelPlazaGroups(visible, userRates, c.GetHeader("Accept-Language"))
 	var notices []string
 	if h.media != nil {
 		requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string)
@@ -270,11 +269,11 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 			notices = []string{modelPlazaPartialMediaNotice}
 		}
 	}
-	filtered := out[:0]
 	if err := h.attachDescriptions(c.Request.Context(), out); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
+	filtered := out[:0]
 	for i := range visible {
 		dto := out[i]
 		if len(dto.Models) == 0 && len(dto.MediaModels) == 0 {
@@ -311,6 +310,17 @@ func filterPlazaVisibleGroups(
 		visible = append(visible, g)
 	}
 	return visible
+}
+
+// toLocalizedModelPlazaGroups 转换可见分组，并把名称与描述换成请求首选语言的版本。
+func toLocalizedModelPlazaGroups(visible []service.PlazaGroup, userRates map[int64]float64, acceptLanguage string) []modelPlazaGroup {
+	out := make([]modelPlazaGroup, 0, len(visible))
+	for i := range visible {
+		group := toModelPlazaGroupDTO(&visible[i], userRates)
+		group.Name, group.Description = visible[i].I18n.Localize(acceptLanguage, group.Name, group.Description)
+		out = append(out, group)
+	}
+	return out
 }
 
 // toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,并合并用户专属倍率。

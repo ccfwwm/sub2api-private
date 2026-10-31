@@ -9,7 +9,7 @@ on:
       version:
         description: 'Embedded image version'
         required: true
-        default: v0.2.15
+        default: v1.3.20
         type: string
       operations:
         description: 'Also test server management backup/restore/upgrade scripts'

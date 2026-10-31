@@ -32,6 +32,10 @@ TASK_INDEX_FILE = '247_media_task_list_indexes.sql'
 DOCS_FILE = '248_public_imagevideo_docs.sql'
 GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
 OPS_DIAGNOSTICS_FILE = '252_media_account_concurrency_diagnostics.sql'
+SCOPED_ADMIN_KEYS_FILE = '253_scoped_admin_api_keys.sql'
+IMAGE_COUNT_BILLING_FILE = '254_group_image_count_billing.sql'
+UPSTREAM_V0_2_19_FILES = (SCOPED_ADMIN_KEYS_FILE, IMAGE_COUNT_BILLING_FILE)
+UPSTREAM_V0_2_19_UPGRADE = 'upstream-v0.2.19'
 TEMPLATE_SCHEMA_FILE = '249_media_protocol_templates.sql'
 LEGACY_TEMPLATE_FILE = '250_migrate_legacy_media_template_refs.sql'
 TEMPLATE_FILES = (TEMPLATE_SCHEMA_FILE, LEGACY_TEMPLATE_FILE)
@@ -312,6 +316,85 @@ def reviewed_ops_diagnostics_upgrade(before, target, folder):
             'expected_migrations': target}
 
 
+def upstream_v0_2_19_statements():
+    return {
+        SCOPED_ADMIN_KEYS_FILE: (
+            'CREATE TABLE IF NOT EXISTS scoped_admin_api_keys ( '
+            'id VARCHAR(24) PRIMARY KEY, name VARCHAR(100) NOT NULL, description TEXT NOT NULL DEFAULT \'\', '
+            'key_prefix VARCHAR(64) NOT NULL, key_hash VARCHAR(64) NOT NULL, enabled BOOLEAN NOT NULL DEFAULT TRUE, '
+            'expires_at TIMESTAMPTZ, allowed_ips JSONB NOT NULL DEFAULT \'[]\', policy JSONB NOT NULL DEFAULT \'{}\', '
+            'created_by BIGINT NOT NULL REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), '
+            'updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_used_at TIMESTAMPTZ, '
+            'last_used_ip VARCHAR(64) NOT NULL DEFAULT \'\', revoked_at TIMESTAMPTZ ); '
+            'ALTER TABLE scoped_admin_api_keys ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;'
+        ),
+        IMAGE_COUNT_BILLING_FILE: (
+            'ALTER TABLE groups ADD COLUMN IF NOT EXISTS image_count_billing BOOLEAN NOT NULL DEFAULT false; '
+            "COMMENT ON COLUMN groups.image_count_billing IS '图片生成是否按实际出图张数计费';"
+        ),
+    }
+
+
+def upstream_v0_2_19_transaction(files):
+    import re
+    expected = upstream_v0_2_19_statements()
+    if set(files) != set(UPSTREAM_V0_2_19_FILES):
+        raise ValueError('unexpected upstream v0.2.19 migration inventory')
+    statements = []
+    for name in UPSTREAM_V0_2_19_FILES:
+        sql, checksum = files[name]
+        if normalized_sql(sql) != ' '.join(expected[name].split()) or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+            raise ValueError('outside reviewed upstream v0.2.19 migration statements')
+        statements.append(expected[name] +
+                          f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{name}','{checksum}');")
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            "SELECT pg_advisory_xact_lock(694208311321144027);\n" + '\n'.join(statements) + ' COMMIT;')
+
+
+def validate_upstream_v0_2_19_transaction(transaction):
+    import re
+    checksums = dict(re.findall(
+        r"INSERT INTO schema_migrations\(filename,checksum\) VALUES\('([^']+)','([0-9a-f]{64})'\);",
+        transaction))
+    if set(checksums) != set(UPSTREAM_V0_2_19_FILES):
+        return False
+    files = {name: (statement, checksums[name])
+             for name, statement in upstream_v0_2_19_statements().items()}
+    try:
+        return transaction == upstream_v0_2_19_transaction(files)
+    except (ValueError, TypeError):
+        return False
+
+
+def reviewed_upstream_v0_2_19_upgrade(before, target, folder):
+    pending = set(target) - set(before)
+    if (pending != set(UPSTREAM_V0_2_19_FILES) or
+            {name: checksum for name, checksum in target.items() if name not in pending} != before):
+        raise ValueError('migration inventory differs outside upstream v0.2.19 migrations')
+    folder, files = Path(folder), {}
+    for name in UPSTREAM_V0_2_19_FILES:
+        source = folder / name
+        if not source.is_file():
+            # Older workers may not stage these newly reviewed assets yet. Reuse
+            # only the checksummed assets for this exact release manifest.
+            for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+                manifest_path = candidate / 'deployment.json'
+                if not manifest_path.is_file() or not (candidate / name).is_file():
+                    continue
+                manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+                if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                    source = candidate / name
+                    break
+        sql = source.read_text(encoding='utf-8').replace('\r\n', '\n').strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        if target[name] != checksum:
+            raise ValueError('upstream v0.2.19 migration checksum differs')
+        files[name] = (sql, checksum)
+    transaction = upstream_v0_2_19_transaction(files)
+    return {'filename': UPSTREAM_V0_2_19_UPGRADE, 'files': list(UPSTREAM_V0_2_19_FILES),
+            'transaction': transaction, 'expected_migrations': target}
+
+
 def reviewed_group_availability_upgrade(before, target, folder):
     if before == target:
         return None
@@ -342,6 +425,8 @@ def reviewed_group_availability_upgrade(before, target, folder):
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
+    if set(target) - set(before) == set(UPSTREAM_V0_2_19_FILES):
+        return reviewed_upstream_v0_2_19_upgrade(before, target, folder)
     if (set(target) - set(before)) & set(TEMPLATE_FILES):
         return reviewed_template_upgrade(before, target, folder)
     if set(target) - set(before) == {GROUP_AVAILABILITY_FILE}:
