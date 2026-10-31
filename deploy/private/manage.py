@@ -128,6 +128,23 @@ class Manager:
     def refresh(self):
         self.c.config['database_container'] = self.active()['x-ops']['postgres']
 
+    def diagnose(self, version):
+        """Check the exact registered release without backup, SQL writes or cutover."""
+        if not VERSION.fullmatch(version):
+            raise ValueError('diagnose requires vMAJOR.MINOR.PATCH')
+        original = self.preflight()
+        image, manifest = self.offline(version)
+        before = self.c.migrations()
+        from media_migrate import reviewed_upgrade
+        reviewed = reviewed_upgrade(before, manifest['migrations'], self.state / 'releases' / version)
+        return {'status': 'ready', 'version': version, 'commit': manifest['commit'],
+                'digest': manifest['digest'], 'image_id': image,
+                'running_image_id': original['Image'],
+                'current_migration_count': len(before), 'target_migration_count': len(manifest['migrations']),
+                'pending_migrations': sorted(set(manifest['migrations']) - set(before)),
+                'reviewed_upgrade': reviewed['filename'] if reviewed else None,
+                'backup_and_restore_still_required': True}
+
     def save(self, job, status):
         job.update(status=status, updated_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         atomic_json(self.state / 'jobs' / (job['id'] + '.json'), job)
@@ -351,6 +368,11 @@ class Manager:
             if reviewed['filename'] == 'upstream-v0.2.19' and not all(
                     test.get(k) for k in ('scoped_admin_keys_schema_verified', 'image_count_default_verified')):
                 raise ValueError('upstream v0.2.19 migration evidence is incomplete')
+            upstream_data_change = (reviewed['filename'] == 'upstream-v0.2.19' and
+                                    '246_enable_gemini_image_generation_groups.sql' in reviewed['files'])
+            if upstream_data_change and not all(test.get(k) for k in (
+                    'upstream_prerequisites_verified', 'exact_group_projection_verified')):
+                raise ValueError('upstream prerequisite migration evidence is incomplete')
             if reviewed['filename'] == 'media-protocol-templates' and not test.get('template_data_verified'):
                 raise ValueError('exact media template account projection was not verified')
             field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
@@ -361,7 +383,7 @@ class Manager:
                      else 'template_migration' if reviewed['filename'] == 'media-protocol-templates'
                      else 'docs_migration')
             job[field] = {'filename': reviewed['filename'], 'restore_verified': True,
-                          'rollback_verified': True, 'data_unchanged': reviewed['filename'] != 'media-protocol-templates'}
+                          'rollback_verified': True, 'data_unchanged': reviewed['filename'] != 'media-protocol-templates' and not upstream_data_change}
             if reviewed['filename'] == 'media-protocol-templates':
                 job[field].update(files=reviewed['files'], exact_account_projection_verified=True,
                                   task_snapshots_and_other_business_data_unchanged=True)
@@ -369,6 +391,9 @@ class Manager:
                 job[field].update(files=reviewed['files'], scoped_admin_keys_schema_verified=True,
                                   image_count_default_verified=True,
                                   billing_and_media_data_unchanged=True)
+                if upstream_data_change:
+                    job[field].update(upstream_prerequisites_verified=True,
+                                      exact_group_projection_verified=True)
         # The controller adds an evidence file; retain the original backup seal.
         (folder / 'restored-fingerprints.json').unlink(missing_ok=True)
 
@@ -792,7 +817,7 @@ class Manager:
 
 def main():
     parser = argparse.ArgumentParser(description='Sub2API 离线生产管理。任务由 systemd 后台执行，SSH 断开不影响。')
-    parser.add_argument('action', choices=['status', 'logs', 'list', 'backup', 'verify', 'prepare', 'upgrade', 'rollback', 'restore', 'rescue', '_worker'])
+    parser.add_argument('action', choices=['diagnose', 'status', 'logs', 'list', 'backup', 'verify', 'prepare', 'upgrade', 'rollback', 'restore', 'rescue', '_worker'])
     parser.add_argument('target', nargs='?', default='')
     parser.add_argument('--immediate', action='store_true', help='Upgrade application immediately without waiting for idle or draining')
     parser.add_argument('--confirm', default='', help='写操作须与动作同名大写：BACKUP / VERIFY / UPGRADE / ROLLBACK / RESTORE')
@@ -822,6 +847,9 @@ def main():
         os.execvp('tail', ['tail', '-n', '80', '-F', str(STATE / 'logs' / (target + '.log'))])
     os.umask(0o077)
     manager = Manager()
+    if args.action == 'diagnose':
+        print(json.dumps(manager.diagnose(args.target), ensure_ascii=False))
+        return
     if args.action == '_worker':
         import fcntl
         job = read(STATE / 'jobs' / (ident(args.target) + '.json'))

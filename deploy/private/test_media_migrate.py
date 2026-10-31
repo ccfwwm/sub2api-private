@@ -24,6 +24,30 @@ class MediaMigrationGateTests(unittest.TestCase):
                        hashlib.sha256((root / name).read_text(encoding='utf-8').strip().encode()).hexdigest())
                 for name in UPSTREAM_V0_2_19_FILES}
 
+    def test_actual_v1319_upgrade_includes_all_seven_upstream_migrations(self):
+        self.assertEqual(UPSTREAM_V0_2_19_FILES, (
+            '242_group_i18n.sql', '243_gemini_cached_contents.sql',
+            '244_gemini_cached_contents_channel_usage.sql',
+            '245_gemini_cached_contents_mutation_lease.sql',
+            '246_enable_gemini_image_generation_groups.sql',
+            '253_scoped_admin_api_keys.sql', '254_group_image_count_billing.sql'))
+        files = self.upstream_files()
+        with tempfile.TemporaryDirectory() as folder:
+            for name, (sql, _) in files.items():
+                Path(folder, name).write_text(sql, encoding='utf-8')
+            # Preserve the two-file route for databases with the five upstream
+            # prerequisites already applied, while rejecting incomplete bundles.
+            from media_migrate import UPSTREAM_V0_2_19_CORE_FILES
+            before = {name: checksum for name, (_, checksum) in files.items()
+                      if name not in UPSTREAM_V0_2_19_CORE_FILES}
+            target = {name: checksum for name, (_, checksum) in files.items()}
+            reviewed = reviewed_upgrade(before, target, folder)
+            self.assertEqual(reviewed['files'], list(UPSTREAM_V0_2_19_CORE_FILES))
+            self.assertTrue(validate_upstream_v0_2_19_transaction(reviewed['transaction']))
+            for omitted in UPSTREAM_V0_2_19_FILES:
+                with self.subTest(omitted=omitted), self.assertRaises(ValueError):
+                    reviewed_upgrade({}, {k: v for k, v in target.items() if k != omitted}, folder)
+
     def test_upstream_v0_2_19_migrations_are_exact_atomic_and_default_image_billing_off(self):
         files = self.upstream_files()
         transaction = upstream_v0_2_19_transaction(files)

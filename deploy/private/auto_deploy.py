@@ -11,12 +11,17 @@ import subprocess
 import sys
 import time
 import uuid
-from controller import IMAGE, REPO, VERSION, atomic_json, file_hash, run, validate_manifest, manifest_images
+from controller import IMAGE, REPO, VERSION, CommandError, atomic_json, file_hash, run, validate_manifest, manifest_images
 from manage import STATE, Manager, inspect, read
 
 AUTO = STATE / 'automatic'
 TERMINAL = {'succeeded', 'failed', 'failed_rolled_back', 'failed_needs_inspection'}
 REVIEWED_MIGRATION_ASSETS = (
+    '242_group_i18n.sql',
+    '243_gemini_cached_contents.sql',
+    '244_gemini_cached_contents_channel_usage.sql',
+    '245_gemini_cached_contents_mutation_lease.sql',
+    '246_enable_gemini_image_generation_groups.sql',
     '246_channel_monitor_imagevideo.sql',
     '247_media_task_list_indexes.sql',
     '248_public_imagevideo_docs.sql',
@@ -32,9 +37,22 @@ def stage_reviewed_migrations(assets, release):
     """Stage reviewed SQL from the checksum-verified release inventory."""
     import shutil
     assets, release = Path(assets), Path(release)
+    import base64
+    import hashlib
+    manifest = read(assets / 'deployment.json') if (assets / 'deployment.json').is_file() else None
     staged = []
     for name in REVIEWED_MIGRATION_ASSETS:
         source = assets / name
+        if manifest and name in manifest['migrations']:
+            if not source.is_file():
+                # Repair historical Releases with incomplete SQL asset lists by
+                # reading only this immutable source commit; never use main.
+                blob = json.loads(run(['gh', 'api',
+                    f"repos/{REPO}/contents/backend/migrations/{name}?ref={manifest['commit']}"]))
+                source.write_bytes(base64.b64decode(blob['content'], validate=False))
+            sql = source.read_text(encoding='utf-8').replace('\r\n', '\n').strip()
+            if hashlib.sha256(sql.encode()).hexdigest() != manifest['migrations'][name]:
+                raise ValueError('reviewed migration checksum differs from immutable release source')
         if source.exists():
             shutil.copyfile(source, release / name)
             staged.append(name)
@@ -50,7 +68,7 @@ def check_order(requested, current):
         raise ValueError('older releases cannot replace newer deployments')
 
 def clean_status(job):
-    return {k: job[k] for k in ('id', 'version', 'immediate', 'digest', 'commit', 'status', 'phase', 'manager_job', 'backup_id', 'error') if k in job}
+    return {k: job[k] for k in ('id', 'version', 'immediate', 'digest', 'commit', 'status', 'phase', 'failed_phase', 'failed_command', 'exit_code', 'manager_job', 'backup_id', 'error') if k in job}
 
 def save(job, status=None, phase=None):
     if status: job['status'] = status
@@ -71,7 +89,11 @@ except Exception:
         manager.save(job,'failed_needs_inspection')
     raise
 '''
-    run([sys.executable, '-c', code, str(Path(manager_path).parent), str(path)], timeout=10800)
+    logs = STATE / 'logs'
+    logs.mkdir(exist_ok=True, mode=0o700)
+    with (logs / (job['id'] + '.log')).open('ab') as output:
+        os.chmod(output.name, 0o600)
+        run([sys.executable, '-c', code, str(Path(manager_path).parent), str(path)], stdout=output, timeout=10800)
     return read(path)
 
 def verify_online(version, image_id):
@@ -81,6 +103,13 @@ def verify_online(version, image_id):
         if settings['data']['version'].lstrip('v') != version.lstrip('v'):
             raise ValueError('online version verification failed')
     if inspect('sub2api')['Image'] != image_id: raise ValueError('online image mismatch')
+
+def pull_public_image(image):
+    # Published images must be anonymously readable. A stale host GHCR login
+    # can hide a public manifest, so isolate this pull without changing logins.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix='sub2api-public-image-') as config:
+        run(['docker', '--config', config, 'pull', image])
 
 def release_assets(version, folder):
     release = json.loads(run(['gh', 'api', f'repos/{REPO}/releases/tags/{version}']))
@@ -145,9 +174,9 @@ def worker(job):
             manifest = release_assets(job['version'], folder)
             job.update(digest=manifest['digest'], commit=manifest['commit']); save(job)
             image, docs_image = manifest_images(manifest, job['version'])
-            save(job, phase='pulling_fixed_digest'); run(['docker', 'pull', image])
+            save(job, phase='pulling_fixed_digest'); pull_public_image(image)
             if docs_image:
-                run(['docker', 'pull', docs_image])
+                pull_public_image(docs_image)
             identity = inspect(image)
             labels = identity['Config'].get('Labels', {})
             if identity['Os'] != 'linux' or identity['Architecture'] != 'amd64' or labels.get('org.opencontainers.image.revision') != manifest['commit'] or labels.get('org.opencontainers.image.version') != job['version']:
@@ -210,11 +239,14 @@ def worker(job):
             save(job, 'succeeded', 'online_verified')
     except Exception as error:
         # Raw subprocess output is never returned to GitHub.
+        job['failed_phase'] = job.get('phase')
+        if isinstance(error, CommandError):
+            job.update(failed_command=error.executable, exit_code=error.exit_code)
         if job.get('status') not in ('failed_rolled_back','failed_needs_inspection'):
             manager_result = read(STATE / 'jobs' / (job['manager_job'] + '.json')) if job.get('manager_job') else {}
             job['backup_id'] = manager_result.get('backup_id')
             save(job, manager_result.get('status') if manager_result.get('status') in TERMINAL else 'failed', phase='inspect_host_log')
-        job['error'] = str(error) if isinstance(error, ValueError) else type(error).__name__; save(job)
+        job['error'] = str(error) if isinstance(error, (ValueError, CommandError)) else type(error).__name__; save(job)
         raise
 
 def dispatch(words):

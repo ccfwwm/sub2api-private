@@ -14,6 +14,33 @@ from auto_deploy import check_order, dispatch, release_assets, stage_reviewed_mi
 from controller import atomic_json
 
 class AutomaticDeployTests(unittest.TestCase):
+ def test_public_image_pull_isolates_host_credentials_without_changing_them(self):
+  image='ghcr.io/ccfwwm/sub2api-private@sha256:'+'a'*64
+  configs=[]
+  def command(args):
+   self.assertEqual(args[:2],['docker','--config'])
+   self.assertEqual(args[3:],['pull',image])
+   config=Path(args[2]); configs.append(config)
+   self.assertTrue(config.is_dir())
+   self.assertFalse((config/'config.json').exists())
+  with patch('auto_deploy.run',side_effect=command):
+   auto_deploy.pull_public_image(image)
+  self.assertFalse(configs[0].exists())
+
+ def test_stage_missing_historical_assets_from_exact_commit_and_verify_checksum(self):
+  name='242_group_i18n.sql'; sql=b'ALTER TABLE groups ADD COLUMN fixture integer;\n'
+  manifest={'commit':'a'*40,'migrations':{name:hashlib.sha256(sql.strip()).hexdigest()}}
+  with tempfile.TemporaryDirectory() as root:
+   assets,release=Path(root)/'assets',Path(root)/'release';assets.mkdir();release.mkdir()
+   atomic_json(assets/'deployment.json',manifest)
+   with patch('auto_deploy.run',return_value=json.dumps({'content':base64.b64encode(sql).decode()}).encode()) as command:
+    self.assertEqual(stage_reviewed_migrations(assets,release),[name])
+   self.assertIn('?ref='+'a'*40,command.call_args.args[0][-1])
+   self.assertEqual((release/name).read_bytes(),sql)
+   (assets/name).write_bytes(sql+b'DROP TABLE users;')
+   with self.assertRaisesRegex(ValueError,'checksum'):
+    stage_reviewed_migrations(assets,release)
+
  def test_publishing_cannot_call_production_workflow_and_manual_deploy_selects_cutover_mode(self):
   root=Path(__file__).resolve().parents[2]
   release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
@@ -26,6 +53,21 @@ class AutomaticDeployTests(unittest.TestCase):
   self.assertIn("'immediate':len(words) == 3",source)
   self.assertIn('      immediate:',deploy)
   self.assertIn('DEPLOY_COMMAND+=" --immediate"',deploy)
+ def test_release_workflows_publish_every_reviewed_upstream_migration_asset(self):
+  root=Path(__file__).resolve().parents[2]
+  upstream=('242_group_i18n.sql','243_gemini_cached_contents.sql',
+   '244_gemini_cached_contents_channel_usage.sql','245_gemini_cached_contents_mutation_lease.sql',
+   '246_enable_gemini_image_generation_groups.sql')
+  release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
+  finalize=(root/'.github/workflows/finalize-private-release.yml').read_text(encoding='utf-8')
+  release_inventory=release[release.index('sha256sum deployment.json'):release.index('git rev-parse HEAD > management-source.txt')]
+  finalize_inventory=finalize[finalize.index('sha256sum deployment.json'):finalize.index('sha256sum server-management.tar.gz')]
+  for name in upstream:
+   with self.subTest(name=name):
+    self.assertIn(name,release_inventory)
+    self.assertIn(name,finalize_inventory)
+    self.assertIn(name,release[release.index('      - uses: actions/upload-artifact'):])
+  self.assertIn('242_group_i18n.sql',finalize[finalize.index('gh release create'):])
  def test_release_assets_downloads_docs_receipt_before_checksum_validation(self):
   version='v1.2.7'; commit='a'*40; docs_name='docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
   verification=json.dumps({'version':version,'status':'recorded'}).encode()

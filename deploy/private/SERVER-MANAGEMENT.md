@@ -9,6 +9,8 @@
 /root/sub2api-manage logs
 /root/sub2api-manage logs <任务ID>
 /root/sub2api-manage list
+# 只读核对已登记的目标镜像、架构、提交及精确迁移差异
+/root/sub2api-manage diagnose v1.3.21
 ```
 
 `logs` 使用 tail，Ctrl-C 只退出查看，不会停止任务。任务状态和日志分别保存在 `/root/sub2api-ops/state/jobs`、`logs`，均仅 root 可读。`backup_id` 是备份 ID，和任务 ID 不同。
@@ -107,6 +109,8 @@ rehearse 做完整备份与隔离恢复，不改变生产 schema；必须验证�
 任务、日志和清单在 `/root/sub2api-ops/state/automatic` 持久保存；
 GitHub 必须查询到最终 `succeeded` 才报告上线成功。
 重复版本复核当前镜像与健康，旧版本不能覆盖新版本。
+
+正式公开镜像按清单的固定 digest 使用独立临时 Docker 配置匿名拉取，避免宿主机旧 GHCR 登录凭据导致公开镜像返回 `not found`；不修改或注销原登录。`diagnose` 不执行备份、迁移 SQL 或切换，结果 `ready` 仍须通过正式升级中的备份和隔离恢复门禁。历史发布缺少已审 SQL 附件时，只允许从该发布清单固定 commit 取回对应文件，归一化 SQL SHA-256 必须与清单相同；绝不从 `main` 取代。
 
 ## v1.2.15 媒体模板与旧配置迁移
 

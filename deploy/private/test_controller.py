@@ -10,6 +10,29 @@ from controller import Controller, IMAGE, REPO, SafeRedirect, atomic_json, valid
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_upstream_group_projection_seals_only_the_reviewed_flag_change(self):
+        columns = 'id,platform,allow_image_generation,name,media_availability'
+        original = Controller.upstream_groups_fingerprint_sql(columns)
+        projected = Controller.upstream_groups_fingerprint_sql(columns, True)
+        self.assertIn('SELECT ' + columns + ' FROM groups', original)
+        self.assertIn("platform IN ('gemini', 'antigravity')", projected)
+        self.assertIn('ELSE allow_image_generation END AS allow_image_generation', projected)
+        self.assertIn(',name,media_availability FROM groups', projected)
+        for invalid in ('*', 'id; DELETE FROM groups', 'id,(SELECT password FROM users)'):
+            with self.assertRaises(ValueError):
+                Controller.upstream_groups_fingerprint_sql(invalid)
+
+    def test_command_failure_keeps_secrets_out_of_exception(self):
+        from controller import run, CommandError
+        import subprocess
+        result = subprocess.CompletedProcess(['gh'], 23, stdout=b'', stderr=b'token=secret-fixture-value')
+        with patch('controller.subprocess.run', return_value=result), patch('controller.COMMAND_ERROR_LOG', None):
+            with self.assertRaises(CommandError) as raised:
+                run(['/usr/bin/gh', 'api', 'fixture'])
+        self.assertEqual(raised.exception.executable, 'gh')
+        self.assertEqual(raised.exception.exit_code, 23)
+        self.assertNotIn('secret-fixture-value', str(raised.exception))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

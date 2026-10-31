@@ -241,10 +241,15 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted SUB2API_REHEARSAL_MIN_FREE_BYTES=4294967296 SUB2API_REHEARSAL_DISK_MULTIPLIER=2 DOCKER_CONFIG="$HOME/.docker" python3 deploy/private/rehearse_fixture.py --manifest deployment.json --ops
           sha256sum deployment.json docs-image-inspect.json > checksums.txt
+          cp backend/migrations/242_group_i18n.sql ./242_group_i18n.sql
           cp backend/migrations/243_media_tasks_and_pricing.sql ./243_media_tasks_and_pricing.sql
+          cp backend/migrations/243_gemini_cached_contents.sql ./243_gemini_cached_contents.sql
           cp backend/migrations/244_unified_media_model_pricing.sql ./244_unified_media_model_pricing.sql
+          cp backend/migrations/244_gemini_cached_contents_channel_usage.sql ./244_gemini_cached_contents_channel_usage.sql
           cp backend/migrations/245_unified_media_account_cost.sql ./245_unified_media_account_cost.sql
+          cp backend/migrations/245_gemini_cached_contents_mutation_lease.sql ./245_gemini_cached_contents_mutation_lease.sql
           cp backend/migrations/246_channel_monitor_imagevideo.sql ./246_channel_monitor_imagevideo.sql
+          cp backend/migrations/246_enable_gemini_image_generation_groups.sql ./246_enable_gemini_image_generation_groups.sql
           cp backend/migrations/247_media_task_list_indexes.sql ./247_media_task_list_indexes.sql
           cp backend/migrations/248_public_imagevideo_docs.sql ./248_public_imagevideo_docs.sql
           cp backend/migrations/249_media_protocol_templates.sql ./249_media_protocol_templates.sql
@@ -253,6 +258,7 @@ jobs:
           cp backend/migrations/252_media_account_concurrency_diagnostics.sql ./252_media_account_concurrency_diagnostics.sql
           cp backend/migrations/253_scoped_admin_api_keys.sql ./253_scoped_admin_api_keys.sql
           cp backend/migrations/254_group_image_count_billing.sql ./254_group_image_count_billing.sql
+          sha256sum 242_group_i18n.sql 243_gemini_cached_contents.sql 244_gemini_cached_contents_channel_usage.sql 245_gemini_cached_contents_mutation_lease.sql 246_enable_gemini_image_generation_groups.sql >> checksums.txt
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
           sha256sum 247_media_task_list_indexes.sql >> checksums.txt
@@ -274,10 +280,15 @@ jobs:
           path: |
             deployment.json
             checksums.txt
+            242_group_i18n.sql
             243_media_tasks_and_pricing.sql
+            243_gemini_cached_contents.sql
             244_unified_media_model_pricing.sql
+            244_gemini_cached_contents_channel_usage.sql
             245_unified_media_account_cost.sql
+            245_gemini_cached_contents_mutation_lease.sql
             246_channel_monitor_imagevideo.sql
+            246_enable_gemini_image_generation_groups.sql
             247_media_task_list_indexes.sql
             248_public_imagevideo_docs.sql
             249_media_protocol_templates.sql

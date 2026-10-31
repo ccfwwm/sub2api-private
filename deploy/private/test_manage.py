@@ -20,6 +20,29 @@ class ManagementSafetyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ident(value)
 
+    def test_diagnose_checks_inventory_without_backups_or_cutover(self):
+        before = {'old.sql': 'a' * 64}
+        target = {**before, '253_scoped_admin_api_keys.sql': 'b' * 64}
+        manifest = {'commit': 'c' * 40, 'digest': 'sha256:' + 'd' * 64, 'migrations': target}
+        with patch.object(self.manager, 'preflight', return_value={'Image': 'old-image'}), \
+                patch.object(self.manager, 'offline', return_value=('new-image', manifest)), \
+                patch.object(self.manager.c, 'migrations', return_value=before), \
+                patch('media_migrate.reviewed_upgrade', return_value={'filename': 'upstream-v0.2.19'}), \
+                patch.object(self.manager, 'backup') as backup, \
+                patch.object(self.manager, 'cutover') as cutover:
+            result = self.manager.diagnose('v1.3.21')
+        self.assertEqual(result['status'], 'ready')
+        self.assertEqual(result['pending_migrations'], ['253_scoped_admin_api_keys.sql'])
+        self.assertTrue(result['backup_and_restore_still_required'])
+        backup.assert_not_called()
+        cutover.assert_not_called()
+
+    def test_diagnose_rejects_invalid_version_before_inspection(self):
+        with patch.object(self.manager, 'preflight') as preflight:
+            with self.assertRaises(ValueError):
+                self.manager.diagnose('main; reboot')
+        preflight.assert_not_called()
+
     def test_application_data_archive_uses_fixed_non_recursive_inventory(self):
         source = self.root / 'data'
         (source / 'logs').mkdir(parents=True)

@@ -44,6 +44,14 @@ REVIEWED_DATA_TABLES = ('billing_usage_entries', 'user_affiliate_ledger', 'media
 COMMAND_ERROR_LOG = None
 
 
+class CommandError(RuntimeError):
+    """Only command identity and exit status may cross the SSH boundary."""
+    def __init__(self, executable, exit_code):
+        self.executable = Path(executable).name
+        self.exit_code = exit_code
+        super().__init__(f'{self.executable} failed (exit {exit_code}); inspect restricted host logs')
+
+
 def file_hash(path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as f:
@@ -80,7 +88,7 @@ def run(args, *, stdin=None, stdout=None, timeout=1800, cwd=None):
                 os.chmod(COMMAND_ERROR_LOG, 0o600)
                 log.write((now() + " " + args[0] + " failed\n").encode())
                 log.write(result.stderr[-65536:])
-        raise RuntimeError(f"{args[0]} failed (exit {result.returncode}); inspect restricted host logs")
+        raise CommandError(args[0], result.returncode)
     return result.stdout
 
 
@@ -433,6 +441,24 @@ class Controller:
         return (f'SELECT count(*)::text || \'|\' || md5(coalesce(string_agg(h, \'\' ORDER BY h), \'\')) '
                 f'FROM (SELECT md5(row_to_json(t)::text) h FROM "{table}" t) fingerprint_rows;')
 
+    @staticmethod
+    def upstream_groups_fingerprint_sql(columns, enable_gemini=False):
+        # Project every original column; the one upstream data change is sealed
+        # before migration so unrelated group flags/prices cannot drift unnoticed.
+        if not re.fullmatch(r'"?[a-z_][a-z0-9_]*"?(,"?[a-z_][a-z0-9_]*"?)*', columns):
+            raise ValueError('invalid group column projection')
+        projection = []
+        for column in columns.split(','):
+            if enable_gemini and column.strip('"') == 'allow_image_generation':
+                projection.append("CASE WHEN platform IN ('gemini', 'antigravity') "
+                                  'AND allow_image_generation = false THEN true '
+                                  'ELSE allow_image_generation END AS allow_image_generation')
+            else:
+                projection.append(column)
+        return ("SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) "
+                'FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT ' + ','.join(projection) +
+                ' FROM groups ORDER BY id) t) fingerprint_rows;')
+
     def rehearse(self, job, backup):
         prefix = "sub2api-rehearsal-" + job["id"][:12]
         network = prefix + "-net"
@@ -510,9 +536,11 @@ class Controller:
                     # original group projection before applying the migration.
                     expected_after["groups"] = self.sql(comparison["groups"], pg)
                 if reviewed['filename'] == 'upstream-v0.2.19':
+                    from media_migrate import GEMINI_IMAGE_ENABLE_FILE
                     columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='groups';", pg)
-                    comparison['groups'] = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT " + columns + " FROM groups ORDER BY id) t) fingerprint_rows;"
-                    expected_after['groups'] = self.sql(comparison['groups'], pg)
+                    comparison['groups'] = self.upstream_groups_fingerprint_sql(columns)
+                    expected_after['groups'] = self.sql(self.upstream_groups_fingerprint_sql(
+                        columns, GEMINI_IMAGE_ENABLE_FILE in reviewed['files']), pg)
                     for table in REVIEWED_DATA_TABLES:
                         query = self.fingerprint_sql(table)
                         monitor_before[query] = self.sql(query, pg)
@@ -551,6 +579,18 @@ class Controller:
                         raise ValueError('image-count billing is enabled for an existing group')
                     job['scoped_admin_keys_schema_verified'] = True
                     job['image_count_default_verified'] = True
+                    if GEMINI_IMAGE_ENABLE_FILE in reviewed['files']:
+                        if self.sql("SELECT count(*) FROM groups WHERE i18n IS DISTINCT FROM '{}'::jsonb;", pg) != '0':
+                            raise ValueError('new group locale values differ from the empty default')
+                        if self.sql("SELECT count(*) FROM groups WHERE platform IN ('gemini','antigravity') AND allow_image_generation=false;", pg) != '0':
+                            raise ValueError('Gemini image flag migration is incomplete')
+                        cache_columns = self.sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='gemini_cached_contents';", pg)
+                        if cache_columns != '18' or self.sql('SELECT count(*) FROM gemini_cached_contents;', pg) != '0':
+                            raise ValueError('new Gemini cache schema differs or contains unexpected rows')
+                        if self.sql("SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='gemini_cached_contents';", pg) != '5':
+                            raise ValueError('Gemini cache indexes are incomplete')
+                        job['upstream_prerequisites_verified'] = True
+                        job['exact_group_projection_verified'] = True
                 job["additive_data_verified"] = True
                 if reviewed['filename'] == 'media-protocol-templates':
                     if LEGACY_TEMPLATE_FILE in files and self.sql(legacy_accounts_fingerprint_sql(files[LEGACY_TEMPLATE_FILE][0]), pg) != expected_after['accounts']:

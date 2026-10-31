@@ -34,7 +34,16 @@ GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
 OPS_DIAGNOSTICS_FILE = '252_media_account_concurrency_diagnostics.sql'
 SCOPED_ADMIN_KEYS_FILE = '253_scoped_admin_api_keys.sql'
 IMAGE_COUNT_BILLING_FILE = '254_group_image_count_billing.sql'
-UPSTREAM_V0_2_19_FILES = (SCOPED_ADMIN_KEYS_FILE, IMAGE_COUNT_BILLING_FILE)
+GROUP_I18N_FILE = '242_group_i18n.sql'
+GEMINI_CACHE_FILE = '243_gemini_cached_contents.sql'
+GEMINI_CACHE_USAGE_FILE = '244_gemini_cached_contents_channel_usage.sql'
+GEMINI_CACHE_LEASE_FILE = '245_gemini_cached_contents_mutation_lease.sql'
+GEMINI_IMAGE_ENABLE_FILE = '246_enable_gemini_image_generation_groups.sql'
+UPSTREAM_V0_2_19_CORE_FILES = (SCOPED_ADMIN_KEYS_FILE, IMAGE_COUNT_BILLING_FILE)
+UPSTREAM_V0_2_19_FILES = (GROUP_I18N_FILE, GEMINI_CACHE_FILE, GEMINI_CACHE_USAGE_FILE,
+                        GEMINI_CACHE_LEASE_FILE, GEMINI_IMAGE_ENABLE_FILE,
+                        *UPSTREAM_V0_2_19_CORE_FILES)
+UPSTREAM_V0_2_19_INVENTORIES = (set(UPSTREAM_V0_2_19_CORE_FILES), set(UPSTREAM_V0_2_19_FILES))
 UPSTREAM_V0_2_19_UPGRADE = 'upstream-v0.2.19'
 TEMPLATE_SCHEMA_FILE = '249_media_protocol_templates.sql'
 LEGACY_TEMPLATE_FILE = '250_migrate_legacy_media_template_refs.sql'
@@ -318,6 +327,41 @@ def reviewed_ops_diagnostics_upgrade(before, target, folder):
 
 def upstream_v0_2_19_statements():
     return {
+        GROUP_I18N_FILE: (
+            "ALTER TABLE groups ADD COLUMN IF NOT EXISTS i18n JSONB NOT NULL DEFAULT '{}'::jsonb; "
+            "COMMENT ON COLUMN groups.i18n IS 'Per-locale display text for the group: "
+            '{"<locale>":{"name":string,"description":string}}; '
+            "locales or fields that are absent fall back to groups.name / groups.description';"
+        ),
+        GEMINI_CACHE_FILE: (
+            'CREATE TABLE IF NOT EXISTS gemini_cached_contents ( '
+            'id BIGSERIAL PRIMARY KEY, public_id VARCHAR(64) NOT NULL, user_id BIGINT NOT NULL, '
+            'api_key_id BIGINT NOT NULL, group_id BIGINT NOT NULL, account_id BIGINT NOT NULL, '
+            'upstream_name VARCHAR(512) NOT NULL, model VARCHAR(255) NOT NULL, '
+            "upstream_model VARCHAR(512) NOT NULL, display_name VARCHAR(512) NOT NULL DEFAULT '', "
+            'total_token_count BIGINT NOT NULL DEFAULT 0, expire_time TIMESTAMPTZ NOT NULL, '
+            'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), '
+            'deleted_at TIMESTAMPTZ NULL ); '
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_gemini_cached_contents_public_id '
+            'ON gemini_cached_contents (public_id); '
+            'CREATE INDEX IF NOT EXISTS idx_gemini_cached_contents_api_key_active '
+            'ON gemini_cached_contents (api_key_id, id DESC) WHERE deleted_at IS NULL; '
+            'CREATE INDEX IF NOT EXISTS idx_gemini_cached_contents_account '
+            'ON gemini_cached_contents (account_id);'
+        ),
+        GEMINI_CACHE_USAGE_FILE: (
+            "ALTER TABLE gemini_cached_contents ADD COLUMN IF NOT EXISTS channel_usage JSONB NOT NULL DEFAULT '{}'::jsonb;"
+        ),
+        GEMINI_CACHE_LEASE_FILE: (
+            'ALTER TABLE gemini_cached_contents ADD COLUMN IF NOT EXISTS mutation_token VARCHAR(64) NULL, '
+            'ADD COLUMN IF NOT EXISTS mutation_lease_until TIMESTAMPTZ NULL; '
+            'CREATE INDEX IF NOT EXISTS idx_gemini_cached_contents_pending_mutation '
+            'ON gemini_cached_contents (mutation_lease_until) WHERE mutation_token IS NOT NULL AND deleted_at IS NULL;'
+        ),
+        GEMINI_IMAGE_ENABLE_FILE: (
+            "UPDATE groups SET allow_image_generation = true WHERE platform IN ('gemini', 'antigravity') "
+            'AND allow_image_generation = false;'
+        ),
         SCOPED_ADMIN_KEYS_FILE: (
             'CREATE TABLE IF NOT EXISTS scoped_admin_api_keys ( '
             'id VARCHAR(24) PRIMARY KEY, name VARCHAR(100) NOT NULL, description TEXT NOT NULL DEFAULT \'\', '
@@ -338,10 +382,12 @@ def upstream_v0_2_19_statements():
 def upstream_v0_2_19_transaction(files):
     import re
     expected = upstream_v0_2_19_statements()
-    if set(files) != set(UPSTREAM_V0_2_19_FILES):
+    if set(files) not in UPSTREAM_V0_2_19_INVENTORIES:
         raise ValueError('unexpected upstream v0.2.19 migration inventory')
     statements = []
     for name in UPSTREAM_V0_2_19_FILES:
+        if name not in files:
+            continue
         sql, checksum = files[name]
         if normalized_sql(sql) != ' '.join(expected[name].split()) or not re.fullmatch(r'[0-9a-f]{64}', checksum):
             raise ValueError('outside reviewed upstream v0.2.19 migration statements')
@@ -356,10 +402,10 @@ def validate_upstream_v0_2_19_transaction(transaction):
     checksums = dict(re.findall(
         r"INSERT INTO schema_migrations\(filename,checksum\) VALUES\('([^']+)','([0-9a-f]{64})'\);",
         transaction))
-    if set(checksums) != set(UPSTREAM_V0_2_19_FILES):
+    if set(checksums) not in UPSTREAM_V0_2_19_INVENTORIES:
         return False
     files = {name: (statement, checksums[name])
-             for name, statement in upstream_v0_2_19_statements().items()}
+             for name, statement in upstream_v0_2_19_statements().items() if name in checksums}
     try:
         return transaction == upstream_v0_2_19_transaction(files)
     except (ValueError, TypeError):
@@ -368,11 +414,13 @@ def validate_upstream_v0_2_19_transaction(transaction):
 
 def reviewed_upstream_v0_2_19_upgrade(before, target, folder):
     pending = set(target) - set(before)
-    if (pending != set(UPSTREAM_V0_2_19_FILES) or
+    if (pending not in UPSTREAM_V0_2_19_INVENTORIES or
             {name: checksum for name, checksum in target.items() if name not in pending} != before):
         raise ValueError('migration inventory differs outside upstream v0.2.19 migrations')
     folder, files = Path(folder), {}
     for name in UPSTREAM_V0_2_19_FILES:
+        if name not in pending:
+            continue
         source = folder / name
         if not source.is_file():
             # Older workers may not stage these newly reviewed assets yet. Reuse
@@ -391,7 +439,7 @@ def reviewed_upstream_v0_2_19_upgrade(before, target, folder):
             raise ValueError('upstream v0.2.19 migration checksum differs')
         files[name] = (sql, checksum)
     transaction = upstream_v0_2_19_transaction(files)
-    return {'filename': UPSTREAM_V0_2_19_UPGRADE, 'files': list(UPSTREAM_V0_2_19_FILES),
+    return {'filename': UPSTREAM_V0_2_19_UPGRADE, 'files': list(files),
             'transaction': transaction, 'expected_migrations': target}
 
 
@@ -425,7 +473,7 @@ def reviewed_group_availability_upgrade(before, target, folder):
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
-    if set(target) - set(before) == set(UPSTREAM_V0_2_19_FILES):
+    if set(target) - set(before) in UPSTREAM_V0_2_19_INVENTORIES:
         return reviewed_upstream_v0_2_19_upgrade(before, target, folder)
     if (set(target) - set(before)) & set(TEMPLATE_FILES):
         return reviewed_template_upgrade(before, target, folder)
