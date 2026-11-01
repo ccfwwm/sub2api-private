@@ -1082,7 +1082,7 @@ export default {
       },
       imagePricing: {
         title: 'Image Generation Pricing',
-        description: 'Configure image generation access and base image prices. Leave empty to use default prices.',
+        description: 'Configure group-wide image prices. Exact group model rules or channel per-request/image prices take precedence; empty fields use default image prices.',
         allowImageGeneration: 'Allow image generation for this group',
         allowBatchImageGeneration: 'Allow batch image generation for this group',
         perImageBilling: 'Bill per generated image',

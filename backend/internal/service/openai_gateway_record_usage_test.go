@@ -2438,21 +2438,22 @@ func TestOpenAIGatewayServiceRecordUsage_GrokVideoUsesDefaultRateCard(t *testing
 	require.Equal(t, VideoBillingDefaultDurationSeconds, *usageRepo.lastLog.VideoDurationSeconds)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_GroupImagePriceOverridesChannelImagePrice(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_ChannelImagePriceOverridesGroupImageTierPrice(t *testing.T) {
 	groupID := int64(127)
-	channelPrice := 0.201
-	groupImagePrice2K := 0.021
+	model := "gpt-image-2.5-sunburst-4k"
+	channelPrice := 0.7
+	groupImagePrice4K := 0.04
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
-	svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, groupID, "grok-imagine-image-quality", channelPrice)
+	svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, groupID, model, channelPrice)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
-			RequestID:    "resp_grok_image_group_price",
-			Model:        "grok-imagine-image-quality",
-			BillingModel: "grok-imagine-image-quality",
+			RequestID:    "resp_openai_image_channel_price",
+			Model:        model,
+			BillingModel: model,
 			ImageCount:   1,
-			ImageSize:    ImageBillingSize2K,
+			ImageSize:    ImageBillingSize4K,
 			Duration:     time.Second,
 		},
 		APIKey: &APIKey{
@@ -2460,11 +2461,11 @@ func TestOpenAIGatewayServiceRecordUsage_GroupImagePriceOverridesChannelImagePri
 			GroupID: i64p(groupID),
 			Group: &Group{
 				ID:                   groupID,
-				Platform:             PlatformGrok,
+				Platform:             PlatformOpenAI,
 				RateMultiplier:       1,
 				ImageRateIndependent: true,
 				ImageRateMultiplier:  1,
-				ImagePrice2K:         &groupImagePrice2K,
+				ImagePrice4K:         &groupImagePrice4K,
 			},
 		},
 		User:    &User{ID: 20127},
@@ -2474,9 +2475,57 @@ func TestOpenAIGatewayServiceRecordUsage_GroupImagePriceOverridesChannelImagePri
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, 1, usageRepo.lastLog.ImageCount)
-	require.Equal(t, ImageBillingSize2K, *usageRepo.lastLog.ImageSize)
-	require.InDelta(t, 0.021, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, 0.021, usageRepo.lastLog.ActualCost, 1e-12)
+	require.Equal(t, ImageBillingSize4K, *usageRepo.lastLog.ImageSize)
+	require.InDelta(t, 0.7, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, 0.7, usageRepo.lastLog.ActualCost, 1e-12)
+	require.NotNil(t, usageRepo.lastLog.BillingMode)
+	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_GroupModelImagePriceOverridesChannelAndGroupTierPrice(t *testing.T) {
+	groupID := int64(127)
+	model := "gpt-image-2.5-sunburst-4k"
+	channelPrice := 0.7
+	groupModelPrice := 0.12
+	groupImagePrice4K := 0.04
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAIImageChannelPricingResolverForTest(t, groupID, model, channelPrice)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:    "resp_openai_image_group_model_price",
+			Model:        model,
+			BillingModel: model,
+			ImageCount:   1,
+			ImageSize:    ImageBillingSize4K,
+			Duration:     time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      10127,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:                   groupID,
+				Platform:             PlatformOpenAI,
+				RateMultiplier:       1,
+				ImageRateIndependent: true,
+				ImageRateMultiplier:  1,
+				ImagePrice4K:         &groupImagePrice4K,
+				ModelPricing: []ChannelModelPricing{{
+					Models:          []string{model},
+					BillingMode:     BillingModePerRequest,
+					PerRequestPrice: &groupModelPrice,
+				}},
+			},
+		},
+		User:    &User{ID: 20127},
+		Account: &Account{ID: 30127, Platform: PlatformOpenAI, Type: AccountTypeOAuth},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 0.12, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, 0.12, usageRepo.lastLog.ActualCost, 1e-12)
 	require.NotNil(t, usageRepo.lastLog.BillingMode)
 	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
 }
@@ -2918,7 +2967,7 @@ func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingUsesSizeTier(
 	require.InDelta(t, 0.80, cost.ActualCost, 1e-12)
 }
 
-func TestGatewayServiceCalculateRecordUsageCost_GroupImagePriceOverridesChannelImagePrice(t *testing.T) {
+func TestGatewayServiceCalculateRecordUsageCost_ChannelImagePriceOverridesGroupImageTierPrice(t *testing.T) {
 	groupID := int64(129)
 	channelPrice := 0.25
 	groupImagePrice2K := 0.021
@@ -2946,8 +2995,8 @@ func TestGatewayServiceCalculateRecordUsageCost_GroupImagePriceOverridesChannelI
 
 	require.NotNil(t, cost)
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)
-	require.InDelta(t, 0.042, cost.TotalCost, 1e-12)
-	require.InDelta(t, 0.042, cost.ActualCost, 1e-12)
+	require.InDelta(t, 0.5, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.5, cost.ActualCost, 1e-12)
 }
 
 func TestRecordUsageKeepsCompactionSemanticFlagOrthogonalToTransport(t *testing.T) {

@@ -1079,7 +1079,7 @@ export default {
       },
       imagePricing: {
         title: '图片生成计费',
-        description: '配置图片生成能力和图片基础单价，留空则使用默认价格',
+        description: '配置分组通用图片价；命中分组模型专属规则或渠道“按次/图片”定价时优先使用对应模型价，留空则使用默认图片价',
         allowImageGeneration: '允许当前分组生图',
         allowBatchImageGeneration: '允许当前分组批量生图',
         perImageBilling: '按张计费',
