@@ -1,16 +1,16 @@
 {
-  "version": "v1.3.21",
+  "version": "v1.3.22",
   "status": "recorded",
-  "acceptance_state": "production-v1.3.21-cut-over-and-verified; historical-real-channel-probe-on-v1.3.19-failed-http-502; no-successful-generation-verified-on-v1.3.21",
-  "previous_production_verified_at": "2026-10-30T17:43:40Z",
-  "verified_at": "2026-10-31T18:01:24Z",
+  "acceptance_state": "pre-release-v1.3.22-source-and-isolated-image-checks-passed; production-v1.3.21-read-only-verified; historical-real-channel-cases-reused; no-v1.3.22-real-generation-test",
+  "previous_production_verified_at": "2026-11-01T19:51:48Z",
+  "verified_at": "2026-11-01T19:51:48Z",
   "new_paid_submissions": 0,
-  "requests_attempted": 1,
+  "requests_attempted": 0,
   "credentials_recorded": false,
-  "environment": "The media verification cases below are historical and mostly ran on production v1.3.19. The low-cost Anthropic Messages request returned HTTP 502 with Upstream request failed and no usage payload; its temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. It is a failed real-channel attempt, not successful generation and not a v1.3.21 channel test. Production was subsequently switched to v1.3.21 using its published fixed application and documentation image digests. The host manager upgrade succeeded after backup and isolated restore/rollback rehearsal. The database contains 309 migrations, exactly matching all 309 filename/checksum entries in the v1.3.21 manifest. All three public entry points return HTTP 200 health and public settings with version 1.3.21; their documentation pages, scripts and public documentation APIs return HTTP 200. The browser-rendered documentation badge is MEDIA API · v1.3.21. No paid generation was submitted during cutover; no successful generation has been verified on v1.3.21.",
+  "environment": "Historical media verification cases below mostly ran on production v1.3.19. The low-cost Anthropic Messages request returned HTTP 502 with Upstream request failed and no usage payload; its temporary API key showed USD 0.0000 of USD 0.05 used and was deleted immediately. This is a failed historical real-channel attempt, not a successful generation and not a v1.3.22 test. Before release, production was read-only checked on 2026-11-01: https://code.aicodeme.xyz/health returned HTTP 200, public settings returned HTTP 200 with version 1.3.21, the application was running image sha256:983add395ca89187b8f8e7c49cdf951b3d6409b5b726810c9feb166ddafe8d16, and the documentation container was running image sha256:04455f8957d1bf2d0f29c8883dd89bd0a9e8c6e075e238fb93315896d96e87a4. PostgreSQL and Redis were running with their prior start times unchanged. Release workflow 41341645498 passed source tests and lint, application image smoke, documentation health, and anonymous-pull checks; formal manifest creation was stopped because this record still named v1.3.21. No v1.3.22 production deployment or paid generation was attempted. Historical completed real-connection cases are reused only as the release baseline; they do not validate the v1.3.22 billing fix.",
   "source_release": "v1.3.19",
   "prior_cases_source_release": "v1.3.19",
-  "reused_for_release": false,
+  "reused_for_release": true,
   "cases": [
     {
       "label": "foxrouter-single-image-standard-connection",
@@ -142,34 +142,17 @@
     "real_channel_tested": false
   },
   "candidate_release": {
-    "version": "v1.3.21",
-    "release_run_id": 41203819601,
-    "source_commit": "49d508b06682fc66e1b00110ff4dafced2d1e029",
-    "application_digest": "sha256:983add395ca89187b8f8e7c49cdf951b3d6409b5b726810c9feb166ddafe8d16",
-    "documentation_digest": "sha256:04455f8957d1bf2d0f29c8883dd89bd0a9e8c6e075e238fb93315896d96e87a4",
+    "version": "v1.3.22",
+    "release_run_id": 41341645498,
+    "source_commit": "6e39bd92c05ce9680acc4c64cf5dd0f0ca7c0221",
+    "application_digest": "sha256:7657610cf8cc03c0caf7e889299113883d0aaf4c726e37c865ca674a11b1def7",
+    "documentation_digest": "sha256:2eb27f8e8b2223fd6948268d7600fec34fc4c11b2209c09e2546ec1fa1f05718",
     "source_tests_and_lint": "passed",
-    "isolated_image_and_restore_rehearsal": "passed",
-    "legacy_manager_archive_compatibility": "passed",
-    "production_deployment_attempts": [
-      {
-        "run_id": 41206331677,
-        "job_id": "03c236757f9c4e7c869ca7b19c5f80d0",
-        "status": "failed_before_backup",
-        "phase": "pulling_fixed_digest",
-        "error": "RuntimeError",
-        "backup_id": null
-      },
-      {
-        "run_id": 41206992378,
-        "job_id": "717278243ba74493a6bff8428fa2130f",
-        "status": "failed_before_backup",
-        "phase": "validating_release",
-        "error": "RuntimeError",
-        "backup_id": null
-      }
-    ],
-    "published": true,
-    "production_cutover": true,
+    "application_image_smoke": "passed",
+    "documentation_health_and_anonymous_pull": "passed",
+    "release_manifest_gate": "failed_before_rehearsal because this record still named v1.3.21",
+    "published": false,
+    "production_cutover": false,
     "real_channel_tested": false
   },
   "production_state_after_attempts": {
