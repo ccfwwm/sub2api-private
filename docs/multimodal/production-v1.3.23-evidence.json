@@ -1,0 +1,68 @@
+{
+  "version": "v1.3.23",
+  "commit": "fba2fc0fe87a85d32762a5b4fe956b67a1df3c5b",
+  "application_digest": "sha256:c693c004ffcb9497c5d6656b357f3e382f929b6a77eb79875837edbfeb1258fe",
+  "documentation_digest": "sha256:7e6508464637ea6a951d3eeaa822de192f5feec7b3d033b4e2a45c1f0c84605d",
+  "protected_containers_unchanged": true,
+  "migration_count": 310,
+  "migration_checksums_match": true,
+  "new_probe_defaults_unchanged": {
+    "channel_monitors": 0,
+    "channel_monitor_request_templates": 0
+  },
+  "web": [
+    {
+      "origin": "http://127.0.0.1:8081",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.23"
+    },
+    {
+      "origin": "https://code.aicodeme.xyz",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.23",
+      "docs": 200,
+      "docs_bundle": 200
+    },
+    {
+      "origin": "https://code.aicodeme.cn",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.23",
+      "docs": 200,
+      "docs_bundle": 200
+    },
+    {
+      "origin": "https://hkcode.aicodeme.xyz",
+      "health": 200,
+      "settings": 200,
+      "version": "1.3.23",
+      "docs": 200,
+      "docs_bundle": 200
+    }
+  ],
+  "frontend_bundles": {
+    "AccountsView": "AccountsView-Br1ddlGU.js",
+    "ChannelMonitorView": "ChannelMonitorView-BH4fJERn.js"
+  },
+  "verified_at": "2026-11-03T14:28:55.577934Z",
+  "production_deployment_run": 41651720707,
+  "automatic_job": "08b1219d51204ff88c9f622e7e11f420",
+  "manager_job": "8b5d8a041df549e4b11762068d135c7f",
+  "backup_id": "19a0d36205034498aac6860343ccf919",
+  "status": "succeeded",
+  "phase": "online_verified",
+  "cutover_mode": "immediate",
+  "new_paid_submissions": 0,
+  "real_channel_tested": false,
+  "credentials_recorded": false,
+  "migration_rehearsal": {
+    "manager_job": "c6465583084a40db842e98438efa058f",
+    "backup_id": "406625c3d3c1425c9a8e7eea04a871da",
+    "migration": "255_channel_monitor_probe_config.sql",
+    "restore_verified": true,
+    "rollback_verified": true,
+    "data_unchanged": true
+  }
+}
