@@ -126,19 +126,19 @@
       </div>
 
       <div v-if="usesProbePart">
-        <label class="input-label">{{ t('admin.channelMonitor.form.primaryModel') }} <span class="text-red-500">*</span></label>
+        <label class="input-label">{{ t('admin.channelMonitor.form.primaryModel') }} <span v-if="form.probe.probe_type !== 'custom'" class="text-red-500">*</span></label>
         <input
           v-model="form.primary_model"
+          :required="form.probe.probe_type !== 'custom'"
           data-testid="monitor-primary-model"
           type="text"
-          required
           class="input font-medium"
           :class="getPlatformTextClass(form.provider)"
           :placeholder="t('admin.channelMonitor.form.primaryModelPlaceholder')"
         />
       </div>
 
-      <div v-if="usesProbePart">
+      <div v-if="usesProbePart && form.probe.probe_type !== 'custom'">
         <label class="input-label">{{ t('admin.channelMonitor.form.extraModels') }}</label>
         <ModelTagInput
           :models="form.extra_models"
@@ -147,6 +147,8 @@
           @update:models="form.extra_models = $event"
         />
       </div>
+
+      <MonitorProbeConfig v-if="usesProbePart && form.provider !== PROVIDER_IMAGEVIDEO" v-model="form.probe" :provider="form.provider" @validity="probeConfigValid = $event" />
 
       <MonitorMediaConfig v-if="form.provider === PROVIDER_IMAGEVIDEO" v-model="form.body_override" :models="[form.primary_model, ...form.extra_models]" @validity="mediaConfigValid = $event" />
 
@@ -197,6 +199,7 @@
             :extra-headers="form.extra_headers"
             :body-override-mode="form.body_override_mode"
             :body-override="form.body_override"
+            :headers-only="form.probe.probe_type === 'custom'"
             @update:extra-headers="form.extra_headers = $event"
             @update:body-override-mode="form.body_override_mode = $event"
             @update:body-override="form.body_override = $event"
@@ -213,7 +216,7 @@
         <button
           type="submit"
           form="channel-monitor-form"
-          :disabled="submitting || (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid)"
+          :disabled="submitting || (usesProbePart && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid) || (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid)"
           class="btn btn-primary"
         >
           {{ submitting
@@ -236,6 +239,8 @@
 </template>
 
 <script setup lang="ts">
+import MonitorProbeConfig from './MonitorProbeConfig.vue'
+import { monitorProbeDefaults, type MonitorProbeSettings } from '@/api/admin/channelMonitor'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -317,6 +322,7 @@ const editing = computed<ChannelMonitor | null>(() => props.monitor)
 
 const submitting = ref(false)
 const mediaConfigValid = ref(true)
+const probeConfigValid = ref(true)
 
 // API key picker
 const showKeyPicker = ref(false)
@@ -328,6 +334,7 @@ interface MonitorForm {
   name: string
   provider: Provider
   api_mode: APIMode
+  probe: MonitorProbeSettings
   check_mode: CheckMode
   account_id: number | null
   endpoint: string
@@ -349,6 +356,7 @@ const form = reactive<MonitorForm>({
   name: '',
   provider: PROVIDER_ANTHROPIC,
   api_mode: API_MODE_CHAT_COMPLETIONS,
+  probe: monitorProbeDefaults(),
   check_mode: CHECK_MODE_PROBE,
   account_id: null,
   endpoint: '',
@@ -420,6 +428,7 @@ const templateSelectValue = computed<string>({
     if (tpl) {
       suppressFormWatchers = true
       form.api_mode = normalizeAPIMode(tpl.api_mode)
+      form.probe = monitorProbeDefaults(tpl)
       form.template_id = id
       form.extra_headers = { ...(tpl.extra_headers || {}) }
       form.body_override_mode = tpl.body_override_mode
@@ -717,6 +726,8 @@ function selectProvider(provider: Provider) {
 // 同时清空 template_id（模板有 provider 归属，跨平台不通用）。
 watch(() => form.provider, () => {
   if (suppressFormWatchers) return
+  form.probe = monitorProbeDefaults()
+  probeConfigValid.value = true
   form.api_key = ''
   if (form.provider !== PROVIDER_OPENAI) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
@@ -734,6 +745,7 @@ watch(() => form.api_mode, () => {
 function resetForm() {
   suppressFormWatchers = true
   form.name = ''
+  form.probe = monitorProbeDefaults()
   form.provider = PROVIDER_ANTHROPIC
   form.api_mode = API_MODE_CHAT_COMPLETIONS
   form.check_mode = CHECK_MODE_PROBE
@@ -760,6 +772,7 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.name = m.name
   form.provider = m.provider
   form.api_mode = normalizeAPIMode(m.api_mode)
+  form.probe = monitorProbeDefaults(m)
   form.check_mode = m.check_mode || CHECK_MODE_PROBE
   form.account_id = m.account_id ?? null
   form.endpoint = m.endpoint
@@ -825,6 +838,7 @@ function pickMyKey(k: ApiKey) {
 
 function buildPayload(): CreateParams {
   return {
+    ...(usesProbePart.value && form.provider !== PROVIDER_IMAGEVIDEO ? form.probe : monitorProbeDefaults()),
     name: form.name.trim(),
     provider: form.provider,
     api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
@@ -832,8 +846,8 @@ function buildPayload(): CreateParams {
     account_id: usesQuotaMode.value ? form.account_id : null,
     endpoint: usesProbePart.value ? form.endpoint.trim() : '',
     api_key: usesProbePart.value ? form.api_key.trim() : '',
-    primary_model: usesProbePart.value ? form.primary_model.trim() : 'quota',
-    extra_models: usesProbePart.value ? form.extra_models : [],
+    primary_model: usesProbePart.value ? (form.primary_model.trim() || (form.probe.probe_type === 'custom' ? 'custom' : '')) : 'quota',
+    extra_models: usesProbePart.value && form.probe.probe_type !== 'custom' ? form.extra_models : [],
     group_name: form.group_name.trim(),
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,
@@ -846,7 +860,7 @@ function buildPayload(): CreateParams {
 }
 
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || (usesProbePart.value && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid.value)) return
   if (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.nameRequired'))
@@ -856,7 +870,7 @@ async function handleSubmit() {
     appStore.showError(t('admin.channelMonitor.linkedAccountRequired'))
     return
   }
-  if (usesProbePart.value && !form.primary_model.trim()) {
+  if (usesProbePart.value && form.probe.probe_type !== 'custom' && !form.primary_model.trim()) {
     appStore.showError(t('admin.channelMonitor.primaryModelRequired'))
     return
   }

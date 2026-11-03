@@ -9,16 +9,23 @@ import (
 // 作用：把一组可复用的 headers + 可选 body 覆盖配置抽出来管理，
 // 被监控「应用」时以快照方式拷贝到监控本身的同名字段。
 type ChannelMonitorRequestTemplate struct {
-	ID               int64
-	Name             string
-	Provider         string
-	APIMode          string
-	Description      string
-	ExtraHeaders     map[string]string
-	BodyOverrideMode string
-	BodyOverride     map[string]any
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                            int64
+	Name                          string
+	Provider                      string
+	APIMode                       string
+	Description                   string
+	ExtraHeaders                  map[string]string
+	BodyOverrideMode              string
+	BodyOverride                  map[string]any
+	ProbeType                     string
+	ImageProbeScheduleEnabled     bool
+	CustomMethod                  string
+	CustomPath                    string
+	CustomBody                    map[string]any
+	CustomResponseJSONPath        string
+	CustomResponseRequireNonEmpty bool
+	CreatedAt                     time.Time
+	UpdatedAt                     time.Time
 }
 
 // ChannelMonitorRequestTemplateListParams 列表过滤。
@@ -29,24 +36,38 @@ type ChannelMonitorRequestTemplateListParams struct {
 
 // ChannelMonitorRequestTemplateCreateParams 创建参数。
 type ChannelMonitorRequestTemplateCreateParams struct {
-	Name             string
-	Provider         string
-	APIMode          string
-	Description      string
-	ExtraHeaders     map[string]string
-	BodyOverrideMode string
-	BodyOverride     map[string]any
+	Name                          string
+	Provider                      string
+	APIMode                       string
+	Description                   string
+	ExtraHeaders                  map[string]string
+	BodyOverrideMode              string
+	BodyOverride                  map[string]any
+	ProbeType                     string
+	ImageProbeScheduleEnabled     bool
+	CustomMethod                  string
+	CustomPath                    string
+	CustomBody                    map[string]any
+	CustomResponseJSONPath        string
+	CustomResponseRequireNonEmpty *bool
 }
 
 // ChannelMonitorRequestTemplateUpdateParams 更新参数（指针字段 = 不修改）。
 // 注意 Provider 不可修改：改 provider 会让已关联监控的 body 黑名单语义错乱。
 type ChannelMonitorRequestTemplateUpdateParams struct {
-	Name             *string
-	APIMode          *string
-	Description      *string
-	ExtraHeaders     *map[string]string
-	BodyOverrideMode *string
-	BodyOverride     *map[string]any
+	Name                          *string
+	APIMode                       *string
+	Description                   *string
+	ExtraHeaders                  *map[string]string
+	BodyOverrideMode              *string
+	BodyOverride                  *map[string]any
+	ProbeType                     *string
+	ImageProbeScheduleEnabled     *bool
+	CustomMethod                  *string
+	CustomPath                    *string
+	CustomBody                    *map[string]any
+	CustomResponseJSONPath        *string
+	CustomResponseRequireNonEmpty *bool
 }
 
 // 模板相关错误（命名与现有 ErrChannelMonitor* 风格保持一致）。

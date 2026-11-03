@@ -56,6 +56,13 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Default("chat_completions").
 			MaxLen(32).
 			Comment("OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions"),
+		field.String("probe_type").Default("text").MaxLen(16),
+		field.Bool("image_probe_schedule_enabled").Default(false),
+		field.String("custom_method").Default("POST").MaxLen(10),
+		field.String("custom_path").Default("").MaxLen(500),
+		field.JSON("custom_body", map[string]any{}).Optional(),
+		field.String("custom_response_json_path").Default("").MaxLen(300),
+		field.Bool("custom_response_require_non_empty").Default(true),
 		// endpoint: 探活模式必填（service 层校验）；quota 模式存空串
 		// （列保持 NOT NULL，去掉 NotEmpty 校验器即可）。
 		field.String("endpoint").

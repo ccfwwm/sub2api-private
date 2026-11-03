@@ -57,7 +57,7 @@ class AutomaticDeployTests(unittest.TestCase):
   root=Path(__file__).resolve().parents[2]
   upstream=('242_group_i18n.sql','243_gemini_cached_contents.sql',
    '244_gemini_cached_contents_channel_usage.sql','245_gemini_cached_contents_mutation_lease.sql',
-   '246_enable_gemini_image_generation_groups.sql')
+   '246_enable_gemini_image_generation_groups.sql','255_channel_monitor_probe_config.sql')
   release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
   finalize=(root/'.github/workflows/finalize-private-release.yml').read_text(encoding='utf-8')
   release_inventory=release[release.index('sha256sum deployment.json'):release.index('git rev-parse HEAD > management-source.txt')]
@@ -68,6 +68,7 @@ class AutomaticDeployTests(unittest.TestCase):
     self.assertIn(name,finalize_inventory)
     self.assertIn(name,release[release.index('      - uses: actions/upload-artifact'):])
   self.assertIn('242_group_i18n.sql',finalize[finalize.index('gh release create'):])
+  self.assertIn('255_channel_monitor_probe_config.sql',finalize[finalize.index('gh release create'):])
  def test_release_assets_downloads_docs_receipt_before_checksum_validation(self):
   version='v1.2.7'; commit='a'*40; docs_name='docs/multimodal/CHANNEL_VERIFICATION_CURRENT.json'
   verification=json.dumps({'version':version,'status':'recorded'}).encode()

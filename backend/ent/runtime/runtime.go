@@ -647,16 +647,48 @@ func init() {
 	channelmonitor.DefaultAPIMode = channelmonitorDescAPIMode.Default.(string)
 	// channelmonitor.APIModeValidator is a validator for the "api_mode" field. It is called by the builders before save.
 	channelmonitor.APIModeValidator = channelmonitorDescAPIMode.Validators[0].(func(string) error)
+	// channelmonitorDescProbeType is the schema descriptor for probe_type field.
+	channelmonitorDescProbeType := channelmonitorFields[5].Descriptor()
+	// channelmonitor.DefaultProbeType holds the default value on creation for the probe_type field.
+	channelmonitor.DefaultProbeType = channelmonitorDescProbeType.Default.(string)
+	// channelmonitor.ProbeTypeValidator is a validator for the "probe_type" field. It is called by the builders before save.
+	channelmonitor.ProbeTypeValidator = channelmonitorDescProbeType.Validators[0].(func(string) error)
+	// channelmonitorDescImageProbeScheduleEnabled is the schema descriptor for image_probe_schedule_enabled field.
+	channelmonitorDescImageProbeScheduleEnabled := channelmonitorFields[6].Descriptor()
+	// channelmonitor.DefaultImageProbeScheduleEnabled holds the default value on creation for the image_probe_schedule_enabled field.
+	channelmonitor.DefaultImageProbeScheduleEnabled = channelmonitorDescImageProbeScheduleEnabled.Default.(bool)
+	// channelmonitorDescCustomMethod is the schema descriptor for custom_method field.
+	channelmonitorDescCustomMethod := channelmonitorFields[7].Descriptor()
+	// channelmonitor.DefaultCustomMethod holds the default value on creation for the custom_method field.
+	channelmonitor.DefaultCustomMethod = channelmonitorDescCustomMethod.Default.(string)
+	// channelmonitor.CustomMethodValidator is a validator for the "custom_method" field. It is called by the builders before save.
+	channelmonitor.CustomMethodValidator = channelmonitorDescCustomMethod.Validators[0].(func(string) error)
+	// channelmonitorDescCustomPath is the schema descriptor for custom_path field.
+	channelmonitorDescCustomPath := channelmonitorFields[8].Descriptor()
+	// channelmonitor.DefaultCustomPath holds the default value on creation for the custom_path field.
+	channelmonitor.DefaultCustomPath = channelmonitorDescCustomPath.Default.(string)
+	// channelmonitor.CustomPathValidator is a validator for the "custom_path" field. It is called by the builders before save.
+	channelmonitor.CustomPathValidator = channelmonitorDescCustomPath.Validators[0].(func(string) error)
+	// channelmonitorDescCustomResponseJSONPath is the schema descriptor for custom_response_json_path field.
+	channelmonitorDescCustomResponseJSONPath := channelmonitorFields[10].Descriptor()
+	// channelmonitor.DefaultCustomResponseJSONPath holds the default value on creation for the custom_response_json_path field.
+	channelmonitor.DefaultCustomResponseJSONPath = channelmonitorDescCustomResponseJSONPath.Default.(string)
+	// channelmonitor.CustomResponseJSONPathValidator is a validator for the "custom_response_json_path" field. It is called by the builders before save.
+	channelmonitor.CustomResponseJSONPathValidator = channelmonitorDescCustomResponseJSONPath.Validators[0].(func(string) error)
+	// channelmonitorDescCustomResponseRequireNonEmpty is the schema descriptor for custom_response_require_non_empty field.
+	channelmonitorDescCustomResponseRequireNonEmpty := channelmonitorFields[11].Descriptor()
+	// channelmonitor.DefaultCustomResponseRequireNonEmpty holds the default value on creation for the custom_response_require_non_empty field.
+	channelmonitor.DefaultCustomResponseRequireNonEmpty = channelmonitorDescCustomResponseRequireNonEmpty.Default.(bool)
 	// channelmonitorDescEndpoint is the schema descriptor for endpoint field.
-	channelmonitorDescEndpoint := channelmonitorFields[5].Descriptor()
+	channelmonitorDescEndpoint := channelmonitorFields[12].Descriptor()
 	// channelmonitor.EndpointValidator is a validator for the "endpoint" field. It is called by the builders before save.
 	channelmonitor.EndpointValidator = channelmonitorDescEndpoint.Validators[0].(func(string) error)
 	// channelmonitorDescAPIKeyEncrypted is the schema descriptor for api_key_encrypted field.
-	channelmonitorDescAPIKeyEncrypted := channelmonitorFields[6].Descriptor()
+	channelmonitorDescAPIKeyEncrypted := channelmonitorFields[13].Descriptor()
 	// channelmonitor.APIKeyEncryptedValidator is a validator for the "api_key_encrypted" field. It is called by the builders before save.
 	channelmonitor.APIKeyEncryptedValidator = channelmonitorDescAPIKeyEncrypted.Validators[0].(func(string) error)
 	// channelmonitorDescPrimaryModel is the schema descriptor for primary_model field.
-	channelmonitorDescPrimaryModel := channelmonitorFields[7].Descriptor()
+	channelmonitorDescPrimaryModel := channelmonitorFields[14].Descriptor()
 	// channelmonitor.PrimaryModelValidator is a validator for the "primary_model" field. It is called by the builders before save.
 	channelmonitor.PrimaryModelValidator = func() func(string) error {
 		validators := channelmonitorDescPrimaryModel.Validators
@@ -674,35 +706,35 @@ func init() {
 		}
 	}()
 	// channelmonitorDescExtraModels is the schema descriptor for extra_models field.
-	channelmonitorDescExtraModels := channelmonitorFields[8].Descriptor()
+	channelmonitorDescExtraModels := channelmonitorFields[15].Descriptor()
 	// channelmonitor.DefaultExtraModels holds the default value on creation for the extra_models field.
 	channelmonitor.DefaultExtraModels = channelmonitorDescExtraModels.Default.([]string)
 	// channelmonitorDescGroupName is the schema descriptor for group_name field.
-	channelmonitorDescGroupName := channelmonitorFields[9].Descriptor()
+	channelmonitorDescGroupName := channelmonitorFields[16].Descriptor()
 	// channelmonitor.DefaultGroupName holds the default value on creation for the group_name field.
 	channelmonitor.DefaultGroupName = channelmonitorDescGroupName.Default.(string)
 	// channelmonitor.GroupNameValidator is a validator for the "group_name" field. It is called by the builders before save.
 	channelmonitor.GroupNameValidator = channelmonitorDescGroupName.Validators[0].(func(string) error)
 	// channelmonitorDescEnabled is the schema descriptor for enabled field.
-	channelmonitorDescEnabled := channelmonitorFields[10].Descriptor()
+	channelmonitorDescEnabled := channelmonitorFields[17].Descriptor()
 	// channelmonitor.DefaultEnabled holds the default value on creation for the enabled field.
 	channelmonitor.DefaultEnabled = channelmonitorDescEnabled.Default.(bool)
 	// channelmonitorDescIntervalSeconds is the schema descriptor for interval_seconds field.
-	channelmonitorDescIntervalSeconds := channelmonitorFields[11].Descriptor()
+	channelmonitorDescIntervalSeconds := channelmonitorFields[18].Descriptor()
 	// channelmonitor.IntervalSecondsValidator is a validator for the "interval_seconds" field. It is called by the builders before save.
 	channelmonitor.IntervalSecondsValidator = channelmonitorDescIntervalSeconds.Validators[0].(func(int) error)
 	// channelmonitorDescJitterSeconds is the schema descriptor for jitter_seconds field.
-	channelmonitorDescJitterSeconds := channelmonitorFields[12].Descriptor()
+	channelmonitorDescJitterSeconds := channelmonitorFields[19].Descriptor()
 	// channelmonitor.DefaultJitterSeconds holds the default value on creation for the jitter_seconds field.
 	channelmonitor.DefaultJitterSeconds = channelmonitorDescJitterSeconds.Default.(int)
 	// channelmonitor.JitterSecondsValidator is a validator for the "jitter_seconds" field. It is called by the builders before save.
 	channelmonitor.JitterSecondsValidator = channelmonitorDescJitterSeconds.Validators[0].(func(int) error)
 	// channelmonitorDescExtraHeaders is the schema descriptor for extra_headers field.
-	channelmonitorDescExtraHeaders := channelmonitorFields[16].Descriptor()
+	channelmonitorDescExtraHeaders := channelmonitorFields[23].Descriptor()
 	// channelmonitor.DefaultExtraHeaders holds the default value on creation for the extra_headers field.
 	channelmonitor.DefaultExtraHeaders = channelmonitorDescExtraHeaders.Default.(map[string]string)
 	// channelmonitorDescBodyOverrideMode is the schema descriptor for body_override_mode field.
-	channelmonitorDescBodyOverrideMode := channelmonitorFields[17].Descriptor()
+	channelmonitorDescBodyOverrideMode := channelmonitorFields[24].Descriptor()
 	// channelmonitor.DefaultBodyOverrideMode holds the default value on creation for the body_override_mode field.
 	channelmonitor.DefaultBodyOverrideMode = channelmonitorDescBodyOverrideMode.Default.(string)
 	// channelmonitor.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
@@ -842,18 +874,50 @@ func init() {
 	channelmonitorrequesttemplate.DefaultAPIMode = channelmonitorrequesttemplateDescAPIMode.Default.(string)
 	// channelmonitorrequesttemplate.APIModeValidator is a validator for the "api_mode" field. It is called by the builders before save.
 	channelmonitorrequesttemplate.APIModeValidator = channelmonitorrequesttemplateDescAPIMode.Validators[0].(func(string) error)
+	// channelmonitorrequesttemplateDescProbeType is the schema descriptor for probe_type field.
+	channelmonitorrequesttemplateDescProbeType := channelmonitorrequesttemplateFields[3].Descriptor()
+	// channelmonitorrequesttemplate.DefaultProbeType holds the default value on creation for the probe_type field.
+	channelmonitorrequesttemplate.DefaultProbeType = channelmonitorrequesttemplateDescProbeType.Default.(string)
+	// channelmonitorrequesttemplate.ProbeTypeValidator is a validator for the "probe_type" field. It is called by the builders before save.
+	channelmonitorrequesttemplate.ProbeTypeValidator = channelmonitorrequesttemplateDescProbeType.Validators[0].(func(string) error)
+	// channelmonitorrequesttemplateDescImageProbeScheduleEnabled is the schema descriptor for image_probe_schedule_enabled field.
+	channelmonitorrequesttemplateDescImageProbeScheduleEnabled := channelmonitorrequesttemplateFields[4].Descriptor()
+	// channelmonitorrequesttemplate.DefaultImageProbeScheduleEnabled holds the default value on creation for the image_probe_schedule_enabled field.
+	channelmonitorrequesttemplate.DefaultImageProbeScheduleEnabled = channelmonitorrequesttemplateDescImageProbeScheduleEnabled.Default.(bool)
+	// channelmonitorrequesttemplateDescCustomMethod is the schema descriptor for custom_method field.
+	channelmonitorrequesttemplateDescCustomMethod := channelmonitorrequesttemplateFields[5].Descriptor()
+	// channelmonitorrequesttemplate.DefaultCustomMethod holds the default value on creation for the custom_method field.
+	channelmonitorrequesttemplate.DefaultCustomMethod = channelmonitorrequesttemplateDescCustomMethod.Default.(string)
+	// channelmonitorrequesttemplate.CustomMethodValidator is a validator for the "custom_method" field. It is called by the builders before save.
+	channelmonitorrequesttemplate.CustomMethodValidator = channelmonitorrequesttemplateDescCustomMethod.Validators[0].(func(string) error)
+	// channelmonitorrequesttemplateDescCustomPath is the schema descriptor for custom_path field.
+	channelmonitorrequesttemplateDescCustomPath := channelmonitorrequesttemplateFields[6].Descriptor()
+	// channelmonitorrequesttemplate.DefaultCustomPath holds the default value on creation for the custom_path field.
+	channelmonitorrequesttemplate.DefaultCustomPath = channelmonitorrequesttemplateDescCustomPath.Default.(string)
+	// channelmonitorrequesttemplate.CustomPathValidator is a validator for the "custom_path" field. It is called by the builders before save.
+	channelmonitorrequesttemplate.CustomPathValidator = channelmonitorrequesttemplateDescCustomPath.Validators[0].(func(string) error)
+	// channelmonitorrequesttemplateDescCustomResponseJSONPath is the schema descriptor for custom_response_json_path field.
+	channelmonitorrequesttemplateDescCustomResponseJSONPath := channelmonitorrequesttemplateFields[8].Descriptor()
+	// channelmonitorrequesttemplate.DefaultCustomResponseJSONPath holds the default value on creation for the custom_response_json_path field.
+	channelmonitorrequesttemplate.DefaultCustomResponseJSONPath = channelmonitorrequesttemplateDescCustomResponseJSONPath.Default.(string)
+	// channelmonitorrequesttemplate.CustomResponseJSONPathValidator is a validator for the "custom_response_json_path" field. It is called by the builders before save.
+	channelmonitorrequesttemplate.CustomResponseJSONPathValidator = channelmonitorrequesttemplateDescCustomResponseJSONPath.Validators[0].(func(string) error)
+	// channelmonitorrequesttemplateDescCustomResponseRequireNonEmpty is the schema descriptor for custom_response_require_non_empty field.
+	channelmonitorrequesttemplateDescCustomResponseRequireNonEmpty := channelmonitorrequesttemplateFields[9].Descriptor()
+	// channelmonitorrequesttemplate.DefaultCustomResponseRequireNonEmpty holds the default value on creation for the custom_response_require_non_empty field.
+	channelmonitorrequesttemplate.DefaultCustomResponseRequireNonEmpty = channelmonitorrequesttemplateDescCustomResponseRequireNonEmpty.Default.(bool)
 	// channelmonitorrequesttemplateDescDescription is the schema descriptor for description field.
-	channelmonitorrequesttemplateDescDescription := channelmonitorrequesttemplateFields[3].Descriptor()
+	channelmonitorrequesttemplateDescDescription := channelmonitorrequesttemplateFields[10].Descriptor()
 	// channelmonitorrequesttemplate.DefaultDescription holds the default value on creation for the description field.
 	channelmonitorrequesttemplate.DefaultDescription = channelmonitorrequesttemplateDescDescription.Default.(string)
 	// channelmonitorrequesttemplate.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	channelmonitorrequesttemplate.DescriptionValidator = channelmonitorrequesttemplateDescDescription.Validators[0].(func(string) error)
 	// channelmonitorrequesttemplateDescExtraHeaders is the schema descriptor for extra_headers field.
-	channelmonitorrequesttemplateDescExtraHeaders := channelmonitorrequesttemplateFields[4].Descriptor()
+	channelmonitorrequesttemplateDescExtraHeaders := channelmonitorrequesttemplateFields[11].Descriptor()
 	// channelmonitorrequesttemplate.DefaultExtraHeaders holds the default value on creation for the extra_headers field.
 	channelmonitorrequesttemplate.DefaultExtraHeaders = channelmonitorrequesttemplateDescExtraHeaders.Default.(map[string]string)
 	// channelmonitorrequesttemplateDescBodyOverrideMode is the schema descriptor for body_override_mode field.
-	channelmonitorrequesttemplateDescBodyOverrideMode := channelmonitorrequesttemplateFields[5].Descriptor()
+	channelmonitorrequesttemplateDescBodyOverrideMode := channelmonitorrequesttemplateFields[12].Descriptor()
 	// channelmonitorrequesttemplate.DefaultBodyOverrideMode holds the default value on creation for the body_override_mode field.
 	channelmonitorrequesttemplate.DefaultBodyOverrideMode = channelmonitorrequesttemplateDescBodyOverrideMode.Default.(string)
 	// channelmonitorrequesttemplate.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.

@@ -1,0 +1,21 @@
+export default {
+  "type": "Probe type",
+  "text": "Text",
+  "image": "Image generation",
+  "custom": "Custom endpoint",
+  "manualHint": "Manual runs by default. Enabling periodic probes accepts possible upstream charges.",
+  "schedule": "Enable periodic probes (may incur charges)",
+  "method": "Request method",
+  "path": "Relative endpoint path",
+  "pathHint": "Appended under the current HTTPS endpoint. Other origins, query strings and directory traversal are not allowed.",
+  "body": "Custom JSON body (optional)",
+  "responsePath": "Response JSON path (optional)",
+  "responseHint": "For example data.0.text. Leave blank to use the entire response body. Only HTTP 2xx responses are accepted.",
+  "nonEmpty": "Require a non-empty extracted response",
+  "invalidBody": "The body must be a valid JSON object.",
+  "accountRules": "Image request parameter rules",
+  "accountRulesHint": "Applies to OpenAI API key image requests and account tests. Drops run before renames; values stay unchanged. Empty rules preserve existing behavior. Destination collisions reject the request.",
+  "drop": "Drop fields (comma or space separated)",
+  "rename": "Rename parameters (one source=target per line)",
+  "invalidRules": "Invalid field name or duplicate mapping. Use one source=target per line."
+}

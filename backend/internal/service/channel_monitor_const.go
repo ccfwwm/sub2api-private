@@ -10,7 +10,9 @@ import (
 // 这些是 MVP 阶段的硬编码值，按需可以提到 config 中。
 const (
 	// monitorRequestTimeout 单次模型请求总超时（含 Body 读取）。
-	monitorRequestTimeout = 45 * time.Second
+	monitorRequestTimeout        = 45 * time.Second
+	monitorImageRequestTimeout   = 180 * time.Second
+	monitorImageResponseMaxBytes = 32 << 20
 	// monitorPingTimeout HEAD 请求 endpoint origin 的超时。
 	monitorPingTimeout = 8 * time.Second
 	// monitorDegradedThreshold 主请求成功但耗时超过该阈值视为 degraded。
@@ -153,7 +155,9 @@ var (
 	ErrChannelMonitorNotFound = infraerrors.NotFound(
 		"CHANNEL_MONITOR_NOT_FOUND", "channel monitor not found",
 	)
-	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
+	ErrChannelMonitorInvalidProbeType     = infraerrors.BadRequest("CHANNEL_MONITOR_INVALID_PROBE_TYPE", "probe_type must be text/custom, or image for OpenAI/Gemini/Grok")
+	ErrChannelMonitorInvalidCustomRequest = infraerrors.BadRequest("CHANNEL_MONITOR_INVALID_CUSTOM_REQUEST", "custom probe requires an allowed method and a relative URL path without query, fragment or traversal")
+	ErrChannelMonitorInvalidProvider      = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/antigravity/kimi/zhipu/deepseek/minimax",
 	)
 	ErrChannelMonitorInvalidCheckMode = infraerrors.BadRequest(

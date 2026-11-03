@@ -14601,46 +14601,53 @@ func (m *BatchImageJobMutation) ResetEdge(name string) error {
 // ChannelMonitorMutation represents an operation that mutates the ChannelMonitor nodes in the graph.
 type ChannelMonitorMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int64
-	created_at              *time.Time
-	updated_at              *time.Time
-	name                    *string
-	provider                *channelmonitor.Provider
-	check_mode              *string
-	account_id              *int64
-	addaccount_id           *int64
-	api_mode                *string
-	endpoint                *string
-	api_key_encrypted       *string
-	primary_model           *string
-	extra_models            *[]string
-	appendextra_models      []string
-	group_name              *string
-	enabled                 *bool
-	interval_seconds        *int
-	addinterval_seconds     *int
-	jitter_seconds          *int
-	addjitter_seconds       *int
-	last_checked_at         *time.Time
-	created_by              *int64
-	addcreated_by           *int64
-	extra_headers           *map[string]string
-	body_override_mode      *string
-	body_override           *map[string]interface{}
-	clearedFields           map[string]struct{}
-	history                 map[int64]struct{}
-	removedhistory          map[int64]struct{}
-	clearedhistory          bool
-	daily_rollups           map[int64]struct{}
-	removeddaily_rollups    map[int64]struct{}
-	cleareddaily_rollups    bool
-	request_template        *int64
-	clearedrequest_template bool
-	done                    bool
-	oldValue                func(context.Context) (*ChannelMonitor, error)
-	predicates              []predicate.ChannelMonitor
+	op                                Op
+	typ                               string
+	id                                *int64
+	created_at                        *time.Time
+	updated_at                        *time.Time
+	name                              *string
+	provider                          *channelmonitor.Provider
+	check_mode                        *string
+	account_id                        *int64
+	addaccount_id                     *int64
+	api_mode                          *string
+	probe_type                        *string
+	image_probe_schedule_enabled      *bool
+	custom_method                     *string
+	custom_path                       *string
+	custom_body                       *map[string]interface{}
+	custom_response_json_path         *string
+	custom_response_require_non_empty *bool
+	endpoint                          *string
+	api_key_encrypted                 *string
+	primary_model                     *string
+	extra_models                      *[]string
+	appendextra_models                []string
+	group_name                        *string
+	enabled                           *bool
+	interval_seconds                  *int
+	addinterval_seconds               *int
+	jitter_seconds                    *int
+	addjitter_seconds                 *int
+	last_checked_at                   *time.Time
+	created_by                        *int64
+	addcreated_by                     *int64
+	extra_headers                     *map[string]string
+	body_override_mode                *string
+	body_override                     *map[string]interface{}
+	clearedFields                     map[string]struct{}
+	history                           map[int64]struct{}
+	removedhistory                    map[int64]struct{}
+	clearedhistory                    bool
+	daily_rollups                     map[int64]struct{}
+	removeddaily_rollups              map[int64]struct{}
+	cleareddaily_rollups              bool
+	request_template                  *int64
+	clearedrequest_template           bool
+	done                              bool
+	oldValue                          func(context.Context) (*ChannelMonitor, error)
+	predicates                        []predicate.ChannelMonitor
 }
 
 var _ ent.Mutation = (*ChannelMonitorMutation)(nil)
@@ -15025,6 +15032,271 @@ func (m *ChannelMonitorMutation) OldAPIMode(ctx context.Context) (v string, err 
 // ResetAPIMode resets all changes to the "api_mode" field.
 func (m *ChannelMonitorMutation) ResetAPIMode() {
 	m.api_mode = nil
+}
+
+// SetProbeType sets the "probe_type" field.
+func (m *ChannelMonitorMutation) SetProbeType(s string) {
+	m.probe_type = &s
+}
+
+// ProbeType returns the value of the "probe_type" field in the mutation.
+func (m *ChannelMonitorMutation) ProbeType() (r string, exists bool) {
+	v := m.probe_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProbeType returns the old "probe_type" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldProbeType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProbeType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProbeType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProbeType: %w", err)
+	}
+	return oldValue.ProbeType, nil
+}
+
+// ResetProbeType resets all changes to the "probe_type" field.
+func (m *ChannelMonitorMutation) ResetProbeType() {
+	m.probe_type = nil
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (m *ChannelMonitorMutation) SetImageProbeScheduleEnabled(b bool) {
+	m.image_probe_schedule_enabled = &b
+}
+
+// ImageProbeScheduleEnabled returns the value of the "image_probe_schedule_enabled" field in the mutation.
+func (m *ChannelMonitorMutation) ImageProbeScheduleEnabled() (r bool, exists bool) {
+	v := m.image_probe_schedule_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImageProbeScheduleEnabled returns the old "image_probe_schedule_enabled" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldImageProbeScheduleEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImageProbeScheduleEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImageProbeScheduleEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImageProbeScheduleEnabled: %w", err)
+	}
+	return oldValue.ImageProbeScheduleEnabled, nil
+}
+
+// ResetImageProbeScheduleEnabled resets all changes to the "image_probe_schedule_enabled" field.
+func (m *ChannelMonitorMutation) ResetImageProbeScheduleEnabled() {
+	m.image_probe_schedule_enabled = nil
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (m *ChannelMonitorMutation) SetCustomMethod(s string) {
+	m.custom_method = &s
+}
+
+// CustomMethod returns the value of the "custom_method" field in the mutation.
+func (m *ChannelMonitorMutation) CustomMethod() (r string, exists bool) {
+	v := m.custom_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomMethod returns the old "custom_method" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCustomMethod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomMethod: %w", err)
+	}
+	return oldValue.CustomMethod, nil
+}
+
+// ResetCustomMethod resets all changes to the "custom_method" field.
+func (m *ChannelMonitorMutation) ResetCustomMethod() {
+	m.custom_method = nil
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (m *ChannelMonitorMutation) SetCustomPath(s string) {
+	m.custom_path = &s
+}
+
+// CustomPath returns the value of the "custom_path" field in the mutation.
+func (m *ChannelMonitorMutation) CustomPath() (r string, exists bool) {
+	v := m.custom_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomPath returns the old "custom_path" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCustomPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomPath: %w", err)
+	}
+	return oldValue.CustomPath, nil
+}
+
+// ResetCustomPath resets all changes to the "custom_path" field.
+func (m *ChannelMonitorMutation) ResetCustomPath() {
+	m.custom_path = nil
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (m *ChannelMonitorMutation) SetCustomBody(value map[string]interface{}) {
+	m.custom_body = &value
+}
+
+// CustomBody returns the value of the "custom_body" field in the mutation.
+func (m *ChannelMonitorMutation) CustomBody() (r map[string]interface{}, exists bool) {
+	v := m.custom_body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomBody returns the old "custom_body" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCustomBody(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomBody: %w", err)
+	}
+	return oldValue.CustomBody, nil
+}
+
+// ClearCustomBody clears the value of the "custom_body" field.
+func (m *ChannelMonitorMutation) ClearCustomBody() {
+	m.custom_body = nil
+	m.clearedFields[channelmonitor.FieldCustomBody] = struct{}{}
+}
+
+// CustomBodyCleared returns if the "custom_body" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) CustomBodyCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldCustomBody]
+	return ok
+}
+
+// ResetCustomBody resets all changes to the "custom_body" field.
+func (m *ChannelMonitorMutation) ResetCustomBody() {
+	m.custom_body = nil
+	delete(m.clearedFields, channelmonitor.FieldCustomBody)
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (m *ChannelMonitorMutation) SetCustomResponseJSONPath(s string) {
+	m.custom_response_json_path = &s
+}
+
+// CustomResponseJSONPath returns the value of the "custom_response_json_path" field in the mutation.
+func (m *ChannelMonitorMutation) CustomResponseJSONPath() (r string, exists bool) {
+	v := m.custom_response_json_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomResponseJSONPath returns the old "custom_response_json_path" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCustomResponseJSONPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomResponseJSONPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomResponseJSONPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomResponseJSONPath: %w", err)
+	}
+	return oldValue.CustomResponseJSONPath, nil
+}
+
+// ResetCustomResponseJSONPath resets all changes to the "custom_response_json_path" field.
+func (m *ChannelMonitorMutation) ResetCustomResponseJSONPath() {
+	m.custom_response_json_path = nil
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (m *ChannelMonitorMutation) SetCustomResponseRequireNonEmpty(b bool) {
+	m.custom_response_require_non_empty = &b
+}
+
+// CustomResponseRequireNonEmpty returns the value of the "custom_response_require_non_empty" field in the mutation.
+func (m *ChannelMonitorMutation) CustomResponseRequireNonEmpty() (r bool, exists bool) {
+	v := m.custom_response_require_non_empty
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomResponseRequireNonEmpty returns the old "custom_response_require_non_empty" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCustomResponseRequireNonEmpty(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomResponseRequireNonEmpty is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomResponseRequireNonEmpty requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomResponseRequireNonEmpty: %w", err)
+	}
+	return oldValue.CustomResponseRequireNonEmpty, nil
+}
+
+// ResetCustomResponseRequireNonEmpty resets all changes to the "custom_response_require_non_empty" field.
+func (m *ChannelMonitorMutation) ResetCustomResponseRequireNonEmpty() {
+	m.custom_response_require_non_empty = nil
 }
 
 // SetEndpoint sets the "endpoint" field.
@@ -15840,7 +16112,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 28)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -15861,6 +16133,27 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.api_mode != nil {
 		fields = append(fields, channelmonitor.FieldAPIMode)
+	}
+	if m.probe_type != nil {
+		fields = append(fields, channelmonitor.FieldProbeType)
+	}
+	if m.image_probe_schedule_enabled != nil {
+		fields = append(fields, channelmonitor.FieldImageProbeScheduleEnabled)
+	}
+	if m.custom_method != nil {
+		fields = append(fields, channelmonitor.FieldCustomMethod)
+	}
+	if m.custom_path != nil {
+		fields = append(fields, channelmonitor.FieldCustomPath)
+	}
+	if m.custom_body != nil {
+		fields = append(fields, channelmonitor.FieldCustomBody)
+	}
+	if m.custom_response_json_path != nil {
+		fields = append(fields, channelmonitor.FieldCustomResponseJSONPath)
+	}
+	if m.custom_response_require_non_empty != nil {
+		fields = append(fields, channelmonitor.FieldCustomResponseRequireNonEmpty)
 	}
 	if m.endpoint != nil {
 		fields = append(fields, channelmonitor.FieldEndpoint)
@@ -15926,6 +16219,20 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.AccountID()
 	case channelmonitor.FieldAPIMode:
 		return m.APIMode()
+	case channelmonitor.FieldProbeType:
+		return m.ProbeType()
+	case channelmonitor.FieldImageProbeScheduleEnabled:
+		return m.ImageProbeScheduleEnabled()
+	case channelmonitor.FieldCustomMethod:
+		return m.CustomMethod()
+	case channelmonitor.FieldCustomPath:
+		return m.CustomPath()
+	case channelmonitor.FieldCustomBody:
+		return m.CustomBody()
+	case channelmonitor.FieldCustomResponseJSONPath:
+		return m.CustomResponseJSONPath()
+	case channelmonitor.FieldCustomResponseRequireNonEmpty:
+		return m.CustomResponseRequireNonEmpty()
 	case channelmonitor.FieldEndpoint:
 		return m.Endpoint()
 	case channelmonitor.FieldAPIKeyEncrypted:
@@ -15977,6 +16284,20 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldAccountID(ctx)
 	case channelmonitor.FieldAPIMode:
 		return m.OldAPIMode(ctx)
+	case channelmonitor.FieldProbeType:
+		return m.OldProbeType(ctx)
+	case channelmonitor.FieldImageProbeScheduleEnabled:
+		return m.OldImageProbeScheduleEnabled(ctx)
+	case channelmonitor.FieldCustomMethod:
+		return m.OldCustomMethod(ctx)
+	case channelmonitor.FieldCustomPath:
+		return m.OldCustomPath(ctx)
+	case channelmonitor.FieldCustomBody:
+		return m.OldCustomBody(ctx)
+	case channelmonitor.FieldCustomResponseJSONPath:
+		return m.OldCustomResponseJSONPath(ctx)
+	case channelmonitor.FieldCustomResponseRequireNonEmpty:
+		return m.OldCustomResponseRequireNonEmpty(ctx)
 	case channelmonitor.FieldEndpoint:
 		return m.OldEndpoint(ctx)
 	case channelmonitor.FieldAPIKeyEncrypted:
@@ -16062,6 +16383,55 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIMode(v)
+		return nil
+	case channelmonitor.FieldProbeType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProbeType(v)
+		return nil
+	case channelmonitor.FieldImageProbeScheduleEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImageProbeScheduleEnabled(v)
+		return nil
+	case channelmonitor.FieldCustomMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomMethod(v)
+		return nil
+	case channelmonitor.FieldCustomPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomPath(v)
+		return nil
+	case channelmonitor.FieldCustomBody:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomBody(v)
+		return nil
+	case channelmonitor.FieldCustomResponseJSONPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomResponseJSONPath(v)
+		return nil
+	case channelmonitor.FieldCustomResponseRequireNonEmpty:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomResponseRequireNonEmpty(v)
 		return nil
 	case channelmonitor.FieldEndpoint:
 		v, ok := value.(string)
@@ -16245,6 +16615,9 @@ func (m *ChannelMonitorMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitor.FieldAccountID) {
 		fields = append(fields, channelmonitor.FieldAccountID)
 	}
+	if m.FieldCleared(channelmonitor.FieldCustomBody) {
+		fields = append(fields, channelmonitor.FieldCustomBody)
+	}
 	if m.FieldCleared(channelmonitor.FieldGroupName) {
 		fields = append(fields, channelmonitor.FieldGroupName)
 	}
@@ -16273,6 +16646,9 @@ func (m *ChannelMonitorMutation) ClearField(name string) error {
 	switch name {
 	case channelmonitor.FieldAccountID:
 		m.ClearAccountID()
+		return nil
+	case channelmonitor.FieldCustomBody:
+		m.ClearCustomBody()
 		return nil
 	case channelmonitor.FieldGroupName:
 		m.ClearGroupName()
@@ -16314,6 +16690,27 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldAPIMode:
 		m.ResetAPIMode()
+		return nil
+	case channelmonitor.FieldProbeType:
+		m.ResetProbeType()
+		return nil
+	case channelmonitor.FieldImageProbeScheduleEnabled:
+		m.ResetImageProbeScheduleEnabled()
+		return nil
+	case channelmonitor.FieldCustomMethod:
+		m.ResetCustomMethod()
+		return nil
+	case channelmonitor.FieldCustomPath:
+		m.ResetCustomPath()
+		return nil
+	case channelmonitor.FieldCustomBody:
+		m.ResetCustomBody()
+		return nil
+	case channelmonitor.FieldCustomResponseJSONPath:
+		m.ResetCustomResponseJSONPath()
+		return nil
+	case channelmonitor.FieldCustomResponseRequireNonEmpty:
+		m.ResetCustomResponseRequireNonEmpty()
 		return nil
 	case channelmonitor.FieldEndpoint:
 		m.ResetEndpoint()
@@ -18815,25 +19212,32 @@ func (m *ChannelMonitorHistoryMutation) ResetEdge(name string) error {
 // ChannelMonitorRequestTemplateMutation represents an operation that mutates the ChannelMonitorRequestTemplate nodes in the graph.
 type ChannelMonitorRequestTemplateMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	name               *string
-	provider           *channelmonitorrequesttemplate.Provider
-	api_mode           *string
-	description        *string
-	extra_headers      *map[string]string
-	body_override_mode *string
-	body_override      *map[string]interface{}
-	clearedFields      map[string]struct{}
-	monitors           map[int64]struct{}
-	removedmonitors    map[int64]struct{}
-	clearedmonitors    bool
-	done               bool
-	oldValue           func(context.Context) (*ChannelMonitorRequestTemplate, error)
-	predicates         []predicate.ChannelMonitorRequestTemplate
+	op                                Op
+	typ                               string
+	id                                *int64
+	created_at                        *time.Time
+	updated_at                        *time.Time
+	name                              *string
+	provider                          *channelmonitorrequesttemplate.Provider
+	api_mode                          *string
+	probe_type                        *string
+	image_probe_schedule_enabled      *bool
+	custom_method                     *string
+	custom_path                       *string
+	custom_body                       *map[string]interface{}
+	custom_response_json_path         *string
+	custom_response_require_non_empty *bool
+	description                       *string
+	extra_headers                     *map[string]string
+	body_override_mode                *string
+	body_override                     *map[string]interface{}
+	clearedFields                     map[string]struct{}
+	monitors                          map[int64]struct{}
+	removedmonitors                   map[int64]struct{}
+	clearedmonitors                   bool
+	done                              bool
+	oldValue                          func(context.Context) (*ChannelMonitorRequestTemplate, error)
+	predicates                        []predicate.ChannelMonitorRequestTemplate
 }
 
 var _ ent.Mutation = (*ChannelMonitorRequestTemplateMutation)(nil)
@@ -19114,6 +19518,271 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetAPIMode() {
 	m.api_mode = nil
 }
 
+// SetProbeType sets the "probe_type" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetProbeType(s string) {
+	m.probe_type = &s
+}
+
+// ProbeType returns the value of the "probe_type" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) ProbeType() (r string, exists bool) {
+	v := m.probe_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProbeType returns the old "probe_type" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldProbeType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProbeType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProbeType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProbeType: %w", err)
+	}
+	return oldValue.ProbeType, nil
+}
+
+// ResetProbeType resets all changes to the "probe_type" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetProbeType() {
+	m.probe_type = nil
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetImageProbeScheduleEnabled(b bool) {
+	m.image_probe_schedule_enabled = &b
+}
+
+// ImageProbeScheduleEnabled returns the value of the "image_probe_schedule_enabled" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) ImageProbeScheduleEnabled() (r bool, exists bool) {
+	v := m.image_probe_schedule_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImageProbeScheduleEnabled returns the old "image_probe_schedule_enabled" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldImageProbeScheduleEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImageProbeScheduleEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImageProbeScheduleEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImageProbeScheduleEnabled: %w", err)
+	}
+	return oldValue.ImageProbeScheduleEnabled, nil
+}
+
+// ResetImageProbeScheduleEnabled resets all changes to the "image_probe_schedule_enabled" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetImageProbeScheduleEnabled() {
+	m.image_probe_schedule_enabled = nil
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetCustomMethod(s string) {
+	m.custom_method = &s
+}
+
+// CustomMethod returns the value of the "custom_method" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomMethod() (r string, exists bool) {
+	v := m.custom_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomMethod returns the old "custom_method" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldCustomMethod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomMethod: %w", err)
+	}
+	return oldValue.CustomMethod, nil
+}
+
+// ResetCustomMethod resets all changes to the "custom_method" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetCustomMethod() {
+	m.custom_method = nil
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetCustomPath(s string) {
+	m.custom_path = &s
+}
+
+// CustomPath returns the value of the "custom_path" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomPath() (r string, exists bool) {
+	v := m.custom_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomPath returns the old "custom_path" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldCustomPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomPath: %w", err)
+	}
+	return oldValue.CustomPath, nil
+}
+
+// ResetCustomPath resets all changes to the "custom_path" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetCustomPath() {
+	m.custom_path = nil
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetCustomBody(value map[string]interface{}) {
+	m.custom_body = &value
+}
+
+// CustomBody returns the value of the "custom_body" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomBody() (r map[string]interface{}, exists bool) {
+	v := m.custom_body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomBody returns the old "custom_body" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldCustomBody(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomBody: %w", err)
+	}
+	return oldValue.CustomBody, nil
+}
+
+// ClearCustomBody clears the value of the "custom_body" field.
+func (m *ChannelMonitorRequestTemplateMutation) ClearCustomBody() {
+	m.custom_body = nil
+	m.clearedFields[channelmonitorrequesttemplate.FieldCustomBody] = struct{}{}
+}
+
+// CustomBodyCleared returns if the "custom_body" field was cleared in this mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomBodyCleared() bool {
+	_, ok := m.clearedFields[channelmonitorrequesttemplate.FieldCustomBody]
+	return ok
+}
+
+// ResetCustomBody resets all changes to the "custom_body" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetCustomBody() {
+	m.custom_body = nil
+	delete(m.clearedFields, channelmonitorrequesttemplate.FieldCustomBody)
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetCustomResponseJSONPath(s string) {
+	m.custom_response_json_path = &s
+}
+
+// CustomResponseJSONPath returns the value of the "custom_response_json_path" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomResponseJSONPath() (r string, exists bool) {
+	v := m.custom_response_json_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomResponseJSONPath returns the old "custom_response_json_path" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldCustomResponseJSONPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomResponseJSONPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomResponseJSONPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomResponseJSONPath: %w", err)
+	}
+	return oldValue.CustomResponseJSONPath, nil
+}
+
+// ResetCustomResponseJSONPath resets all changes to the "custom_response_json_path" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetCustomResponseJSONPath() {
+	m.custom_response_json_path = nil
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetCustomResponseRequireNonEmpty(b bool) {
+	m.custom_response_require_non_empty = &b
+}
+
+// CustomResponseRequireNonEmpty returns the value of the "custom_response_require_non_empty" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) CustomResponseRequireNonEmpty() (r bool, exists bool) {
+	v := m.custom_response_require_non_empty
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomResponseRequireNonEmpty returns the old "custom_response_require_non_empty" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldCustomResponseRequireNonEmpty(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomResponseRequireNonEmpty is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomResponseRequireNonEmpty requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomResponseRequireNonEmpty: %w", err)
+	}
+	return oldValue.CustomResponseRequireNonEmpty, nil
+}
+
+// ResetCustomResponseRequireNonEmpty resets all changes to the "custom_response_require_non_empty" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetCustomResponseRequireNonEmpty() {
+	m.custom_response_require_non_empty = nil
+}
+
 // SetDescription sets the "description" field.
 func (m *ChannelMonitorRequestTemplateMutation) SetDescription(s string) {
 	m.description = &s
@@ -19372,7 +20041,7 @@ func (m *ChannelMonitorRequestTemplateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorRequestTemplateMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldCreatedAt)
 	}
@@ -19387,6 +20056,27 @@ func (m *ChannelMonitorRequestTemplateMutation) Fields() []string {
 	}
 	if m.api_mode != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldAPIMode)
+	}
+	if m.probe_type != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldProbeType)
+	}
+	if m.image_probe_schedule_enabled != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled)
+	}
+	if m.custom_method != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomMethod)
+	}
+	if m.custom_path != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomPath)
+	}
+	if m.custom_body != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomBody)
+	}
+	if m.custom_response_json_path != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomResponseJSONPath)
+	}
+	if m.custom_response_require_non_empty != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty)
 	}
 	if m.description != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldDescription)
@@ -19418,6 +20108,20 @@ func (m *ChannelMonitorRequestTemplateMutation) Field(name string) (ent.Value, b
 		return m.Provider()
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		return m.APIMode()
+	case channelmonitorrequesttemplate.FieldProbeType:
+		return m.ProbeType()
+	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
+		return m.ImageProbeScheduleEnabled()
+	case channelmonitorrequesttemplate.FieldCustomMethod:
+		return m.CustomMethod()
+	case channelmonitorrequesttemplate.FieldCustomPath:
+		return m.CustomPath()
+	case channelmonitorrequesttemplate.FieldCustomBody:
+		return m.CustomBody()
+	case channelmonitorrequesttemplate.FieldCustomResponseJSONPath:
+		return m.CustomResponseJSONPath()
+	case channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+		return m.CustomResponseRequireNonEmpty()
 	case channelmonitorrequesttemplate.FieldDescription:
 		return m.Description()
 	case channelmonitorrequesttemplate.FieldExtraHeaders:
@@ -19445,6 +20149,20 @@ func (m *ChannelMonitorRequestTemplateMutation) OldField(ctx context.Context, na
 		return m.OldProvider(ctx)
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		return m.OldAPIMode(ctx)
+	case channelmonitorrequesttemplate.FieldProbeType:
+		return m.OldProbeType(ctx)
+	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
+		return m.OldImageProbeScheduleEnabled(ctx)
+	case channelmonitorrequesttemplate.FieldCustomMethod:
+		return m.OldCustomMethod(ctx)
+	case channelmonitorrequesttemplate.FieldCustomPath:
+		return m.OldCustomPath(ctx)
+	case channelmonitorrequesttemplate.FieldCustomBody:
+		return m.OldCustomBody(ctx)
+	case channelmonitorrequesttemplate.FieldCustomResponseJSONPath:
+		return m.OldCustomResponseJSONPath(ctx)
+	case channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+		return m.OldCustomResponseRequireNonEmpty(ctx)
 	case channelmonitorrequesttemplate.FieldDescription:
 		return m.OldDescription(ctx)
 	case channelmonitorrequesttemplate.FieldExtraHeaders:
@@ -19496,6 +20214,55 @@ func (m *ChannelMonitorRequestTemplateMutation) SetField(name string, value ent.
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIMode(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldProbeType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProbeType(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImageProbeScheduleEnabled(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomMethod(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomPath(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomBody:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomBody(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomResponseJSONPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomResponseJSONPath(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomResponseRequireNonEmpty(v)
 		return nil
 	case channelmonitorrequesttemplate.FieldDescription:
 		v, ok := value.(string)
@@ -19555,6 +20322,9 @@ func (m *ChannelMonitorRequestTemplateMutation) AddField(name string, value ent.
 // mutation.
 func (m *ChannelMonitorRequestTemplateMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(channelmonitorrequesttemplate.FieldCustomBody) {
+		fields = append(fields, channelmonitorrequesttemplate.FieldCustomBody)
+	}
 	if m.FieldCleared(channelmonitorrequesttemplate.FieldDescription) {
 		fields = append(fields, channelmonitorrequesttemplate.FieldDescription)
 	}
@@ -19575,6 +20345,9 @@ func (m *ChannelMonitorRequestTemplateMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChannelMonitorRequestTemplateMutation) ClearField(name string) error {
 	switch name {
+	case channelmonitorrequesttemplate.FieldCustomBody:
+		m.ClearCustomBody()
+		return nil
 	case channelmonitorrequesttemplate.FieldDescription:
 		m.ClearDescription()
 		return nil
@@ -19603,6 +20376,27 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetField(name string) error {
 		return nil
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		m.ResetAPIMode()
+		return nil
+	case channelmonitorrequesttemplate.FieldProbeType:
+		m.ResetProbeType()
+		return nil
+	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
+		m.ResetImageProbeScheduleEnabled()
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomMethod:
+		m.ResetCustomMethod()
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomPath:
+		m.ResetCustomPath()
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomBody:
+		m.ResetCustomBody()
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomResponseJSONPath:
+		m.ResetCustomResponseJSONPath()
+		return nil
+	case channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+		m.ResetCustomResponseRequireNonEmpty()
 		return nil
 	case channelmonitorrequesttemplate.FieldDescription:
 		m.ResetDescription()

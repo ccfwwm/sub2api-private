@@ -33,6 +33,13 @@ func (r *channelMonitorRequestTemplateRepository) Create(ctx context.Context, t 
 		SetName(t.Name).
 		SetProvider(channelmonitorrequesttemplate.Provider(t.Provider)).
 		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
+		SetProbeType(t.ProbeType).
+		SetImageProbeScheduleEnabled(t.ImageProbeScheduleEnabled).
+		SetCustomMethod(t.CustomMethod).
+		SetCustomPath(t.CustomPath).
+		SetCustomBody(t.CustomBody).
+		SetCustomResponseJSONPath(t.CustomResponseJSONPath).
+		SetCustomResponseRequireNonEmpty(t.CustomResponseRequireNonEmpty).
 		SetDescription(t.Description).
 		SetExtraHeaders(emptyHeadersIfNilRepo(t.ExtraHeaders)).
 		SetBodyOverrideMode(defaultBodyModeRepo(t.BodyOverrideMode))
@@ -65,6 +72,13 @@ func (r *channelMonitorRequestTemplateRepository) Update(ctx context.Context, t 
 	updater := client.ChannelMonitorRequestTemplate.UpdateOneID(t.ID).
 		SetName(t.Name).
 		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
+		SetProbeType(t.ProbeType).
+		SetImageProbeScheduleEnabled(t.ImageProbeScheduleEnabled).
+		SetCustomMethod(t.CustomMethod).
+		SetCustomPath(t.CustomPath).
+		SetCustomBody(t.CustomBody).
+		SetCustomResponseJSONPath(t.CustomResponseJSONPath).
+		SetCustomResponseRequireNonEmpty(t.CustomResponseRequireNonEmpty).
 		SetDescription(t.Description).
 		SetExtraHeaders(emptyHeadersIfNilRepo(t.ExtraHeaders)).
 		SetBodyOverrideMode(defaultBodyModeRepo(t.BodyOverrideMode))
@@ -72,6 +86,9 @@ func (r *channelMonitorRequestTemplateRepository) Update(ctx context.Context, t 
 		updater = updater.SetBodyOverride(t.BodyOverride)
 	} else {
 		updater = updater.ClearBodyOverride()
+	}
+	if t.CustomBody == nil {
+		updater = updater.ClearCustomBody()
 	}
 	updated, err := updater.Save(ctx)
 	if err != nil {
@@ -159,11 +176,21 @@ func (r *channelMonitorRequestTemplateRepository) applyToMonitorsWithClient(
 			channelmonitor.APIModeEQ(defaultAPIModeRepo(tpl.APIMode)),
 		).
 		SetAPIMode(defaultAPIModeRepo(tpl.APIMode)).
+		SetProbeType(tpl.ProbeType).
+		SetImageProbeScheduleEnabled(tpl.ImageProbeScheduleEnabled).
+		SetCustomMethod(tpl.CustomMethod).
+		SetCustomPath(tpl.CustomPath).
+		SetCustomBody(tpl.CustomBody).
+		SetCustomResponseJSONPath(tpl.CustomResponseJSONPath).
+		SetCustomResponseRequireNonEmpty(tpl.CustomResponseRequireNonEmpty).
 		SetBodyOverrideMode(defaultBodyModeRepo(tpl.BodyOverrideMode))
 	if tpl.BodyOverride != nil {
 		updater = updater.SetBodyOverride(tpl.BodyOverride)
 	} else {
 		updater = updater.ClearBodyOverride()
+	}
+	if tpl.CustomBody == nil {
+		updater = updater.ClearCustomBody()
 	}
 
 	affected, err := updater.Save(ctx)
@@ -252,15 +279,22 @@ func entToServiceTemplate(row *dbent.ChannelMonitorRequestTemplate) *service.Cha
 		headers = map[string]string{}
 	}
 	return &service.ChannelMonitorRequestTemplate{
-		ID:               row.ID,
-		Name:             row.Name,
-		Provider:         string(row.Provider),
-		APIMode:          defaultAPIModeRepo(row.APIMode),
-		Description:      row.Description,
-		ExtraHeaders:     headers,
-		BodyOverrideMode: row.BodyOverrideMode,
-		BodyOverride:     row.BodyOverride,
-		CreatedAt:        row.CreatedAt,
-		UpdatedAt:        row.UpdatedAt,
+		ID:                            row.ID,
+		Name:                          row.Name,
+		Provider:                      string(row.Provider),
+		APIMode:                       defaultAPIModeRepo(row.APIMode),
+		ProbeType:                     row.ProbeType,
+		ImageProbeScheduleEnabled:     row.ImageProbeScheduleEnabled,
+		CustomMethod:                  row.CustomMethod,
+		CustomPath:                    row.CustomPath,
+		CustomBody:                    row.CustomBody,
+		CustomResponseJSONPath:        row.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: row.CustomResponseRequireNonEmpty,
+		Description:                   row.Description,
+		ExtraHeaders:                  headers,
+		BodyOverrideMode:              row.BodyOverrideMode,
+		BodyOverride:                  row.BodyOverride,
+		CreatedAt:                     row.CreatedAt,
+		UpdatedAt:                     row.UpdatedAt,
 	}
 }

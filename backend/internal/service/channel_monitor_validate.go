@@ -108,6 +108,46 @@ func validateAPIMode(provider, apiMode string) error {
 	}
 }
 
+func defaultMonitorProbeType(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return MonitorProbeTypeText
+	}
+	return value
+}
+
+func validateMonitorProbeSettings(provider, probeType, method, path, responsePath string) error {
+	if len(path) > 500 || len(responsePath) > 300 {
+		return ErrChannelMonitorInvalidCustomRequest
+	}
+	switch defaultMonitorProbeType(probeType) {
+	case MonitorProbeTypeText:
+		return nil
+	case MonitorProbeTypeImage:
+		if provider != MonitorProviderOpenAI && provider != MonitorProviderGemini && provider != MonitorProviderGrok {
+			return ErrChannelMonitorInvalidProbeType
+		}
+		return nil
+	case MonitorProbeTypeCustom:
+		if provider == MonitorProviderImageVideo {
+			return ErrChannelMonitorInvalidProbeType
+		}
+		if !validCustomProbeMethod(defaultCustomProbeMethod(method)) {
+			return ErrChannelMonitorInvalidCustomRequest
+		}
+		if err := validateCustomProbePath(path); err != nil {
+			return ErrChannelMonitorInvalidCustomRequest
+		}
+		return nil
+	default:
+		return ErrChannelMonitorInvalidProbeType
+	}
+}
+
+func defaultCustomResponseNonEmpty(value *bool) bool {
+	return value == nil || *value
+}
+
 // validateInterval 校验 interval_seconds 范围。
 func validateInterval(sec int) error {
 	if sec < monitorMinIntervalSeconds || sec > monitorMaxIntervalSeconds {

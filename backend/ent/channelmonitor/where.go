@@ -85,6 +85,36 @@ func APIMode(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldAPIMode, v))
 }
 
+// ProbeType applies equality check predicate on the "probe_type" field. It's identical to ProbeTypeEQ.
+func ProbeType(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldProbeType, v))
+}
+
+// ImageProbeScheduleEnabled applies equality check predicate on the "image_probe_schedule_enabled" field. It's identical to ImageProbeScheduleEnabledEQ.
+func ImageProbeScheduleEnabled(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldImageProbeScheduleEnabled, v))
+}
+
+// CustomMethod applies equality check predicate on the "custom_method" field. It's identical to CustomMethodEQ.
+func CustomMethod(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomMethod, v))
+}
+
+// CustomPath applies equality check predicate on the "custom_path" field. It's identical to CustomPathEQ.
+func CustomPath(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomPath, v))
+}
+
+// CustomResponseJSONPath applies equality check predicate on the "custom_response_json_path" field. It's identical to CustomResponseJSONPathEQ.
+func CustomResponseJSONPath(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseRequireNonEmpty applies equality check predicate on the "custom_response_require_non_empty" field. It's identical to CustomResponseRequireNonEmptyEQ.
+func CustomResponseRequireNonEmpty(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomResponseRequireNonEmpty, v))
+}
+
 // Endpoint applies equality check predicate on the "endpoint" field. It's identical to EndpointEQ.
 func Endpoint(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldEndpoint, v))
@@ -483,6 +513,296 @@ func APIModeEqualFold(v string) predicate.ChannelMonitor {
 // APIModeContainsFold applies the ContainsFold predicate on the "api_mode" field.
 func APIModeContainsFold(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldAPIMode, v))
+}
+
+// ProbeTypeEQ applies the EQ predicate on the "probe_type" field.
+func ProbeTypeEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldProbeType, v))
+}
+
+// ProbeTypeNEQ applies the NEQ predicate on the "probe_type" field.
+func ProbeTypeNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldProbeType, v))
+}
+
+// ProbeTypeIn applies the In predicate on the "probe_type" field.
+func ProbeTypeIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldProbeType, vs...))
+}
+
+// ProbeTypeNotIn applies the NotIn predicate on the "probe_type" field.
+func ProbeTypeNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldProbeType, vs...))
+}
+
+// ProbeTypeGT applies the GT predicate on the "probe_type" field.
+func ProbeTypeGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldProbeType, v))
+}
+
+// ProbeTypeGTE applies the GTE predicate on the "probe_type" field.
+func ProbeTypeGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldProbeType, v))
+}
+
+// ProbeTypeLT applies the LT predicate on the "probe_type" field.
+func ProbeTypeLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldProbeType, v))
+}
+
+// ProbeTypeLTE applies the LTE predicate on the "probe_type" field.
+func ProbeTypeLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldProbeType, v))
+}
+
+// ProbeTypeContains applies the Contains predicate on the "probe_type" field.
+func ProbeTypeContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldProbeType, v))
+}
+
+// ProbeTypeHasPrefix applies the HasPrefix predicate on the "probe_type" field.
+func ProbeTypeHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldProbeType, v))
+}
+
+// ProbeTypeHasSuffix applies the HasSuffix predicate on the "probe_type" field.
+func ProbeTypeHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldProbeType, v))
+}
+
+// ProbeTypeEqualFold applies the EqualFold predicate on the "probe_type" field.
+func ProbeTypeEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldProbeType, v))
+}
+
+// ProbeTypeContainsFold applies the ContainsFold predicate on the "probe_type" field.
+func ProbeTypeContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldProbeType, v))
+}
+
+// ImageProbeScheduleEnabledEQ applies the EQ predicate on the "image_probe_schedule_enabled" field.
+func ImageProbeScheduleEnabledEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldImageProbeScheduleEnabled, v))
+}
+
+// ImageProbeScheduleEnabledNEQ applies the NEQ predicate on the "image_probe_schedule_enabled" field.
+func ImageProbeScheduleEnabledNEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldImageProbeScheduleEnabled, v))
+}
+
+// CustomMethodEQ applies the EQ predicate on the "custom_method" field.
+func CustomMethodEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomMethod, v))
+}
+
+// CustomMethodNEQ applies the NEQ predicate on the "custom_method" field.
+func CustomMethodNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldCustomMethod, v))
+}
+
+// CustomMethodIn applies the In predicate on the "custom_method" field.
+func CustomMethodIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldCustomMethod, vs...))
+}
+
+// CustomMethodNotIn applies the NotIn predicate on the "custom_method" field.
+func CustomMethodNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldCustomMethod, vs...))
+}
+
+// CustomMethodGT applies the GT predicate on the "custom_method" field.
+func CustomMethodGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldCustomMethod, v))
+}
+
+// CustomMethodGTE applies the GTE predicate on the "custom_method" field.
+func CustomMethodGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldCustomMethod, v))
+}
+
+// CustomMethodLT applies the LT predicate on the "custom_method" field.
+func CustomMethodLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldCustomMethod, v))
+}
+
+// CustomMethodLTE applies the LTE predicate on the "custom_method" field.
+func CustomMethodLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldCustomMethod, v))
+}
+
+// CustomMethodContains applies the Contains predicate on the "custom_method" field.
+func CustomMethodContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldCustomMethod, v))
+}
+
+// CustomMethodHasPrefix applies the HasPrefix predicate on the "custom_method" field.
+func CustomMethodHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldCustomMethod, v))
+}
+
+// CustomMethodHasSuffix applies the HasSuffix predicate on the "custom_method" field.
+func CustomMethodHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldCustomMethod, v))
+}
+
+// CustomMethodEqualFold applies the EqualFold predicate on the "custom_method" field.
+func CustomMethodEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldCustomMethod, v))
+}
+
+// CustomMethodContainsFold applies the ContainsFold predicate on the "custom_method" field.
+func CustomMethodContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldCustomMethod, v))
+}
+
+// CustomPathEQ applies the EQ predicate on the "custom_path" field.
+func CustomPathEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomPath, v))
+}
+
+// CustomPathNEQ applies the NEQ predicate on the "custom_path" field.
+func CustomPathNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldCustomPath, v))
+}
+
+// CustomPathIn applies the In predicate on the "custom_path" field.
+func CustomPathIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldCustomPath, vs...))
+}
+
+// CustomPathNotIn applies the NotIn predicate on the "custom_path" field.
+func CustomPathNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldCustomPath, vs...))
+}
+
+// CustomPathGT applies the GT predicate on the "custom_path" field.
+func CustomPathGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldCustomPath, v))
+}
+
+// CustomPathGTE applies the GTE predicate on the "custom_path" field.
+func CustomPathGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldCustomPath, v))
+}
+
+// CustomPathLT applies the LT predicate on the "custom_path" field.
+func CustomPathLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldCustomPath, v))
+}
+
+// CustomPathLTE applies the LTE predicate on the "custom_path" field.
+func CustomPathLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldCustomPath, v))
+}
+
+// CustomPathContains applies the Contains predicate on the "custom_path" field.
+func CustomPathContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldCustomPath, v))
+}
+
+// CustomPathHasPrefix applies the HasPrefix predicate on the "custom_path" field.
+func CustomPathHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldCustomPath, v))
+}
+
+// CustomPathHasSuffix applies the HasSuffix predicate on the "custom_path" field.
+func CustomPathHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldCustomPath, v))
+}
+
+// CustomPathEqualFold applies the EqualFold predicate on the "custom_path" field.
+func CustomPathEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldCustomPath, v))
+}
+
+// CustomPathContainsFold applies the ContainsFold predicate on the "custom_path" field.
+func CustomPathContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldCustomPath, v))
+}
+
+// CustomBodyIsNil applies the IsNil predicate on the "custom_body" field.
+func CustomBodyIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldCustomBody))
+}
+
+// CustomBodyNotNil applies the NotNil predicate on the "custom_body" field.
+func CustomBodyNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldCustomBody))
+}
+
+// CustomResponseJSONPathEQ applies the EQ predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathNEQ applies the NEQ predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathIn applies the In predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldCustomResponseJSONPath, vs...))
+}
+
+// CustomResponseJSONPathNotIn applies the NotIn predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldCustomResponseJSONPath, vs...))
+}
+
+// CustomResponseJSONPathGT applies the GT predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathGTE applies the GTE predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathLT applies the LT predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathLTE applies the LTE predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathContains applies the Contains predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathHasPrefix applies the HasPrefix predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathHasSuffix applies the HasSuffix predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathEqualFold applies the EqualFold predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseJSONPathContainsFold applies the ContainsFold predicate on the "custom_response_json_path" field.
+func CustomResponseJSONPathContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldCustomResponseJSONPath, v))
+}
+
+// CustomResponseRequireNonEmptyEQ applies the EQ predicate on the "custom_response_require_non_empty" field.
+func CustomResponseRequireNonEmptyEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldCustomResponseRequireNonEmpty, v))
+}
+
+// CustomResponseRequireNonEmptyNEQ applies the NEQ predicate on the "custom_response_require_non_empty" field.
+func CustomResponseRequireNonEmptyNEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldCustomResponseRequireNonEmpty, v))
 }
 
 // EndpointEQ applies the EQ predicate on the "endpoint" field.

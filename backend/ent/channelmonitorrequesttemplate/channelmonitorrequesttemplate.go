@@ -25,6 +25,20 @@ const (
 	FieldProvider = "provider"
 	// FieldAPIMode holds the string denoting the api_mode field in the database.
 	FieldAPIMode = "api_mode"
+	// FieldProbeType holds the string denoting the probe_type field in the database.
+	FieldProbeType = "probe_type"
+	// FieldImageProbeScheduleEnabled holds the string denoting the image_probe_schedule_enabled field in the database.
+	FieldImageProbeScheduleEnabled = "image_probe_schedule_enabled"
+	// FieldCustomMethod holds the string denoting the custom_method field in the database.
+	FieldCustomMethod = "custom_method"
+	// FieldCustomPath holds the string denoting the custom_path field in the database.
+	FieldCustomPath = "custom_path"
+	// FieldCustomBody holds the string denoting the custom_body field in the database.
+	FieldCustomBody = "custom_body"
+	// FieldCustomResponseJSONPath holds the string denoting the custom_response_json_path field in the database.
+	FieldCustomResponseJSONPath = "custom_response_json_path"
+	// FieldCustomResponseRequireNonEmpty holds the string denoting the custom_response_require_non_empty field in the database.
+	FieldCustomResponseRequireNonEmpty = "custom_response_require_non_empty"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldExtraHeaders holds the string denoting the extra_headers field in the database.
@@ -54,6 +68,13 @@ var Columns = []string{
 	FieldName,
 	FieldProvider,
 	FieldAPIMode,
+	FieldProbeType,
+	FieldImageProbeScheduleEnabled,
+	FieldCustomMethod,
+	FieldCustomPath,
+	FieldCustomBody,
+	FieldCustomResponseJSONPath,
+	FieldCustomResponseRequireNonEmpty,
 	FieldDescription,
 	FieldExtraHeaders,
 	FieldBodyOverrideMode,
@@ -83,6 +104,26 @@ var (
 	DefaultAPIMode string
 	// APIModeValidator is a validator for the "api_mode" field. It is called by the builders before save.
 	APIModeValidator func(string) error
+	// DefaultProbeType holds the default value on creation for the "probe_type" field.
+	DefaultProbeType string
+	// ProbeTypeValidator is a validator for the "probe_type" field. It is called by the builders before save.
+	ProbeTypeValidator func(string) error
+	// DefaultImageProbeScheduleEnabled holds the default value on creation for the "image_probe_schedule_enabled" field.
+	DefaultImageProbeScheduleEnabled bool
+	// DefaultCustomMethod holds the default value on creation for the "custom_method" field.
+	DefaultCustomMethod string
+	// CustomMethodValidator is a validator for the "custom_method" field. It is called by the builders before save.
+	CustomMethodValidator func(string) error
+	// DefaultCustomPath holds the default value on creation for the "custom_path" field.
+	DefaultCustomPath string
+	// CustomPathValidator is a validator for the "custom_path" field. It is called by the builders before save.
+	CustomPathValidator func(string) error
+	// DefaultCustomResponseJSONPath holds the default value on creation for the "custom_response_json_path" field.
+	DefaultCustomResponseJSONPath string
+	// CustomResponseJSONPathValidator is a validator for the "custom_response_json_path" field. It is called by the builders before save.
+	CustomResponseJSONPathValidator func(string) error
+	// DefaultCustomResponseRequireNonEmpty holds the default value on creation for the "custom_response_require_non_empty" field.
+	DefaultCustomResponseRequireNonEmpty bool
 	// DefaultDescription holds the default value on creation for the "description" field.
 	DefaultDescription string
 	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
@@ -158,6 +199,36 @@ func ByProvider(opts ...sql.OrderTermOption) OrderOption {
 // ByAPIMode orders the results by the api_mode field.
 func ByAPIMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAPIMode, opts...).ToFunc()
+}
+
+// ByProbeType orders the results by the probe_type field.
+func ByProbeType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProbeType, opts...).ToFunc()
+}
+
+// ByImageProbeScheduleEnabled orders the results by the image_probe_schedule_enabled field.
+func ByImageProbeScheduleEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImageProbeScheduleEnabled, opts...).ToFunc()
+}
+
+// ByCustomMethod orders the results by the custom_method field.
+func ByCustomMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomMethod, opts...).ToFunc()
+}
+
+// ByCustomPath orders the results by the custom_path field.
+func ByCustomPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomPath, opts...).ToFunc()
+}
+
+// ByCustomResponseJSONPath orders the results by the custom_response_json_path field.
+func ByCustomResponseJSONPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomResponseJSONPath, opts...).ToFunc()
+}
+
+// ByCustomResponseRequireNonEmpty orders the results by the custom_response_require_non_empty field.
+func ByCustomResponseRequireNonEmpty(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomResponseRequireNonEmpty, opts...).ToFunc()
 }
 
 // ByDescription orders the results by the description field.

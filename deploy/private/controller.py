@@ -296,6 +296,7 @@ class Controller:
                                    validate_template_transaction, validate_legacy_transaction,
                                    validate_group_availability_transaction,
                                    validate_ops_diagnostics_transaction,
+                                   validate_monitor_probe_transaction,
                                    validate_upstream_v0_2_19_transaction)
         legacy = validate_legacy_transaction(transaction)
         reviewed = (legacy or validate_unified_transaction(transaction) or
@@ -304,6 +305,7 @@ class Controller:
                     validate_docs_transaction(transaction) or validate_template_transaction(transaction))
         reviewed = reviewed or validate_group_availability_transaction(transaction)
         reviewed = reviewed or validate_ops_diagnostics_transaction(transaction)
+        reviewed = reviewed or validate_monitor_probe_transaction(transaction)
         reviewed = reviewed or validate_upstream_v0_2_19_transaction(transaction)
         if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not reviewed:
             raise ValueError("reviewed atomic media transaction required")
@@ -495,7 +497,7 @@ class Controller:
             # this field. Ordinary prepare continues to require exact schemas.
             reviewed = job.get("reviewed_media_migration")
             if reviewed:
-                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql", "252_media_account_concurrency_diagnostics.sql", "upstream-v0.2.19"):
+                if reviewed["filename"] not in ("243_media_tasks_and_pricing.sql", "unified-media-pricing", "246_channel_monitor_imagevideo.sql", "247_media_task_list_indexes.sql", "248_public_imagevideo_docs.sql", "media-protocol-templates", "251_media_group_availability.sql", "252_media_account_concurrency_diagnostics.sql", "upstream-v0.2.19", "255_channel_monitor_probe_config.sql"):
                     raise ValueError("unreviewed migration")
                 before_columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_platform_quotas';", pg)
                 quota_sql = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY id),'')) FROM (SELECT " + before_columns + " FROM user_platform_quotas ORDER BY id) t;"
@@ -505,6 +507,12 @@ class Controller:
                 comparison = {t: self.fingerprint_sql(t) for t in PROTECTED}
                 expected_after = dict(restored)
                 monitor_before = {}
+                if reviewed['filename'] == '255_channel_monitor_probe_config.sql':
+                    from media_migrate import MONITOR_PROBE_TABLES, monitor_probe_defaults_sql
+                    for table in (*MONITOR_PROBE_TABLES, 'channel_monitor_histories'):
+                        columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='" + table + "';", pg)
+                        query = "SELECT count(*)::text || '|' || md5(coalesce(string_agg(h,'' ORDER BY h),'')) FROM (SELECT md5(row_to_json(t)::text) h FROM (SELECT " + columns + " FROM " + table + ") t) fingerprint_rows;"
+                        monitor_before[query] = self.sql(query, pg)
                 if reviewed['filename'] == 'media-protocol-templates':
                     from media_migrate import template_transaction_files, LEGACY_TEMPLATE_FILE, legacy_accounts_fingerprint_sql
                     files = template_transaction_files(reviewed['transaction'])
@@ -551,6 +559,10 @@ class Controller:
                     raise ValueError("reviewed migration differs from exact expected business data")
                 if any(self.sql(query, pg) != value for query, value in monitor_before.items()):
                     raise ValueError('reviewed migration changed existing media or monitor data')
+                if reviewed['filename'] == '255_channel_monitor_probe_config.sql':
+                    if any(self.sql(monitor_probe_defaults_sql(table), pg) != '0' for table in MONITOR_PROBE_TABLES):
+                        raise ValueError('monitor probe migration changed defaults or enabled paid scheduling')
+                    job['monitor_probe_defaults_verified'] = True
                 if reviewed["filename"] == "251_media_group_availability.sql":
                     if self.sql("SELECT count(*) FROM groups WHERE media_availability IS DISTINCT FROM 'available';", pg) != "0":
                         raise ValueError("media group availability migration did not default every existing group to available")

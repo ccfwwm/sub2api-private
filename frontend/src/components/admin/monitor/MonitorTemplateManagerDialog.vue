@@ -173,6 +173,8 @@
         />
       </div>
 
+      <MonitorProbeConfig v-if="form.provider !== 'imagevideo'" v-model="form.probe" :provider="form.provider" @validity="probeConfigValid = $event" />
+
       <template v-if="form.provider === 'imagevideo'">
         <label class="input-label">{{ t('admin.channelMonitor.form.extraModels') }}<input v-model="mediaModels" class="input" placeholder="omni-flash, veo-3.1-lite" /></label>
         <MonitorMediaConfig :models="mediaModels.split(',')" v-model="form.body_override" @validity="mediaConfigValid = $event" />
@@ -183,6 +185,7 @@
         :extra-headers="form.extra_headers"
         :body-override-mode="form.body_override_mode"
         :body-override="form.body_override"
+        :headers-only="form.probe.probe_type === 'custom'"
         @update:extra-headers="form.extra_headers = $event"
         @update:body-override-mode="form.body_override_mode = $event"
         @update:body-override="form.body_override = $event"
@@ -202,7 +205,7 @@
           <button class="btn btn-secondary" @click="$emit('close')">
             {{ t('common.close') }}
           </button>
-          <button v-if="editing" class="btn btn-primary" :disabled="submitting || (form.provider === 'imagevideo' && !mediaConfigValid)" @click="handleSubmit">
+          <button v-if="editing" class="btn btn-primary" :disabled="submitting || (form.provider !== 'imagevideo' && !probeConfigValid) || (form.provider === 'imagevideo' && !mediaConfigValid)" @click="handleSubmit">
             {{ submitting ? t('common.submitting') : editing === 'new' ? t('common.create') : t('common.update') }}
           </button>
         </div>
@@ -231,6 +234,8 @@
 </template>
 
 <script setup lang="ts">
+import MonitorProbeConfig from './MonitorProbeConfig.vue'
+import { monitorProbeDefaults, type MonitorProbeSettings } from '@/api/admin/channelMonitor'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -311,6 +316,7 @@ interface TemplateForm {
   name: string
   provider: Provider
   api_mode: APIMode
+  probe: MonitorProbeSettings
   description: string
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
@@ -320,6 +326,7 @@ interface TemplateForm {
 const editing = ref<null | 'new' | number>(null) // null = list view; 'new' = create; <id> = edit
 const submitting = ref(false)
 const mediaConfigValid = ref(true)
+const probeConfigValid = ref(true)
 const form = reactive<TemplateForm>(emptyForm(PROVIDER_ANTHROPIC))
 const mediaModels = ref('')
 
@@ -329,6 +336,7 @@ function emptyForm(provider: Provider): TemplateForm {
     name: '',
     provider,
     api_mode: API_MODE_CHAT_COMPLETIONS,
+    probe: monitorProbeDefaults(),
     description: '',
     extra_headers: {},
     body_override_mode: 'off',
@@ -341,6 +349,7 @@ function loadForm(tpl: ChannelMonitorTemplate) {
   form.name = tpl.name
   form.provider = tpl.provider
   form.api_mode = normalizeAPIMode(tpl.api_mode)
+  form.probe = monitorProbeDefaults(tpl)
   form.description = tpl.description
   form.extra_headers = { ...(tpl.extra_headers || {}) }
   form.body_override_mode = tpl.body_override_mode
@@ -395,7 +404,7 @@ watch(
 
 // --- submit ---
 async function handleSubmit() {
-  if (submitting.value) return
+  if (submitting.value || (form.provider !== 'imagevideo' && !probeConfigValid.value)) return
   if (form.provider === 'imagevideo' && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.template.missingName'))
@@ -405,6 +414,7 @@ async function handleSubmit() {
   try {
     if (editing.value === 'new') {
       await adminAPI.channelMonitorTemplate.create({
+        ...(form.provider === 'imagevideo' ? monitorProbeDefaults() : form.probe),
         name: form.name.trim(),
         provider: form.provider,
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
@@ -416,6 +426,7 @@ async function handleSubmit() {
       appStore.showSuccess(t('admin.channelMonitor.template.createSuccess'))
     } else if (typeof editing.value === 'number') {
       await adminAPI.channelMonitorTemplate.update(editing.value, {
+        ...(form.provider === 'imagevideo' ? monitorProbeDefaults() : form.probe),
         name: form.name.trim(),
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),

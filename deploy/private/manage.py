@@ -375,7 +375,10 @@ class Manager:
                 raise ValueError('upstream prerequisite migration evidence is incomplete')
             if reviewed['filename'] == 'media-protocol-templates' and not test.get('template_data_verified'):
                 raise ValueError('exact media template account projection was not verified')
+            if reviewed['filename'] == '255_channel_monitor_probe_config.sql' and not test.get('monitor_probe_defaults_verified'):
+                raise ValueError('monitor probe configuration defaults were not verified')
             field = ('task_index_migration' if reviewed['filename'] == '247_media_task_list_indexes.sql'
+                     else 'monitor_probe_migration' if reviewed['filename'] == '255_channel_monitor_probe_config.sql'
                      else 'monitor_migration' if reviewed['filename'] == '246_channel_monitor_imagevideo.sql'
                      else 'group_availability_migration' if reviewed['filename'] == '251_media_group_availability.sql'
                     else 'ops_diagnostics_migration' if reviewed['filename'] == '252_media_account_concurrency_diagnostics.sql'

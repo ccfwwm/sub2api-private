@@ -28,6 +28,20 @@ type ChannelMonitorRequestTemplate struct {
 	Provider channelmonitorrequesttemplate.Provider `json:"provider,omitempty"`
 	// OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions
 	APIMode string `json:"api_mode,omitempty"`
+	// ProbeType holds the value of the "probe_type" field.
+	ProbeType string `json:"probe_type,omitempty"`
+	// ImageProbeScheduleEnabled holds the value of the "image_probe_schedule_enabled" field.
+	ImageProbeScheduleEnabled bool `json:"image_probe_schedule_enabled,omitempty"`
+	// CustomMethod holds the value of the "custom_method" field.
+	CustomMethod string `json:"custom_method,omitempty"`
+	// CustomPath holds the value of the "custom_path" field.
+	CustomPath string `json:"custom_path,omitempty"`
+	// CustomBody holds the value of the "custom_body" field.
+	CustomBody map[string]interface{} `json:"custom_body,omitempty"`
+	// CustomResponseJSONPath holds the value of the "custom_response_json_path" field.
+	CustomResponseJSONPath string `json:"custom_response_json_path,omitempty"`
+	// CustomResponseRequireNonEmpty holds the value of the "custom_response_require_non_empty" field.
+	CustomResponseRequireNonEmpty bool `json:"custom_response_require_non_empty,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// ExtraHeaders holds the value of the "extra_headers" field.
@@ -65,11 +79,13 @@ func (*ChannelMonitorRequestTemplate) scanValues(columns []string) ([]any, error
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case channelmonitorrequesttemplate.FieldExtraHeaders, channelmonitorrequesttemplate.FieldBodyOverride:
+		case channelmonitorrequesttemplate.FieldCustomBody, channelmonitorrequesttemplate.FieldExtraHeaders, channelmonitorrequesttemplate.FieldBodyOverride:
 			values[i] = new([]byte)
+		case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled, channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+			values[i] = new(sql.NullBool)
 		case channelmonitorrequesttemplate.FieldID:
 			values[i] = new(sql.NullInt64)
-		case channelmonitorrequesttemplate.FieldName, channelmonitorrequesttemplate.FieldProvider, channelmonitorrequesttemplate.FieldAPIMode, channelmonitorrequesttemplate.FieldDescription, channelmonitorrequesttemplate.FieldBodyOverrideMode:
+		case channelmonitorrequesttemplate.FieldName, channelmonitorrequesttemplate.FieldProvider, channelmonitorrequesttemplate.FieldAPIMode, channelmonitorrequesttemplate.FieldProbeType, channelmonitorrequesttemplate.FieldCustomMethod, channelmonitorrequesttemplate.FieldCustomPath, channelmonitorrequesttemplate.FieldCustomResponseJSONPath, channelmonitorrequesttemplate.FieldDescription, channelmonitorrequesttemplate.FieldBodyOverrideMode:
 			values[i] = new(sql.NullString)
 		case channelmonitorrequesttemplate.FieldCreatedAt, channelmonitorrequesttemplate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -123,6 +139,50 @@ func (_m *ChannelMonitorRequestTemplate) assignValues(columns []string, values [
 				return fmt.Errorf("unexpected type %T for field api_mode", values[i])
 			} else if value.Valid {
 				_m.APIMode = value.String
+			}
+		case channelmonitorrequesttemplate.FieldProbeType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field probe_type", values[i])
+			} else if value.Valid {
+				_m.ProbeType = value.String
+			}
+		case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field image_probe_schedule_enabled", values[i])
+			} else if value.Valid {
+				_m.ImageProbeScheduleEnabled = value.Bool
+			}
+		case channelmonitorrequesttemplate.FieldCustomMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_method", values[i])
+			} else if value.Valid {
+				_m.CustomMethod = value.String
+			}
+		case channelmonitorrequesttemplate.FieldCustomPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_path", values[i])
+			} else if value.Valid {
+				_m.CustomPath = value.String
+			}
+		case channelmonitorrequesttemplate.FieldCustomBody:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_body", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CustomBody); err != nil {
+					return fmt.Errorf("unmarshal field custom_body: %w", err)
+				}
+			}
+		case channelmonitorrequesttemplate.FieldCustomResponseJSONPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_response_json_path", values[i])
+			} else if value.Valid {
+				_m.CustomResponseJSONPath = value.String
+			}
+		case channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_response_require_non_empty", values[i])
+			} else if value.Valid {
+				_m.CustomResponseRequireNonEmpty = value.Bool
 			}
 		case channelmonitorrequesttemplate.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -207,6 +267,27 @@ func (_m *ChannelMonitorRequestTemplate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("api_mode=")
 	builder.WriteString(_m.APIMode)
+	builder.WriteString(", ")
+	builder.WriteString("probe_type=")
+	builder.WriteString(_m.ProbeType)
+	builder.WriteString(", ")
+	builder.WriteString("image_probe_schedule_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageProbeScheduleEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("custom_method=")
+	builder.WriteString(_m.CustomMethod)
+	builder.WriteString(", ")
+	builder.WriteString("custom_path=")
+	builder.WriteString(_m.CustomPath)
+	builder.WriteString(", ")
+	builder.WriteString("custom_body=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomBody))
+	builder.WriteString(", ")
+	builder.WriteString("custom_response_json_path=")
+	builder.WriteString(_m.CustomResponseJSONPath)
+	builder.WriteString(", ")
+	builder.WriteString("custom_response_require_non_empty=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomResponseRequireNonEmpty))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)

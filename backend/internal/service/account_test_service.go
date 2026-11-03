@@ -3069,6 +3069,10 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		"response_format": "b64_json",
 	}
 	payloadBytes, _ := json.Marshal(payload)
+	payloadBytes, _, err = applyOpenAIImagesAccountParamRules(account, payloadBytes, "application/json")
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid image parameter rules: %s", err.Error()))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
 	if err != nil {
@@ -3105,6 +3109,7 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 	var result struct {
 		Data []struct {
 			B64JSON       string `json:"b64_json"`
+			URL           string `json:"url"`
 			RevisedPrompt string `json:"revised_prompt"`
 		} `json:"data"`
 	}
@@ -3116,17 +3121,25 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		return s.sendErrorAndEnd(c, "No images returned from API")
 	}
 
+	imageReturned := false
 	for _, item := range result.Data {
 		if item.RevisedPrompt != "" {
 			s.sendEvent(c, TestEvent{Type: "content", Text: item.RevisedPrompt})
 		}
 		if item.B64JSON != "" {
+			imageReturned = true
 			s.sendEvent(c, TestEvent{
 				Type:     "image",
 				ImageURL: "data:image/png;base64," + item.B64JSON,
 				MimeType: "image/png",
 			})
+		} else if strings.TrimSpace(item.URL) != "" {
+			imageReturned = true
+			s.sendEvent(c, TestEvent{Type: "image", ImageURL: item.URL})
 		}
+	}
+	if !imageReturned {
+		return s.sendErrorAndEnd(c, "No images returned from API")
 	}
 
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})

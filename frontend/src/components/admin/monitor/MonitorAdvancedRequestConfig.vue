@@ -54,7 +54,7 @@
     </div>
 
     <!-- Body mode radio -->
-    <div>
+    <div v-if="!headersOnly">
       <label class="input-label">{{ t('admin.channelMonitor.advanced.bodyMode') }}</label>
       <div class="grid grid-cols-3 gap-3">
         <button
@@ -74,7 +74,7 @@
     </div>
 
     <!-- Body JSON (仅当 mode != off) -->
-    <div v-if="bodyOverrideMode !== 'off'">
+    <div v-if="!headersOnly && bodyOverrideMode !== 'off'">
       <div class="mb-1 flex items-center justify-between">
         <label class="input-label !mb-0">{{ t('admin.channelMonitor.advanced.bodyJson') }}</label>
         <button
@@ -115,6 +115,7 @@ import {
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{
+  headersOnly?: boolean
   provider?: Provider
   apiMode?: APIMode
   extraHeaders: Record<string, string>

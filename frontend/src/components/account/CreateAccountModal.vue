@@ -3633,6 +3633,8 @@
         </div>
       </div>
 
+      <OpenAIImageParamRulesEditor v-if="form.platform === 'openai' && accountCategory === 'apikey'" v-model="imageParamRules" @validity="imageParamRulesValid = $event" />
+
       <!-- OpenAI APIKey images: backfill b64_json from url -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'apikey'"
@@ -4114,6 +4116,7 @@
 </template>
 
 <script setup lang="ts">
+import OpenAIImageParamRulesEditor from './OpenAIImageParamRulesEditor.vue'
 import MediaAccountModelsEditor from './MediaAccountModelsEditor.vue'
 import type { MediaCapability } from '@/types/media'
 import { ref, reactive, computed, watch } from 'vue'
@@ -4720,6 +4723,8 @@ const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
+const imageParamRules = ref<unknown>(null)
+const imageParamRulesValid = ref(true)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
@@ -5241,6 +5246,7 @@ watch(
     headerOverrideEnabled.value = false
     headerOverrideRows.value = []
     openAIImagesUrlToB64JsonEnabled.value = false
+    imageParamRules.value = null
     grokOAuthCustomBaseUrlEnabled.value = false
     grokOAuthBaseUrl.value = ''
     // Reset OAuth states
@@ -5678,6 +5684,7 @@ const resetForm = () => {
   headerOverrideEnabled.value = false
   headerOverrideRows.value = []
   openAIImagesUrlToB64JsonEnabled.value = false
+  imageParamRules.value = null
   grokOAuthCustomBaseUrlEnabled.value = false
   grokOAuthBaseUrl.value = ''
   interceptWarmupRequests.value = false
@@ -5817,6 +5824,8 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   } else {
     delete extra.openai_responses_mode
   }
+  if (accountCategory.value === 'apikey' && imageParamRules.value) extra.openai_images_request_params = imageParamRules.value
+  else delete extra.openai_images_request_params
   if (accountCategory.value === 'apikey' && openAIImagesUrlToB64JsonEnabled.value) {
     extra.images_url_to_b64_json = true
   } else {
@@ -5954,6 +5963,7 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 }
 
 const handleSubmit = async () => {
+  if (form.platform === 'openai' && accountCategory.value === 'apikey' && !imageParamRulesValid.value) { appStore.showError(t('probeConfig.invalidRules')); return }
   if (form.platform === "imagevideo" && !apiKeyBaseUrl.value.trim()) { appStore.showError("Base URL is required"); return }
   // For OAuth-based type, handle OAuth flow (goes to step 2)
   if (isOAuthFlow.value) {

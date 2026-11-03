@@ -34,6 +34,8 @@ GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
 OPS_DIAGNOSTICS_FILE = '252_media_account_concurrency_diagnostics.sql'
 SCOPED_ADMIN_KEYS_FILE = '253_scoped_admin_api_keys.sql'
 IMAGE_COUNT_BILLING_FILE = '254_group_image_count_billing.sql'
+MONITOR_PROBE_FILE = '255_channel_monitor_probe_config.sql'
+MONITOR_PROBE_TABLES = ('channel_monitors', 'channel_monitor_request_templates')
 GROUP_I18N_FILE = '242_group_i18n.sql'
 GEMINI_CACHE_FILE = '243_gemini_cached_contents.sql'
 GEMINI_CACHE_USAGE_FILE = '244_gemini_cached_contents_channel_usage.sql'
@@ -325,6 +327,68 @@ def reviewed_ops_diagnostics_upgrade(before, target, folder):
             'expected_migrations': target}
 
 
+def monitor_probe_statements():
+    return ' '.join(
+        f"ALTER TABLE {table} "
+        "ADD COLUMN IF NOT EXISTS probe_type VARCHAR(16) NOT NULL DEFAULT 'text', "
+        "ADD COLUMN IF NOT EXISTS image_probe_schedule_enabled BOOLEAN NOT NULL DEFAULT false, "
+        "ADD COLUMN IF NOT EXISTS custom_method VARCHAR(10) NOT NULL DEFAULT 'POST', "
+        "ADD COLUMN IF NOT EXISTS custom_path VARCHAR(500) NOT NULL DEFAULT '', "
+        "ADD COLUMN IF NOT EXISTS custom_body JSONB NULL, "
+        "ADD COLUMN IF NOT EXISTS custom_response_json_path VARCHAR(300) NOT NULL DEFAULT '', "
+        "ADD COLUMN IF NOT EXISTS custom_response_require_non_empty BOOLEAN NOT NULL DEFAULT true;"
+        for table in MONITOR_PROBE_TABLES)
+
+
+def monitor_probe_transaction(sql, checksum):
+    import re
+    if normalized_sql(sql) != monitor_probe_statements() or not re.fullmatch(r'[0-9a-f]{64}', checksum):
+        raise ValueError('outside reviewed monitor probe configuration migration')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            'SELECT pg_advisory_xact_lock(694208311321144027);\n' + monitor_probe_statements() +
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{MONITOR_PROBE_FILE}','{checksum}'); COMMIT;")
+
+
+def validate_monitor_probe_transaction(transaction):
+    import re
+    match = re.search(r"VALUES\('255_channel_monitor_probe_config\.sql','([0-9a-f]{64})'\)", transaction)
+    return bool(match and transaction == monitor_probe_transaction(monitor_probe_statements(), match[1]))
+
+
+def reviewed_monitor_probe_upgrade(before, target, folder):
+    if (set(target) - set(before) != {MONITOR_PROBE_FILE} or
+            {k: v for k, v in target.items() if k != MONITOR_PROBE_FILE} != before):
+        raise ValueError('migration inventory differs outside reviewed monitor probe configuration')
+    folder = Path(folder)
+    source = folder / MONITOR_PROBE_FILE
+    if not source.is_file():
+        # Older workers stage the previous allowlist before installing this manager.
+        for candidate in sorted((folder.parent.parent / 'automatic').glob('*-assets')):
+            manifest_path = candidate / 'deployment.json'
+            if not manifest_path.is_file() or not (candidate / MONITOR_PROBE_FILE).is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            if manifest.get('version') == folder.name and manifest.get('migrations') == target:
+                source = candidate / MONITOR_PROBE_FILE
+                break
+    sql = source.read_text(encoding='utf-8').replace('\r\n', '\n').strip()
+    checksum = hashlib.sha256(sql.encode()).hexdigest()
+    if checksum != target[MONITOR_PROBE_FILE]:
+        raise ValueError('monitor probe configuration checksum differs')
+    return {'filename': MONITOR_PROBE_FILE,
+            'transaction': monitor_probe_transaction(sql, checksum), 'expected_migrations': target}
+
+
+def monitor_probe_defaults_sql(table):
+    if table not in MONITOR_PROBE_TABLES:
+        raise ValueError('unreviewed monitor probe table')
+    return (f"SELECT count(*) FROM {table} WHERE probe_type IS DISTINCT FROM 'text' "
+            "OR image_probe_schedule_enabled IS DISTINCT FROM false "
+            "OR custom_method IS DISTINCT FROM 'POST' OR custom_path IS DISTINCT FROM '' "
+            "OR custom_body IS NOT NULL OR custom_response_json_path IS DISTINCT FROM '' "
+            "OR custom_response_require_non_empty IS DISTINCT FROM true;")
+
+
 def upstream_v0_2_19_statements():
     return {
         GROUP_I18N_FILE: (
@@ -473,6 +537,8 @@ def reviewed_group_availability_upgrade(before, target, folder):
 def reviewed_upgrade(before, target, folder):
     if before == target:
         return None
+    if set(target) - set(before) == {MONITOR_PROBE_FILE}:
+        return reviewed_monitor_probe_upgrade(before, target, folder)
     if set(target) - set(before) in UPSTREAM_V0_2_19_INVENTORIES:
         return reviewed_upstream_v0_2_19_upgrade(before, target, folder)
     if (set(target) - set(before)) & set(TEMPLATE_FILES):

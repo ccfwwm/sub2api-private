@@ -258,6 +258,7 @@ jobs:
           cp backend/migrations/252_media_account_concurrency_diagnostics.sql ./252_media_account_concurrency_diagnostics.sql
           cp backend/migrations/253_scoped_admin_api_keys.sql ./253_scoped_admin_api_keys.sql
           cp backend/migrations/254_group_image_count_billing.sql ./254_group_image_count_billing.sql
+          cp backend/migrations/255_channel_monitor_probe_config.sql ./255_channel_monitor_probe_config.sql
           sha256sum 242_group_i18n.sql 243_gemini_cached_contents.sql 244_gemini_cached_contents_channel_usage.sql 245_gemini_cached_contents_mutation_lease.sql 246_enable_gemini_image_generation_groups.sql >> checksums.txt
           sha256sum 243_media_tasks_and_pricing.sql >> checksums.txt
           sha256sum 244_unified_media_model_pricing.sql 245_unified_media_account_cost.sql 246_channel_monitor_imagevideo.sql >> checksums.txt
@@ -268,6 +269,7 @@ jobs:
           sha256sum 251_media_group_availability.sql >> checksums.txt
           sha256sum 252_media_account_concurrency_diagnostics.sql >> checksums.txt
           sha256sum 253_scoped_admin_api_keys.sql 254_group_image_count_billing.sql >> checksums.txt
+          sha256sum 255_channel_monitor_probe_config.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           python3 deploy/private/package_manager.py --output server-management.tar.gz
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
@@ -297,4 +299,5 @@ jobs:
             252_media_account_concurrency_diagnostics.sql
             253_scoped_admin_api_keys.sql
             254_group_image_count_billing.sql
+            255_channel_monitor_probe_config.sql
             docs-image-inspect.json

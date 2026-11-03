@@ -1,6 +1,8 @@
 .PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
+	src/components/account/__tests__/OpenAIImageParamRulesEditor.spec.ts \
+	src/components/admin/monitor/__tests__/MonitorProbeConfig.spec.ts \
 	src/components/modelPlaza/__tests__/MediaDescription.spec.ts \
 	src/components/modelPlaza/__tests__/PlazaMediaPricing.spec.ts \
 	src/router/__tests__/media-admin-route.spec.ts \
@@ -9,6 +11,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/views/__tests__/ImageVideoDocs.spec.ts \
 	src/views/__tests__/HomeView.compact.spec.ts \
 	src/components/admin/monitor/__tests__/MonitorMediaConfig.spec.ts \
+	src/components/admin/monitor/__tests__/MonitorTemplateManagerDialog.requests.spec.ts \
 	src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts \
 	src/views/admin/__tests__/MonitorFormDialog.accountSelector.spec.ts \
 	src/components/common/__tests__/ImageDeploymentPanel.spec.ts \

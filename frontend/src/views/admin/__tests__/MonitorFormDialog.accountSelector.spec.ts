@@ -171,6 +171,49 @@ describe('MonitorFormDialog linked account selector', () => {
     monitorUpdate.mockReset().mockResolvedValue({})
   })
 
+  it('saves image probes as manual by default and preserves explicit schedule opt-in', async () => {
+    const wrapper = mountDialog(makeMonitor())
+    await flushPromises()
+    await wrapper.get('[data-testid="probe-type"]').setValue('image')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate.mock.calls[0][1]).toMatchObject({ probe_type: 'image', image_probe_schedule_enabled: false })
+    await wrapper.get('[data-testid="probe-schedule"]').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate.mock.calls[1][1]).toMatchObject({ probe_type: 'image', image_probe_schedule_enabled: true })
+  })
+
+  it('saves custom method, path, headers and body without requiring a model', async () => {
+    const wrapper = mountDialog(makeMonitor({ primary_model: '', extra_headers: { 'X-Probe': 'value' } }))
+    await flushPromises()
+    await wrapper.get('[data-testid="probe-type"]').setValue('custom')
+    await wrapper.get('[data-testid="probe-path"]').setValue('/v1/custom/check')
+    await wrapper.get('[data-testid="probe-body"]').setValue('{"prompt":"hello"}')
+    await wrapper.get('[data-testid="probe-response-path"]').setValue('data.0.text')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate.mock.calls[0][1]).toMatchObject({
+      probe_type: 'custom', image_probe_schedule_enabled: false, primary_model: 'custom',
+      custom_method: 'POST', custom_path: '/v1/custom/check', custom_body: { prompt: 'hello' },
+      custom_response_json_path: 'data.0.text', custom_response_require_non_empty: true, extra_headers: { 'X-Probe': 'value' },
+    })
+  })
+
+  it('blocks malformed custom JSON and clears stale validation after switching provider', async () => {
+    const wrapper = mountDialog(makeMonitor({ probe_type: 'custom', custom_path: '/health' }))
+    await flushPromises()
+    await wrapper.get('[data-testid="probe-body"]').setValue('{')
+    await wrapper.get('form').trigger('submit')
+    expect(monitorUpdate).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="monitor-provider-grok"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledTimes(1)
+    expect(monitorUpdate.mock.calls[0][1]).toMatchObject({ provider: 'grok', probe_type: 'text' })
+  })
+
   it('blocks media monitor saves until the pinned template configuration is valid', async () => {
     const body = { media_monitor: { mode: 'generation', models: {} } }
     const wrapper = mountDialog(makeMonitor({ provider: 'imagevideo', primary_model: 'exact-model', body_override: body }))

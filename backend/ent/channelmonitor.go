@@ -33,6 +33,20 @@ type ChannelMonitor struct {
 	AccountID *int64 `json:"account_id,omitempty"`
 	// OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions
 	APIMode string `json:"api_mode,omitempty"`
+	// ProbeType holds the value of the "probe_type" field.
+	ProbeType string `json:"probe_type,omitempty"`
+	// ImageProbeScheduleEnabled holds the value of the "image_probe_schedule_enabled" field.
+	ImageProbeScheduleEnabled bool `json:"image_probe_schedule_enabled,omitempty"`
+	// CustomMethod holds the value of the "custom_method" field.
+	CustomMethod string `json:"custom_method,omitempty"`
+	// CustomPath holds the value of the "custom_path" field.
+	CustomPath string `json:"custom_path,omitempty"`
+	// CustomBody holds the value of the "custom_body" field.
+	CustomBody map[string]interface{} `json:"custom_body,omitempty"`
+	// CustomResponseJSONPath holds the value of the "custom_response_json_path" field.
+	CustomResponseJSONPath string `json:"custom_response_json_path,omitempty"`
+	// CustomResponseRequireNonEmpty holds the value of the "custom_response_require_non_empty" field.
+	CustomResponseRequireNonEmpty bool `json:"custom_response_require_non_empty,omitempty"`
 	// Provider base origin, e.g. https://api.openai.com; empty for quota-only monitors
 	Endpoint string `json:"endpoint,omitempty"`
 	// AES-256-GCM encrypted API key
@@ -114,13 +128,13 @@ func (*ChannelMonitor) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case channelmonitor.FieldExtraModels, channelmonitor.FieldExtraHeaders, channelmonitor.FieldBodyOverride:
+		case channelmonitor.FieldCustomBody, channelmonitor.FieldExtraModels, channelmonitor.FieldExtraHeaders, channelmonitor.FieldBodyOverride:
 			values[i] = new([]byte)
-		case channelmonitor.FieldEnabled:
+		case channelmonitor.FieldImageProbeScheduleEnabled, channelmonitor.FieldCustomResponseRequireNonEmpty, channelmonitor.FieldEnabled:
 			values[i] = new(sql.NullBool)
 		case channelmonitor.FieldID, channelmonitor.FieldAccountID, channelmonitor.FieldIntervalSeconds, channelmonitor.FieldJitterSeconds, channelmonitor.FieldCreatedBy, channelmonitor.FieldTemplateID:
 			values[i] = new(sql.NullInt64)
-		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldCheckMode, channelmonitor.FieldAPIMode, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode:
+		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldCheckMode, channelmonitor.FieldAPIMode, channelmonitor.FieldProbeType, channelmonitor.FieldCustomMethod, channelmonitor.FieldCustomPath, channelmonitor.FieldCustomResponseJSONPath, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode:
 			values[i] = new(sql.NullString)
 		case channelmonitor.FieldCreatedAt, channelmonitor.FieldUpdatedAt, channelmonitor.FieldLastCheckedAt:
 			values[i] = new(sql.NullTime)
@@ -187,6 +201,50 @@ func (_m *ChannelMonitor) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field api_mode", values[i])
 			} else if value.Valid {
 				_m.APIMode = value.String
+			}
+		case channelmonitor.FieldProbeType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field probe_type", values[i])
+			} else if value.Valid {
+				_m.ProbeType = value.String
+			}
+		case channelmonitor.FieldImageProbeScheduleEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field image_probe_schedule_enabled", values[i])
+			} else if value.Valid {
+				_m.ImageProbeScheduleEnabled = value.Bool
+			}
+		case channelmonitor.FieldCustomMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_method", values[i])
+			} else if value.Valid {
+				_m.CustomMethod = value.String
+			}
+		case channelmonitor.FieldCustomPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_path", values[i])
+			} else if value.Valid {
+				_m.CustomPath = value.String
+			}
+		case channelmonitor.FieldCustomBody:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_body", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CustomBody); err != nil {
+					return fmt.Errorf("unmarshal field custom_body: %w", err)
+				}
+			}
+		case channelmonitor.FieldCustomResponseJSONPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_response_json_path", values[i])
+			} else if value.Valid {
+				_m.CustomResponseJSONPath = value.String
+			}
+		case channelmonitor.FieldCustomResponseRequireNonEmpty:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_response_require_non_empty", values[i])
+			} else if value.Valid {
+				_m.CustomResponseRequireNonEmpty = value.Bool
 			}
 		case channelmonitor.FieldEndpoint:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -353,6 +411,27 @@ func (_m *ChannelMonitor) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("api_mode=")
 	builder.WriteString(_m.APIMode)
+	builder.WriteString(", ")
+	builder.WriteString("probe_type=")
+	builder.WriteString(_m.ProbeType)
+	builder.WriteString(", ")
+	builder.WriteString("image_probe_schedule_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageProbeScheduleEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("custom_method=")
+	builder.WriteString(_m.CustomMethod)
+	builder.WriteString(", ")
+	builder.WriteString("custom_path=")
+	builder.WriteString(_m.CustomPath)
+	builder.WriteString(", ")
+	builder.WriteString("custom_body=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomBody))
+	builder.WriteString(", ")
+	builder.WriteString("custom_response_json_path=")
+	builder.WriteString(_m.CustomResponseJSONPath)
+	builder.WriteString(", ")
+	builder.WriteString("custom_response_require_non_empty=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomResponseRequireNonEmpty))
 	builder.WriteString(", ")
 	builder.WriteString("endpoint=")
 	builder.WriteString(_m.Endpoint)

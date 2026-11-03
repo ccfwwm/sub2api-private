@@ -43,6 +43,13 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
 		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
+		SetProbeType(m.ProbeType).
+		SetImageProbeScheduleEnabled(m.ImageProbeScheduleEnabled).
+		SetCustomMethod(m.CustomMethod).
+		SetCustomPath(m.CustomPath).
+		SetCustomBody(m.CustomBody).
+		SetCustomResponseJSONPath(m.CustomResponseJSONPath).
+		SetCustomResponseRequireNonEmpty(m.CustomResponseRequireNonEmpty).
 		SetEndpoint(m.Endpoint).
 		SetAPIKeyEncrypted(m.APIKey). // 调用方传入的已是密文
 		SetPrimaryModel(m.PrimaryModel).
@@ -115,6 +122,13 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
 		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
+		SetProbeType(m.ProbeType).
+		SetImageProbeScheduleEnabled(m.ImageProbeScheduleEnabled).
+		SetCustomMethod(m.CustomMethod).
+		SetCustomPath(m.CustomPath).
+		SetCustomBody(m.CustomBody).
+		SetCustomResponseJSONPath(m.CustomResponseJSONPath).
+		SetCustomResponseRequireNonEmpty(m.CustomResponseRequireNonEmpty).
 		SetEndpoint(m.Endpoint).
 		SetAPIKeyEncrypted(m.APIKey).
 		SetPrimaryModel(m.PrimaryModel).
@@ -140,6 +154,9 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		updater = updater.SetBodyOverride(m.BodyOverride)
 	} else {
 		updater = updater.ClearBodyOverride()
+	}
+	if m.CustomBody == nil {
+		updater = updater.ClearCustomBody()
 	}
 
 	updated, err := updater.Save(ctx)
@@ -770,27 +787,34 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 	duplicateOperationID := headers[service.ChannelMonitorDuplicateOperationIDMetadataKey]
 	delete(headers, service.ChannelMonitorDuplicateOperationIDMetadataKey)
 	out := &service.ChannelMonitor{
-		ID:                   row.ID,
-		Name:                 row.Name,
-		Provider:             string(row.Provider),
-		APIMode:              defaultAPIModeRepo(row.APIMode),
-		Endpoint:             row.Endpoint,
-		APIKey:               row.APIKeyEncrypted, // 仍为密文，service 层负责解密
-		PrimaryModel:         row.PrimaryModel,
-		ExtraModels:          extras,
-		GroupName:            row.GroupName,
-		Enabled:              row.Enabled,
-		IntervalSeconds:      row.IntervalSeconds,
-		JitterSeconds:        row.JitterSeconds,
-		LastCheckedAt:        row.LastCheckedAt,
-		CreatedBy:            row.CreatedBy,
-		CreatedAt:            row.CreatedAt,
-		UpdatedAt:            row.UpdatedAt,
-		ExtraHeaders:         headers,
-		BodyOverrideMode:     row.BodyOverrideMode,
-		BodyOverride:         row.BodyOverride,
-		CheckMode:            defaultCheckModeRepo(row.CheckMode),
-		DuplicateOperationID: duplicateOperationID,
+		ID:                            row.ID,
+		Name:                          row.Name,
+		Provider:                      string(row.Provider),
+		APIMode:                       defaultAPIModeRepo(row.APIMode),
+		ProbeType:                     row.ProbeType,
+		ImageProbeScheduleEnabled:     row.ImageProbeScheduleEnabled,
+		CustomMethod:                  row.CustomMethod,
+		CustomPath:                    row.CustomPath,
+		CustomBody:                    row.CustomBody,
+		CustomResponseJSONPath:        row.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: row.CustomResponseRequireNonEmpty,
+		Endpoint:                      row.Endpoint,
+		APIKey:                        row.APIKeyEncrypted, // 仍为密文，service 层负责解密
+		PrimaryModel:                  row.PrimaryModel,
+		ExtraModels:                   extras,
+		GroupName:                     row.GroupName,
+		Enabled:                       row.Enabled,
+		IntervalSeconds:               row.IntervalSeconds,
+		JitterSeconds:                 row.JitterSeconds,
+		LastCheckedAt:                 row.LastCheckedAt,
+		CreatedBy:                     row.CreatedBy,
+		CreatedAt:                     row.CreatedAt,
+		UpdatedAt:                     row.UpdatedAt,
+		ExtraHeaders:                  headers,
+		BodyOverrideMode:              row.BodyOverrideMode,
+		BodyOverride:                  row.BodyOverride,
+		CheckMode:                     defaultCheckModeRepo(row.CheckMode),
+		DuplicateOperationID:          duplicateOperationID,
 	}
 	if row.TemplateID != nil {
 		id := *row.TemplateID

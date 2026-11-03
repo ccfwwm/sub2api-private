@@ -2217,6 +2217,8 @@
         </div>
       </div>
 
+      <OpenAIImageParamRulesEditor v-if="account?.platform === 'openai' && account?.type === 'apikey'" v-model="imageParamRules" @validity="imageParamRulesValid = $event" />
+
       <!-- OpenAI APIKey images: backfill b64_json from url -->
       <div
         v-if="account?.platform === 'openai' && account?.type === 'apikey'"
@@ -3384,6 +3386,7 @@
 </template>
 
 <script setup lang="ts">
+import OpenAIImageParamRulesEditor from './OpenAIImageParamRulesEditor.vue'
 import MediaAccountModelsEditor from './MediaAccountModelsEditor.vue'
 import { accountMediaCapabilities, type MediaCapability } from '@/types/media'
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
@@ -4162,6 +4165,8 @@ const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
+const imageParamRules = ref<unknown>(null)
+const imageParamRulesValid = ref(true)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
@@ -4640,6 +4645,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
 	openAIImagesUrlToB64JsonEnabled.value = extra?.images_url_to_b64_json === true
+  imageParamRules.value = extra?.openai_images_request_params ?? null
 	autoPause5hThreshold.value = typeof extra?.auto_pause_5h_threshold === 'number' ? extra.auto_pause_5h_threshold * 100 : null
 	autoPause7dThreshold.value = typeof extra?.auto_pause_7d_threshold === 'number' ? extra.auto_pause_7d_threshold * 100 : null
 	autoPause5hDisabled.value = extra?.auto_pause_5h_disabled === true
@@ -5636,6 +5642,7 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
 }
 
 const handleSubmit = async () => {
+  if (props.account?.platform === 'openai' && props.account?.type === 'apikey' && !imageParamRulesValid.value) { appStore.showError(t('probeConfig.invalidRules')); return }
   if (!props.account) return
   const accountID = props.account.id
 
@@ -6243,6 +6250,8 @@ const handleSubmit = async () => {
         } else {
           newExtra.openai_responses_mode = openAIResponsesMode.value
         }
+        if (imageParamRules.value) newExtra.openai_images_request_params = imageParamRules.value
+        else delete newExtra.openai_images_request_params
         if (openAIImagesUrlToB64JsonEnabled.value) {
           newExtra.images_url_to_b64_json = true
         } else {

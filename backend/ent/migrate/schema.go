@@ -627,6 +627,13 @@ var (
 		{Name: "check_mode", Type: field.TypeString, Size: 32, Default: "probe"},
 		{Name: "account_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "api_mode", Type: field.TypeString, Size: 32, Default: "chat_completions"},
+		{Name: "probe_type", Type: field.TypeString, Size: 16, Default: "text"},
+		{Name: "image_probe_schedule_enabled", Type: field.TypeBool, Default: false},
+		{Name: "custom_method", Type: field.TypeString, Size: 10, Default: "POST"},
+		{Name: "custom_path", Type: field.TypeString, Size: 500, Default: ""},
+		{Name: "custom_body", Type: field.TypeJSON, Nullable: true},
+		{Name: "custom_response_json_path", Type: field.TypeString, Size: 300, Default: ""},
+		{Name: "custom_response_require_non_empty", Type: field.TypeBool, Default: true},
 		{Name: "endpoint", Type: field.TypeString, Size: 500},
 		{Name: "api_key_encrypted", Type: field.TypeString},
 		{Name: "primary_model", Type: field.TypeString, Size: 200},
@@ -650,7 +657,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitors_channel_monitor_request_templates_request_template",
-				Columns:    []*schema.Column{ChannelMonitorsColumns[21]},
+				Columns:    []*schema.Column{ChannelMonitorsColumns[28]},
 				RefColumns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -659,7 +666,7 @@ var (
 			{
 				Name:    "channelmonitor_enabled_last_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[13], ChannelMonitorsColumns[16]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[20], ChannelMonitorsColumns[23]},
 			},
 			{
 				Name:    "channelmonitor_provider",
@@ -674,12 +681,12 @@ var (
 			{
 				Name:    "channelmonitor_group_name",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[12]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[19]},
 			},
 			{
 				Name:    "channelmonitor_template_id",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[21]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[28]},
 			},
 			{
 				Name:    "channelmonitor_account_id",
@@ -778,6 +785,13 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "provider", Type: field.TypeEnum, Enums: []string{"openai", "anthropic", "gemini", "grok", "antigravity", "kimi", "zhipu", "deepseek", "minimax", "opencode_go", "imagevideo"}},
 		{Name: "api_mode", Type: field.TypeString, Size: 32, Default: "chat_completions"},
+		{Name: "probe_type", Type: field.TypeString, Size: 16, Default: "text"},
+		{Name: "image_probe_schedule_enabled", Type: field.TypeBool, Default: false},
+		{Name: "custom_method", Type: field.TypeString, Size: 10, Default: "POST"},
+		{Name: "custom_path", Type: field.TypeString, Size: 500, Default: ""},
+		{Name: "custom_body", Type: field.TypeJSON, Nullable: true},
+		{Name: "custom_response_json_path", Type: field.TypeString, Size: 300, Default: ""},
+		{Name: "custom_response_require_non_empty", Type: field.TypeBool, Default: true},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 500, Default: ""},
 		{Name: "extra_headers", Type: field.TypeJSON},
 		{Name: "body_override_mode", Type: field.TypeString, Size: 10, Default: "off"},

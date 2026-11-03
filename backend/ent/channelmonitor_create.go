@@ -107,6 +107,96 @@ func (_c *ChannelMonitorCreate) SetNillableAPIMode(v *string) *ChannelMonitorCre
 	return _c
 }
 
+// SetProbeType sets the "probe_type" field.
+func (_c *ChannelMonitorCreate) SetProbeType(v string) *ChannelMonitorCreate {
+	_c.mutation.SetProbeType(v)
+	return _c
+}
+
+// SetNillableProbeType sets the "probe_type" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableProbeType(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetProbeType(*v)
+	}
+	return _c
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (_c *ChannelMonitorCreate) SetImageProbeScheduleEnabled(v bool) *ChannelMonitorCreate {
+	_c.mutation.SetImageProbeScheduleEnabled(v)
+	return _c
+}
+
+// SetNillableImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableImageProbeScheduleEnabled(v *bool) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetImageProbeScheduleEnabled(*v)
+	}
+	return _c
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (_c *ChannelMonitorCreate) SetCustomMethod(v string) *ChannelMonitorCreate {
+	_c.mutation.SetCustomMethod(v)
+	return _c
+}
+
+// SetNillableCustomMethod sets the "custom_method" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableCustomMethod(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetCustomMethod(*v)
+	}
+	return _c
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (_c *ChannelMonitorCreate) SetCustomPath(v string) *ChannelMonitorCreate {
+	_c.mutation.SetCustomPath(v)
+	return _c
+}
+
+// SetNillableCustomPath sets the "custom_path" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableCustomPath(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetCustomPath(*v)
+	}
+	return _c
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (_c *ChannelMonitorCreate) SetCustomBody(v map[string]interface{}) *ChannelMonitorCreate {
+	_c.mutation.SetCustomBody(v)
+	return _c
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (_c *ChannelMonitorCreate) SetCustomResponseJSONPath(v string) *ChannelMonitorCreate {
+	_c.mutation.SetCustomResponseJSONPath(v)
+	return _c
+}
+
+// SetNillableCustomResponseJSONPath sets the "custom_response_json_path" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableCustomResponseJSONPath(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetCustomResponseJSONPath(*v)
+	}
+	return _c
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (_c *ChannelMonitorCreate) SetCustomResponseRequireNonEmpty(v bool) *ChannelMonitorCreate {
+	_c.mutation.SetCustomResponseRequireNonEmpty(v)
+	return _c
+}
+
+// SetNillableCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableCustomResponseRequireNonEmpty(v *bool) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetCustomResponseRequireNonEmpty(*v)
+	}
+	return _c
+}
+
 // SetEndpoint sets the "endpoint" field.
 func (_c *ChannelMonitorCreate) SetEndpoint(v string) *ChannelMonitorCreate {
 	_c.mutation.SetEndpoint(v)
@@ -339,6 +429,30 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultAPIMode
 		_c.mutation.SetAPIMode(v)
 	}
+	if _, ok := _c.mutation.ProbeType(); !ok {
+		v := channelmonitor.DefaultProbeType
+		_c.mutation.SetProbeType(v)
+	}
+	if _, ok := _c.mutation.ImageProbeScheduleEnabled(); !ok {
+		v := channelmonitor.DefaultImageProbeScheduleEnabled
+		_c.mutation.SetImageProbeScheduleEnabled(v)
+	}
+	if _, ok := _c.mutation.CustomMethod(); !ok {
+		v := channelmonitor.DefaultCustomMethod
+		_c.mutation.SetCustomMethod(v)
+	}
+	if _, ok := _c.mutation.CustomPath(); !ok {
+		v := channelmonitor.DefaultCustomPath
+		_c.mutation.SetCustomPath(v)
+	}
+	if _, ok := _c.mutation.CustomResponseJSONPath(); !ok {
+		v := channelmonitor.DefaultCustomResponseJSONPath
+		_c.mutation.SetCustomResponseJSONPath(v)
+	}
+	if _, ok := _c.mutation.CustomResponseRequireNonEmpty(); !ok {
+		v := channelmonitor.DefaultCustomResponseRequireNonEmpty
+		_c.mutation.SetCustomResponseRequireNonEmpty(v)
+	}
 	if _, ok := _c.mutation.ExtraModels(); !ok {
 		v := channelmonitor.DefaultExtraModels
 		_c.mutation.SetExtraModels(v)
@@ -404,6 +518,44 @@ func (_c *ChannelMonitorCreate) check() error {
 		if err := channelmonitor.APIModeValidator(v); err != nil {
 			return &ValidationError{Name: "api_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_mode": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ProbeType(); !ok {
+		return &ValidationError{Name: "probe_type", err: errors.New(`ent: missing required field "ChannelMonitor.probe_type"`)}
+	}
+	if v, ok := _c.mutation.ProbeType(); ok {
+		if err := channelmonitor.ProbeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "probe_type", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.probe_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ImageProbeScheduleEnabled(); !ok {
+		return &ValidationError{Name: "image_probe_schedule_enabled", err: errors.New(`ent: missing required field "ChannelMonitor.image_probe_schedule_enabled"`)}
+	}
+	if _, ok := _c.mutation.CustomMethod(); !ok {
+		return &ValidationError{Name: "custom_method", err: errors.New(`ent: missing required field "ChannelMonitor.custom_method"`)}
+	}
+	if v, ok := _c.mutation.CustomMethod(); ok {
+		if err := channelmonitor.CustomMethodValidator(v); err != nil {
+			return &ValidationError{Name: "custom_method", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.custom_method": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.CustomPath(); !ok {
+		return &ValidationError{Name: "custom_path", err: errors.New(`ent: missing required field "ChannelMonitor.custom_path"`)}
+	}
+	if v, ok := _c.mutation.CustomPath(); ok {
+		if err := channelmonitor.CustomPathValidator(v); err != nil {
+			return &ValidationError{Name: "custom_path", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.custom_path": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.CustomResponseJSONPath(); !ok {
+		return &ValidationError{Name: "custom_response_json_path", err: errors.New(`ent: missing required field "ChannelMonitor.custom_response_json_path"`)}
+	}
+	if v, ok := _c.mutation.CustomResponseJSONPath(); ok {
+		if err := channelmonitor.CustomResponseJSONPathValidator(v); err != nil {
+			return &ValidationError{Name: "custom_response_json_path", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.custom_response_json_path": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.CustomResponseRequireNonEmpty(); !ok {
+		return &ValidationError{Name: "custom_response_require_non_empty", err: errors.New(`ent: missing required field "ChannelMonitor.custom_response_require_non_empty"`)}
 	}
 	if _, ok := _c.mutation.Endpoint(); !ok {
 		return &ValidationError{Name: "endpoint", err: errors.New(`ent: missing required field "ChannelMonitor.endpoint"`)}
@@ -524,6 +676,34 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.APIMode(); ok {
 		_spec.SetField(channelmonitor.FieldAPIMode, field.TypeString, value)
 		_node.APIMode = value
+	}
+	if value, ok := _c.mutation.ProbeType(); ok {
+		_spec.SetField(channelmonitor.FieldProbeType, field.TypeString, value)
+		_node.ProbeType = value
+	}
+	if value, ok := _c.mutation.ImageProbeScheduleEnabled(); ok {
+		_spec.SetField(channelmonitor.FieldImageProbeScheduleEnabled, field.TypeBool, value)
+		_node.ImageProbeScheduleEnabled = value
+	}
+	if value, ok := _c.mutation.CustomMethod(); ok {
+		_spec.SetField(channelmonitor.FieldCustomMethod, field.TypeString, value)
+		_node.CustomMethod = value
+	}
+	if value, ok := _c.mutation.CustomPath(); ok {
+		_spec.SetField(channelmonitor.FieldCustomPath, field.TypeString, value)
+		_node.CustomPath = value
+	}
+	if value, ok := _c.mutation.CustomBody(); ok {
+		_spec.SetField(channelmonitor.FieldCustomBody, field.TypeJSON, value)
+		_node.CustomBody = value
+	}
+	if value, ok := _c.mutation.CustomResponseJSONPath(); ok {
+		_spec.SetField(channelmonitor.FieldCustomResponseJSONPath, field.TypeString, value)
+		_node.CustomResponseJSONPath = value
+	}
+	if value, ok := _c.mutation.CustomResponseRequireNonEmpty(); ok {
+		_spec.SetField(channelmonitor.FieldCustomResponseRequireNonEmpty, field.TypeBool, value)
+		_node.CustomResponseRequireNonEmpty = value
 	}
 	if value, ok := _c.mutation.Endpoint(); ok {
 		_spec.SetField(channelmonitor.FieldEndpoint, field.TypeString, value)
@@ -759,6 +939,96 @@ func (u *ChannelMonitorUpsert) SetAPIMode(v string) *ChannelMonitorUpsert {
 // UpdateAPIMode sets the "api_mode" field to the value that was provided on create.
 func (u *ChannelMonitorUpsert) UpdateAPIMode() *ChannelMonitorUpsert {
 	u.SetExcluded(channelmonitor.FieldAPIMode)
+	return u
+}
+
+// SetProbeType sets the "probe_type" field.
+func (u *ChannelMonitorUpsert) SetProbeType(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldProbeType, v)
+	return u
+}
+
+// UpdateProbeType sets the "probe_type" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateProbeType() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldProbeType)
+	return u
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (u *ChannelMonitorUpsert) SetImageProbeScheduleEnabled(v bool) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldImageProbeScheduleEnabled, v)
+	return u
+}
+
+// UpdateImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateImageProbeScheduleEnabled() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldImageProbeScheduleEnabled)
+	return u
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (u *ChannelMonitorUpsert) SetCustomMethod(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldCustomMethod, v)
+	return u
+}
+
+// UpdateCustomMethod sets the "custom_method" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateCustomMethod() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldCustomMethod)
+	return u
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (u *ChannelMonitorUpsert) SetCustomPath(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldCustomPath, v)
+	return u
+}
+
+// UpdateCustomPath sets the "custom_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateCustomPath() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldCustomPath)
+	return u
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (u *ChannelMonitorUpsert) SetCustomBody(v map[string]interface{}) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldCustomBody, v)
+	return u
+}
+
+// UpdateCustomBody sets the "custom_body" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateCustomBody() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldCustomBody)
+	return u
+}
+
+// ClearCustomBody clears the value of the "custom_body" field.
+func (u *ChannelMonitorUpsert) ClearCustomBody() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldCustomBody)
+	return u
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (u *ChannelMonitorUpsert) SetCustomResponseJSONPath(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldCustomResponseJSONPath, v)
+	return u
+}
+
+// UpdateCustomResponseJSONPath sets the "custom_response_json_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateCustomResponseJSONPath() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldCustomResponseJSONPath)
+	return u
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (u *ChannelMonitorUpsert) SetCustomResponseRequireNonEmpty(v bool) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldCustomResponseRequireNonEmpty, v)
+	return u
+}
+
+// UpdateCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateCustomResponseRequireNonEmpty() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldCustomResponseRequireNonEmpty)
 	return u
 }
 
@@ -1112,6 +1382,111 @@ func (u *ChannelMonitorUpsertOne) SetAPIMode(v string) *ChannelMonitorUpsertOne 
 func (u *ChannelMonitorUpsertOne) UpdateAPIMode() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateAPIMode()
+	})
+}
+
+// SetProbeType sets the "probe_type" field.
+func (u *ChannelMonitorUpsertOne) SetProbeType(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetProbeType(v)
+	})
+}
+
+// UpdateProbeType sets the "probe_type" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateProbeType() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateProbeType()
+	})
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (u *ChannelMonitorUpsertOne) SetImageProbeScheduleEnabled(v bool) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetImageProbeScheduleEnabled(v)
+	})
+}
+
+// UpdateImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateImageProbeScheduleEnabled() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateImageProbeScheduleEnabled()
+	})
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (u *ChannelMonitorUpsertOne) SetCustomMethod(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomMethod(v)
+	})
+}
+
+// UpdateCustomMethod sets the "custom_method" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateCustomMethod() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomMethod()
+	})
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (u *ChannelMonitorUpsertOne) SetCustomPath(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomPath(v)
+	})
+}
+
+// UpdateCustomPath sets the "custom_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateCustomPath() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomPath()
+	})
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (u *ChannelMonitorUpsertOne) SetCustomBody(v map[string]interface{}) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomBody(v)
+	})
+}
+
+// UpdateCustomBody sets the "custom_body" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateCustomBody() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomBody()
+	})
+}
+
+// ClearCustomBody clears the value of the "custom_body" field.
+func (u *ChannelMonitorUpsertOne) ClearCustomBody() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearCustomBody()
+	})
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (u *ChannelMonitorUpsertOne) SetCustomResponseJSONPath(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomResponseJSONPath(v)
+	})
+}
+
+// UpdateCustomResponseJSONPath sets the "custom_response_json_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateCustomResponseJSONPath() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomResponseJSONPath()
+	})
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (u *ChannelMonitorUpsertOne) SetCustomResponseRequireNonEmpty(v bool) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomResponseRequireNonEmpty(v)
+	})
+}
+
+// UpdateCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateCustomResponseRequireNonEmpty() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomResponseRequireNonEmpty()
 	})
 }
 
@@ -1666,6 +2041,111 @@ func (u *ChannelMonitorUpsertBulk) SetAPIMode(v string) *ChannelMonitorUpsertBul
 func (u *ChannelMonitorUpsertBulk) UpdateAPIMode() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateAPIMode()
+	})
+}
+
+// SetProbeType sets the "probe_type" field.
+func (u *ChannelMonitorUpsertBulk) SetProbeType(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetProbeType(v)
+	})
+}
+
+// UpdateProbeType sets the "probe_type" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateProbeType() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateProbeType()
+	})
+}
+
+// SetImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field.
+func (u *ChannelMonitorUpsertBulk) SetImageProbeScheduleEnabled(v bool) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetImageProbeScheduleEnabled(v)
+	})
+}
+
+// UpdateImageProbeScheduleEnabled sets the "image_probe_schedule_enabled" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateImageProbeScheduleEnabled() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateImageProbeScheduleEnabled()
+	})
+}
+
+// SetCustomMethod sets the "custom_method" field.
+func (u *ChannelMonitorUpsertBulk) SetCustomMethod(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomMethod(v)
+	})
+}
+
+// UpdateCustomMethod sets the "custom_method" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateCustomMethod() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomMethod()
+	})
+}
+
+// SetCustomPath sets the "custom_path" field.
+func (u *ChannelMonitorUpsertBulk) SetCustomPath(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomPath(v)
+	})
+}
+
+// UpdateCustomPath sets the "custom_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateCustomPath() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomPath()
+	})
+}
+
+// SetCustomBody sets the "custom_body" field.
+func (u *ChannelMonitorUpsertBulk) SetCustomBody(v map[string]interface{}) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomBody(v)
+	})
+}
+
+// UpdateCustomBody sets the "custom_body" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateCustomBody() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomBody()
+	})
+}
+
+// ClearCustomBody clears the value of the "custom_body" field.
+func (u *ChannelMonitorUpsertBulk) ClearCustomBody() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearCustomBody()
+	})
+}
+
+// SetCustomResponseJSONPath sets the "custom_response_json_path" field.
+func (u *ChannelMonitorUpsertBulk) SetCustomResponseJSONPath(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomResponseJSONPath(v)
+	})
+}
+
+// UpdateCustomResponseJSONPath sets the "custom_response_json_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateCustomResponseJSONPath() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomResponseJSONPath()
+	})
+}
+
+// SetCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field.
+func (u *ChannelMonitorUpsertBulk) SetCustomResponseRequireNonEmpty(v bool) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetCustomResponseRequireNonEmpty(v)
+	})
+}
+
+// UpdateCustomResponseRequireNonEmpty sets the "custom_response_require_non_empty" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateCustomResponseRequireNonEmpty() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateCustomResponseRequireNonEmpty()
 	})
 }
 

@@ -16,8 +16,59 @@ from media_migrate import (SCOPED_ADMIN_KEYS_FILE, IMAGE_COUNT_BILLING_FILE, UPS
                            UPSTREAM_V0_2_19_UPGRADE, upstream_v0_2_19_statements,
                            upstream_v0_2_19_transaction, validate_upstream_v0_2_19_transaction)
 import tempfile
+from media_migrate import (MONITOR_PROBE_FILE, MONITOR_PROBE_TABLES, monitor_probe_transaction,
+                          validate_monitor_probe_transaction, monitor_probe_defaults_sql)
 
 class MediaMigrationGateTests(unittest.TestCase):
+    def test_monitor_probe_upgrade_is_exact_and_scheduling_stays_disabled(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        sql = (root / MONITOR_PROBE_FILE).read_text(encoding='utf-8').strip()
+        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, MONITOR_PROBE_FILE: checksum}
+        transaction = monitor_probe_transaction(sql, checksum)
+        self.assertTrue(validate_monitor_probe_transaction(transaction))
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, MONITOR_PROBE_FILE).write_text(sql, encoding='utf-8')
+            self.assertEqual(reviewed_upgrade(before, target, folder)['transaction'], transaction)
+            self.assertIsNone(reviewed_upgrade(target, target, folder))
+            for bad in ({**target, 'old.sql': 'c' * 64},
+                        {**target, 'unexpected.sql': 'd' * 64},
+                        {**target, MONITOR_PROBE_FILE: 'e' * 64}):
+                with self.subTest(target=bad), self.assertRaises(ValueError):
+                    reviewed_upgrade(before, bad, folder)
+        for bad in (transaction.replace('DEFAULT false', 'DEFAULT true'),
+                    transaction.replace("DEFAULT 'text'", "DEFAULT 'image'"),
+                    transaction.replace(' COMMIT;', ' DELETE FROM accounts; COMMIT;')):
+            self.assertFalse(validate_monitor_probe_transaction(bad))
+        for table in MONITOR_PROBE_TABLES:
+            query = monitor_probe_defaults_sql(table)
+            self.assertIn('image_probe_schedule_enabled IS DISTINCT FROM false', query)
+            self.assertIn("probe_type IS DISTINCT FROM 'text'", query)
+        with self.assertRaises(ValueError):
+            monitor_probe_defaults_sql('accounts')
+
+    def test_old_worker_loads_monitor_probe_sql_only_from_matching_release_assets(self):
+        root = Path(__file__).resolve().parents[2] / 'backend/migrations'
+        sql = (root / MONITOR_PROBE_FILE).read_text(encoding='utf-8').strip()
+        before = {'old.sql': 'b' * 64}
+        target = {**before, MONITOR_PROBE_FILE: hashlib.sha256(sql.encode()).hexdigest()}
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            release, assets = state / 'releases/v1.3.23', state / 'automatic/receipt-assets'
+            release.mkdir(parents=True)
+            assets.mkdir(parents=True)
+            (assets / MONITOR_PROBE_FILE).write_text(sql, encoding='utf-8')
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.23', 'migrations': target}))
+            result = reviewed_upgrade(before, target, release)
+            self.assertTrue(validate_monitor_probe_transaction(result['transaction']))
+            (assets / MONITOR_PROBE_FILE).write_text(sql + ' DROP TABLE users;', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                reviewed_upgrade(before, target, release)
+            (assets / 'deployment.json').write_text(json.dumps({'version': 'v1.3.22', 'migrations': target}))
+            with self.assertRaises(FileNotFoundError):
+                reviewed_upgrade(before, target, release)
+
     def upstream_files(self):
         root = Path(__file__).resolve().parents[2] / 'backend/migrations'
         return {name: ((root / name).read_text(encoding='utf-8').strip(),

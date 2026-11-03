@@ -149,16 +149,22 @@ func (s *ChannelMonitorService) Get(ctx context.Context, id int64) (*ChannelMoni
 
 // Create 创建监控（内部加密 api_key）。
 func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCreateParams) (*ChannelMonitor, error) {
+	if defaultMonitorProbeType(p.ProbeType) == MonitorProbeTypeCustom && strings.TrimSpace(p.PrimaryModel) == "" {
+		p.PrimaryModel = "custom"
+	}
 	if err := validateMonitorMediaModels(p.Provider, strings.TrimSpace(p.PrimaryModel), normalizeModels(p.ExtraModels), p.BodyOverride); err != nil {
 		return nil, err
 	}
 	if err := validateCreateParams(p); err != nil {
 		return nil, err
 	}
-	if err := validateBodyModeForProtocol(p.Provider, p.APIMode, p.BodyOverrideMode, p.BodyOverride); err != nil {
+	if err := validateProbeBody(p.Provider, p.APIMode, p.ProbeType, p.BodyOverrideMode, p.BodyOverride); err != nil {
 		return nil, err
 	}
 	if err := validateExtraHeaders(p.ExtraHeaders); err != nil {
+		return nil, err
+	}
+	if err := validateMonitorProbeSettings(p.Provider, p.ProbeType, p.CustomMethod, p.CustomPath, p.CustomResponseJSONPath); err != nil {
 		return nil, err
 	}
 	if err := s.validateLinkedAccount(ctx, p.Provider, p.AccountID); err != nil {
@@ -170,24 +176,31 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		return nil, fmt.Errorf("encrypt api key: %w", err)
 	}
 	m := &ChannelMonitor{
-		Name:             strings.TrimSpace(p.Name),
-		Provider:         p.Provider,
-		APIMode:          defaultAPIMode(p.APIMode),
-		Endpoint:         normalizeEndpoint(p.Endpoint),
-		APIKey:           encrypted, // 注意：传入 repository 时该字段为密文
-		PrimaryModel:     normalizeMonitorPrimaryModel(p.Provider, checkMode, p.PrimaryModel),
-		ExtraModels:      normalizeModels(p.ExtraModels),
-		GroupName:        strings.TrimSpace(p.GroupName),
-		Enabled:          p.Enabled,
-		IntervalSeconds:  p.IntervalSeconds,
-		JitterSeconds:    p.JitterSeconds,
-		CreatedBy:        p.CreatedBy,
-		TemplateID:       p.TemplateID,
-		ExtraHeaders:     emptyHeadersIfNil(p.ExtraHeaders),
-		BodyOverrideMode: defaultBodyMode(p.BodyOverrideMode),
-		BodyOverride:     p.BodyOverride,
-		CheckMode:        checkMode,
-		AccountID:        cloneInt64Pointer(p.AccountID),
+		Name:                          strings.TrimSpace(p.Name),
+		Provider:                      p.Provider,
+		APIMode:                       defaultAPIMode(p.APIMode),
+		Endpoint:                      normalizeEndpoint(p.Endpoint),
+		APIKey:                        encrypted, // 注意：传入 repository 时该字段为密文
+		PrimaryModel:                  normalizeMonitorPrimaryModel(p.Provider, checkMode, p.PrimaryModel),
+		ExtraModels:                   normalizeModels(p.ExtraModels),
+		GroupName:                     strings.TrimSpace(p.GroupName),
+		Enabled:                       p.Enabled,
+		IntervalSeconds:               p.IntervalSeconds,
+		JitterSeconds:                 p.JitterSeconds,
+		CreatedBy:                     p.CreatedBy,
+		TemplateID:                    p.TemplateID,
+		ExtraHeaders:                  emptyHeadersIfNil(p.ExtraHeaders),
+		BodyOverrideMode:              defaultBodyMode(p.BodyOverrideMode),
+		BodyOverride:                  p.BodyOverride,
+		ProbeType:                     defaultMonitorProbeType(p.ProbeType),
+		ImageProbeScheduleEnabled:     p.ImageProbeScheduleEnabled,
+		CustomMethod:                  defaultCustomProbeMethod(p.CustomMethod),
+		CustomPath:                    strings.TrimSpace(p.CustomPath),
+		CustomBody:                    p.CustomBody,
+		CustomResponseJSONPath:        strings.TrimSpace(p.CustomResponseJSONPath),
+		CustomResponseRequireNonEmpty: defaultCustomResponseNonEmpty(p.CustomResponseRequireNonEmpty),
+		CheckMode:                     checkMode,
+		AccountID:                     cloneInt64Pointer(p.AccountID),
 	}
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, fmt.Errorf("create channel monitor: %w", err)
@@ -236,26 +249,37 @@ func (s *ChannelMonitorService) Duplicate(
 		return nil, fmt.Errorf("clone duplicate channel monitor body override: %w", err)
 	}
 
+	customBody, err := cloneChannelMonitorJSONMap(source.CustomBody)
+	if err != nil {
+		return nil, fmt.Errorf("clone custom probe body: %w", err)
+	}
 	duplicate := &ChannelMonitor{
-		Name:                 duplicateChannelMonitorName(source.Name),
-		Provider:             source.Provider,
-		APIMode:              source.APIMode,
-		Endpoint:             source.Endpoint,
-		APIKey:               encryptedAPIKey,
-		PrimaryModel:         source.PrimaryModel,
-		ExtraModels:          append([]string{}, source.ExtraModels...),
-		GroupName:            source.GroupName,
-		Enabled:              false,
-		IntervalSeconds:      source.IntervalSeconds,
-		JitterSeconds:        source.JitterSeconds,
-		CreatedBy:            createdBy,
-		TemplateID:           cloneInt64Pointer(source.TemplateID),
-		ExtraHeaders:         cloneChannelMonitorHeaders(source.ExtraHeaders),
-		BodyOverrideMode:     source.BodyOverrideMode,
-		BodyOverride:         bodyOverride,
-		CheckMode:            defaultCheckMode(source.CheckMode),
-		AccountID:            cloneInt64Pointer(source.AccountID),
-		DuplicateOperationID: operationID,
+		Name:                          duplicateChannelMonitorName(source.Name),
+		Provider:                      source.Provider,
+		APIMode:                       source.APIMode,
+		Endpoint:                      source.Endpoint,
+		APIKey:                        encryptedAPIKey,
+		PrimaryModel:                  source.PrimaryModel,
+		ExtraModels:                   append([]string{}, source.ExtraModels...),
+		GroupName:                     source.GroupName,
+		Enabled:                       false,
+		IntervalSeconds:               source.IntervalSeconds,
+		JitterSeconds:                 source.JitterSeconds,
+		CreatedBy:                     createdBy,
+		TemplateID:                    cloneInt64Pointer(source.TemplateID),
+		ExtraHeaders:                  cloneChannelMonitorHeaders(source.ExtraHeaders),
+		BodyOverrideMode:              source.BodyOverrideMode,
+		BodyOverride:                  bodyOverride,
+		ProbeType:                     source.ProbeType,
+		ImageProbeScheduleEnabled:     source.ImageProbeScheduleEnabled,
+		CustomMethod:                  source.CustomMethod,
+		CustomPath:                    source.CustomPath,
+		CustomBody:                    customBody,
+		CustomResponseJSONPath:        source.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: source.CustomResponseRequireNonEmpty,
+		CheckMode:                     defaultCheckMode(source.CheckMode),
+		AccountID:                     cloneInt64Pointer(source.AccountID),
+		DuplicateOperationID:          operationID,
 	}
 	if err := s.repo.Create(ctx, duplicate); err != nil {
 		return nil, fmt.Errorf("duplicate channel monitor: %w", err)
@@ -336,6 +360,14 @@ func duplicateChannelMonitorName(sourceName string) string {
 		nameRunes = nameRunes[:maxBaseRunes]
 	}
 	return string(nameRunes) + suffix
+}
+
+func defaultCustomProbeMethod(method string) string {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		return "POST"
+	}
+	return method
 }
 
 func cloneInt64Pointer(value *int64) *int64 {
@@ -442,6 +474,9 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 		return nil, err
 	}
 	if err := validateMonitorMediaModels(existing.Provider, existing.PrimaryModel, existing.ExtraModels, existing.BodyOverride); err != nil {
+		return nil, err
+	}
+	if err := validateMonitorProbeSettings(existing.Provider, existing.ProbeType, existing.CustomMethod, existing.CustomPath, existing.CustomResponseJSONPath); err != nil {
 		return nil, err
 	}
 
@@ -612,6 +647,14 @@ func (s *ChannelMonitorService) ListHistory(ctx context.Context, id int64, model
 // 按 check_mode 分派：probe（默认，现状探活）/ quota（仅查关联账号配额，
 // 零 LLM 成本）/ quota_probe（探活 + 配额快照挂主模型行）。
 func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	return s.runCheck(ctx, id, false)
+}
+
+func (s *ChannelMonitorService) RunScheduledCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	return s.runCheck(ctx, id, true)
+}
+
+func (s *ChannelMonitorService) runCheck(ctx context.Context, id int64, scheduled bool) ([]*CheckResult, error) {
 	rt := s.probeRuntime(ctx)
 	if !rt.Enabled {
 		return nil, ErrChannelMonitorDisabled
@@ -622,6 +665,9 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
 		return nil, err
+	}
+	if scheduled && (!m.Enabled || !monitorPeriodicProbeAllowed(m)) {
+		return nil, nil
 	}
 	checkMode := defaultCheckMode(m.CheckMode)
 	if checkMode != MonitorCheckModeQuota && m.APIKeyDecryptFailed {
@@ -713,6 +759,11 @@ func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *Chan
 // errgroup 仅用于等待，不传播错误（每个 model 失败都已打包进 CheckResult）。
 func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *ChannelMonitor) []*CheckResult {
 	models := append([]string{m.PrimaryModel}, m.ExtraModels...)
+	// Custom requests are static; repeating the same body for every model would
+	// issue duplicate requests without changing what is being tested.
+	if defaultMonitorProbeType(m.ProbeType) == MonitorProbeTypeCustom {
+		models = models[:1]
+	}
 	results := make([]*CheckResult, len(models))
 
 	// ping 共享一次，所有模型记录同一个 ping 延迟。
@@ -720,10 +771,16 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 
 	// 所有模型共用同一份 CheckOptions（来自监控的快照字段）。
 	opts := &CheckOptions{
-		APIMode:          m.APIMode,
-		ExtraHeaders:     m.ExtraHeaders,
-		BodyOverrideMode: m.BodyOverrideMode,
-		BodyOverride:     m.BodyOverride,
+		APIMode:                       m.APIMode,
+		ExtraHeaders:                  m.ExtraHeaders,
+		BodyOverrideMode:              m.BodyOverrideMode,
+		BodyOverride:                  m.BodyOverride,
+		ProbeType:                     m.ProbeType,
+		CustomMethod:                  m.CustomMethod,
+		CustomPath:                    m.CustomPath,
+		CustomBody:                    m.CustomBody,
+		CustomResponseJSONPath:        m.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: m.CustomResponseRequireNonEmpty,
 	}
 
 	var eg errgroup.Group
@@ -982,6 +1039,30 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 
 // applyMonitorAdvancedUpdate 处理自定义请求快照相关字段，从 applyMonitorUpdate 拆出避免过长。
 func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams, providerChanged bool) error {
+	if p.ProbeType != nil {
+		if defaultMonitorProbeType(existing.ProbeType) != defaultMonitorProbeType(*p.ProbeType) {
+			existing.ImageProbeScheduleEnabled = false
+		}
+		existing.ProbeType = *p.ProbeType
+	}
+	if p.ImageProbeScheduleEnabled != nil {
+		existing.ImageProbeScheduleEnabled = *p.ImageProbeScheduleEnabled
+	}
+	if p.CustomMethod != nil {
+		existing.CustomMethod = *p.CustomMethod
+	}
+	if p.CustomPath != nil {
+		existing.CustomPath = *p.CustomPath
+	}
+	if p.CustomBody != nil {
+		existing.CustomBody = *p.CustomBody
+	}
+	if p.CustomResponseJSONPath != nil {
+		existing.CustomResponseJSONPath = *p.CustomResponseJSONPath
+	}
+	if p.CustomResponseRequireNonEmpty != nil {
+		existing.CustomResponseRequireNonEmpty = *p.CustomResponseRequireNonEmpty
+	}
 	if p.ClearTemplate {
 		existing.TemplateID = nil
 	} else if p.TemplateID != nil {
@@ -1012,13 +1093,17 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 	if p.BodyOverride != nil {
 		newBody = *p.BodyOverride
 	}
-	if providerChanged || p.APIMode != nil || p.BodyOverrideMode != nil || p.BodyOverride != nil {
-		if err := validateBodyModeForProtocol(existing.Provider, newAPIMode, newMode, newBody); err != nil {
+	if providerChanged || p.ProbeType != nil || p.APIMode != nil || p.BodyOverrideMode != nil || p.BodyOverride != nil {
+		if err := validateProbeBody(existing.Provider, newAPIMode, existing.ProbeType, newMode, newBody); err != nil {
 			return err
 		}
 		existing.BodyOverrideMode = defaultBodyMode(newMode)
 		existing.BodyOverride = newBody
 	}
 	existing.APIMode = newAPIMode
+	existing.ProbeType = defaultMonitorProbeType(existing.ProbeType)
+	existing.CustomMethod = defaultCustomProbeMethod(existing.CustomMethod)
+	existing.CustomPath = strings.TrimSpace(existing.CustomPath)
+	existing.CustomResponseJSONPath = strings.TrimSpace(existing.CustomResponseJSONPath)
 	return nil
 }

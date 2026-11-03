@@ -294,6 +294,24 @@ class ManagementSafetyTests(unittest.TestCase):
         self.assertTrue(result['image_count_default_verified'])
         self.assertTrue(result['billing_and_media_data_unchanged'])
 
+    def test_monitor_probe_rehearsal_requires_disabled_scheduling_evidence(self):
+        backup = self.root / 'fixture-backup'
+        backup.mkdir()
+        meta = {'runtime_image': 'captured-old-runtime', 'migrations': {'old.sql': 'a' * 64}}
+        reviewed = {'filename': '255_channel_monitor_probe_config.sql',
+                    'transaction': 'sealed', 'expected_migrations': {}}
+        def report(test, folder, verified=False):
+            test.update(restore_verified=True, rollback_verified=True, additive_data_verified=True)
+            if verified:
+                test['monitor_probe_defaults_verified'] = True
+        with patch.object(self.manager.c, 'rehearse', side_effect=report):
+            with self.assertRaisesRegex(ValueError, 'defaults were not verified'):
+                self.manager.rehearse({'id': 'a' * 32}, backup, meta, 'candidate', 'v1.3.23', reviewed)
+        job = {'id': 'b' * 32}
+        with patch.object(self.manager.c, 'rehearse', side_effect=lambda test, folder: report(test, folder, True)):
+            self.manager.rehearse(job, backup, meta, 'candidate', 'v1.3.23', reviewed)
+        self.assertTrue(job['monitor_probe_migration']['data_unchanged'])
+
     def test_failed_drain_probe_restores_admission(self):
         with patch.object(self.manager.c, 'inspect', return_value={'Config': {'Env': [
                 'IMAGE_DEPLOY_DRAIN_FILE=/run/sub2api-ops/drain']}}), \

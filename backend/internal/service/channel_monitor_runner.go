@@ -147,7 +147,7 @@ func (r *ChannelMonitorRunner) Schedule(m *ChannelMonitor) {
 	if r == nil || m == nil {
 		return
 	}
-	if !m.Enabled || m.APIKeyDecryptFailed {
+	if !m.Enabled || m.APIKeyDecryptFailed || !monitorPeriodicProbeAllowed(m) {
 		r.Unschedule(m.ID)
 		return
 	}
@@ -305,7 +305,10 @@ func (r *ChannelMonitorRunner) runOne(id int64, name string) {
 		lookup, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		m, err := svc.Get(lookup, id)
 		stop()
-		if err == nil && m.Provider == MonitorProviderImageVideo {
+		if err == nil && m != nil && defaultMonitorProbeType(m.ProbeType) == MonitorProbeTypeImage {
+			limit = monitorImageRequestTimeout + monitorPingTimeout + monitorRunOneBuffer
+		}
+		if err == nil && m != nil && m.Provider == MonitorProviderImageVideo {
 			limit = time.Duration(20) * 185 * time.Second
 		}
 	}
@@ -321,11 +324,30 @@ func (r *ChannelMonitorRunner) runOne(id int64, name string) {
 		}
 	}()
 
-	if _, err := r.svc.RunCheck(ctx, id); err != nil {
+	run := r.svc.RunCheck
+	if scheduled, ok := r.svc.(interface {
+		RunScheduledCheck(context.Context, int64) ([]*CheckResult, error)
+	}); ok {
+		run = scheduled.RunScheduledCheck
+	}
+	if _, err := run(ctx, id); err != nil {
 		if errors.Is(err, ErrChannelMonitorAPIKeyDecryptFailed) {
 			r.Unschedule(id)
 		}
 		slog.Warn("channel_monitor: run check failed",
 			"monitor_id", id, "name", name, "error", err)
+	}
+}
+
+// Newly configured image/custom probes require an explicit cost opt-in. Legacy text and task-aware media monitors retain their scheduling behavior.
+func monitorPeriodicProbeAllowed(m *ChannelMonitor) bool {
+	if defaultCheckMode(m.CheckMode) == MonitorCheckModeQuota {
+		return true
+	}
+	switch defaultMonitorProbeType(m.ProbeType) {
+	case MonitorProbeTypeImage, MonitorProbeTypeCustom:
+		return m.ImageProbeScheduleEnabled
+	default:
+		return true
 	}
 }

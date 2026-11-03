@@ -7,7 +7,10 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 
+import probeConfig from './probeConfig'
+
 export default {
+  probeConfig,
   adminAccessKeys,
   ...landing,
   ...common,

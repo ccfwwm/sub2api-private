@@ -1,0 +1,21 @@
+export default {
+  "type": "探测类型",
+  "text": "文本",
+  "image": "图片生成",
+  "custom": "自定义接口",
+  "manualHint": "默认仅手动运行。启用周期检测表示接受请求可能产生的上游费用。",
+  "schedule": "启用周期检测（可能产生上游费用）",
+  "method": "请求方法",
+  "path": "接口相对路径",
+  "pathHint": "在当前 HTTPS endpoint 下追加路径，不可填写其他域名、查询参数或目录跳转。",
+  "body": "自定义 JSON 请求体（可留空）",
+  "responsePath": "响应 JSON 路径（可留空）",
+  "responseHint": "例如 data.0.text。留空使用整个响应体；只接受 HTTP 2xx 响应。",
+  "nonEmpty": "要求提取结果非空",
+  "invalidBody": "请求体必须是有效的 JSON 对象。",
+  "accountRules": "图片请求参数适配",
+  "accountRulesHint": "仅作用于 OpenAI API Key 图片请求与账号测试。先删除字段，再改名；值保持原样。留空保持现有行为；目标字段冲突时拒绝请求。",
+  "drop": "删除字段（逗号或空格分隔）",
+  "rename": "参数改名（每行 原字段=目标字段）",
+  "invalidRules": "字段名格式无效或映射重复，请使用每行 原字段=目标字段。"
+}

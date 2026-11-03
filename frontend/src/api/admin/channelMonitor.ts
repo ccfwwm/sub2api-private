@@ -20,6 +20,26 @@ export type Provider =
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error' | 'pending'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses'
+export interface MonitorProbeSettings {
+  probe_type: 'text' | 'image' | 'custom'
+  image_probe_schedule_enabled: boolean
+  custom_method: string
+  custom_path: string
+  custom_body: Record<string, unknown> | null
+  custom_response_json_path: string
+  custom_response_require_non_empty: boolean
+}
+export function monitorProbeDefaults(value: Partial<MonitorProbeSettings> = {}): MonitorProbeSettings {
+  return {
+    probe_type: value.probe_type || 'text',
+    image_probe_schedule_enabled: value.image_probe_schedule_enabled === true,
+    custom_method: value.custom_method || 'POST',
+    custom_path: value.custom_path || '',
+    custom_body: value.custom_body ?? null,
+    custom_response_json_path: value.custom_response_json_path || '',
+    custom_response_require_non_empty: value.custom_response_require_non_empty !== false,
+  }
+}
 /**
  * probe = LLM 探活（默认）；quota = 仅查关联账号用量（零 LLM 成本）；
  * quota_probe = 探活 + 配额快照挂主模型行。
@@ -60,7 +80,7 @@ export interface MonitorQuotaSnapshot {
   fetched_at: string
 }
 
-export interface ChannelMonitor {
+export interface ChannelMonitor extends Partial<MonitorProbeSettings> {
   id: number
   name: string
   provider: Provider
@@ -127,7 +147,7 @@ export interface ListResponse {
   pages: number
 }
 
-export interface CreateParams {
+export interface CreateParams extends Partial<MonitorProbeSettings> {
   name: string
   provider: Provider
   api_mode?: APIMode

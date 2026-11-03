@@ -134,6 +134,21 @@ class DeploymentTests(unittest.TestCase):
                 self.controller.apply_reviewed_media_migration(bad)
                 command.assert_not_called()
 
+    def test_monitor_probe_migration_rejects_extra_sql_and_paid_defaults(self):
+        import hashlib
+        from media_migrate import monitor_probe_transaction, MONITOR_PROBE_FILE
+        source = Path(__file__).resolve().parents[2] / 'backend/migrations' / MONITOR_PROBE_FILE
+        sql = source.read_text(encoding='utf-8').strip()
+        transaction = monitor_probe_transaction(sql, hashlib.sha256(sql.encode()).hexdigest())
+        with patch('controller.run') as command:
+            self.controller.apply_reviewed_media_migration(transaction)
+            command.assert_called_once()
+        for bad in (transaction.replace('DEFAULT false', 'DEFAULT true'),
+                    transaction.replace(' COMMIT;', ' DROP TABLE channel_monitors; COMMIT;')):
+            with patch('controller.run') as command, self.assertRaisesRegex(ValueError, 'reviewed atomic'):
+                self.controller.apply_reviewed_media_migration(bad)
+                command.assert_not_called()
+
     def test_task_index_rehearsal_can_fingerprint_media_but_not_arbitrary_tables(self):
         for table in ('billing_usage_entries', 'user_affiliate_ledger', 'media_tasks',
                       'media_ledger_entries', 'media_cost_entries', 'media_artifacts'):

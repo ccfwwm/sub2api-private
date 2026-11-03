@@ -27,6 +27,25 @@ function mountDialog() {
 }
 describe('monitor template list requests', () => {
   beforeEach(() => { vi.resetAllMocks() })
+  it('saves the custom request snapshot and explicit scheduling choice', async () => {
+    list.mockResolvedValue({ items: [] })
+    create.mockResolvedValue({})
+    const wrapper = mountDialog()
+    await flushPromises()
+    const vm = wrapper.vm as any
+    vm.openCreateForm()
+    vm.form.name = 'Custom health'
+    vm.form.probe = {
+      probe_type: 'custom', image_probe_schedule_enabled: false,
+      custom_method: 'PUT', custom_path: '/v1/check', custom_body: { prompt: 'hello' },
+      custom_response_json_path: 'data.0.text', custom_response_require_non_empty: true,
+    }
+    vm.form.extra_headers = { 'X-Probe': 'value' }
+    await vm.handleSubmit()
+    expect(create.mock.calls[0][0]).toMatchObject({
+      ...vm.form.probe, extra_headers: { 'X-Probe': 'value' },
+    })
+  })
   it('blocks media template saves while a published protocol selection is invalid', async () => {
     list.mockResolvedValue({ items: [] })
     create.mockResolvedValue({})

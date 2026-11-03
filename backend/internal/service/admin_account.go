@@ -411,6 +411,9 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if _, err := readOpenAIImagesAccountParamRules(&Account{Platform: input.Platform, Type: input.Type, Extra: accountExtra}); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_IMAGE_PARAMETER_RULES", err.Error())
+	}
 	var mediaErr error
 	input.Credentials, accountExtra, mediaErr = NormalizeMediaAccountConfig(input.Platform, input.Credentials, accountExtra, false)
 	if mediaErr != nil {
@@ -775,6 +778,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		ComputeQuotaResetAt(account.Extra)
 		NormalizeFixedQuotaWindows(account.Extra)
+	}
+	if _, err := readOpenAIImagesAccountParamRules(account); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_IMAGE_PARAMETER_RULES", err.Error())
 	}
 	if input.Extra == nil {
 		account.Extra = prepareCodexFingerprintExtraForUpdate(account, account.Extra)

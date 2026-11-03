@@ -146,6 +146,7 @@ docs/*
 !docs/COMPOSITE_GROUPS.md
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md
+!docs/IMAGE_PARAMS_AND_MONITOR_PROBES_CN.md
 !docs/codex-credits.md
 !docs/MULTIMODAL_API_COMPATIBILITY_CN.md
 !docs/openapi/

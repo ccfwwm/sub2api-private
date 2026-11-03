@@ -30,6 +30,12 @@ const (
 	MonitorAPIModeResponses       = "responses"
 )
 
+const (
+	MonitorProbeTypeText   = "text"
+	MonitorProbeTypeImage  = "image"
+	MonitorProbeTypeCustom = "custom"
+)
+
 // ChannelMonitor 渠道监控配置（service 层模型，不直接暴露 ent 类型）。
 type ChannelMonitor struct {
 	ID              int64
@@ -55,10 +61,17 @@ type ChannelMonitor struct {
 	AccountID *int64 // 关联账号 ID；账号删除后被 DB 置空（监控保留并报「账号未关联」）
 
 	// 请求自定义快照（来自模板拷贝 or 用户手填，运行时直接读取）
-	TemplateID       *int64            // 仅用于 UI 分组 + 一键应用，运行时不用
-	ExtraHeaders     map[string]string // 与 adapter 默认 headers 合并，用户优先
-	BodyOverrideMode string            // off / merge / replace
-	BodyOverride     map[string]any    // 仅 mode != off 时使用
+	TemplateID                    *int64            // 仅用于 UI 分组 + 一键应用，运行时不用
+	ExtraHeaders                  map[string]string // 与 adapter 默认 headers 合并，用户优先
+	BodyOverrideMode              string            // off / merge / replace
+	BodyOverride                  map[string]any    // 仅 mode != off 时使用
+	ProbeType                     string
+	ImageProbeScheduleEnabled     bool
+	CustomMethod                  string
+	CustomPath                    string
+	CustomBody                    map[string]any
+	CustomResponseJSONPath        string
+	CustomResponseRequireNonEmpty bool
 
 	// DuplicateOperationID is internal persistence metadata used to recover an
 	// already committed duplicate after an ambiguous idempotency-store failure.
@@ -82,22 +95,29 @@ type ChannelMonitorListParams struct {
 
 // ChannelMonitorCreateParams 创建参数。
 type ChannelMonitorCreateParams struct {
-	Name             string
-	Provider         string
-	APIMode          string
-	Endpoint         string
-	APIKey           string
-	PrimaryModel     string
-	ExtraModels      []string
-	GroupName        string
-	Enabled          bool
-	IntervalSeconds  int
-	JitterSeconds    int
-	CreatedBy        int64
-	TemplateID       *int64
-	ExtraHeaders     map[string]string
-	BodyOverrideMode string
-	BodyOverride     map[string]any
+	Name                          string
+	Provider                      string
+	APIMode                       string
+	Endpoint                      string
+	APIKey                        string
+	PrimaryModel                  string
+	ExtraModels                   []string
+	GroupName                     string
+	Enabled                       bool
+	IntervalSeconds               int
+	JitterSeconds                 int
+	CreatedBy                     int64
+	TemplateID                    *int64
+	ExtraHeaders                  map[string]string
+	BodyOverrideMode              string
+	BodyOverride                  map[string]any
+	ProbeType                     string
+	ImageProbeScheduleEnabled     bool
+	CustomMethod                  string
+	CustomPath                    string
+	CustomBody                    map[string]any
+	CustomResponseJSONPath        string
+	CustomResponseRequireNonEmpty *bool
 
 	// 配额模式：CheckMode 空串默认 probe；quota/quota_probe 必须关联账号。
 	CheckMode string
@@ -120,11 +140,18 @@ type ChannelMonitorUpdateParams struct {
 	// 自定义快照字段：指针为 nil 表示不更新，非 nil 覆盖
 	// TemplateID *(*int64)：用 ** 表达三态：nil=不更新；&nil=清空；&&id=设为 id。
 	// 简化处理：用 ClearTemplate 显式标志 + TemplateID（普通指针）
-	TemplateID       *int64
-	ClearTemplate    bool // true 时无视 TemplateID，把监控的 template_id 置空
-	ExtraHeaders     *map[string]string
-	BodyOverrideMode *string
-	BodyOverride     *map[string]any
+	TemplateID                    *int64
+	ClearTemplate                 bool // true 时无视 TemplateID，把监控的 template_id 置空
+	ExtraHeaders                  *map[string]string
+	BodyOverrideMode              *string
+	BodyOverride                  *map[string]any
+	ProbeType                     *string
+	ImageProbeScheduleEnabled     *bool
+	CustomMethod                  *string
+	CustomPath                    *string
+	CustomBody                    *map[string]any
+	CustomResponseJSONPath        *string
+	CustomResponseRequireNonEmpty *bool
 
 	// 配额模式：CheckMode nil = 不更新；AccountID nil = 不更新，
 	// 指向 0 = 清空关联（退回 probe 模式时由 CheckMode 分支兜底）。

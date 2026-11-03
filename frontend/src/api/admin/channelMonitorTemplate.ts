@@ -6,9 +6,9 @@
  */
 
 import { apiClient } from '../client'
-import type { APIMode, BodyOverrideMode, Provider } from './channelMonitor'
+import type { APIMode, BodyOverrideMode, Provider, MonitorProbeSettings } from './channelMonitor'
 
-export interface ChannelMonitorTemplate {
+export interface ChannelMonitorTemplate extends Partial<MonitorProbeSettings> {
   id: number
   name: string
   provider: Provider
@@ -32,7 +32,7 @@ export interface ListResponse {
   items: ChannelMonitorTemplate[]
 }
 
-export interface CreateParams {
+export interface CreateParams extends Partial<MonitorProbeSettings> {
   name: string
   provider: Provider
   api_mode?: APIMode
@@ -42,7 +42,7 @@ export interface CreateParams {
   body_override?: Record<string, unknown> | null
 }
 
-export interface UpdateParams {
+export interface UpdateParams extends Partial<MonitorProbeSettings> {
   name?: string
   api_mode?: APIMode
   description?: string

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -18,43 +19,65 @@ type ChannelMonitorRequestTemplateHandler struct {
 }
 
 // NewChannelMonitorRequestTemplateHandler 创建 handler。
-func NewChannelMonitorRequestTemplateHandler(templateService *service.ChannelMonitorRequestTemplateService) *ChannelMonitorRequestTemplateHandler {
+func NewChannelMonitorRequestTemplateHandler(templateService *service.ChannelMonitorRequestTemplateService, monitorService *service.ChannelMonitorService) *ChannelMonitorRequestTemplateHandler {
+	templateService.SetMonitorService(monitorService)
 	return &ChannelMonitorRequestTemplateHandler{templateService: templateService}
 }
 
 // --- DTO ---
 
 type channelMonitorTemplateCreateRequest struct {
-	Name             string            `json:"name" binding:"required,max=100"`
-	Provider         string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok imagevideo"`
-	APIMode          string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Description      string            `json:"description" binding:"max=500"`
-	ExtraHeaders     map[string]string `json:"extra_headers"`
-	BodyOverrideMode string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride     map[string]any    `json:"body_override"`
+	ProbeType                     string            `json:"probe_type"`
+	ImageProbeScheduleEnabled     bool              `json:"image_probe_schedule_enabled"`
+	CustomMethod                  string            `json:"custom_method"`
+	CustomPath                    string            `json:"custom_path"`
+	CustomBody                    map[string]any    `json:"custom_body"`
+	CustomResponseJSONPath        string            `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool             `json:"custom_response_require_non_empty"`
+	Name                          string            `json:"name" binding:"required,max=100"`
+	Provider                      string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok imagevideo"`
+	APIMode                       string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Description                   string            `json:"description" binding:"max=500"`
+	ExtraHeaders                  map[string]string `json:"extra_headers"`
+	BodyOverrideMode              string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  map[string]any    `json:"body_override"`
 }
 
 type channelMonitorTemplateUpdateRequest struct {
-	Name             *string            `json:"name" binding:"omitempty,max=100"`
-	APIMode          *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Description      *string            `json:"description" binding:"omitempty,max=500"`
-	ExtraHeaders     *map[string]string `json:"extra_headers"`
-	BodyOverrideMode *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride     *map[string]any    `json:"body_override"`
+	ProbeType                     *string            `json:"probe_type"`
+	ImageProbeScheduleEnabled     *bool              `json:"image_probe_schedule_enabled"`
+	CustomMethod                  *string            `json:"custom_method"`
+	CustomPath                    *string            `json:"custom_path"`
+	CustomBody                    json.RawMessage    `json:"custom_body"`
+	CustomResponseJSONPath        *string            `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool              `json:"custom_response_require_non_empty"`
+	Name                          *string            `json:"name" binding:"omitempty,max=100"`
+	APIMode                       *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Description                   *string            `json:"description" binding:"omitempty,max=500"`
+	ExtraHeaders                  *map[string]string `json:"extra_headers"`
+	BodyOverrideMode              *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  *map[string]any    `json:"body_override"`
 }
 
 type channelMonitorTemplateResponse struct {
-	ID                 int64             `json:"id"`
-	Name               string            `json:"name"`
-	Provider           string            `json:"provider"`
-	APIMode            string            `json:"api_mode"`
-	Description        string            `json:"description"`
-	ExtraHeaders       map[string]string `json:"extra_headers"`
-	BodyOverrideMode   string            `json:"body_override_mode"`
-	BodyOverride       map[string]any    `json:"body_override"`
-	CreatedAt          string            `json:"created_at"`
-	UpdatedAt          string            `json:"updated_at"`
-	AssociatedMonitors int64             `json:"associated_monitors"`
+	ProbeType                     string            `json:"probe_type"`
+	ImageProbeScheduleEnabled     bool              `json:"image_probe_schedule_enabled"`
+	CustomMethod                  string            `json:"custom_method"`
+	CustomPath                    string            `json:"custom_path"`
+	CustomBody                    map[string]any    `json:"custom_body"`
+	CustomResponseJSONPath        string            `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty bool              `json:"custom_response_require_non_empty"`
+	ID                            int64             `json:"id"`
+	Name                          string            `json:"name"`
+	Provider                      string            `json:"provider"`
+	APIMode                       string            `json:"api_mode"`
+	Description                   string            `json:"description"`
+	ExtraHeaders                  map[string]string `json:"extra_headers"`
+	BodyOverrideMode              string            `json:"body_override_mode"`
+	BodyOverride                  map[string]any    `json:"body_override"`
+	CreatedAt                     string            `json:"created_at"`
+	UpdatedAt                     string            `json:"updated_at"`
+	AssociatedMonitors            int64             `json:"associated_monitors"`
 }
 
 func (h *ChannelMonitorRequestTemplateHandler) toResponse(c *gin.Context, t *service.ChannelMonitorRequestTemplate) *channelMonitorTemplateResponse {
@@ -67,17 +90,24 @@ func (h *ChannelMonitorRequestTemplateHandler) toResponse(c *gin.Context, t *ser
 	}
 	count, _ := h.templateService.CountAssociatedMonitors(c.Request.Context(), t.ID)
 	return &channelMonitorTemplateResponse{
-		ID:                 t.ID,
-		Name:               t.Name,
-		Provider:           t.Provider,
-		APIMode:            t.APIMode,
-		Description:        t.Description,
-		ExtraHeaders:       headers,
-		BodyOverrideMode:   t.BodyOverrideMode,
-		BodyOverride:       t.BodyOverride,
-		CreatedAt:          t.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:          t.UpdatedAt.UTC().Format(time.RFC3339),
-		AssociatedMonitors: count,
+		ID:                            t.ID,
+		Name:                          t.Name,
+		Provider:                      t.Provider,
+		APIMode:                       t.APIMode,
+		Description:                   t.Description,
+		ExtraHeaders:                  headers,
+		BodyOverrideMode:              t.BodyOverrideMode,
+		BodyOverride:                  t.BodyOverride,
+		ProbeType:                     t.ProbeType,
+		ImageProbeScheduleEnabled:     t.ImageProbeScheduleEnabled,
+		CustomMethod:                  t.CustomMethod,
+		CustomPath:                    t.CustomPath,
+		CustomBody:                    t.CustomBody,
+		CustomResponseJSONPath:        t.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: t.CustomResponseRequireNonEmpty,
+		CreatedAt:                     t.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:                     t.UpdatedAt.UTC().Format(time.RFC3339),
+		AssociatedMonitors:            count,
 	}
 }
 
@@ -132,13 +162,20 @@ func (h *ChannelMonitorRequestTemplateHandler) Create(c *gin.Context) {
 		return
 	}
 	t, err := h.templateService.Create(c.Request.Context(), service.ChannelMonitorRequestTemplateCreateParams{
-		Name:             req.Name,
-		Provider:         req.Provider,
-		APIMode:          req.APIMode,
-		Description:      req.Description,
-		ExtraHeaders:     req.ExtraHeaders,
-		BodyOverrideMode: req.BodyOverrideMode,
-		BodyOverride:     req.BodyOverride,
+		Name:                          req.Name,
+		Provider:                      req.Provider,
+		APIMode:                       req.APIMode,
+		Description:                   req.Description,
+		ExtraHeaders:                  req.ExtraHeaders,
+		BodyOverrideMode:              req.BodyOverrideMode,
+		BodyOverride:                  req.BodyOverride,
+		ProbeType:                     req.ProbeType,
+		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
+		CustomMethod:                  req.CustomMethod,
+		CustomPath:                    req.CustomPath,
+		CustomBody:                    req.CustomBody,
+		CustomResponseJSONPath:        req.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: req.CustomResponseRequireNonEmpty,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -158,13 +195,25 @@ func (h *ChannelMonitorRequestTemplateHandler) Update(c *gin.Context) {
 		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
 		return
 	}
+	customBody, err := parseMonitorCustomBodyUpdate(req.CustomBody)
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", "custom_body must be a JSON object or null"))
+		return
+	}
 	t, err := h.templateService.Update(c.Request.Context(), id, service.ChannelMonitorRequestTemplateUpdateParams{
-		Name:             req.Name,
-		APIMode:          req.APIMode,
-		Description:      req.Description,
-		ExtraHeaders:     req.ExtraHeaders,
-		BodyOverrideMode: req.BodyOverrideMode,
-		BodyOverride:     req.BodyOverride,
+		Name:                          req.Name,
+		APIMode:                       req.APIMode,
+		Description:                   req.Description,
+		ExtraHeaders:                  req.ExtraHeaders,
+		BodyOverrideMode:              req.BodyOverrideMode,
+		BodyOverride:                  req.BodyOverride,
+		ProbeType:                     req.ProbeType,
+		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
+		CustomMethod:                  req.CustomMethod,
+		CustomPath:                    req.CustomPath,
+		CustomBody:                    customBody,
+		CustomResponseJSONPath:        req.CustomResponseJSONPath,
+		CustomResponseRequireNonEmpty: req.CustomResponseRequireNonEmpty,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

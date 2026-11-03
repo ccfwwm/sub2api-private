@@ -28,10 +28,16 @@ func TestApplyChannelMonitorTemplatePreservesDuplicateOperationMetadataAtomicall
 
 	mock.ExpectBegin()
 	expectChannelMonitorTemplateForApply(mock, templateID)
-	mock.ExpectExec(`(?s)UPDATE "channel_monitors" SET "body_override" = NULL, "updated_at" = \$1, "api_mode" = \$2, "body_override_mode" = \$3 WHERE .*"template_id" = \$4.*"id" IN \(\$5, \$6\).*"provider" = \$7.*"api_mode" = \$8`).
+	mock.ExpectExec(`(?s)UPDATE "channel_monitors" SET "custom_body" = NULL, "body_override" = NULL, "updated_at" = \$1, "api_mode" = \$2, "probe_type" = \$3, "image_probe_schedule_enabled" = \$4, "custom_method" = \$5, "custom_path" = \$6, "custom_response_json_path" = \$7, "custom_response_require_non_empty" = \$8, "body_override_mode" = \$9 WHERE .*"template_id" = \$10.*"id" IN \(\$11, \$12\).*"provider" = \$13.*"api_mode" = \$14`).
 		WithArgs(
 			sqlmock.AnyArg(),
 			service.MonitorAPIModeResponses,
+			service.MonitorProbeTypeText,
+			false,
+			"POST",
+			"",
+			"",
+			true,
 			service.MonitorBodyOverrideModeOff,
 			templateID,
 			monitorIDs[0],
@@ -100,9 +106,11 @@ func expectChannelMonitorTemplateForApply(mock sqlmock.Sqlmock, templateID int64
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "name", "provider", "api_mode", "description",
 			"extra_headers", "body_override_mode", "body_override",
+			"probe_type", "image_probe_schedule_enabled", "custom_method", "custom_path", "custom_body", "custom_response_json_path", "custom_response_require_non_empty",
 		}).AddRow(
 			templateID, now, now, "monitor-template", service.MonitorProviderOpenAI,
 			service.MonitorAPIModeResponses, "", []byte(`{"User-Agent":"template-client"}`),
 			service.MonitorBodyOverrideModeOff, nil,
+			service.MonitorProbeTypeText, false, "POST", "", nil, "", true,
 		))
 }

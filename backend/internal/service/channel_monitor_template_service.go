@@ -37,12 +37,17 @@ type AssociatedMonitorBrief struct {
 
 // ChannelMonitorRequestTemplateService 模板管理 service。
 type ChannelMonitorRequestTemplateService struct {
-	repo ChannelMonitorRequestTemplateRepository
+	repo           ChannelMonitorRequestTemplateRepository
+	monitorService *ChannelMonitorService
 }
 
 // NewChannelMonitorRequestTemplateService 创建模板 service。
 func NewChannelMonitorRequestTemplateService(repo ChannelMonitorRequestTemplateRepository) *ChannelMonitorRequestTemplateService {
 	return &ChannelMonitorRequestTemplateService{repo: repo}
+}
+
+func (s *ChannelMonitorRequestTemplateService) SetMonitorService(m *ChannelMonitorService) {
+	s.monitorService = m
 }
 
 // ---------- CRUD ----------
@@ -77,13 +82,20 @@ func (s *ChannelMonitorRequestTemplateService) Create(ctx context.Context, p Cha
 		return nil, err
 	}
 	t := &ChannelMonitorRequestTemplate{
-		Name:             strings.TrimSpace(p.Name),
-		Provider:         p.Provider,
-		APIMode:          defaultAPIMode(p.APIMode),
-		Description:      strings.TrimSpace(p.Description),
-		ExtraHeaders:     emptyHeadersIfNil(p.ExtraHeaders),
-		BodyOverrideMode: defaultBodyMode(p.BodyOverrideMode),
-		BodyOverride:     p.BodyOverride,
+		Name:                          strings.TrimSpace(p.Name),
+		Provider:                      p.Provider,
+		APIMode:                       defaultAPIMode(p.APIMode),
+		Description:                   strings.TrimSpace(p.Description),
+		ExtraHeaders:                  emptyHeadersIfNil(p.ExtraHeaders),
+		BodyOverrideMode:              defaultBodyMode(p.BodyOverrideMode),
+		BodyOverride:                  p.BodyOverride,
+		ProbeType:                     defaultMonitorProbeType(p.ProbeType),
+		ImageProbeScheduleEnabled:     p.ImageProbeScheduleEnabled,
+		CustomMethod:                  defaultCustomProbeMethod(p.CustomMethod),
+		CustomPath:                    strings.TrimSpace(p.CustomPath),
+		CustomBody:                    p.CustomBody,
+		CustomResponseJSONPath:        strings.TrimSpace(p.CustomResponseJSONPath),
+		CustomResponseRequireNonEmpty: defaultCustomResponseNonEmpty(p.CustomResponseRequireNonEmpty),
 	}
 	if err := s.repo.Create(ctx, t); err != nil {
 		return nil, fmt.Errorf("create template: %w", err)
@@ -118,7 +130,8 @@ func (s *ChannelMonitorRequestTemplateService) Delete(ctx context.Context, id in
 // monitorIDs 必须非空且每个 id 都必须当前 template_id = id；不满足条件的会被 SQL WHERE 过滤掉。
 // 返回实际被覆盖的监控数。
 func (s *ChannelMonitorRequestTemplateService) ApplyToMonitors(ctx context.Context, id int64, monitorIDs []int64) (int64, error) {
-	if _, err := s.repo.GetByID(ctx, id); err != nil {
+	template, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		return 0, err
 	}
 	if len(monitorIDs) == 0 {
@@ -127,6 +140,18 @@ func (s *ChannelMonitorRequestTemplateService) ApplyToMonitors(ctx context.Conte
 	affected, err := s.repo.ApplyToMonitors(ctx, id, monitorIDs)
 	if err != nil {
 		return 0, fmt.Errorf("apply template to monitors: %w", err)
+	}
+	if affected > 0 && s.monitorService != nil && s.monitorService.scheduler != nil {
+		seen := make(map[int64]bool, len(monitorIDs))
+		for _, monitorID := range monitorIDs {
+			if seen[monitorID] {
+				continue
+			}
+			seen[monitorID] = true
+			if m, err := s.monitorService.Get(ctx, monitorID); err == nil && m != nil && m.TemplateID != nil && *m.TemplateID == id && m.Provider == template.Provider && defaultAPIMode(m.APIMode) == defaultAPIMode(template.APIMode) {
+				s.monitorService.scheduler.Schedule(m)
+			}
+		}
 	}
 	return affected, nil
 }
@@ -158,7 +183,10 @@ func validateTemplateCreateParams(p ChannelMonitorRequestTemplateCreateParams) e
 	if err := validateAPIMode(p.Provider, p.APIMode); err != nil {
 		return ErrChannelMonitorTemplateInvalidAPIMode
 	}
-	if err := validateBodyModeForProtocol(p.Provider, p.APIMode, p.BodyOverrideMode, p.BodyOverride); err != nil {
+	if err := validateProbeBody(p.Provider, p.APIMode, p.ProbeType, p.BodyOverrideMode, p.BodyOverride); err != nil {
+		return err
+	}
+	if err := validateMonitorProbeSettings(p.Provider, p.ProbeType, p.CustomMethod, p.CustomPath, p.CustomResponseJSONPath); err != nil {
 		return err
 	}
 	if err := validateExtraHeaders(p.ExtraHeaders); err != nil {
@@ -169,6 +197,30 @@ func validateTemplateCreateParams(p ChannelMonitorRequestTemplateCreateParams) e
 
 // applyTemplateUpdate 把 update params 中非 nil 字段应用到 existing 上。
 func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonitorRequestTemplateUpdateParams) error {
+	if p.ProbeType != nil {
+		if defaultMonitorProbeType(existing.ProbeType) != defaultMonitorProbeType(*p.ProbeType) {
+			existing.ImageProbeScheduleEnabled = false
+		}
+		existing.ProbeType = *p.ProbeType
+	}
+	if p.ImageProbeScheduleEnabled != nil {
+		existing.ImageProbeScheduleEnabled = *p.ImageProbeScheduleEnabled
+	}
+	if p.CustomMethod != nil {
+		existing.CustomMethod = *p.CustomMethod
+	}
+	if p.CustomPath != nil {
+		existing.CustomPath = *p.CustomPath
+	}
+	if p.CustomBody != nil {
+		existing.CustomBody = *p.CustomBody
+	}
+	if p.CustomResponseJSONPath != nil {
+		existing.CustomResponseJSONPath = *p.CustomResponseJSONPath
+	}
+	if p.CustomResponseRequireNonEmpty != nil {
+		existing.CustomResponseRequireNonEmpty = *p.CustomResponseRequireNonEmpty
+	}
 	if p.Name != nil {
 		name := strings.TrimSpace(*p.Name)
 		if name == "" {
@@ -201,13 +253,30 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 	if p.BodyOverride != nil {
 		newBody = *p.BodyOverride
 	}
-	if err := validateBodyModeForProtocol(existing.Provider, newAPIMode, newMode, newBody); err != nil {
+	if err := validateProbeBody(existing.Provider, newAPIMode, existing.ProbeType, newMode, newBody); err != nil {
+		return err
+	}
+	if err := validateMonitorProbeSettings(existing.Provider, existing.ProbeType, existing.CustomMethod, existing.CustomPath, existing.CustomResponseJSONPath); err != nil {
 		return err
 	}
 	existing.APIMode = newAPIMode
+	existing.ProbeType = defaultMonitorProbeType(existing.ProbeType)
+	existing.CustomMethod = defaultCustomProbeMethod(existing.CustomMethod)
+	existing.CustomPath = strings.TrimSpace(existing.CustomPath)
+	existing.CustomResponseJSONPath = strings.TrimSpace(existing.CustomResponseJSONPath)
 	existing.BodyOverrideMode = defaultBodyMode(newMode)
 	existing.BodyOverride = newBody
 	return nil
+}
+
+func validateProbeBody(provider, apiMode, probeType, mode string, body map[string]any) error {
+	if defaultMonitorProbeType(probeType) == MonitorProbeTypeCustom {
+		return nil
+	}
+	if defaultMonitorProbeType(probeType) == MonitorProbeTypeImage {
+		return validateBodyModeParams(mode, body)
+	}
+	return validateBodyModeForProtocol(provider, apiMode, mode, body)
 }
 
 // validateBodyModeForProtocol 校验 body_override_mode 与 provider/api_mode 的协议特定要求。
