@@ -631,7 +631,7 @@ func mergeHeaders(base map[string]string, opts *CheckOptions) map[string]string 
 //     bodyMergeKeyDenyList[provider] 的 key 会被静默丢弃，避免破坏 challenge / model 路由
 //   - replace: 直接 marshal BodyOverride 作为完整 body
 //
-// 任何 mode 返回的 []byte 都已经是合法 JSON，可直接送入 postRawJSON。
+// 任何 mode 返回的 []byte 都已经是合法 JSON，可直接送入 doMonitorRequest。
 func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt string, opts *CheckOptions) ([]byte, error) {
 	mode := bodyOverrideMode(opts)
 
@@ -756,12 +756,6 @@ func hasNonEmptyBodyValue(v any) bool {
 	default:
 		return true
 	}
-}
-
-// postRawJSON 发送 POST + 已序列化好的 JSON 字节，限制响应体大小，返回响应字节、HTTP status、错误。
-// adapter 自行 marshal 是为了精确控制字段顺序与类型，所以这里直接收 []byte 而不是 any。
-func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
-	return doMonitorRequest(ctx, http.MethodPost, fullURL, payload, headers)
 }
 
 func doMonitorRequest(ctx context.Context, method, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
