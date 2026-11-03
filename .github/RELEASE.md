@@ -8,6 +8,8 @@ valid; `sub2api-private` is now a legacy name, not a visibility requirement.
   image must be public. Release workflows verify visibility and anonymous pulls.
 - Push a stable `vMAJOR.MINOR.PATCH` tag, or dispatch `release.yml` for an existing
   unpublished tag. A published release and its image digest are immutable.
+  Commit `docs/multimodal/RELEASE-vMAJOR.MINOR.PATCH.md` before tagging; the
+  workflow checks the exact tagged source for these release notes before testing.
 - If source tests and image builds passed but publication failed, dispatch
   `finalize-private-release.yml` with the original tag, exact application and docs
   digests, and source build run. It verifies provenance and reruns image checks
