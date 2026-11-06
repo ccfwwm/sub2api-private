@@ -98,15 +98,27 @@ jobs:
       - run: make test-frontend
       - run: make -C backend test-unit
       - name: Install media integration test dependencies
+        timeout-minutes: 8
         run: |
+          if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
+            ffprobe -version | head -n 1
+            exit 0
+          fi
           # Azure's HTTP mirror can stall every package retry on hosted runners.
-          # Keep the dependency check reproducible with the official HTTPS archive.
+          # Ubuntu 26 runners also reference it through mirror+file, so rewrite
+          # the mirror inventory as well as traditional apt source definitions.
           sudo python3 - <<'PY'
           from pathlib import Path
-          for path in [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]:
+          paths = [Path('/etc/apt/sources.list'), Path('/etc/apt/apt-mirrors.txt'),
+                   *Path('/etc/apt/sources.list.d').glob('*.sources'),
+                   *Path('/etc/apt/sources.list.d').glob('*.list')]
+          for path in paths:
               if path.exists():
                   text = path.read_text()
-                  text = text.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  for source in ('http://azure.archive.ubuntu.com/ubuntu',
+                                 'https://azure.archive.ubuntu.com/ubuntu',
+                                 'http://archive.ubuntu.com/ubuntu'):
+                      text = text.replace(source, 'https://archive.ubuntu.com/ubuntu')
                   path.write_text(text)
           PY
           sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=20 -o Acquire::http::Timeout=20 update
