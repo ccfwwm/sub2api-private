@@ -52,6 +52,7 @@ func (h *ChannelMonitorUserHandler) quotaVisible(c *gin.Context) bool {
 // --- Response ---
 
 type channelMonitorUserListItem struct {
+	service.MonitorDataQuality
 	ID                   int64                                `json:"id"`
 	Name                 string                               `json:"name"`
 	Provider             string                               `json:"provider"`
@@ -86,6 +87,7 @@ type channelMonitorUserDetailResponse struct {
 }
 
 type channelMonitorUserModelStat struct {
+	service.MonitorDataQuality
 	Model           string  `json:"model"`
 	LatestStatus    string  `json:"latest_status"`
 	LatestLatencyMs *int    `json:"latest_latency_ms"`
@@ -114,6 +116,7 @@ func userMonitorViewToItem(v *service.UserMonitorView, includeQuota bool) channe
 		})
 	}
 	item := channelMonitorUserListItem{
+		MonitorDataQuality:   v.MonitorDataQuality,
 		ID:                   v.ID,
 		Name:                 v.Name,
 		Provider:             v.Provider,
@@ -136,13 +139,14 @@ func userMonitorDetailToResponse(d *service.UserMonitorDetail) *channelMonitorUs
 	models := make([]channelMonitorUserModelStat, 0, len(d.Models))
 	for _, m := range d.Models {
 		models = append(models, channelMonitorUserModelStat{
-			Model:           m.Model,
-			LatestStatus:    m.LatestStatus,
-			LatestLatencyMs: m.LatestLatencyMs,
-			Availability7d:  m.Availability7d,
-			Availability15d: m.Availability15d,
-			Availability30d: m.Availability30d,
-			AvgLatency7dMs:  m.AvgLatency7dMs,
+			MonitorDataQuality: m.MonitorDataQuality,
+			Model:              m.Model,
+			LatestStatus:       m.LatestStatus,
+			LatestLatencyMs:    m.LatestLatencyMs,
+			Availability7d:     m.Availability7d,
+			Availability15d:    m.Availability15d,
+			Availability30d:    m.Availability30d,
+			AvgLatency7dMs:     m.AvgLatency7dMs,
 		})
 	}
 	return &channelMonitorUserDetailResponse{

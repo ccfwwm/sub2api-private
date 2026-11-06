@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"time"
 )
@@ -17,6 +18,7 @@ type ChannelMonitorRequestTemplate struct {
 	ExtraHeaders                  map[string]string
 	BodyOverrideMode              string
 	BodyOverride                  map[string]any
+	ProbeConfig                   domain.MonitorProbeConfig
 	ProbeType                     string
 	ImageProbeScheduleEnabled     bool
 	CustomMethod                  string
@@ -43,6 +45,7 @@ type ChannelMonitorRequestTemplateCreateParams struct {
 	ExtraHeaders                  map[string]string
 	BodyOverrideMode              string
 	BodyOverride                  map[string]any
+	ProbeConfig                   domain.MonitorProbeConfig
 	ProbeType                     string
 	ImageProbeScheduleEnabled     bool
 	CustomMethod                  string
@@ -61,6 +64,7 @@ type ChannelMonitorRequestTemplateUpdateParams struct {
 	ExtraHeaders                  *map[string]string
 	BodyOverrideMode              *string
 	BodyOverride                  *map[string]any
+	ProbeConfig                   *domain.MonitorProbeConfig
 	ProbeType                     *string
 	ImageProbeScheduleEnabled     *bool
 	CustomMethod                  *string

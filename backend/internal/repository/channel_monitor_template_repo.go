@@ -33,6 +33,7 @@ func (r *channelMonitorRequestTemplateRepository) Create(ctx context.Context, t 
 		SetName(t.Name).
 		SetProvider(channelmonitorrequesttemplate.Provider(t.Provider)).
 		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
+		SetProbeConfig(t.ProbeConfig).
 		SetProbeType(t.ProbeType).
 		SetImageProbeScheduleEnabled(t.ImageProbeScheduleEnabled).
 		SetCustomMethod(t.CustomMethod).
@@ -72,6 +73,7 @@ func (r *channelMonitorRequestTemplateRepository) Update(ctx context.Context, t 
 	updater := client.ChannelMonitorRequestTemplate.UpdateOneID(t.ID).
 		SetName(t.Name).
 		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
+		SetProbeConfig(t.ProbeConfig).
 		SetProbeType(t.ProbeType).
 		SetImageProbeScheduleEnabled(t.ImageProbeScheduleEnabled).
 		SetCustomMethod(t.CustomMethod).
@@ -176,6 +178,7 @@ func (r *channelMonitorRequestTemplateRepository) applyToMonitorsWithClient(
 			channelmonitor.APIModeEQ(defaultAPIModeRepo(tpl.APIMode)),
 		).
 		SetAPIMode(defaultAPIModeRepo(tpl.APIMode)).
+		SetProbeConfig(tpl.ProbeConfig).
 		SetProbeType(tpl.ProbeType).
 		SetImageProbeScheduleEnabled(tpl.ImageProbeScheduleEnabled).
 		SetCustomMethod(tpl.CustomMethod).
@@ -283,6 +286,7 @@ func entToServiceTemplate(row *dbent.ChannelMonitorRequestTemplate) *service.Cha
 		Name:                          row.Name,
 		Provider:                      string(row.Provider),
 		APIMode:                       defaultAPIModeRepo(row.APIMode),
+		ProbeConfig:                   row.ProbeConfig,
 		ProbeType:                     row.ProbeType,
 		ImageProbeScheduleEnabled:     row.ImageProbeScheduleEnabled,
 		CustomMethod:                  row.CustomMethod,

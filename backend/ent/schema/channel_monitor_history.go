@@ -30,6 +30,8 @@ func (ChannelMonitorHistory) Annotations() []schema.Annotation {
 func (ChannelMonitorHistory) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("monitor_id"),
+		field.String("sample_id").Optional().Nillable().MaxLen(100),
+		field.Int("request_latency_ms").Optional().Nillable(),
 		field.String("model").
 			NotEmpty().
 			MaxLen(200),
@@ -68,5 +70,6 @@ func (ChannelMonitorHistory) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("monitor_id", "model", "checked_at"),
 		index.Fields("checked_at"),
+		index.Fields("monitor_id", "model", "sample_id").Unique(),
 	}
 }

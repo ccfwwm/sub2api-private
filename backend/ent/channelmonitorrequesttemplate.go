@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ChannelMonitorRequestTemplate is the model entity for the ChannelMonitorRequestTemplate schema.
@@ -28,6 +29,8 @@ type ChannelMonitorRequestTemplate struct {
 	Provider channelmonitorrequesttemplate.Provider `json:"provider,omitempty"`
 	// OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions
 	APIMode string `json:"api_mode,omitempty"`
+	// ProbeConfig holds the value of the "probe_config" field.
+	ProbeConfig domain.MonitorProbeConfig `json:"probe_config,omitempty"`
 	// ProbeType holds the value of the "probe_type" field.
 	ProbeType string `json:"probe_type,omitempty"`
 	// ImageProbeScheduleEnabled holds the value of the "image_probe_schedule_enabled" field.
@@ -79,7 +82,7 @@ func (*ChannelMonitorRequestTemplate) scanValues(columns []string) ([]any, error
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case channelmonitorrequesttemplate.FieldCustomBody, channelmonitorrequesttemplate.FieldExtraHeaders, channelmonitorrequesttemplate.FieldBodyOverride:
+		case channelmonitorrequesttemplate.FieldProbeConfig, channelmonitorrequesttemplate.FieldCustomBody, channelmonitorrequesttemplate.FieldExtraHeaders, channelmonitorrequesttemplate.FieldBodyOverride:
 			values[i] = new([]byte)
 		case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled, channelmonitorrequesttemplate.FieldCustomResponseRequireNonEmpty:
 			values[i] = new(sql.NullBool)
@@ -139,6 +142,14 @@ func (_m *ChannelMonitorRequestTemplate) assignValues(columns []string, values [
 				return fmt.Errorf("unexpected type %T for field api_mode", values[i])
 			} else if value.Valid {
 				_m.APIMode = value.String
+			}
+		case channelmonitorrequesttemplate.FieldProbeConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field probe_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ProbeConfig); err != nil {
+					return fmt.Errorf("unmarshal field probe_config: %w", err)
+				}
 			}
 		case channelmonitorrequesttemplate.FieldProbeType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -267,6 +278,9 @@ func (_m *ChannelMonitorRequestTemplate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("api_mode=")
 	builder.WriteString(_m.APIMode)
+	builder.WriteString(", ")
+	builder.WriteString("probe_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ProbeConfig))
 	builder.WriteString(", ")
 	builder.WriteString("probe_type=")
 	builder.WriteString(_m.ProbeType)

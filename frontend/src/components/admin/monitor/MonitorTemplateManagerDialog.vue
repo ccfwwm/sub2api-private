@@ -175,6 +175,7 @@
 
       <MonitorProbeConfig v-if="form.provider !== 'imagevideo'" v-model="form.probe" :provider="form.provider" @validity="probeConfigValid = $event" />
 
+      <MonitorPolicyConfig v-model="form.probe.probe_config" :models="form.provider === 'imagevideo' ? mediaModels.split(',') : []" :provider="form.provider" :probe-type="form.probe.probe_type" :body="form.body_override" :body-mode="form.body_override_mode" @validity="policyConfigValid = $event" />
       <template v-if="form.provider === 'imagevideo'">
         <label class="input-label">{{ t('admin.channelMonitor.form.extraModels') }}<input v-model="mediaModels" class="input" placeholder="omni-flash, veo-3.1-lite" /></label>
         <MonitorMediaConfig :models="mediaModels.split(',')" v-model="form.body_override" @validity="mediaConfigValid = $event" />
@@ -205,7 +206,7 @@
           <button class="btn btn-secondary" @click="$emit('close')">
             {{ t('common.close') }}
           </button>
-          <button v-if="editing" class="btn btn-primary" :disabled="submitting || (form.provider !== 'imagevideo' && !probeConfigValid) || (form.provider === 'imagevideo' && !mediaConfigValid)" @click="handleSubmit">
+          <button v-if="editing" class="btn btn-primary" :disabled="submitting || !policyConfigValid || (form.provider !== 'imagevideo' && !probeConfigValid) || (form.provider === 'imagevideo' && !mediaConfigValid)" @click="handleSubmit">
             {{ submitting ? t('common.submitting') : editing === 'new' ? t('common.create') : t('common.update') }}
           </button>
         </div>
@@ -234,6 +235,7 @@
 </template>
 
 <script setup lang="ts">
+import MonitorPolicyConfig from './MonitorPolicyConfig.vue'
 import MonitorProbeConfig from './MonitorProbeConfig.vue'
 import { monitorProbeDefaults, type MonitorProbeSettings } from '@/api/admin/channelMonitor'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
@@ -327,6 +329,7 @@ const editing = ref<null | 'new' | number>(null) // null = list view; 'new' = cr
 const submitting = ref(false)
 const mediaConfigValid = ref(true)
 const probeConfigValid = ref(true)
+const policyConfigValid = ref(true)
 const form = reactive<TemplateForm>(emptyForm(PROVIDER_ANTHROPIC))
 const mediaModels = ref('')
 
@@ -404,7 +407,7 @@ watch(
 
 // --- submit ---
 async function handleSubmit() {
-  if (submitting.value || (form.provider !== 'imagevideo' && !probeConfigValid.value)) return
+  if (submitting.value || !policyConfigValid.value || (form.provider !== 'imagevideo' && !probeConfigValid.value)) return
   if (form.provider === 'imagevideo' && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.template.missingName'))
@@ -414,7 +417,7 @@ async function handleSubmit() {
   try {
     if (editing.value === 'new') {
       await adminAPI.channelMonitorTemplate.create({
-        ...(form.provider === 'imagevideo' ? monitorProbeDefaults() : form.probe),
+        ...form.probe,
         name: form.name.trim(),
         provider: form.provider,
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
@@ -426,7 +429,7 @@ async function handleSubmit() {
       appStore.showSuccess(t('admin.channelMonitor.template.createSuccess'))
     } else if (typeof editing.value === 'number') {
       await adminAPI.channelMonitorTemplate.update(editing.value, {
-        ...(form.provider === 'imagevideo' ? monitorProbeDefaults() : form.probe),
+        ...form.probe,
         name: form.name.trim(),
         api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),

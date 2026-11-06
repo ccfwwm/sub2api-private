@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/tidwall/gjson"
@@ -33,6 +35,9 @@ func newSSRFSafeHTTPClient(timeout time.Duration) *http.Client {
 	if timeout > monitorRequestTimeout {
 		headerTimeout = timeout
 	}
+	if headerTimeout < 600*time.Second {
+		headerTimeout = 600 * time.Second
+	}
 	tr := &http.Transport{
 		DialContext:           safeDialContext,
 		ForceAttemptHTTP2:     true,
@@ -46,6 +51,7 @@ func newSSRFSafeHTTPClient(timeout time.Duration) *http.Client {
 
 // CheckOptions 承载一次检测的自定义入参。
 type CheckOptions struct {
+	ProbeConfig domain.MonitorProbeConfig
 	// APIMode 仅对 OpenAI provider 生效；空串等同 chat_completions。
 	APIMode string
 	// ExtraHeaders 用户自定义 HTTP 头（merge 到 adapter 默认 headers，用户优先）。
@@ -74,12 +80,23 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		CheckedAt: time.Now(),
 	}
 
+	policy := resolveMonitorPolicy(domain.MonitorProbeConfig{}, model, monitorProbeType(opts))
+	if opts != nil {
+		policy = resolveMonitorPolicy(opts.ProbeConfig, model, monitorProbeType(opts))
+	}
+	ctx, cancel := context.WithTimeout(ctx, policy.RequestTimeout)
+	defer cancel()
+	ctx = context.WithValue(ctx, monitorTimeoutKey{}, policy.RequestTimeout)
 	challenge := generateChallenge()
+	prompt := probePrompt(monitorProbeType(opts), challenge.Prompt)
+	if strings.TrimSpace(policy.Prompt) != "" {
+		prompt = policy.Prompt
+	}
 	mode := bodyOverrideMode(opts)
 	probeType := monitorProbeType(opts)
 
 	start := time.Now()
-	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, probePrompt(probeType, challenge.Prompt), opts)
+	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, prompt, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
@@ -108,19 +125,19 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 			res.Message = truncateMessage("custom probe: upstream returned 2xx with an empty extracted response")
 			return res
 		}
-		return finalizeOperationalOrDegraded(res, latency, latencyMs)
+		return finalizeOperationalOrDegraded(res, latency, latencyMs, policy.NormalLatency)
 	}
 
 	// Replace 模式：跳过 challenge 校验（用户 body 是静态的，challenge 没法嵌入）。
 	// 改用「HTTP 2xx + 响应文本（adapter.textPath 抽取）非空」作为 operational 判定。
 	// 响应文本为空则降级为 failed（视为上游回了 200 但没实际内容）。
-	if mode == MonitorBodyOverrideModeReplace {
+	if mode == MonitorBodyOverrideModeReplace || strings.TrimSpace(policy.Prompt) != "" {
 		if strings.TrimSpace(respText) == "" {
 			res.Status = MonitorStatusFailed
 			res.Message = truncateMessage("replace-mode: upstream returned 2xx with empty text")
 			return res
 		}
-		return finalizeOperationalOrDegraded(res, latency, latencyMs)
+		return finalizeOperationalOrDegraded(res, latency, latencyMs, policy.NormalLatency)
 	}
 
 	if !validateChallenge(respText, challenge.Expected) {
@@ -129,7 +146,7 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		return res
 	}
 
-	return finalizeOperationalOrDegraded(res, latency, latencyMs)
+	return finalizeOperationalOrDegraded(res, latency, latencyMs, policy.NormalLatency)
 }
 
 func probePrompt(probeType, textPrompt string) string {
@@ -152,8 +169,12 @@ func customResponseMustBeNonEmpty(opts *CheckOptions) bool {
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
 // 拆出来是为了让 runCheckForModel 不超过 30 行。
-func finalizeOperationalOrDegraded(res *CheckResult, latency time.Duration, latencyMs int) *CheckResult {
-	if latency >= monitorDegradedThreshold {
+func finalizeOperationalOrDegraded(res *CheckResult, latency time.Duration, latencyMs int, thresholds ...time.Duration) *CheckResult {
+	threshold := monitorDegradedThreshold
+	if len(thresholds) > 0 {
+		threshold = thresholds[0]
+	}
+	if latency > threshold {
 		res.Status = MonitorStatusDegraded
 		res.Message = truncateMessage(fmt.Sprintf("slow response: %dms", latencyMs))
 		return res
@@ -762,7 +783,14 @@ func doMonitorRequest(ctx context.Context, method, fullURL string, payload []byt
 	return doMonitorRequestWithClient(ctx, monitorHTTPClient, method, fullURL, payload, headers, monitorResponseMaxBytes)
 }
 
+type monitorTimeoutKey struct{}
+
 func doMonitorRequestWithClient(ctx context.Context, client *http.Client, method, fullURL string, payload []byte, headers map[string]string, maxBytes int64) ([]byte, int, error) {
+	if timeout, ok := ctx.Value(monitorTimeoutKey{}).(time.Duration); ok {
+		clone := *client
+		clone.Timeout = timeout
+		client = &clone
+	}
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
@@ -896,17 +924,20 @@ func sanitizeErrorMessage(msg string) string {
 }
 
 // truncateMessage 把消息按 monitorMessageMaxBytes 截断，避免 DB 列溢出与日志过长。
-func truncateMessage(msg string) string {
+// Normalize before truncation: JSON expands invalid UTF-8 to a three-byte rune.
+func NormalizeMonitorMessage(msg string) string {
+	msg = sanitizeErrorMessage(strings.ToValidUTF8(msg, "�"))
 	if len(msg) <= monitorMessageMaxBytes {
 		return msg
 	}
 	const ellipsis = "...(truncated)"
 	cutoff := monitorMessageMaxBytes - len(ellipsis)
-	if cutoff < 0 {
-		cutoff = 0
+	for cutoff > 0 && !utf8.RuneStart(msg[cutoff]) {
+		cutoff--
 	}
 	return msg[:cutoff] + ellipsis
 }
+func truncateMessage(msg string) string { return NormalizeMonitorMessage(msg) }
 
 // truncateForErrorBody 把上游错误响应 body 压到 monitorErrorBodySnippetMaxBytes 以内，
 // 并顺手把连续空白折成一个空格：上游 HTML 错误页常含大量缩进/换行，保留会浪费预算。

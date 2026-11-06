@@ -29,6 +29,8 @@ const (
 	FieldAccountID = "account_id"
 	// FieldAPIMode holds the string denoting the api_mode field in the database.
 	FieldAPIMode = "api_mode"
+	// FieldProbeConfig holds the string denoting the probe_config field in the database.
+	FieldProbeConfig = "probe_config"
 	// FieldProbeType holds the string denoting the probe_type field in the database.
 	FieldProbeType = "probe_type"
 	// FieldImageProbeScheduleEnabled holds the string denoting the image_probe_schedule_enabled field in the database.
@@ -112,6 +114,7 @@ var Columns = []string{
 	FieldCheckMode,
 	FieldAccountID,
 	FieldAPIMode,
+	FieldProbeConfig,
 	FieldProbeType,
 	FieldImageProbeScheduleEnabled,
 	FieldCustomMethod,

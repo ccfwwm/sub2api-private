@@ -345,6 +345,16 @@ func APIModeContainsFold(v string) predicate.ChannelMonitorRequestTemplate {
 	return predicate.ChannelMonitorRequestTemplate(sql.FieldContainsFold(FieldAPIMode, v))
 }
 
+// ProbeConfigIsNil applies the IsNil predicate on the "probe_config" field.
+func ProbeConfigIsNil() predicate.ChannelMonitorRequestTemplate {
+	return predicate.ChannelMonitorRequestTemplate(sql.FieldIsNull(FieldProbeConfig))
+}
+
+// ProbeConfigNotNil applies the NotNil predicate on the "probe_config" field.
+func ProbeConfigNotNil() predicate.ChannelMonitorRequestTemplate {
+	return predicate.ChannelMonitorRequestTemplate(sql.FieldNotNull(FieldProbeConfig))
+}
+
 // ProbeTypeEQ applies the EQ predicate on the "probe_type" field.
 func ProbeTypeEQ(v string) predicate.ChannelMonitorRequestTemplate {
 	return predicate.ChannelMonitorRequestTemplate(sql.FieldEQ(FieldProbeType, v))

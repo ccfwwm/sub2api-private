@@ -2,6 +2,7 @@ package schema
 
 import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
@@ -56,6 +57,7 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Default("chat_completions").
 			MaxLen(32).
 			Comment("OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions"),
+		field.JSON("probe_config", domain.MonitorProbeConfig{}).Optional(),
 		field.String("probe_type").Default("text").MaxLen(16),
 		field.Bool("image_probe_schedule_enabled").Default(false),
 		field.String("custom_method").Default("POST").MaxLen(10),

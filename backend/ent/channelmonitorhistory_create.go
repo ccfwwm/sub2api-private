@@ -30,6 +30,34 @@ func (_c *ChannelMonitorHistoryCreate) SetMonitorID(v int64) *ChannelMonitorHist
 	return _c
 }
 
+// SetSampleID sets the "sample_id" field.
+func (_c *ChannelMonitorHistoryCreate) SetSampleID(v string) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetSampleID(v)
+	return _c
+}
+
+// SetNillableSampleID sets the "sample_id" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableSampleID(v *string) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetSampleID(*v)
+	}
+	return _c
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (_c *ChannelMonitorHistoryCreate) SetRequestLatencyMs(v int) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetRequestLatencyMs(v)
+	return _c
+}
+
+// SetNillableRequestLatencyMs sets the "request_latency_ms" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableRequestLatencyMs(v *int) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetRequestLatencyMs(*v)
+	}
+	return _c
+}
+
 // SetModel sets the "model" field.
 func (_c *ChannelMonitorHistoryCreate) SetModel(v string) *ChannelMonitorHistoryCreate {
 	_c.mutation.SetModel(v)
@@ -159,6 +187,11 @@ func (_c *ChannelMonitorHistoryCreate) check() error {
 	if _, ok := _c.mutation.MonitorID(); !ok {
 		return &ValidationError{Name: "monitor_id", err: errors.New(`ent: missing required field "ChannelMonitorHistory.monitor_id"`)}
 	}
+	if v, ok := _c.mutation.SampleID(); ok {
+		if err := channelmonitorhistory.SampleIDValidator(v); err != nil {
+			return &ValidationError{Name: "sample_id", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.sample_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Model(); !ok {
 		return &ValidationError{Name: "model", err: errors.New(`ent: missing required field "ChannelMonitorHistory.model"`)}
 	}
@@ -213,6 +246,14 @@ func (_c *ChannelMonitorHistoryCreate) createSpec() (*ChannelMonitorHistory, *sq
 		_spec = sqlgraph.NewCreateSpec(channelmonitorhistory.Table, sqlgraph.NewFieldSpec(channelmonitorhistory.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.SampleID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldSampleID, field.TypeString, value)
+		_node.SampleID = &value
+	}
+	if value, ok := _c.mutation.RequestLatencyMs(); ok {
+		_spec.SetField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt, value)
+		_node.RequestLatencyMs = &value
+	}
 	if value, ok := _c.mutation.Model(); ok {
 		_spec.SetField(channelmonitorhistory.FieldModel, field.TypeString, value)
 		_node.Model = value
@@ -319,6 +360,48 @@ func (u *ChannelMonitorHistoryUpsert) SetMonitorID(v int64) *ChannelMonitorHisto
 // UpdateMonitorID sets the "monitor_id" field to the value that was provided on create.
 func (u *ChannelMonitorHistoryUpsert) UpdateMonitorID() *ChannelMonitorHistoryUpsert {
 	u.SetExcluded(channelmonitorhistory.FieldMonitorID)
+	return u
+}
+
+// SetSampleID sets the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsert) SetSampleID(v string) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldSampleID, v)
+	return u
+}
+
+// UpdateSampleID sets the "sample_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateSampleID() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldSampleID)
+	return u
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsert) ClearSampleID() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldSampleID)
+	return u
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsert) SetRequestLatencyMs(v int) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldRequestLatencyMs, v)
+	return u
+}
+
+// UpdateRequestLatencyMs sets the "request_latency_ms" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateRequestLatencyMs() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldRequestLatencyMs)
+	return u
+}
+
+// AddRequestLatencyMs adds v to the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsert) AddRequestLatencyMs(v int) *ChannelMonitorHistoryUpsert {
+	u.Add(channelmonitorhistory.FieldRequestLatencyMs, v)
+	return u
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsert) ClearRequestLatencyMs() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldRequestLatencyMs)
 	return u
 }
 
@@ -493,6 +576,55 @@ func (u *ChannelMonitorHistoryUpsertOne) SetMonitorID(v int64) *ChannelMonitorHi
 func (u *ChannelMonitorHistoryUpsertOne) UpdateMonitorID() *ChannelMonitorHistoryUpsertOne {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.UpdateMonitorID()
+	})
+}
+
+// SetSampleID sets the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetSampleID(v string) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetSampleID(v)
+	})
+}
+
+// UpdateSampleID sets the "sample_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateSampleID() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateSampleID()
+	})
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearSampleID() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearSampleID()
+	})
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetRequestLatencyMs(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetRequestLatencyMs(v)
+	})
+}
+
+// AddRequestLatencyMs adds v to the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertOne) AddRequestLatencyMs(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddRequestLatencyMs(v)
+	})
+}
+
+// UpdateRequestLatencyMs sets the "request_latency_ms" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateRequestLatencyMs() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateRequestLatencyMs()
+	})
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearRequestLatencyMs() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearRequestLatencyMs()
 	})
 }
 
@@ -851,6 +983,55 @@ func (u *ChannelMonitorHistoryUpsertBulk) SetMonitorID(v int64) *ChannelMonitorH
 func (u *ChannelMonitorHistoryUpsertBulk) UpdateMonitorID() *ChannelMonitorHistoryUpsertBulk {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.UpdateMonitorID()
+	})
+}
+
+// SetSampleID sets the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetSampleID(v string) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetSampleID(v)
+	})
+}
+
+// UpdateSampleID sets the "sample_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateSampleID() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateSampleID()
+	})
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearSampleID() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearSampleID()
+	})
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetRequestLatencyMs(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetRequestLatencyMs(v)
+	})
+}
+
+// AddRequestLatencyMs adds v to the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertBulk) AddRequestLatencyMs(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddRequestLatencyMs(v)
+	})
+}
+
+// UpdateRequestLatencyMs sets the "request_latency_ms" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateRequestLatencyMs() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateRequestLatencyMs()
+	})
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearRequestLatencyMs() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearRequestLatencyMs()
 	})
 }
 

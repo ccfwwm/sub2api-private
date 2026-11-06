@@ -1,3 +1,4 @@
+import type { MonitorDataQuality } from './admin/channelMonitor'
 /**
  * User-facing Channel Monitor API endpoints
  * Read-only views for end users to inspect channel availability/status.
@@ -21,7 +22,7 @@ export interface MonitorTimelinePoint {
   checked_at: string
 }
 
-export interface UserMonitorView {
+export interface UserMonitorView extends MonitorDataQuality {
   id: number
   name: string
   provider: Provider
@@ -44,7 +45,7 @@ export interface UserMonitorListResponse {
   items: UserMonitorView[]
 }
 
-export interface UserMonitorModelDetail {
+export interface UserMonitorModelDetail extends MonitorDataQuality {
   model: string
   latest_status: MonitorStatus
   latest_latency_ms: number | null

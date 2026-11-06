@@ -20,7 +20,23 @@ export type Provider =
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error' | 'pending'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses'
+export interface MonitorProbePolicy {
+  prompt?: string
+  normal_latency_ms?: number
+  request_timeout_ms?: number
+  observation_timeout_ms?: number
+}
+export interface MonitorProbeConfig { defaults: MonitorProbePolicy; models?: Record<string, MonitorProbePolicy> }
+export interface MonitorDataQuality {
+  sample_count_7d?: number
+  sample_count_15d?: number
+  sample_count_30d?: number
+  last_result_at?: string | null
+  stale?: boolean
+  data_error?: boolean
+}
 export interface MonitorProbeSettings {
+  probe_config?: MonitorProbeConfig
   probe_type: 'text' | 'image' | 'custom'
   image_probe_schedule_enabled: boolean
   custom_method: string
@@ -32,6 +48,7 @@ export interface MonitorProbeSettings {
 export function monitorProbeDefaults(value: Partial<MonitorProbeSettings> = {}): MonitorProbeSettings {
   return {
     probe_type: value.probe_type || 'text',
+ probe_config: JSON.parse(JSON.stringify(value.probe_config ?? { defaults: {}, models: {} })),
     image_probe_schedule_enabled: value.image_probe_schedule_enabled === true,
     custom_method: value.custom_method || 'POST',
     custom_path: value.custom_path || '',
@@ -80,7 +97,7 @@ export interface MonitorQuotaSnapshot {
   fetched_at: string
 }
 
-export interface ChannelMonitor extends Partial<MonitorProbeSettings> {
+export interface ChannelMonitor extends Partial<MonitorProbeSettings>, MonitorDataQuality {
   id: number
   name: string
   provider: Provider
@@ -180,6 +197,7 @@ export type UpdateParams = Partial<CreateParams> & {
 }
 
 export interface CheckResult {
+	request_latency_ms?: number | null
   model: string
   status: MonitorStatus
   latency_ms: number | null
@@ -195,6 +213,7 @@ export interface RunNowResponse {
 }
 
 export interface HistoryItem {
+	request_latency_ms?: number | null
   id: number
   model: string
   status: MonitorStatus
@@ -347,9 +366,18 @@ export async function del(id: number): Promise<void> {
  * Trigger an immediate manual check for a channel monitor.
  * Returns the latest check results for primary + extra models.
  */
+interface MonitorRun { run_id: string; state: string; results: RunNowResponse['results']; error?: string }
 export async function runNow(id: number): Promise<RunNowResponse> {
-	const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`, undefined, { timeout: 240_000 })
-  return data
+  const { data: started } = await apiClient.post<MonitorRun>(`/admin/channel-monitors/${id}/run?async=true`)
+  const deadline = Date.now() + 24 * 60 * 60 * 1000
+  let run = started
+  while (run.state === 'running' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    const { data } = await apiClient.get<MonitorRun>(`/admin/channel-monitors/${id}/runs/${run.run_id}`)
+    run = data
+  }
+  if (run.state !== 'completed') throw new Error(run.error || 'Monitor check did not complete')
+  return { results: run.results }
 }
 
 export async function confirmMediaTaskReset(id: number, model: string): Promise<void> {

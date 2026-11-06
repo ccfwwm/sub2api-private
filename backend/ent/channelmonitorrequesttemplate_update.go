@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ChannelMonitorRequestTemplateUpdate is the builder for updating ChannelMonitorRequestTemplate entities.
@@ -74,6 +75,26 @@ func (_u *ChannelMonitorRequestTemplateUpdate) SetNillableAPIMode(v *string) *Ch
 	if v != nil {
 		_u.SetAPIMode(*v)
 	}
+	return _u
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (_u *ChannelMonitorRequestTemplateUpdate) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpdate {
+	_u.mutation.SetProbeConfig(v)
+	return _u
+}
+
+// SetNillableProbeConfig sets the "probe_config" field if the given value is not nil.
+func (_u *ChannelMonitorRequestTemplateUpdate) SetNillableProbeConfig(v *domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpdate {
+	if v != nil {
+		_u.SetProbeConfig(*v)
+	}
+	return _u
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (_u *ChannelMonitorRequestTemplateUpdate) ClearProbeConfig() *ChannelMonitorRequestTemplateUpdate {
+	_u.mutation.ClearProbeConfig()
 	return _u
 }
 
@@ -376,6 +397,12 @@ func (_u *ChannelMonitorRequestTemplateUpdate) sqlSave(ctx context.Context) (_no
 	if value, ok := _u.mutation.APIMode(); ok {
 		_spec.SetField(channelmonitorrequesttemplate.FieldAPIMode, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ProbeConfig(); ok {
+		_spec.SetField(channelmonitorrequesttemplate.FieldProbeConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.ProbeConfigCleared() {
+		_spec.ClearField(channelmonitorrequesttemplate.FieldProbeConfig, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.ProbeType(); ok {
 		_spec.SetField(channelmonitorrequesttemplate.FieldProbeType, field.TypeString, value)
 	}
@@ -528,6 +555,26 @@ func (_u *ChannelMonitorRequestTemplateUpdateOne) SetNillableAPIMode(v *string) 
 	if v != nil {
 		_u.SetAPIMode(*v)
 	}
+	return _u
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (_u *ChannelMonitorRequestTemplateUpdateOne) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpdateOne {
+	_u.mutation.SetProbeConfig(v)
+	return _u
+}
+
+// SetNillableProbeConfig sets the "probe_config" field if the given value is not nil.
+func (_u *ChannelMonitorRequestTemplateUpdateOne) SetNillableProbeConfig(v *domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpdateOne {
+	if v != nil {
+		_u.SetProbeConfig(*v)
+	}
+	return _u
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (_u *ChannelMonitorRequestTemplateUpdateOne) ClearProbeConfig() *ChannelMonitorRequestTemplateUpdateOne {
+	_u.mutation.ClearProbeConfig()
 	return _u
 }
 
@@ -859,6 +906,12 @@ func (_u *ChannelMonitorRequestTemplateUpdateOne) sqlSave(ctx context.Context) (
 	}
 	if value, ok := _u.mutation.APIMode(); ok {
 		_spec.SetField(channelmonitorrequesttemplate.FieldAPIMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProbeConfig(); ok {
+		_spec.SetField(channelmonitorrequesttemplate.FieldProbeConfig, field.TypeJSON, value)
+	}
+	if _u.mutation.ProbeConfigCleared() {
+		_spec.ClearField(channelmonitorrequesttemplate.FieldProbeConfig, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ProbeType(); ok {
 		_spec.SetField(channelmonitorrequesttemplate.FieldProbeType, field.TypeString, value)

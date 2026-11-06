@@ -194,7 +194,7 @@ func TestMediaMonitorAcceptedTaskSurvivesRestartAndFailedProbeRetriesOnLaterChec
 		}
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 5, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", map[string]any{"prompt": "custom probe"})}}}}
+	m := &ChannelMonitor{ID: 5, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", map[string]any{"prompt": "custom probe"})}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	result := s.runMediaMonitor(context.Background(), m)
 	require.Equal(t, MonitorStatusPending, result[0].Status)
@@ -204,6 +204,7 @@ func TestMediaMonitorAcceptedTaskSurvivesRestartAndFailedProbeRetriesOnLaterChec
 	result = s.runMediaMonitor(context.Background(), m)
 	require.Equal(t, MonitorStatusFailed, result[0].Status)
 	require.Equal(t, 1, polls)
+	require.NoError(t, s.acknowledgeMediaReceipts(m, result))
 	result = s.runMediaMonitor(context.Background(), m)
 	require.Equal(t, MonitorStatusPending, result[0].Status)
 	require.Equal(t, 2, posts)
@@ -215,16 +216,33 @@ func TestMediaMonitorRequiresValidArtifactAndRoutesImages(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2, 2))))
 	output := base64.StdEncoding.EncodeToString(buf.Bytes())
+	posts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
 		require.Equal(t, "/v1/images/generations", r.URL.Path)
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"b64_json": output}}})
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 6, Endpoint: server.URL, APIKey: "key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
+	m := &ChannelMonitor{ID: 6, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "key", PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
-	require.Equal(t, MonitorStatusOperational, s.runMediaMonitor(context.Background(), m)[0].Status)
+	result := s.runMediaMonitor(context.Background(), m)
+	require.Equal(t, MonitorStatusOperational, result[0].Status)
+	// Completion before the history commit must survive restart without billing
+	// another generation. Both success and failure receipts need acknowledgment.
+	s = NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+	replayed := s.runMediaMonitor(context.Background(), m)
+	result[0].CheckedAt = result[0].CheckedAt.Round(0).UTC()
+	require.Equal(t, result[0], replayed[0])
+	require.Equal(t, 1, posts)
+	require.NoError(t, s.acknowledgeMediaReceipts(m, result))
 	output = base64.StdEncoding.EncodeToString([]byte("not an image"))
-	require.Equal(t, MonitorStatusFailed, s.runMediaMonitor(context.Background(), m)[0].Status)
+	failed := s.runMediaMonitor(context.Background(), m)
+	require.Equal(t, MonitorStatusFailed, failed[0].Status)
+	require.Equal(t, 2, posts)
+	s = NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+	failed[0].CheckedAt = failed[0].CheckedAt.Round(0).UTC()
+	require.Equal(t, failed[0], s.runMediaMonitor(context.Background(), m)[0])
+	require.Equal(t, 2, posts)
 }
 
 func TestMediaMonitorInterruptedSubmissionAndCorruptJournalNeverSubmit(t *testing.T) {
@@ -298,13 +316,14 @@ func TestMediaMonitorRecoveryFailureIsFailedAndDoesNotResubmit(t *testing.T) {
 	defer server.Close()
 	entry := monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)
 	entry.Capability.Template.Recover = &media.TemplateEndpoint{Method: http.MethodGet, Path: "/v1/media/tasks/recover", Query: map[string]string{"idempotency_key": "{idempotency_key}"}}
-	m := &ChannelMonitor{ID: 49, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "gpt-image-2",
+	m := &ChannelMonitor{ID: 49, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "gpt-image-2",
 		BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": entry}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 
 	first := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, MonitorStatusFailed, first.Status)
 	require.Equal(t, 1, posts)
+	require.NoError(t, s.acknowledgeMediaReceipts(m, []*CheckResult{first}))
 	second := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, MonitorStatusFailed, second.Status)
 	require.Contains(t, second.Message, "recovery unavailable")
@@ -323,7 +342,7 @@ func TestMediaMonitorRejectionKeepsReasonAndRetriesOnNextCheck(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"message":"Model gpt-image2.5 is not available for this group; private-key custom-secret"}}`))
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 18, Endpoint: server.URL, APIKey: "private-key", ExtraHeaders: map[string]string{"X-Secret": "custom-secret"}, PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
+	m := &ChannelMonitor{ID: 18, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "private-key", ExtraHeaders: map[string]string{"X-Secret": "custom-secret"}, PrimaryModel: "gpt-image-2", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	first := s.runMediaMonitor(context.Background(), m)[0]
 	require.Equal(t, MonitorStatusFailed, first.Status)
@@ -332,6 +351,7 @@ func TestMediaMonitorRejectionKeepsReasonAndRetriesOnNextCheck(t *testing.T) {
 	require.NotContains(t, first.Message, "acceptance uncertain")
 	require.NotContains(t, first.Message, "private-key")
 	require.NotContains(t, first.Message, "custom-secret")
+	require.NoError(t, s.acknowledgeMediaReceipts(m, []*CheckResult{first}))
 	// A definite rejection permits a new probe on the next cycle.
 	s = NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	next := s.runMediaMonitor(context.Background(), m)[0]
@@ -357,7 +377,7 @@ func TestMediaMonitorRetriesWrapped429OnlyAfterRetryAfterOnLaterCheck(t *testing
 		_, _ = w.Write([]byte(`{"id":"accepted-after-retry","status":"queued"}`))
 	}))
 	defer server.Close()
-	m := &ChannelMonitor{ID: 33, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)}}}}
+	m := &ChannelMonitor{ID: 33, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "omni-flash", BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"omni-flash": monitorTestMediaModel(t, "omni-flash", "omni-flash", "video-arrays", nil)}}}}
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 
 	result := s.runMediaMonitor(context.Background(), m)
@@ -365,11 +385,13 @@ func TestMediaMonitorRetriesWrapped429OnlyAfterRetryAfterOnLaterCheck(t *testing
 	require.Contains(t, result[0].Message, "HTTP 429")
 	require.Contains(t, result[0].Message, "no resubmission in this request")
 	require.Equal(t, 1, posts)
+	require.NoError(t, s.acknowledgeMediaReceipts(m, result))
 
 	result = s.runMediaMonitor(context.Background(), m)
 	require.Equal(t, MonitorStatusFailed, result[0].Status)
 	require.Contains(t, result[0].Message, "retry available after")
 	require.Equal(t, 1, posts)
+	require.NoError(t, s.acknowledgeMediaReceipts(m, result))
 
 	time.Sleep(1100 * time.Millisecond)
 	result = s.runMediaMonitor(context.Background(), m)

@@ -44,6 +44,53 @@ func (_u *ChannelMonitorHistoryUpdate) SetNillableMonitorID(v *int64) *ChannelMo
 	return _u
 }
 
+// SetSampleID sets the "sample_id" field.
+func (_u *ChannelMonitorHistoryUpdate) SetSampleID(v string) *ChannelMonitorHistoryUpdate {
+	_u.mutation.SetSampleID(v)
+	return _u
+}
+
+// SetNillableSampleID sets the "sample_id" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableSampleID(v *string) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetSampleID(*v)
+	}
+	return _u
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearSampleID() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearSampleID()
+	return _u
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdate) SetRequestLatencyMs(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.ResetRequestLatencyMs()
+	_u.mutation.SetRequestLatencyMs(v)
+	return _u
+}
+
+// SetNillableRequestLatencyMs sets the "request_latency_ms" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableRequestLatencyMs(v *int) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetRequestLatencyMs(*v)
+	}
+	return _u
+}
+
+// AddRequestLatencyMs adds value to the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdate) AddRequestLatencyMs(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.AddRequestLatencyMs(v)
+	return _u
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearRequestLatencyMs() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearRequestLatencyMs()
+	return _u
+}
+
 // SetModel sets the "model" field.
 func (_u *ChannelMonitorHistoryUpdate) SetModel(v string) *ChannelMonitorHistoryUpdate {
 	_u.mutation.SetModel(v)
@@ -217,6 +264,11 @@ func (_u *ChannelMonitorHistoryUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChannelMonitorHistoryUpdate) check() error {
+	if v, ok := _u.mutation.SampleID(); ok {
+		if err := channelmonitorhistory.SampleIDValidator(v); err != nil {
+			return &ValidationError{Name: "sample_id", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.sample_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Model(); ok {
 		if err := channelmonitorhistory.ModelValidator(v); err != nil {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.model": %w`, err)}
@@ -249,6 +301,21 @@ func (_u *ChannelMonitorHistoryUpdate) sqlSave(ctx context.Context) (_node int, 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.SampleID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldSampleID, field.TypeString, value)
+	}
+	if _u.mutation.SampleIDCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldSampleID, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestLatencyMs(); ok {
+		_spec.SetField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRequestLatencyMs(); ok {
+		_spec.AddField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt, value)
+	}
+	if _u.mutation.RequestLatencyMsCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(channelmonitorhistory.FieldModel, field.TypeString, value)
@@ -349,6 +416,53 @@ func (_u *ChannelMonitorHistoryUpdateOne) SetNillableMonitorID(v *int64) *Channe
 	if v != nil {
 		_u.SetMonitorID(*v)
 	}
+	return _u
+}
+
+// SetSampleID sets the "sample_id" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetSampleID(v string) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.SetSampleID(v)
+	return _u
+}
+
+// SetNillableSampleID sets the "sample_id" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableSampleID(v *string) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetSampleID(*v)
+	}
+	return _u
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearSampleID() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearSampleID()
+	return _u
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetRequestLatencyMs(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ResetRequestLatencyMs()
+	_u.mutation.SetRequestLatencyMs(v)
+	return _u
+}
+
+// SetNillableRequestLatencyMs sets the "request_latency_ms" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableRequestLatencyMs(v *int) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetRequestLatencyMs(*v)
+	}
+	return _u
+}
+
+// AddRequestLatencyMs adds value to the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdateOne) AddRequestLatencyMs(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.AddRequestLatencyMs(v)
+	return _u
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearRequestLatencyMs() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearRequestLatencyMs()
 	return _u
 }
 
@@ -538,6 +652,11 @@ func (_u *ChannelMonitorHistoryUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChannelMonitorHistoryUpdateOne) check() error {
+	if v, ok := _u.mutation.SampleID(); ok {
+		if err := channelmonitorhistory.SampleIDValidator(v); err != nil {
+			return &ValidationError{Name: "sample_id", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.sample_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Model(); ok {
 		if err := channelmonitorhistory.ModelValidator(v); err != nil {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.model": %w`, err)}
@@ -587,6 +706,21 @@ func (_u *ChannelMonitorHistoryUpdateOne) sqlSave(ctx context.Context) (_node *C
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.SampleID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldSampleID, field.TypeString, value)
+	}
+	if _u.mutation.SampleIDCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldSampleID, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestLatencyMs(); ok {
+		_spec.SetField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRequestLatencyMs(); ok {
+		_spec.AddField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt, value)
+	}
+	if _u.mutation.RequestLatencyMsCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldRequestLatencyMs, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(channelmonitorhistory.FieldModel, field.TypeString, value)

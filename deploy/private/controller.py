@@ -296,7 +296,7 @@ class Controller:
                                    validate_template_transaction, validate_legacy_transaction,
                                    validate_group_availability_transaction,
                                    validate_ops_diagnostics_transaction,
-                                   validate_monitor_probe_transaction,
+                                   validate_monitor_probe_transaction, validate_monitor_policy_transaction,
                                    validate_upstream_v0_2_19_transaction)
         legacy = validate_legacy_transaction(transaction)
         reviewed = (legacy or validate_unified_transaction(transaction) or
@@ -305,7 +305,7 @@ class Controller:
                     validate_docs_transaction(transaction) or validate_template_transaction(transaction))
         reviewed = reviewed or validate_group_availability_transaction(transaction)
         reviewed = reviewed or validate_ops_diagnostics_transaction(transaction)
-        reviewed = reviewed or validate_monitor_probe_transaction(transaction)
+        reviewed = reviewed or validate_monitor_probe_transaction(transaction) or validate_monitor_policy_transaction(transaction)
         reviewed = reviewed or validate_upstream_v0_2_19_transaction(transaction)
         if not transaction.startswith("BEGIN; SET LOCAL lock_timeout='3s';") or not transaction.endswith("COMMIT;") or not reviewed:
             raise ValueError("reviewed atomic media transaction required")
@@ -507,7 +507,7 @@ class Controller:
                 comparison = {t: self.fingerprint_sql(t) for t in PROTECTED}
                 expected_after = dict(restored)
                 monitor_before = {}
-                if reviewed['filename'] == '255_channel_monitor_probe_config.sql':
+                if reviewed['filename'] in ('255_channel_monitor_probe_config.sql','256_channel_monitor_policy_and_runs.sql'):
                     from media_migrate import MONITOR_PROBE_TABLES, monitor_probe_defaults_sql
                     for table in (*MONITOR_PROBE_TABLES, 'channel_monitor_histories'):
                         columns = self.sql("SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='" + table + "';", pg)

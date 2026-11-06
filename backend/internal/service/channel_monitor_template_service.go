@@ -89,6 +89,7 @@ func (s *ChannelMonitorRequestTemplateService) Create(ctx context.Context, p Cha
 		ExtraHeaders:                  emptyHeadersIfNil(p.ExtraHeaders),
 		BodyOverrideMode:              defaultBodyMode(p.BodyOverrideMode),
 		BodyOverride:                  p.BodyOverride,
+		ProbeConfig:                   cloneMonitorPolicy(p.ProbeConfig),
 		ProbeType:                     defaultMonitorProbeType(p.ProbeType),
 		ImageProbeScheduleEnabled:     p.ImageProbeScheduleEnabled,
 		CustomMethod:                  defaultCustomProbeMethod(p.CustomMethod),
@@ -189,6 +190,9 @@ func validateTemplateCreateParams(p ChannelMonitorRequestTemplateCreateParams) e
 	if err := validateMonitorProbeSettings(p.Provider, p.ProbeType, p.CustomMethod, p.CustomPath, p.CustomResponseJSONPath); err != nil {
 		return err
 	}
+	if err := validateMonitorPolicy(p.ProbeConfig, p.Provider, p.ProbeType, []string{"template"}, p.BodyOverride); err != nil {
+		return err
+	}
 	if err := validateExtraHeaders(p.ExtraHeaders); err != nil {
 		return err
 	}
@@ -197,6 +201,9 @@ func validateTemplateCreateParams(p ChannelMonitorRequestTemplateCreateParams) e
 
 // applyTemplateUpdate 把 update params 中非 nil 字段应用到 existing 上。
 func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonitorRequestTemplateUpdateParams) error {
+	if p.ProbeConfig != nil {
+		existing.ProbeConfig = cloneMonitorPolicy(*p.ProbeConfig)
+	}
 	if p.ProbeType != nil {
 		if defaultMonitorProbeType(existing.ProbeType) != defaultMonitorProbeType(*p.ProbeType) {
 			existing.ImageProbeScheduleEnabled = false
@@ -257,6 +264,9 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 		return err
 	}
 	if err := validateMonitorProbeSettings(existing.Provider, existing.ProbeType, existing.CustomMethod, existing.CustomPath, existing.CustomResponseJSONPath); err != nil {
+		return err
+	}
+	if err := validateMonitorPolicy(existing.ProbeConfig, existing.Provider, existing.ProbeType, []string{"template"}, newBody); err != nil {
 		return err
 	}
 	existing.APIMode = newAPIMode

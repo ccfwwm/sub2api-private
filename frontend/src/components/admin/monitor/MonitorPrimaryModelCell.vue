@@ -56,6 +56,8 @@
       </div>
       </HelpTooltip>
     </div>
+    <div v-if="row.stale || row.data_error" class="mt-1 text-xs text-amber-600" :title="row.last_result_at || ''">{{ t(row.data_error ? 'monitorPolicy.readError' : 'monitorPolicy.stale') }}</div>
+    <div v-if="row.last_result_at" class="mt-1 text-xs text-gray-400">{{ t('monitorPolicy.lastResult') }}: {{ new Date(row.last_result_at).toLocaleString() }}</div>
     <!-- 配额模式监控：主模型行内联展示最新用量/余额快照（管理端不受用户端开关限制） -->
     <MonitorQuotaView :snapshot="row.latest_quota" />
   </div>

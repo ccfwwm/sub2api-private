@@ -65,6 +65,7 @@ type ChannelMonitor struct {
 	ExtraHeaders                  map[string]string // 与 adapter 默认 headers 合并，用户优先
 	BodyOverrideMode              string            // off / merge / replace
 	BodyOverride                  map[string]any    // 仅 mode != off 时使用
+	ProbeConfig                   domain.MonitorProbeConfig
 	ProbeType                     string
 	ImageProbeScheduleEnabled     bool
 	CustomMethod                  string
@@ -111,6 +112,7 @@ type ChannelMonitorCreateParams struct {
 	ExtraHeaders                  map[string]string
 	BodyOverrideMode              string
 	BodyOverride                  map[string]any
+	ProbeConfig                   domain.MonitorProbeConfig
 	ProbeType                     string
 	ImageProbeScheduleEnabled     bool
 	CustomMethod                  string
@@ -145,6 +147,7 @@ type ChannelMonitorUpdateParams struct {
 	ExtraHeaders                  *map[string]string
 	BodyOverrideMode              *string
 	BodyOverride                  *map[string]any
+	ProbeConfig                   *domain.MonitorProbeConfig
 	ProbeType                     *string
 	ImageProbeScheduleEnabled     *bool
 	CustomMethod                  *string
@@ -161,18 +164,21 @@ type ChannelMonitorUpdateParams struct {
 
 // CheckResult 单个模型一次检测的结果。
 type CheckResult struct {
-	Model         string
-	Status        string // operational / degraded / failed / error
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
+	SampleID         string    `json:"sample_id"`
+	RequestLatencyMs *int      `json:"request_latency_ms"`
+	Model            string    `json:"model"`
+	Status           string    `json:"status"` // operational / degraded / failed / error
+	LatencyMs        *int      `json:"latency_ms"`
+	PingLatencyMs    *int      `json:"ping_latency_ms"`
+	Message          string    `json:"message"`
+	CheckedAt        time.Time `json:"checked_at"`
 	// Quota 配额模式附带快照（quota 模式唯一数据；quota_probe 挂在主模型行）。
-	Quota *domain.MonitorQuotaSnapshot
+	Quota *domain.MonitorQuotaSnapshot `json:"quota"`
 }
 
 // UserMonitorView 用户只读视图：监控概览（含主模型最近状态 + 7d 可用率 + 附加模型最近状态）。
 type UserMonitorView struct {
+	MonitorDataQuality
 	ID                   int64
 	Name                 string
 	Provider             string
@@ -199,6 +205,7 @@ type UserMonitorTimelinePoint struct {
 
 // ExtraModelStatus 附加模型最近一次状态。
 type ExtraModelStatus struct {
+	CheckedAt *time.Time
 	Model     string
 	Status    string
 	LatencyMs *int
@@ -215,6 +222,7 @@ type UserMonitorDetail struct {
 
 // ModelDetail 单个模型的可用率/延迟统计。
 type ModelDetail struct {
+	MonitorDataQuality
 	Model           string
 	LatestStatus    string
 	LatestLatencyMs *int
@@ -226,26 +234,29 @@ type ModelDetail struct {
 
 // ChannelMonitorHistoryRow 历史记录入库行（service 层向 repository 提交的数据）。
 type ChannelMonitorHistoryRow struct {
-	MonitorID     int64
-	Model         string
-	Status        string
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
-	Quota         *domain.MonitorQuotaSnapshot
+	SampleID         string
+	RequestLatencyMs *int
+	MonitorID        int64
+	Model            string
+	Status           string
+	LatencyMs        *int
+	PingLatencyMs    *int
+	Message          string
+	CheckedAt        time.Time
+	Quota            *domain.MonitorQuotaSnapshot
 }
 
 // ChannelMonitorHistoryEntry 历史记录查询返回行（含 ent 主键 ID）。
 type ChannelMonitorHistoryEntry struct {
-	ID            int64
-	Model         string
-	Status        string
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
-	Quota         *domain.MonitorQuotaSnapshot
+	RequestLatencyMs *int
+	ID               int64
+	Model            string
+	Status           string
+	LatencyMs        *int
+	PingLatencyMs    *int
+	Message          string
+	CheckedAt        time.Time
+	Quota            *domain.MonitorQuotaSnapshot
 }
 
 // ChannelMonitorLatest 最近一次检测的简明信息（用于 UserMonitorView 聚合）。
@@ -272,9 +283,24 @@ type ChannelMonitorAvailability struct {
 // PrimaryStatus / PrimaryLatencyMs 描述主模型最近状态；Availability7d 是主模型 7 天可用率；
 // ExtraModels 描述附加模型最近状态（用于 hover 展示）。
 type MonitorStatusSummary struct {
+	MonitorDataQuality
 	PrimaryStatus    string // 空字符串表示无历史
 	PrimaryLatencyMs *int
 	Availability7d   float64 // 0-100，无历史时为 0
 	ExtraModels      []ExtraModelStatus
 	LatestQuota      *domain.MonitorQuotaSnapshot // 主模型最近配额快照（配额模式）
+}
+
+// MonitorDataQuality distinguishes missing observations from an observed failure.
+type MonitorDataQuality struct {
+	SampleCount7d  int        `json:"sample_count_7d"`
+	SampleCount15d int        `json:"sample_count_15d"`
+	SampleCount30d int        `json:"sample_count_30d"`
+	LastResultAt   *time.Time `json:"last_result_at"`
+	Stale          bool       `json:"stale"`
+	DataError      bool       `json:"data_error"`
+}
+
+func MonitorResultStale(at *time.Time, interval int) bool {
+	return at != nil && time.Since(*at) > time.Duration(max(120, interval*2))*time.Second
 }

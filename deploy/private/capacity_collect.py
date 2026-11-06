@@ -152,6 +152,10 @@ def postgres_probe(container):
     sql = """SELECT json_build_object(
       'max_connections', current_setting('max_connections')::int,
       'database_size_bytes', pg_database_size(current_database()),
+      'request_completions_last_minute', (SELECT count(*) FROM usage_logs WHERE created_at>=now()-interval '1 minute'),
+      'media_submissions_last_minute', (SELECT count(*) FROM media_tasks WHERE created_at>=now()-interval '1 minute'),
+      'temp_bytes', (SELECT temp_bytes FROM pg_stat_database WHERE datname=current_database()),
+      'temp_files', (SELECT temp_files FROM pg_stat_database WHERE datname=current_database()),
       'connections', (SELECT count(*) FROM pg_stat_activity),
       'active_connections', (SELECT count(*) FROM pg_stat_activity WHERE state = 'active'),
       'waiting_queries', (SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND wait_event IS NOT NULL),

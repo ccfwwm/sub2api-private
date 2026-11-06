@@ -54,7 +54,7 @@ func TestMediaMonitorLostResponseRecoversAcrossRestartForEachModel(t *testing.T)
 		require.NoError(t, err)
 		models[model] = entry
 	}
-	m := &ChannelMonitor{ID: 51, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "gpt-image-2.5", ExtraModels: []string{"gpt-image-2"}, BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", TaskAPI: true, Models: models}}}
+	m := &ChannelMonitor{ID: 51, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "gpt-image-2.5", ExtraModels: []string{"gpt-image-2"}, BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", TaskAPI: true, Models: models}}}
 	service := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 	first := service.runMediaMonitor(context.Background(), m)
 	require.Len(t, first, 2)
@@ -62,6 +62,7 @@ func TestMediaMonitorLostResponseRecoversAcrossRestartForEachModel(t *testing.T)
 	require.Contains(t, first[1].Message, "submission outcome is uncertain")
 	require.Equal(t, 2, posts)
 	require.Len(t, keys, 2)
+	require.NoError(t, service.acknowledgeMediaReceipts(m, first))
 	// An unavailable live template store and removed capabilities must not prevent
 	// recovering either frozen original request after a restart.
 	m.BodyOverride = map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation"}}

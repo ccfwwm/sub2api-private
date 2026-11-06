@@ -150,6 +150,8 @@
 
       <MonitorProbeConfig v-if="usesProbePart && form.provider !== PROVIDER_IMAGEVIDEO" v-model="form.probe" :provider="form.provider" @validity="probeConfigValid = $event" />
 
+      <MonitorPolicyConfig v-if="usesProbePart" v-model="form.probe.probe_config" :models="[form.primary_model, ...form.extra_models]" :provider="form.provider" :probe-type="form.probe.probe_type" :body="form.body_override" :body-mode="form.body_override_mode" @validity="policyConfigValid = $event" />
+
       <MonitorMediaConfig v-if="form.provider === PROVIDER_IMAGEVIDEO" v-model="form.body_override" :models="[form.primary_model, ...form.extra_models]" @validity="mediaConfigValid = $event" />
 
       <div>
@@ -216,7 +218,7 @@
         <button
           type="submit"
           form="channel-monitor-form"
-          :disabled="submitting || (usesProbePart && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid) || (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid)"
+          :disabled="submitting || !policyConfigValid || (usesProbePart && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid) || (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid)"
           class="btn btn-primary"
         >
           {{ submitting
@@ -239,6 +241,7 @@
 </template>
 
 <script setup lang="ts">
+import MonitorPolicyConfig from './MonitorPolicyConfig.vue'
 import MonitorProbeConfig from './MonitorProbeConfig.vue'
 import { monitorProbeDefaults, type MonitorProbeSettings } from '@/api/admin/channelMonitor'
 import { ref, reactive, computed, watch } from 'vue'
@@ -323,6 +326,7 @@ const editing = computed<ChannelMonitor | null>(() => props.monitor)
 const submitting = ref(false)
 const mediaConfigValid = ref(true)
 const probeConfigValid = ref(true)
+const policyConfigValid = ref(true)
 
 // API key picker
 const showKeyPicker = ref(false)
@@ -838,7 +842,7 @@ function pickMyKey(k: ApiKey) {
 
 function buildPayload(): CreateParams {
   return {
-    ...(usesProbePart.value && form.provider !== PROVIDER_IMAGEVIDEO ? form.probe : monitorProbeDefaults()),
+    ...(usesProbePart.value ? form.probe : monitorProbeDefaults()),
     name: form.name.trim(),
     provider: form.provider,
     api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
@@ -860,7 +864,7 @@ function buildPayload(): CreateParams {
 }
 
 async function handleSubmit() {
-  if (submitting.value || (usesProbePart.value && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid.value)) return
+  if (submitting.value || !policyConfigValid.value || (usesProbePart.value && form.provider !== PROVIDER_IMAGEVIDEO && !probeConfigValid.value)) return
   if (form.provider === PROVIDER_IMAGEVIDEO && !mediaConfigValid.value) return
   if (!form.name.trim()) {
     appStore.showError(t('admin.channelMonitor.nameRequired'))

@@ -28,10 +28,11 @@ func TestApplyChannelMonitorTemplatePreservesDuplicateOperationMetadataAtomicall
 
 	mock.ExpectBegin()
 	expectChannelMonitorTemplateForApply(mock, templateID)
-	mock.ExpectExec(`(?s)UPDATE "channel_monitors" SET "custom_body" = NULL, "body_override" = NULL, "updated_at" = \$1, "api_mode" = \$2, "probe_type" = \$3, "image_probe_schedule_enabled" = \$4, "custom_method" = \$5, "custom_path" = \$6, "custom_response_json_path" = \$7, "custom_response_require_non_empty" = \$8, "body_override_mode" = \$9 WHERE .*"template_id" = \$10.*"id" IN \(\$11, \$12\).*"provider" = \$13.*"api_mode" = \$14`).
+	mock.ExpectExec(`(?s)UPDATE "channel_monitors" SET "custom_body" = NULL, "body_override" = NULL, "updated_at" = \$1, "api_mode" = \$2, "probe_config" = \$3, "probe_type" = \$4, "image_probe_schedule_enabled" = \$5, "custom_method" = \$6, "custom_path" = \$7, "custom_response_json_path" = \$8, "custom_response_require_non_empty" = \$9, "body_override_mode" = \$10 WHERE .*"template_id" = \$11.*"id" IN \(\$12, \$13\).*"provider" = \$14.*"api_mode" = \$15`).
 		WithArgs(
 			sqlmock.AnyArg(),
 			service.MonitorAPIModeResponses,
+			sqlmock.AnyArg(),
 			service.MonitorProbeTypeText,
 			false,
 			"POST",

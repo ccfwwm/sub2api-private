@@ -1,3 +1,4 @@
+import monitorPolicy from './monitorPolicy'
 import adminAccessKeys from './adminAccessKeys'
 import landing from './landing'
 import common from './common'
@@ -10,6 +11,7 @@ import misc from './misc'
 import probeConfig from './probeConfig'
 
 export default {
+ monitorPolicy,
   probeConfig,
   adminAccessKeys,
   ...landing,
