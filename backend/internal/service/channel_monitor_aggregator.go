@@ -27,23 +27,27 @@ func (s *ChannelMonitorService) BatchMonitorStatusSummary(
 		return out
 	}
 	latestMap, err := s.repo.ListLatestForMonitorIDs(ctx, ids)
+	dataError := err != nil
 	if err != nil {
 		slog.Warn("channel_monitor: batch load latest failed", "error", err)
 		latestMap = map[int64][]*ChannelMonitorLatest{}
 	}
 	availMap, err := s.repo.ComputeAvailabilityForMonitors(ctx, ids, monitorAvailability7Days)
+	dataError = dataError || err != nil
 	if err != nil {
 		slog.Warn("channel_monitor: batch compute availability failed", "error", err)
 		availMap = map[int64][]*ChannelMonitorAvailability{}
 	}
 
 	for _, id := range ids {
-		out[id] = buildStatusSummary(
+		summary := buildStatusSummary(
 			indexLatestByModel(latestMap[id]),
 			indexAvailabilityByModel(availMap[id]),
 			primaryByID[id],
 			extrasByID[id],
 		)
+		summary.DataError = dataError
+		out[id] = summary
 	}
 	return out
 }
@@ -202,18 +206,21 @@ func buildStatusSummary(
 	summary := MonitorStatusSummary{ExtraModels: make([]ExtraModelStatus, 0, len(extras))}
 	if primary != "" {
 		if l, ok := latestByModel[primary]; ok {
+			summary.LastResultAt = &l.CheckedAt
 			summary.PrimaryStatus = l.Status
 			summary.PrimaryLatencyMs = l.LatencyMs
 			// 配额快照只挂主模型行（quota 模式唯一行 / quota_probe 的主行）。
 			summary.LatestQuota = l.Quota
 		}
 		if a, ok := availByModel[primary]; ok {
+			summary.SampleCount7d = a.TotalChecks
 			summary.Availability7d = a.AvailabilityPct
 		}
 	}
 	for _, model := range extras {
 		entry := ExtraModelStatus{Model: model}
 		if l, ok := latestByModel[model]; ok {
+			entry.CheckedAt = &l.CheckedAt
 			entry.Status = l.Status
 			entry.LatencyMs = l.LatencyMs
 		}
@@ -230,17 +237,19 @@ func buildUserViewFromSummary(
 	primaryLatest *ChannelMonitorLatest,
 	timelineEntries []*ChannelMonitorHistoryEntry,
 ) *UserMonitorView {
+	summary.Stale = MonitorResultStale(summary.LastResultAt, m.IntervalSeconds)
 	view := &UserMonitorView{
-		ID:               m.ID,
-		Name:             m.Name,
-		Provider:         m.Provider,
-		GroupName:        m.GroupName,
-		PrimaryModel:     m.PrimaryModel,
-		PrimaryStatus:    summary.PrimaryStatus,
-		PrimaryLatencyMs: summary.PrimaryLatencyMs,
-		Availability7d:   summary.Availability7d,
-		ExtraModels:      summary.ExtraModels,
-		Timeline:         buildTimelinePoints(timelineEntries),
+		ID:                 m.ID,
+		Name:               m.Name,
+		Provider:           m.Provider,
+		GroupName:          m.GroupName,
+		PrimaryModel:       m.PrimaryModel,
+		PrimaryStatus:      summary.PrimaryStatus,
+		PrimaryLatencyMs:   summary.PrimaryLatencyMs,
+		Availability7d:     summary.Availability7d,
+		MonitorDataQuality: summary.MonitorDataQuality,
+		ExtraModels:        summary.ExtraModels,
+		Timeline:           buildTimelinePoints(timelineEntries),
 	}
 	if primaryLatest != nil {
 		view.PrimaryPingLatencyMs = primaryLatest.PingLatencyMs
@@ -276,17 +285,22 @@ func mergeModelDetails(
 	for _, model := range all {
 		d := ModelDetail{Model: model}
 		if l, ok := latestByModel[model]; ok {
+			d.LastResultAt = &l.CheckedAt
+			d.Stale = MonitorResultStale(d.LastResultAt, m.IntervalSeconds)
 			d.LatestStatus = l.Status
 			d.LatestLatencyMs = l.LatencyMs
 		}
 		if a, ok := availMap[monitorAvailability7Days][model]; ok {
+			d.SampleCount7d = a.TotalChecks
 			d.Availability7d = a.AvailabilityPct
 			d.AvgLatency7dMs = a.AvgLatencyMs
 		}
 		if a, ok := availMap[monitorAvailability15Days][model]; ok {
+			d.SampleCount15d = a.TotalChecks
 			d.Availability15d = a.AvailabilityPct
 		}
 		if a, ok := availMap[monitorAvailability30Days][model]; ok {
+			d.SampleCount30d = a.TotalChecks
 			d.Availability30d = a.AvailabilityPct
 		}
 		out = append(out, d)

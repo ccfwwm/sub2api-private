@@ -1,14 +1,14 @@
 {
-  "version": "v1.3.23",
+  "version": "v1.3.24",
   "status": "recorded",
-  "acceptance_state": "v1.3.23-production-immediate-cutover-verified; three-public-entry-points-healthy; migration255-defaults-and-existing-checksums-verified; no-new-paid-generation-test",
+  "acceptance_state": "monitor-repair-pre-release-tests; real-connection-verified-on-v1.3.23; production-cutover-and-generation-pending; capacity-gates-pending",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
-  "verified_at": "2026-11-03T14:28:55.577934Z",
+  "verified_at": "2026-11-06T10:31:45Z",
   "new_paid_submissions": 0,
-  "requests_attempted": 0,
+  "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "v1.3.23 deployed successfully after explicit user authorization for immediate cutover. Source test job and immutable image checks passed in build run 41640915567; both initial and finalize 41645953357 backup/restore, rollback and rescue rehearsals passed. Release publication was completed through the authorized GitHub CLI after missing-notes and Actions token permission failures, without changing the original tag or image digests. Production deployment run 41651720707 and host manager 8b5d8a041df549e4b11762068d135c7f succeeded with fresh backup 19a0d36205034498aac6860343ccf919. Three public entry points report version 1.3.23 and healthy status; deployed frontend bundles contain the new account parameter and monitor settings. All 310 production migration checksums match the release, existing monitor defaults remain text with periodic probes disabled, and PostgreSQL/Redis identities and start times are unchanged. New behaviors are covered by regression tests; no new real-channel paid generation was submitted. Historical channel cases below remain baseline evidence only.",
-  "source_release": "v1.3.19",
+  "environment": "Monitor repair release preparation. Current production v1.3.23: a read-only GET /v1/models with monitor 19 credentials returned HTTP 200 in 608 ms. No generation was submitted for this pre-release record. gpt-image-2.5 is absent from the advertised model list and requires mapping verification before recovery. The new application has not yet been deployed. Historical generation cases below are baseline evidence only. Seven-day capacity sampling is active; resource limits remain unchanged pending baseline, isolated restore and 30-minute load gates.",
+  "source_release": "v1.3.24",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
@@ -91,6 +91,21 @@
       "api_key_limit_usd": "0.05",
       "temporary_test_key_deleted": true,
       "credentials_recorded": false
+    },
+    {
+      "label": "monitor19-model-catalogue-20261106",
+      "verification": "real_connection",
+      "status": "completed",
+      "running_version": "v1.3.23",
+      "endpoint": "https://code.aicodeme.xyz",
+      "http_status": 200,
+      "latency_ms": 608,
+      "model_count": 6,
+      "gpt_image_2_5_advertised": false,
+      "gemini_omni_1_1_flash_advertised": true,
+      "submission_attempts": 0,
+      "generation_submitted": false,
+      "verified_at": "2026-11-06T10:31:45Z"
     }
   ],
   "source_release_commit": "b4ab17e61afb4fb213e16157882e840deb361a31",

@@ -32,6 +32,7 @@ REVIEWED_MIGRATION_ASSETS = (
     '253_scoped_admin_api_keys.sql',
     '254_group_image_count_billing.sql',
     '255_channel_monitor_probe_config.sql',
+    '256_channel_monitor_policy_and_runs.sql',
 )
 
 def stage_reviewed_migrations(assets, release):

@@ -627,6 +627,7 @@ var (
 		{Name: "check_mode", Type: field.TypeString, Size: 32, Default: "probe"},
 		{Name: "account_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "api_mode", Type: field.TypeString, Size: 32, Default: "chat_completions"},
+		{Name: "probe_config", Type: field.TypeJSON, Nullable: true},
 		{Name: "probe_type", Type: field.TypeString, Size: 16, Default: "text"},
 		{Name: "image_probe_schedule_enabled", Type: field.TypeBool, Default: false},
 		{Name: "custom_method", Type: field.TypeString, Size: 10, Default: "POST"},
@@ -657,7 +658,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitors_channel_monitor_request_templates_request_template",
-				Columns:    []*schema.Column{ChannelMonitorsColumns[28]},
+				Columns:    []*schema.Column{ChannelMonitorsColumns[29]},
 				RefColumns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -666,7 +667,7 @@ var (
 			{
 				Name:    "channelmonitor_enabled_last_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[20], ChannelMonitorsColumns[23]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[21], ChannelMonitorsColumns[24]},
 			},
 			{
 				Name:    "channelmonitor_provider",
@@ -681,12 +682,12 @@ var (
 			{
 				Name:    "channelmonitor_group_name",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[19]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[20]},
 			},
 			{
 				Name:    "channelmonitor_template_id",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[28]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[29]},
 			},
 			{
 				Name:    "channelmonitor_account_id",
@@ -742,6 +743,8 @@ var (
 	// ChannelMonitorHistoriesColumns holds the columns for the "channel_monitor_histories" table.
 	ChannelMonitorHistoriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "sample_id", Type: field.TypeString, Nullable: true, Size: 100},
+		{Name: "request_latency_ms", Type: field.TypeInt, Nullable: true},
 		{Name: "model", Type: field.TypeString, Size: 200},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"operational", "degraded", "failed", "error", "pending"}},
 		{Name: "latency_ms", Type: field.TypeInt, Nullable: true},
@@ -759,7 +762,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitor_histories_channel_monitors_history",
-				Columns:    []*schema.Column{ChannelMonitorHistoriesColumns[8]},
+				Columns:    []*schema.Column{ChannelMonitorHistoriesColumns[10]},
 				RefColumns: []*schema.Column{ChannelMonitorsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -768,12 +771,17 @@ var (
 			{
 				Name:    "channelmonitorhistory_monitor_id_model_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[8], ChannelMonitorHistoriesColumns[1], ChannelMonitorHistoriesColumns[7]},
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[10], ChannelMonitorHistoriesColumns[3], ChannelMonitorHistoriesColumns[9]},
 			},
 			{
 				Name:    "channelmonitorhistory_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[7]},
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[9]},
+			},
+			{
+				Name:    "channelmonitorhistory_monitor_id_model_sample_id",
+				Unique:  true,
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[10], ChannelMonitorHistoriesColumns[3], ChannelMonitorHistoriesColumns[1]},
 			},
 		},
 	}
@@ -785,6 +793,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "provider", Type: field.TypeEnum, Enums: []string{"openai", "anthropic", "gemini", "grok", "antigravity", "kimi", "zhipu", "deepseek", "minimax", "opencode_go", "imagevideo"}},
 		{Name: "api_mode", Type: field.TypeString, Size: 32, Default: "chat_completions"},
+		{Name: "probe_config", Type: field.TypeJSON, Nullable: true},
 		{Name: "probe_type", Type: field.TypeString, Size: 16, Default: "text"},
 		{Name: "image_probe_schedule_enabled", Type: field.TypeBool, Default: false},
 		{Name: "custom_method", Type: field.TypeString, Size: 10, Default: "POST"},

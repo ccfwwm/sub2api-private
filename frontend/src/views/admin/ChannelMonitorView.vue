@@ -90,6 +90,7 @@
 
           <template #cell-availability_7d="{ row }">
             <span class="text-sm text-gray-900 dark:text-gray-100">{{ formatAvailability(row) }}</span>
+ <div v-if="row.sample_count_7d != null" class="text-xs text-gray-400">{{ t('monitorPolicy.samples', { count: row.sample_count_7d }) }}</div>
           </template>
 
           <template #cell-latency="{ row }">

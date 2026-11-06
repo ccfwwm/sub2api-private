@@ -36,13 +36,13 @@
                 class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
                 :class="statusBadgeClass(m.latest_status)"
               >
-                {{ statusLabel(m.latest_status) }}
+                {{ m.stale ? t('monitorPolicy.stale') : statusLabel(m.latest_status) }}
               </span>
             </td>
             <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ formatLatency(m.latest_latency_ms) }}</td>
-            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ formatPercent(m.availability_7d) }}</td>
-            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ formatPercent(m.availability_15d) }}</td>
-            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ formatPercent(m.availability_30d) }}</td>
+            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ m.sample_count_7d === 0 ? t('monitorPolicy.noData') : formatPercent(m.availability_7d) }}</td>
+            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ m.sample_count_15d === 0 ? t('monitorPolicy.noData') : formatPercent(m.availability_15d) }}</td>
+            <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ m.sample_count_30d === 0 ? t('monitorPolicy.noData') : formatPercent(m.availability_30d) }}</td>
             <td class="py-2 pr-3 text-gray-700 dark:text-gray-300">{{ formatLatency(m.avg_latency_7d_ms) }}</td>
           </tr>
         </tbody>

@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ChannelMonitorRequestTemplateCreate is the builder for creating a ChannelMonitorRequestTemplate entity.
@@ -73,6 +74,20 @@ func (_c *ChannelMonitorRequestTemplateCreate) SetAPIMode(v string) *ChannelMoni
 func (_c *ChannelMonitorRequestTemplateCreate) SetNillableAPIMode(v *string) *ChannelMonitorRequestTemplateCreate {
 	if v != nil {
 		_c.SetAPIMode(*v)
+	}
+	return _c
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (_c *ChannelMonitorRequestTemplateCreate) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateCreate {
+	_c.mutation.SetProbeConfig(v)
+	return _c
+}
+
+// SetNillableProbeConfig sets the "probe_config" field if the given value is not nil.
+func (_c *ChannelMonitorRequestTemplateCreate) SetNillableProbeConfig(v *domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateCreate {
+	if v != nil {
+		_c.SetProbeConfig(*v)
 	}
 	return _c
 }
@@ -440,6 +455,10 @@ func (_c *ChannelMonitorRequestTemplateCreate) createSpec() (*ChannelMonitorRequ
 		_spec.SetField(channelmonitorrequesttemplate.FieldAPIMode, field.TypeString, value)
 		_node.APIMode = value
 	}
+	if value, ok := _c.mutation.ProbeConfig(); ok {
+		_spec.SetField(channelmonitorrequesttemplate.FieldProbeConfig, field.TypeJSON, value)
+		_node.ProbeConfig = value
+	}
 	if value, ok := _c.mutation.ProbeType(); ok {
 		_spec.SetField(channelmonitorrequesttemplate.FieldProbeType, field.TypeString, value)
 		_node.ProbeType = value
@@ -597,6 +616,24 @@ func (u *ChannelMonitorRequestTemplateUpsert) SetAPIMode(v string) *ChannelMonit
 // UpdateAPIMode sets the "api_mode" field to the value that was provided on create.
 func (u *ChannelMonitorRequestTemplateUpsert) UpdateAPIMode() *ChannelMonitorRequestTemplateUpsert {
 	u.SetExcluded(channelmonitorrequesttemplate.FieldAPIMode)
+	return u
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsert) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpsert {
+	u.Set(channelmonitorrequesttemplate.FieldProbeConfig, v)
+	return u
+}
+
+// UpdateProbeConfig sets the "probe_config" field to the value that was provided on create.
+func (u *ChannelMonitorRequestTemplateUpsert) UpdateProbeConfig() *ChannelMonitorRequestTemplateUpsert {
+	u.SetExcluded(channelmonitorrequesttemplate.FieldProbeConfig)
+	return u
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsert) ClearProbeConfig() *ChannelMonitorRequestTemplateUpsert {
+	u.SetNull(channelmonitorrequesttemplate.FieldProbeConfig)
 	return u
 }
 
@@ -848,6 +885,27 @@ func (u *ChannelMonitorRequestTemplateUpsertOne) SetAPIMode(v string) *ChannelMo
 func (u *ChannelMonitorRequestTemplateUpsertOne) UpdateAPIMode() *ChannelMonitorRequestTemplateUpsertOne {
 	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
 		s.UpdateAPIMode()
+	})
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsertOne) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpsertOne {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.SetProbeConfig(v)
+	})
+}
+
+// UpdateProbeConfig sets the "probe_config" field to the value that was provided on create.
+func (u *ChannelMonitorRequestTemplateUpsertOne) UpdateProbeConfig() *ChannelMonitorRequestTemplateUpsertOne {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.UpdateProbeConfig()
+	})
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsertOne) ClearProbeConfig() *ChannelMonitorRequestTemplateUpsertOne {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.ClearProbeConfig()
 	})
 }
 
@@ -1290,6 +1348,27 @@ func (u *ChannelMonitorRequestTemplateUpsertBulk) SetAPIMode(v string) *ChannelM
 func (u *ChannelMonitorRequestTemplateUpsertBulk) UpdateAPIMode() *ChannelMonitorRequestTemplateUpsertBulk {
 	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
 		s.UpdateAPIMode()
+	})
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsertBulk) SetProbeConfig(v domain.MonitorProbeConfig) *ChannelMonitorRequestTemplateUpsertBulk {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.SetProbeConfig(v)
+	})
+}
+
+// UpdateProbeConfig sets the "probe_config" field to the value that was provided on create.
+func (u *ChannelMonitorRequestTemplateUpsertBulk) UpdateProbeConfig() *ChannelMonitorRequestTemplateUpsertBulk {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.UpdateProbeConfig()
+	})
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (u *ChannelMonitorRequestTemplateUpsertBulk) ClearProbeConfig() *ChannelMonitorRequestTemplateUpsertBulk {
+	return u.Update(func(s *ChannelMonitorRequestTemplateUpsert) {
+		s.ClearProbeConfig()
 	})
 }
 

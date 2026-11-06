@@ -192,7 +192,7 @@ func monitorMediaClient(m *ChannelMonitor) *http.Client {
 		client = *newSSRFSafeHTTPClient(180 * time.Second)
 		client.Transport = &http.Transport{DialContext: safeDialContext, ForceAttemptHTTP2: true,
 			MaxIdleConns: 16, IdleConnTimeout: monitorIdleConnTimeout,
-			TLSHandshakeTimeout: monitorTLSHandshakeTimeout, ResponseHeaderTimeout: 180 * time.Second}
+			TLSHandshakeTimeout: monitorTLSHandshakeTimeout, ResponseHeaderTimeout: 600 * time.Second}
 	}
 	if client.Transport == nil {
 		client.Transport = http.DefaultTransport
@@ -263,6 +263,10 @@ func runMonitorMediaConnection(ctx context.Context, m *ChannelMonitor, c Monitor
 // Pending tasks are polled by later checks. Terminal failures are recorded for
 // this check and a new availability probe may be submitted by the next check.
 type monitorMediaTask struct {
+	ReceiptVersion      int              `json:"receipt_version,omitempty"`
+	HistoryPersisted    bool             `json:"history_persisted,omitempty"`
+	Receipt             *CheckResult     `json:"receipt,omitempty"`
+	CompletedAt         *time.Time       `json:"completed_at,omitempty"`
 	Revision            string           `json:"revision"`
 	Fingerprint         string           `json:"fingerprint"`
 	StartedAt           time.Time        `json:"started_at"`
@@ -336,6 +340,7 @@ func (s *ChannelMonitorService) ConfirmMediaTaskReset(ctx context.Context, id in
 }
 
 func (s *ChannelMonitorService) saveMonitorMediaTask(path string, task monitorMediaTask) error {
+	task.Message = truncateMessage(task.Message)
 	raw, err := json.Marshal(task)
 	if err != nil {
 		return err
@@ -407,15 +412,74 @@ func (s *ChannelMonitorService) runMediaMonitor(ctx context.Context, m *ChannelM
 func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m *ChannelMonitor, model string, c MonitorMediaConfig, client *http.Client) *CheckResult {
 	res := &CheckResult{Model: model, Status: MonitorStatusError, CheckedAt: time.Now()}
 	start := time.Now()
-	defer func() { ms := int(time.Since(start).Milliseconds()); res.LatencyMs = &ms }()
-	path := s.monitorMediaStatePath(m.ID, model)
 	var task monitorMediaTask
+	replayingReceipt := false
+	kind := "image"
+	if cap := c.Models[model].Capability; cap != nil {
+		kind = cap.MediaType
+	}
+	policy := resolveMonitorPolicy(m.ProbeConfig, model, kind)
+	local := *client
+	local.Timeout = policy.RequestTimeout
+	client = &local
+	ctx, cancel := context.WithTimeout(ctx, 2*policy.RequestTimeout)
+	defer cancel()
+	defer func() {
+		if replayingReceipt {
+			return
+		}
+		ms := int(time.Since(start).Milliseconds())
+		res.RequestLatencyMs = &ms
+		total := ms
+		if !task.StartedAt.IsZero() {
+			end := time.Now()
+			if task.CompletedAt != nil {
+				end = *task.CompletedAt
+			}
+			total = int(end.Sub(task.StartedAt).Milliseconds())
+		}
+		res.LatencyMs = &total
+		if res.Status == MonitorStatusOperational || res.Status == MonitorStatusDegraded {
+			finalizeOperationalOrDegraded(res, time.Duration(total)*time.Millisecond, total, policy.NormalLatency)
+		}
+		if res.Status != MonitorStatusPending && task.IdempotencyKey != "" {
+			res.SampleID = task.IdempotencyKey
+		}
+		res.Message = truncateMessage(res.Message)
+		if task.ReceiptVersion > 0 && task.IdempotencyKey != "" && res.Status != MonitorStatusPending {
+			copy := *res
+			task.Receipt = &copy
+			task.HistoryPersisted = false
+			if err := s.saveMonitorMediaTask(s.monitorMediaStatePath(m.ID, model), task); err != nil {
+				res.Status = MonitorStatusError
+				res.Message = "generation: result receipt could not be persisted; no resubmission"
+			}
+		}
+	}()
+	path := s.monitorMediaStatePath(m.ID, model)
 	stored, readErr := os.ReadFile(path)
 	if readErr == nil {
 		plain, decryptErr := s.encryptor.Decrypt(string(stored))
 		if decryptErr != nil || json.Unmarshal([]byte(plain), &task) != nil {
 			res.Message = "generation: task journal unreadable; no resubmission"
 			return res
+		}
+		if task.ReceiptVersion > 0 && !task.HistoryPersisted && (task.Receipt != nil || task.State == "completed" || task.State == "blocked") {
+			if task.Receipt != nil {
+				*res = *task.Receipt
+				replayingReceipt = true
+				return res
+			}
+			res.Status = task.ResultStatus
+			if res.Status == "" {
+				res.Status = MonitorStatusError
+			}
+			res.SampleID = task.IdempotencyKey
+			res.Message = task.Message
+			return res
+		}
+		if task.StartedAt.IsZero() {
+			task.StartedAt = start
 		}
 		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
 		if task.State == "submitting" && task.UpstreamID == "" && !canRecover {
@@ -465,7 +529,6 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		return res
 	}
 	adapter := &media.Adapter{Client: client}
-	wasPending := task.State != "completed" && !os.IsNotExist(readErr)
 	var upstream media.UpstreamResult
 	var err error
 	submittedThisCheck := false
@@ -487,13 +550,25 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message = "generation: published protocol template required; no submission"
 			return res
 		}
+		limit := policy.RequestTimeout
+		if entry.Capability.Template.Mode == "async" {
+			limit = policy.ObservationTimeout
+		}
+		if policy.NormalLatency >= limit {
+			res.Message = "generation: normal latency must be below the resolved protocol timeout; no submission"
+			return res
+		}
+		entry.Parameters = cloneMonitorMediaParameters(entry.Parameters)
+		if strings.TrimSpace(policy.Prompt) != "" {
+			entry.Parameters["prompt"] = policy.Prompt
+		}
 		cap, req, normalizeErr := normalizeMonitorMediaModel(model, entry)
 		if normalizeErr != nil {
 			res.Message = "generation: invalid model parameters"
 			return res
 		}
 		raw, _ := json.Marshal([]any{m.Endpoint, m.APIKey, m.ExtraHeaders, cap, req, c.Revision})
-		task = monitorMediaTask{StartedAt: start, State: "submitting", Revision: c.Revision, Capability: cap,
+		task = monitorMediaTask{ReceiptVersion: 1, StartedAt: start, State: "submitting", Revision: c.Revision, Capability: cap,
 			Fingerprint: fmt.Sprintf("%x", sha256.Sum256(raw)), Operation: string(req.Operation),
 			IdempotencyKey: "monitor-" + uuid.NewString(),
 			Account:        media.Account{BaseURL: m.Endpoint, Key: m.APIKey, TaskAPI: c.TaskAPI}}
@@ -577,11 +652,17 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			break
 		}
 		res.Status, res.Message = MonitorStatusPending, "generation: task in progress; 下次只查询原任务 "+task.UpstreamID
+		if time.Since(task.StartedAt) > policy.ObservationTimeout {
+			res.Status = MonitorStatusFailed
+			res.Message = "generation: observation deadline exceeded; original task retained for recovery; no resubmission"
+		}
 	case "completed":
 		task.AcceptanceUncertain = false
 		if err := media.ValidateMonitorArtifacts(ctx, client, task.Capability, upstream.Artifacts, task.Account); err != nil {
 			task.State, res.Status, res.Message = "blocked", MonitorStatusFailed, "generation: result is not a valid deliverable artifact; this availability probe failed; a later check will try again; no resubmission in this request"
 		} else {
+			completed := time.Now()
+			task.CompletedAt = &completed
 			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: 已校验实际 "+task.Capability.MediaType+" 文件；任务 "+task.UpstreamID
 		}
 	case "failed":
@@ -629,17 +710,6 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	task.ResultStatus, task.Message = res.Status, res.Message
 	if s.saveMonitorMediaTask(path, task) != nil {
 		res.Status, res.Message = MonitorStatusError, "generation: result journal could not be persisted; no resubmission"
-	}
-	if wasPending && task.State == "completed" && res.Status == MonitorStatusOperational && m.IntervalSeconds > 0 && time.Since(task.StartedAt) >= time.Duration(m.IntervalSeconds)*time.Second {
-		// The previous async probe finished between scheduled checks. Start the
-		// next interval only after validating and persisting that original result.
-		// This avoids turning a four-minute generation schedule into eight minutes.
-		next := s.runMonitorMediaGeneration(ctx, m, model, c, client)
-		if next.Status == MonitorStatusPending {
-			res.Message += "；本轮已提交：" + next.Message
-		} else {
-			res = next
-		}
 	}
 	res.Message = truncateMessage(res.Message)
 	return res
@@ -715,4 +785,130 @@ func monitorMediaHeaderValues(headers map[string]string) []string {
 		values = append(values, value)
 	}
 	return values
+}
+
+func cloneMonitorMediaParameters(v map[string]any) map[string]any {
+	out := make(map[string]any, len(v))
+	for k, x := range v {
+		out[k] = x
+	}
+	return out
+}
+
+// Poll accepted tasks independently of the paid generation interval. A terminal
+// model is removed from the poll set so another model cannot resubmit it.
+func (s *ChannelMonitorService) awaitMediaResults(ctx context.Context, m *ChannelMonitor, results []*CheckResult) ([]*CheckResult, error) {
+	c, err := parseMonitorMediaConfig(m.BodyOverride)
+	if err != nil {
+		return results, err
+	}
+	if c.Mode != "generation" {
+		return results, nil
+	}
+	intervals, nextPoll := map[string]time.Duration{}, map[string]time.Time{}
+	for _, v := range results {
+		cap := c.Models[v.Model].Capability
+		// The frozen journal is authoritative after template edits or a restart.
+		if b, e := os.ReadFile(s.monitorMediaStatePath(m.ID, v.Model)); e == nil {
+			if plain, e := s.encryptor.Decrypt(string(b)); e == nil {
+				var task monitorMediaTask
+				if json.Unmarshal([]byte(plain), &task) == nil {
+					cap = &task.Capability
+				}
+			}
+		}
+		seconds := 15
+		if cap != nil {
+			if cap.Delivery.PollSeconds > 0 {
+				seconds = cap.Delivery.PollSeconds
+			}
+			if cap.Template != nil && cap.Template.PollSeconds > 0 {
+				seconds = cap.Template.PollSeconds
+			}
+		}
+		intervals[v.Model] = time.Duration(seconds) * time.Second
+		nextPoll[v.Model] = time.Now().Add(intervals[v.Model])
+	}
+	for {
+		pending := false
+		var due time.Time
+		for _, v := range results {
+			if v.Status == MonitorStatusPending {
+				pending = true
+				if due.IsZero() || nextPoll[v.Model].Before(due) {
+					due = nextPoll[v.Model]
+				}
+			}
+		}
+		if !pending {
+			return results, nil
+		}
+		wait := time.Until(due)
+		if wait < 0 {
+			wait = 0
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return results, ctx.Err()
+		case <-timer.C:
+		}
+		for i, v := range results {
+			if v.Status != MonitorStatusPending || time.Now().Before(nextPoll[v.Model]) {
+				continue
+			}
+			single := *m
+			single.PrimaryModel = v.Model
+			single.ExtraModels = nil
+			next := s.runMediaMonitor(ctx, &single)
+			if len(next) > 0 {
+				results[i] = next[0]
+			}
+			nextPoll[v.Model] = time.Now().Add(intervals[v.Model])
+		}
+		saveCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		err = s.persistCheckResults(saveCtx, m, results)
+		stop()
+		if err != nil {
+			return results, err
+		}
+	}
+}
+
+// A successful database commit acknowledges the exact encrypted task receipt.
+// A crash before this write replays the same sample without a billable POST.
+func (s *ChannelMonitorService) acknowledgeMediaReceipts(m *ChannelMonitor, results []*CheckResult) error {
+	if m.Provider != MonitorProviderImageVideo {
+		return nil
+	}
+	for _, r := range results {
+		if r.Status == MonitorStatusPending || r.SampleID == "" {
+			continue
+		}
+		path := s.monitorMediaStatePath(m.ID, r.Model)
+		b, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		plain, err := s.encryptor.Decrypt(string(b))
+		if err != nil {
+			return err
+		}
+		var task monitorMediaTask
+		if err = json.Unmarshal([]byte(plain), &task); err != nil {
+			return err
+		}
+		if task.IdempotencyKey != r.SampleID || task.ReceiptVersion == 0 {
+			continue
+		}
+		task.HistoryPersisted = true
+		if err = s.saveMonitorMediaTask(path, task); err != nil {
+			return err
+		}
+	}
+	return nil
 }

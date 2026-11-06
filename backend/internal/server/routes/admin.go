@@ -852,6 +852,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
+		monitors.GET("/:id/runs/:run_id", h.Admin.ChannelMonitor.RunStatus)
 		monitors.POST("/:id/media-tasks/reset", h.Admin.ChannelMonitor.ResetMediaTask)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
 	}

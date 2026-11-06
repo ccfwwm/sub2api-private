@@ -44,6 +44,8 @@ const HSL_LIGHTNESS = 42
 export interface AvailabilityRow {
   primary_status: MonitorStatus | ''
   availability_7d: number | null | undefined
+ sample_count_7d?: number
+ data_error?: boolean
 }
 
 export function useChannelMonitorFormat() {
@@ -211,7 +213,9 @@ export function useChannelMonitorFormat() {
   }
 
   function formatAvailability(row: AvailabilityRow): string {
-    if (!row.primary_status) return '-'
+    if (row.data_error) return t('monitorPolicy.readError')
+ if (row.sample_count_7d === 0) return t('monitorPolicy.noData')
+ if (!row.primary_status) return '-'
     return formatPercent(row.availability_7d)
   }
 

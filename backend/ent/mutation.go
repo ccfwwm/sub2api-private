@@ -14612,6 +14612,7 @@ type ChannelMonitorMutation struct {
 	account_id                        *int64
 	addaccount_id                     *int64
 	api_mode                          *string
+	probe_config                      *domain.MonitorProbeConfig
 	probe_type                        *string
 	image_probe_schedule_enabled      *bool
 	custom_method                     *string
@@ -15032,6 +15033,55 @@ func (m *ChannelMonitorMutation) OldAPIMode(ctx context.Context) (v string, err 
 // ResetAPIMode resets all changes to the "api_mode" field.
 func (m *ChannelMonitorMutation) ResetAPIMode() {
 	m.api_mode = nil
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (m *ChannelMonitorMutation) SetProbeConfig(dpc domain.MonitorProbeConfig) {
+	m.probe_config = &dpc
+}
+
+// ProbeConfig returns the value of the "probe_config" field in the mutation.
+func (m *ChannelMonitorMutation) ProbeConfig() (r domain.MonitorProbeConfig, exists bool) {
+	v := m.probe_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProbeConfig returns the old "probe_config" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldProbeConfig(ctx context.Context) (v domain.MonitorProbeConfig, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProbeConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProbeConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProbeConfig: %w", err)
+	}
+	return oldValue.ProbeConfig, nil
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (m *ChannelMonitorMutation) ClearProbeConfig() {
+	m.probe_config = nil
+	m.clearedFields[channelmonitor.FieldProbeConfig] = struct{}{}
+}
+
+// ProbeConfigCleared returns if the "probe_config" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) ProbeConfigCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldProbeConfig]
+	return ok
+}
+
+// ResetProbeConfig resets all changes to the "probe_config" field.
+func (m *ChannelMonitorMutation) ResetProbeConfig() {
+	m.probe_config = nil
+	delete(m.clearedFields, channelmonitor.FieldProbeConfig)
 }
 
 // SetProbeType sets the "probe_type" field.
@@ -16112,7 +16162,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 29)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -16133,6 +16183,9 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.api_mode != nil {
 		fields = append(fields, channelmonitor.FieldAPIMode)
+	}
+	if m.probe_config != nil {
+		fields = append(fields, channelmonitor.FieldProbeConfig)
 	}
 	if m.probe_type != nil {
 		fields = append(fields, channelmonitor.FieldProbeType)
@@ -16219,6 +16272,8 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.AccountID()
 	case channelmonitor.FieldAPIMode:
 		return m.APIMode()
+	case channelmonitor.FieldProbeConfig:
+		return m.ProbeConfig()
 	case channelmonitor.FieldProbeType:
 		return m.ProbeType()
 	case channelmonitor.FieldImageProbeScheduleEnabled:
@@ -16284,6 +16339,8 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldAccountID(ctx)
 	case channelmonitor.FieldAPIMode:
 		return m.OldAPIMode(ctx)
+	case channelmonitor.FieldProbeConfig:
+		return m.OldProbeConfig(ctx)
 	case channelmonitor.FieldProbeType:
 		return m.OldProbeType(ctx)
 	case channelmonitor.FieldImageProbeScheduleEnabled:
@@ -16383,6 +16440,13 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIMode(v)
+		return nil
+	case channelmonitor.FieldProbeConfig:
+		v, ok := value.(domain.MonitorProbeConfig)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProbeConfig(v)
 		return nil
 	case channelmonitor.FieldProbeType:
 		v, ok := value.(string)
@@ -16615,6 +16679,9 @@ func (m *ChannelMonitorMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitor.FieldAccountID) {
 		fields = append(fields, channelmonitor.FieldAccountID)
 	}
+	if m.FieldCleared(channelmonitor.FieldProbeConfig) {
+		fields = append(fields, channelmonitor.FieldProbeConfig)
+	}
 	if m.FieldCleared(channelmonitor.FieldCustomBody) {
 		fields = append(fields, channelmonitor.FieldCustomBody)
 	}
@@ -16646,6 +16713,9 @@ func (m *ChannelMonitorMutation) ClearField(name string) error {
 	switch name {
 	case channelmonitor.FieldAccountID:
 		m.ClearAccountID()
+		return nil
+	case channelmonitor.FieldProbeConfig:
+		m.ClearProbeConfig()
 		return nil
 	case channelmonitor.FieldCustomBody:
 		m.ClearCustomBody()
@@ -16690,6 +16760,9 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldAPIMode:
 		m.ResetAPIMode()
+		return nil
+	case channelmonitor.FieldProbeConfig:
+		m.ResetProbeConfig()
 		return nil
 	case channelmonitor.FieldProbeType:
 		m.ResetProbeType()
@@ -18304,24 +18377,27 @@ func (m *ChannelMonitorDailyRollupMutation) ResetEdge(name string) error {
 // ChannelMonitorHistoryMutation represents an operation that mutates the ChannelMonitorHistory nodes in the graph.
 type ChannelMonitorHistoryMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	model              *string
-	status             *channelmonitorhistory.Status
-	latency_ms         *int
-	addlatency_ms      *int
-	ping_latency_ms    *int
-	addping_latency_ms *int
-	message            *string
-	quota              **domain.MonitorQuotaSnapshot
-	checked_at         *time.Time
-	clearedFields      map[string]struct{}
-	monitor            *int64
-	clearedmonitor     bool
-	done               bool
-	oldValue           func(context.Context) (*ChannelMonitorHistory, error)
-	predicates         []predicate.ChannelMonitorHistory
+	op                    Op
+	typ                   string
+	id                    *int64
+	sample_id             *string
+	request_latency_ms    *int
+	addrequest_latency_ms *int
+	model                 *string
+	status                *channelmonitorhistory.Status
+	latency_ms            *int
+	addlatency_ms         *int
+	ping_latency_ms       *int
+	addping_latency_ms    *int
+	message               *string
+	quota                 **domain.MonitorQuotaSnapshot
+	checked_at            *time.Time
+	clearedFields         map[string]struct{}
+	monitor               *int64
+	clearedmonitor        bool
+	done                  bool
+	oldValue              func(context.Context) (*ChannelMonitorHistory, error)
+	predicates            []predicate.ChannelMonitorHistory
 }
 
 var _ ent.Mutation = (*ChannelMonitorHistoryMutation)(nil)
@@ -18456,6 +18532,125 @@ func (m *ChannelMonitorHistoryMutation) OldMonitorID(ctx context.Context) (v int
 // ResetMonitorID resets all changes to the "monitor_id" field.
 func (m *ChannelMonitorHistoryMutation) ResetMonitorID() {
 	m.monitor = nil
+}
+
+// SetSampleID sets the "sample_id" field.
+func (m *ChannelMonitorHistoryMutation) SetSampleID(s string) {
+	m.sample_id = &s
+}
+
+// SampleID returns the value of the "sample_id" field in the mutation.
+func (m *ChannelMonitorHistoryMutation) SampleID() (r string, exists bool) {
+	v := m.sample_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSampleID returns the old "sample_id" field's value of the ChannelMonitorHistory entity.
+// If the ChannelMonitorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorHistoryMutation) OldSampleID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSampleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSampleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSampleID: %w", err)
+	}
+	return oldValue.SampleID, nil
+}
+
+// ClearSampleID clears the value of the "sample_id" field.
+func (m *ChannelMonitorHistoryMutation) ClearSampleID() {
+	m.sample_id = nil
+	m.clearedFields[channelmonitorhistory.FieldSampleID] = struct{}{}
+}
+
+// SampleIDCleared returns if the "sample_id" field was cleared in this mutation.
+func (m *ChannelMonitorHistoryMutation) SampleIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitorhistory.FieldSampleID]
+	return ok
+}
+
+// ResetSampleID resets all changes to the "sample_id" field.
+func (m *ChannelMonitorHistoryMutation) ResetSampleID() {
+	m.sample_id = nil
+	delete(m.clearedFields, channelmonitorhistory.FieldSampleID)
+}
+
+// SetRequestLatencyMs sets the "request_latency_ms" field.
+func (m *ChannelMonitorHistoryMutation) SetRequestLatencyMs(i int) {
+	m.request_latency_ms = &i
+	m.addrequest_latency_ms = nil
+}
+
+// RequestLatencyMs returns the value of the "request_latency_ms" field in the mutation.
+func (m *ChannelMonitorHistoryMutation) RequestLatencyMs() (r int, exists bool) {
+	v := m.request_latency_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestLatencyMs returns the old "request_latency_ms" field's value of the ChannelMonitorHistory entity.
+// If the ChannelMonitorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorHistoryMutation) OldRequestLatencyMs(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestLatencyMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestLatencyMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestLatencyMs: %w", err)
+	}
+	return oldValue.RequestLatencyMs, nil
+}
+
+// AddRequestLatencyMs adds i to the "request_latency_ms" field.
+func (m *ChannelMonitorHistoryMutation) AddRequestLatencyMs(i int) {
+	if m.addrequest_latency_ms != nil {
+		*m.addrequest_latency_ms += i
+	} else {
+		m.addrequest_latency_ms = &i
+	}
+}
+
+// AddedRequestLatencyMs returns the value that was added to the "request_latency_ms" field in this mutation.
+func (m *ChannelMonitorHistoryMutation) AddedRequestLatencyMs() (r int, exists bool) {
+	v := m.addrequest_latency_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRequestLatencyMs clears the value of the "request_latency_ms" field.
+func (m *ChannelMonitorHistoryMutation) ClearRequestLatencyMs() {
+	m.request_latency_ms = nil
+	m.addrequest_latency_ms = nil
+	m.clearedFields[channelmonitorhistory.FieldRequestLatencyMs] = struct{}{}
+}
+
+// RequestLatencyMsCleared returns if the "request_latency_ms" field was cleared in this mutation.
+func (m *ChannelMonitorHistoryMutation) RequestLatencyMsCleared() bool {
+	_, ok := m.clearedFields[channelmonitorhistory.FieldRequestLatencyMs]
+	return ok
+}
+
+// ResetRequestLatencyMs resets all changes to the "request_latency_ms" field.
+func (m *ChannelMonitorHistoryMutation) ResetRequestLatencyMs() {
+	m.request_latency_ms = nil
+	m.addrequest_latency_ms = nil
+	delete(m.clearedFields, channelmonitorhistory.FieldRequestLatencyMs)
 }
 
 // SetModel sets the "model" field.
@@ -18865,9 +19060,15 @@ func (m *ChannelMonitorHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 10)
 	if m.monitor != nil {
 		fields = append(fields, channelmonitorhistory.FieldMonitorID)
+	}
+	if m.sample_id != nil {
+		fields = append(fields, channelmonitorhistory.FieldSampleID)
+	}
+	if m.request_latency_ms != nil {
+		fields = append(fields, channelmonitorhistory.FieldRequestLatencyMs)
 	}
 	if m.model != nil {
 		fields = append(fields, channelmonitorhistory.FieldModel)
@@ -18900,6 +19101,10 @@ func (m *ChannelMonitorHistoryMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case channelmonitorhistory.FieldMonitorID:
 		return m.MonitorID()
+	case channelmonitorhistory.FieldSampleID:
+		return m.SampleID()
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		return m.RequestLatencyMs()
 	case channelmonitorhistory.FieldModel:
 		return m.Model()
 	case channelmonitorhistory.FieldStatus:
@@ -18925,6 +19130,10 @@ func (m *ChannelMonitorHistoryMutation) OldField(ctx context.Context, name strin
 	switch name {
 	case channelmonitorhistory.FieldMonitorID:
 		return m.OldMonitorID(ctx)
+	case channelmonitorhistory.FieldSampleID:
+		return m.OldSampleID(ctx)
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		return m.OldRequestLatencyMs(ctx)
 	case channelmonitorhistory.FieldModel:
 		return m.OldModel(ctx)
 	case channelmonitorhistory.FieldStatus:
@@ -18954,6 +19163,20 @@ func (m *ChannelMonitorHistoryMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMonitorID(v)
+		return nil
+	case channelmonitorhistory.FieldSampleID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSampleID(v)
+		return nil
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestLatencyMs(v)
 		return nil
 	case channelmonitorhistory.FieldModel:
 		v, ok := value.(string)
@@ -19012,6 +19235,9 @@ func (m *ChannelMonitorHistoryMutation) SetField(name string, value ent.Value) e
 // this mutation.
 func (m *ChannelMonitorHistoryMutation) AddedFields() []string {
 	var fields []string
+	if m.addrequest_latency_ms != nil {
+		fields = append(fields, channelmonitorhistory.FieldRequestLatencyMs)
+	}
 	if m.addlatency_ms != nil {
 		fields = append(fields, channelmonitorhistory.FieldLatencyMs)
 	}
@@ -19026,6 +19252,8 @@ func (m *ChannelMonitorHistoryMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ChannelMonitorHistoryMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		return m.AddedRequestLatencyMs()
 	case channelmonitorhistory.FieldLatencyMs:
 		return m.AddedLatencyMs()
 	case channelmonitorhistory.FieldPingLatencyMs:
@@ -19039,6 +19267,13 @@ func (m *ChannelMonitorHistoryMutation) AddedField(name string) (ent.Value, bool
 // type.
 func (m *ChannelMonitorHistoryMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRequestLatencyMs(v)
+		return nil
 	case channelmonitorhistory.FieldLatencyMs:
 		v, ok := value.(int)
 		if !ok {
@@ -19061,6 +19296,12 @@ func (m *ChannelMonitorHistoryMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *ChannelMonitorHistoryMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(channelmonitorhistory.FieldSampleID) {
+		fields = append(fields, channelmonitorhistory.FieldSampleID)
+	}
+	if m.FieldCleared(channelmonitorhistory.FieldRequestLatencyMs) {
+		fields = append(fields, channelmonitorhistory.FieldRequestLatencyMs)
+	}
 	if m.FieldCleared(channelmonitorhistory.FieldLatencyMs) {
 		fields = append(fields, channelmonitorhistory.FieldLatencyMs)
 	}
@@ -19087,6 +19328,12 @@ func (m *ChannelMonitorHistoryMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChannelMonitorHistoryMutation) ClearField(name string) error {
 	switch name {
+	case channelmonitorhistory.FieldSampleID:
+		m.ClearSampleID()
+		return nil
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		m.ClearRequestLatencyMs()
+		return nil
 	case channelmonitorhistory.FieldLatencyMs:
 		m.ClearLatencyMs()
 		return nil
@@ -19109,6 +19356,12 @@ func (m *ChannelMonitorHistoryMutation) ResetField(name string) error {
 	switch name {
 	case channelmonitorhistory.FieldMonitorID:
 		m.ResetMonitorID()
+		return nil
+	case channelmonitorhistory.FieldSampleID:
+		m.ResetSampleID()
+		return nil
+	case channelmonitorhistory.FieldRequestLatencyMs:
+		m.ResetRequestLatencyMs()
 		return nil
 	case channelmonitorhistory.FieldModel:
 		m.ResetModel()
@@ -19220,6 +19473,7 @@ type ChannelMonitorRequestTemplateMutation struct {
 	name                              *string
 	provider                          *channelmonitorrequesttemplate.Provider
 	api_mode                          *string
+	probe_config                      *domain.MonitorProbeConfig
 	probe_type                        *string
 	image_probe_schedule_enabled      *bool
 	custom_method                     *string
@@ -19516,6 +19770,55 @@ func (m *ChannelMonitorRequestTemplateMutation) OldAPIMode(ctx context.Context) 
 // ResetAPIMode resets all changes to the "api_mode" field.
 func (m *ChannelMonitorRequestTemplateMutation) ResetAPIMode() {
 	m.api_mode = nil
+}
+
+// SetProbeConfig sets the "probe_config" field.
+func (m *ChannelMonitorRequestTemplateMutation) SetProbeConfig(dpc domain.MonitorProbeConfig) {
+	m.probe_config = &dpc
+}
+
+// ProbeConfig returns the value of the "probe_config" field in the mutation.
+func (m *ChannelMonitorRequestTemplateMutation) ProbeConfig() (r domain.MonitorProbeConfig, exists bool) {
+	v := m.probe_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProbeConfig returns the old "probe_config" field's value of the ChannelMonitorRequestTemplate entity.
+// If the ChannelMonitorRequestTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorRequestTemplateMutation) OldProbeConfig(ctx context.Context) (v domain.MonitorProbeConfig, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProbeConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProbeConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProbeConfig: %w", err)
+	}
+	return oldValue.ProbeConfig, nil
+}
+
+// ClearProbeConfig clears the value of the "probe_config" field.
+func (m *ChannelMonitorRequestTemplateMutation) ClearProbeConfig() {
+	m.probe_config = nil
+	m.clearedFields[channelmonitorrequesttemplate.FieldProbeConfig] = struct{}{}
+}
+
+// ProbeConfigCleared returns if the "probe_config" field was cleared in this mutation.
+func (m *ChannelMonitorRequestTemplateMutation) ProbeConfigCleared() bool {
+	_, ok := m.clearedFields[channelmonitorrequesttemplate.FieldProbeConfig]
+	return ok
+}
+
+// ResetProbeConfig resets all changes to the "probe_config" field.
+func (m *ChannelMonitorRequestTemplateMutation) ResetProbeConfig() {
+	m.probe_config = nil
+	delete(m.clearedFields, channelmonitorrequesttemplate.FieldProbeConfig)
 }
 
 // SetProbeType sets the "probe_type" field.
@@ -20041,7 +20344,7 @@ func (m *ChannelMonitorRequestTemplateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorRequestTemplateMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldCreatedAt)
 	}
@@ -20056,6 +20359,9 @@ func (m *ChannelMonitorRequestTemplateMutation) Fields() []string {
 	}
 	if m.api_mode != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldAPIMode)
+	}
+	if m.probe_config != nil {
+		fields = append(fields, channelmonitorrequesttemplate.FieldProbeConfig)
 	}
 	if m.probe_type != nil {
 		fields = append(fields, channelmonitorrequesttemplate.FieldProbeType)
@@ -20108,6 +20414,8 @@ func (m *ChannelMonitorRequestTemplateMutation) Field(name string) (ent.Value, b
 		return m.Provider()
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		return m.APIMode()
+	case channelmonitorrequesttemplate.FieldProbeConfig:
+		return m.ProbeConfig()
 	case channelmonitorrequesttemplate.FieldProbeType:
 		return m.ProbeType()
 	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
@@ -20149,6 +20457,8 @@ func (m *ChannelMonitorRequestTemplateMutation) OldField(ctx context.Context, na
 		return m.OldProvider(ctx)
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		return m.OldAPIMode(ctx)
+	case channelmonitorrequesttemplate.FieldProbeConfig:
+		return m.OldProbeConfig(ctx)
 	case channelmonitorrequesttemplate.FieldProbeType:
 		return m.OldProbeType(ctx)
 	case channelmonitorrequesttemplate.FieldImageProbeScheduleEnabled:
@@ -20214,6 +20524,13 @@ func (m *ChannelMonitorRequestTemplateMutation) SetField(name string, value ent.
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIMode(v)
+		return nil
+	case channelmonitorrequesttemplate.FieldProbeConfig:
+		v, ok := value.(domain.MonitorProbeConfig)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProbeConfig(v)
 		return nil
 	case channelmonitorrequesttemplate.FieldProbeType:
 		v, ok := value.(string)
@@ -20322,6 +20639,9 @@ func (m *ChannelMonitorRequestTemplateMutation) AddField(name string, value ent.
 // mutation.
 func (m *ChannelMonitorRequestTemplateMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(channelmonitorrequesttemplate.FieldProbeConfig) {
+		fields = append(fields, channelmonitorrequesttemplate.FieldProbeConfig)
+	}
 	if m.FieldCleared(channelmonitorrequesttemplate.FieldCustomBody) {
 		fields = append(fields, channelmonitorrequesttemplate.FieldCustomBody)
 	}
@@ -20345,6 +20665,9 @@ func (m *ChannelMonitorRequestTemplateMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChannelMonitorRequestTemplateMutation) ClearField(name string) error {
 	switch name {
+	case channelmonitorrequesttemplate.FieldProbeConfig:
+		m.ClearProbeConfig()
+		return nil
 	case channelmonitorrequesttemplate.FieldCustomBody:
 		m.ClearCustomBody()
 		return nil
@@ -20376,6 +20699,9 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetField(name string) error {
 		return nil
 	case channelmonitorrequesttemplate.FieldAPIMode:
 		m.ResetAPIMode()
+		return nil
+	case channelmonitorrequesttemplate.FieldProbeConfig:
+		m.ResetProbeConfig()
 		return nil
 	case channelmonitorrequesttemplate.FieldProbeType:
 		m.ResetProbeType()

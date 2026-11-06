@@ -67,6 +67,9 @@ def summarize(samples, expected_interval=60, min_days=7):
         }
 
     postgres = {
+        'request_completions_per_minute': metric_summary([number(row,'postgres','request_completions_last_minute') for row in samples]),
+        'media_submissions_per_minute': metric_summary([number(row,'postgres','media_submissions_last_minute') for row in samples]),
+        'temp_bytes_growth': sum(max(0,b-a) for a,b in zip([number(row,'postgres','temp_bytes') for row in samples][:-1], [number(row,'postgres','temp_bytes') for row in samples][1:]) if a is not None and b is not None),
         'connection_pct': metric_summary([
             value * 100 / maximum for row in samples
             if (value := number(row, 'postgres', 'connections')) is not None

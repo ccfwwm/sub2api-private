@@ -17,6 +17,10 @@ const (
 	FieldID = "id"
 	// FieldMonitorID holds the string denoting the monitor_id field in the database.
 	FieldMonitorID = "monitor_id"
+	// FieldSampleID holds the string denoting the sample_id field in the database.
+	FieldSampleID = "sample_id"
+	// FieldRequestLatencyMs holds the string denoting the request_latency_ms field in the database.
+	FieldRequestLatencyMs = "request_latency_ms"
 	// FieldModel holds the string denoting the model field in the database.
 	FieldModel = "model"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -48,6 +52,8 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldMonitorID,
+	FieldSampleID,
+	FieldRequestLatencyMs,
 	FieldModel,
 	FieldStatus,
 	FieldLatencyMs,
@@ -68,6 +74,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// SampleIDValidator is a validator for the "sample_id" field. It is called by the builders before save.
+	SampleIDValidator func(string) error
 	// ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	ModelValidator func(string) error
 	// DefaultMessage holds the default value on creation for the "message" field.
@@ -115,6 +123,16 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByMonitorID orders the results by the monitor_id field.
 func ByMonitorID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMonitorID, opts...).ToFunc()
+}
+
+// BySampleID orders the results by the sample_id field.
+func BySampleID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSampleID, opts...).ToFunc()
+}
+
+// ByRequestLatencyMs orders the results by the request_latency_ms field.
+func ByRequestLatencyMs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestLatencyMs, opts...).ToFunc()
 }
 
 // ByModel orders the results by the model field.

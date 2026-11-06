@@ -34,6 +34,9 @@ GROUP_AVAILABILITY_FILE = '251_media_group_availability.sql'
 OPS_DIAGNOSTICS_FILE = '252_media_account_concurrency_diagnostics.sql'
 SCOPED_ADMIN_KEYS_FILE = '253_scoped_admin_api_keys.sql'
 IMAGE_COUNT_BILLING_FILE = '254_group_image_count_billing.sql'
+MONITOR_POLICY_FILE='256_channel_monitor_policy_and_runs.sql'
+MONITOR_POLICY_BODY_SHA256='fa860639482f990551fc590fdbf589bb8669523e51c23ed3f086050ff90b5493'
+
 MONITOR_PROBE_FILE = '255_channel_monitor_probe_config.sql'
 MONITOR_PROBE_TABLES = ('channel_monitors', 'channel_monitor_request_templates')
 GROUP_I18N_FILE = '242_group_i18n.sql'
@@ -535,6 +538,8 @@ def reviewed_group_availability_upgrade(before, target, folder):
 
 
 def reviewed_upgrade(before, target, folder):
+    if set(target)-set(before)=={MONITOR_POLICY_FILE}:
+        return reviewed_monitor_policy_upgrade(before,target,folder)
     if before == target:
         return None
     if set(target) - set(before) == {MONITOR_PROBE_FILE}:
@@ -792,5 +797,40 @@ def main():
         print("Media migration gate failed: "+type(error).__name__,file=sys.stderr)
         raise
 
+
+
+
+
+def monitor_policy_transaction(sql,checksum):
+    import re
+    if hashlib.sha256(normalized_sql(sql).encode()).hexdigest()!=MONITOR_POLICY_BODY_SHA256 or not re.fullmatch(r'[0-9a-f]{64}',checksum):
+        raise ValueError('outside reviewed monitor policy migration')
+    return ("BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='60s'; "
+            'SELECT pg_advisory_xact_lock(694208311321144027);\n'+normalized_sql(sql)+
+            f"\nINSERT INTO schema_migrations(filename,checksum) VALUES('{MONITOR_POLICY_FILE}','{checksum}'); COMMIT;")
+
+def validate_monitor_policy_transaction(transaction):
+    import re
+    match=re.search(r"VALUES\('256_channel_monitor_policy_and_runs\.sql','([0-9a-f]{64})'\)",transaction)
+    if not match:return False
+    body=transaction.split('\n',1)[1].rsplit('\n',1)[0]
+    try:return transaction==monitor_policy_transaction(body,match[1])
+    except ValueError:return False
+
+def reviewed_monitor_policy_upgrade(before,target,folder):
+    if set(target)-set(before)!={MONITOR_POLICY_FILE} or {k:v for k,v in target.items() if k!=MONITOR_POLICY_FILE}!=before:
+        raise ValueError('migration inventory differs outside monitor policy')
+    folder=Path(folder)
+    source=folder/MONITOR_POLICY_FILE
+    if not source.is_file():
+        for candidate in sorted((folder.parent.parent/'automatic').glob('*-assets')):
+            manifest=candidate/'deployment.json'
+            if manifest.is_file() and (candidate/MONITOR_POLICY_FILE).is_file():
+                data=json.loads(manifest.read_text())
+                if data.get('version')==folder.name and data.get('migrations')==target:source=candidate/MONITOR_POLICY_FILE;break
+    sql=source.read_text(encoding='utf-8').replace('\r\n','\n').strip()
+    checksum=hashlib.sha256(sql.encode()).hexdigest()
+    if checksum!=target[MONITOR_POLICY_FILE]:raise ValueError('monitor policy checksum differs')
+    return {'filename':MONITOR_POLICY_FILE,'transaction':monitor_policy_transaction(sql,checksum),'expected_migrations':target}
 
 if __name__=="__main__":main()

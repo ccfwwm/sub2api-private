@@ -40,28 +40,29 @@ func NewChannelMonitorHandler(monitorService *service.ChannelMonitorService) *Ch
 // --- Request / Response ---
 
 type channelMonitorCreateRequest struct {
-	ProbeType                     string            `json:"probe_type"`
-	ImageProbeScheduleEnabled     bool              `json:"image_probe_schedule_enabled"`
-	CustomMethod                  string            `json:"custom_method"`
-	CustomPath                    string            `json:"custom_path"`
-	CustomBody                    map[string]any    `json:"custom_body"`
-	CustomResponseJSONPath        string            `json:"custom_response_json_path"`
-	CustomResponseRequireNonEmpty *bool             `json:"custom_response_require_non_empty"`
-	Name                          string            `json:"name" binding:"required,max=100"`
-	Provider                      string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go imagevideo"`
-	APIMode                       string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Endpoint                      string            `json:"endpoint" binding:"omitempty,max=500"`
-	APIKey                        string            `json:"api_key" binding:"omitempty,max=2000"`
-	PrimaryModel                  string            `json:"primary_model" binding:"max=200"`
-	ExtraModels                   []string          `json:"extra_models"`
-	GroupName                     string            `json:"group_name" binding:"max=100"`
-	Enabled                       *bool             `json:"enabled"`
-	IntervalSeconds               int               `json:"interval_seconds" binding:"required,min=15,max=3600"`
-	JitterSeconds                 int               `json:"jitter_seconds" binding:"omitempty,min=0,max=3585"`
-	TemplateID                    *int64            `json:"template_id"`
-	ExtraHeaders                  map[string]string `json:"extra_headers"`
-	BodyOverrideMode              string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride                  map[string]any    `json:"body_override"`
+	ProbeConfig                   domain.MonitorProbeConfig `json:"probe_config"`
+	ProbeType                     string                    `json:"probe_type"`
+	ImageProbeScheduleEnabled     bool                      `json:"image_probe_schedule_enabled"`
+	CustomMethod                  string                    `json:"custom_method"`
+	CustomPath                    string                    `json:"custom_path"`
+	CustomBody                    map[string]any            `json:"custom_body"`
+	CustomResponseJSONPath        string                    `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool                     `json:"custom_response_require_non_empty"`
+	Name                          string                    `json:"name" binding:"required,max=100"`
+	Provider                      string                    `json:"provider" binding:"required,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go imagevideo"`
+	APIMode                       string                    `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Endpoint                      string                    `json:"endpoint" binding:"omitempty,max=500"`
+	APIKey                        string                    `json:"api_key" binding:"omitempty,max=2000"`
+	PrimaryModel                  string                    `json:"primary_model" binding:"max=200"`
+	ExtraModels                   []string                  `json:"extra_models"`
+	GroupName                     string                    `json:"group_name" binding:"max=100"`
+	Enabled                       *bool                     `json:"enabled"`
+	IntervalSeconds               int                       `json:"interval_seconds" binding:"required,min=15,max=3600"`
+	JitterSeconds                 int                       `json:"jitter_seconds" binding:"omitempty,min=0,max=3585"`
+	TemplateID                    *int64                    `json:"template_id"`
+	ExtraHeaders                  map[string]string         `json:"extra_headers"`
+	BodyOverrideMode              string                    `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  map[string]any            `json:"body_override"`
 
 	// CheckMode: probe（默认）/ quota / quota_probe。quota 模式 endpoint/api_key
 	// 可空（条件必填校验在 service 层按模式分支）。
@@ -71,29 +72,30 @@ type channelMonitorCreateRequest struct {
 }
 
 type channelMonitorUpdateRequest struct {
-	ProbeType                     *string            `json:"probe_type"`
-	ImageProbeScheduleEnabled     *bool              `json:"image_probe_schedule_enabled"`
-	CustomMethod                  *string            `json:"custom_method"`
-	CustomPath                    *string            `json:"custom_path"`
-	CustomBody                    json.RawMessage    `json:"custom_body"`
-	CustomResponseJSONPath        *string            `json:"custom_response_json_path"`
-	CustomResponseRequireNonEmpty *bool              `json:"custom_response_require_non_empty"`
-	Name                          *string            `json:"name" binding:"omitempty,max=100"`
-	Provider                      *string            `json:"provider" binding:"omitempty,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go imagevideo"`
-	APIMode                       *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Endpoint                      *string            `json:"endpoint" binding:"omitempty,max=500"`
-	APIKey                        *string            `json:"api_key" binding:"omitempty,max=2000"`
-	PrimaryModel                  *string            `json:"primary_model" binding:"omitempty,max=200"`
-	ExtraModels                   *[]string          `json:"extra_models"`
-	GroupName                     *string            `json:"group_name" binding:"omitempty,max=100"`
-	Enabled                       *bool              `json:"enabled"`
-	IntervalSeconds               *int               `json:"interval_seconds" binding:"omitempty,min=15,max=3600"`
-	JitterSeconds                 *int               `json:"jitter_seconds" binding:"omitempty,min=0,max=3585"`
-	TemplateID                    *int64             `json:"template_id"`
-	ClearTemplate                 bool               `json:"clear_template"` // true 时把 template_id 置空，忽略 TemplateID
-	ExtraHeaders                  *map[string]string `json:"extra_headers"`
-	BodyOverrideMode              *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride                  *map[string]any    `json:"body_override"`
+	ProbeConfig                   *domain.MonitorProbeConfig `json:"probe_config"`
+	ProbeType                     *string                    `json:"probe_type"`
+	ImageProbeScheduleEnabled     *bool                      `json:"image_probe_schedule_enabled"`
+	CustomMethod                  *string                    `json:"custom_method"`
+	CustomPath                    *string                    `json:"custom_path"`
+	CustomBody                    json.RawMessage            `json:"custom_body"`
+	CustomResponseJSONPath        *string                    `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool                      `json:"custom_response_require_non_empty"`
+	Name                          *string                    `json:"name" binding:"omitempty,max=100"`
+	Provider                      *string                    `json:"provider" binding:"omitempty,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go imagevideo"`
+	APIMode                       *string                    `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Endpoint                      *string                    `json:"endpoint" binding:"omitempty,max=500"`
+	APIKey                        *string                    `json:"api_key" binding:"omitempty,max=2000"`
+	PrimaryModel                  *string                    `json:"primary_model" binding:"omitempty,max=200"`
+	ExtraModels                   *[]string                  `json:"extra_models"`
+	GroupName                     *string                    `json:"group_name" binding:"omitempty,max=100"`
+	Enabled                       *bool                      `json:"enabled"`
+	IntervalSeconds               *int                       `json:"interval_seconds" binding:"omitempty,min=15,max=3600"`
+	JitterSeconds                 *int                       `json:"jitter_seconds" binding:"omitempty,min=0,max=3585"`
+	TemplateID                    *int64                     `json:"template_id"`
+	ClearTemplate                 bool                       `json:"clear_template"` // true 时把 template_id 置空，忽略 TemplateID
+	ExtraHeaders                  *map[string]string         `json:"extra_headers"`
+	BodyOverrideMode              *string                    `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  *map[string]any            `json:"body_override"`
 
 	// CheckMode/AccountID：nil = 不更新；AccountID 指向 0 = 清空关联。
 	CheckMode *string `json:"check_mode" binding:"omitempty,oneof=probe quota quota_probe"`
@@ -106,6 +108,8 @@ type resetMonitorMediaTaskRequest struct {
 }
 
 type channelMonitorResponse struct {
+	service.MonitorDataQuality
+	ProbeConfig                   domain.MonitorProbeConfig            `json:"probe_config"`
 	ProbeType                     string                               `json:"probe_type"`
 	ImageProbeScheduleEnabled     bool                                 `json:"image_probe_schedule_enabled"`
 	CustomMethod                  string                               `json:"custom_method"`
@@ -148,24 +152,26 @@ type channelMonitorResponse struct {
 }
 
 type channelMonitorCheckResultResponse struct {
-	Model         string                       `json:"model"`
-	Status        string                       `json:"status"`
-	LatencyMs     *int                         `json:"latency_ms"`
-	PingLatencyMs *int                         `json:"ping_latency_ms"`
-	Message       string                       `json:"message"`
-	CheckedAt     string                       `json:"checked_at"`
-	Quota         *domain.MonitorQuotaSnapshot `json:"quota,omitempty"`
+	RequestLatencyMs *int                         `json:"request_latency_ms"`
+	Model            string                       `json:"model"`
+	Status           string                       `json:"status"`
+	LatencyMs        *int                         `json:"latency_ms"`
+	PingLatencyMs    *int                         `json:"ping_latency_ms"`
+	Message          string                       `json:"message"`
+	CheckedAt        string                       `json:"checked_at"`
+	Quota            *domain.MonitorQuotaSnapshot `json:"quota,omitempty"`
 }
 
 type channelMonitorHistoryItemResponse struct {
-	ID            int64                        `json:"id"`
-	Model         string                       `json:"model"`
-	Status        string                       `json:"status"`
-	LatencyMs     *int                         `json:"latency_ms"`
-	PingLatencyMs *int                         `json:"ping_latency_ms"`
-	Message       string                       `json:"message"`
-	CheckedAt     string                       `json:"checked_at"`
-	Quota         *domain.MonitorQuotaSnapshot `json:"quota,omitempty"`
+	RequestLatencyMs *int                         `json:"request_latency_ms"`
+	ID               int64                        `json:"id"`
+	Model            string                       `json:"model"`
+	Status           string                       `json:"status"`
+	LatencyMs        *int                         `json:"latency_ms"`
+	PingLatencyMs    *int                         `json:"ping_latency_ms"`
+	Message          string                       `json:"message"`
+	CheckedAt        string                       `json:"checked_at"`
+	Quota            *domain.MonitorQuotaSnapshot `json:"quota,omitempty"`
 }
 
 // maskAPIKey 对 API Key 明文做脱敏：前 4 字符 + "***"，长度 ≤ 4 时只显示 "***"。
@@ -209,6 +215,7 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		ExtraHeaders:                  headers,
 		BodyOverrideMode:              m.BodyOverrideMode,
 		BodyOverride:                  m.BodyOverride,
+		ProbeConfig:                   m.ProbeConfig,
 		ProbeType:                     m.ProbeType,
 		ImageProbeScheduleEnabled:     m.ImageProbeScheduleEnabled,
 		CustomMethod:                  m.CustomMethod,
@@ -230,26 +237,28 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 
 func checkResultToResponse(r *service.CheckResult) channelMonitorCheckResultResponse {
 	return channelMonitorCheckResultResponse{
-		Model:         r.Model,
-		Status:        r.Status,
-		LatencyMs:     r.LatencyMs,
-		PingLatencyMs: r.PingLatencyMs,
-		Message:       r.Message,
-		CheckedAt:     r.CheckedAt.UTC().Format(time.RFC3339),
-		Quota:         r.Quota,
+		RequestLatencyMs: r.RequestLatencyMs,
+		Model:            r.Model,
+		Status:           r.Status,
+		LatencyMs:        r.LatencyMs,
+		PingLatencyMs:    r.PingLatencyMs,
+		Message:          r.Message,
+		CheckedAt:        r.CheckedAt.UTC().Format(time.RFC3339),
+		Quota:            r.Quota,
 	}
 }
 
 func historyEntryToResponse(e *service.ChannelMonitorHistoryEntry) channelMonitorHistoryItemResponse {
 	return channelMonitorHistoryItemResponse{
-		ID:            e.ID,
-		Model:         e.Model,
-		Status:        e.Status,
-		LatencyMs:     e.LatencyMs,
-		PingLatencyMs: e.PingLatencyMs,
-		Message:       e.Message,
-		CheckedAt:     e.CheckedAt.UTC().Format(time.RFC3339),
-		Quota:         e.Quota,
+		RequestLatencyMs: e.RequestLatencyMs,
+		ID:               e.ID,
+		Model:            e.Model,
+		Status:           e.Status,
+		LatencyMs:        e.LatencyMs,
+		PingLatencyMs:    e.PingLatencyMs,
+		Message:          e.Message,
+		CheckedAt:        e.CheckedAt.UTC().Format(time.RFC3339),
+		Quota:            e.Quota,
 	}
 }
 
@@ -328,6 +337,8 @@ func buildListItemResponse(m *service.ChannelMonitor, summary service.MonitorSta
 	resp.PrimaryStatus = summary.PrimaryStatus
 	resp.PrimaryLatencyMs = summary.PrimaryLatencyMs
 	resp.Availability7d = summary.Availability7d
+	resp.MonitorDataQuality = summary.MonitorDataQuality
+	resp.Stale = service.MonitorResultStale(summary.LastResultAt, m.IntervalSeconds)
 	resp.LatestQuota = summary.LatestQuota
 	resp.ExtraModelsStatus = make([]dto.ChannelMonitorExtraModelStatus, 0, len(summary.ExtraModels))
 	for _, e := range summary.ExtraModels {
@@ -386,6 +397,7 @@ func (h *ChannelMonitorHandler) Create(c *gin.Context) {
 		ExtraHeaders:                  req.ExtraHeaders,
 		BodyOverrideMode:              req.BodyOverrideMode,
 		BodyOverride:                  req.BodyOverride,
+		ProbeConfig:                   req.ProbeConfig,
 		ProbeType:                     req.ProbeType,
 		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
 		CustomMethod:                  req.CustomMethod,
@@ -494,6 +506,7 @@ func (h *ChannelMonitorHandler) Update(c *gin.Context) {
 		ExtraHeaders:                  req.ExtraHeaders,
 		BodyOverrideMode:              req.BodyOverrideMode,
 		BodyOverride:                  req.BodyOverride,
+		ProbeConfig:                   req.ProbeConfig,
 		ProbeType:                     req.ProbeType,
 		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
 		CustomMethod:                  req.CustomMethod,
@@ -541,6 +554,15 @@ func (h *ChannelMonitorHandler) Delete(c *gin.Context) {
 func (h *ChannelMonitorHandler) Run(c *gin.Context) {
 	id, ok := ParseChannelMonitorID(c)
 	if !ok {
+		return
+	}
+	if c.Query("async") == "true" {
+		v, err := h.monitorService.StartMonitorRun(c.Request.Context(), id)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		response.Success(c, v)
 		return
 	}
 	results, err := h.monitorService.RunCheck(c.Request.Context(), id)
@@ -608,4 +630,17 @@ func parseHistoryLimit(raw string) int {
 		return service.MonitorHistoryMaxLimit
 	}
 	return v
+}
+
+func (h *ChannelMonitorHandler) RunStatus(c *gin.Context) {
+	id, ok := ParseChannelMonitorID(c)
+	if !ok {
+		return
+	}
+	v, err := h.monitorService.GetMonitorRun(c.Request.Context(), id, c.Param("run_id"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, v)
 }

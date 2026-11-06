@@ -305,11 +305,8 @@ func (r *ChannelMonitorRunner) runOne(id int64, name string) {
 		lookup, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		m, err := svc.Get(lookup, id)
 		stop()
-		if err == nil && m != nil && defaultMonitorProbeType(m.ProbeType) == MonitorProbeTypeImage {
-			limit = monitorImageRequestTimeout + monitorPingTimeout + monitorRunOneBuffer
-		}
-		if err == nil && m != nil && m.Provider == MonitorProviderImageVideo {
-			limit = time.Duration(20) * 185 * time.Second
+		if err == nil && m != nil {
+			limit = monitorCheckLimit(m)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), limit)

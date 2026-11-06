@@ -43,6 +43,8 @@
       </span>
     </div>
 
+    <div v-if="item.stale || item.data_error" class="mt-1 text-xs text-amber-600" :title="item.last_result_at || ''">{{ t(item.data_error ? 'monitorPolicy.readError' : 'monitorPolicy.stale') }}</div>
+    <div v-if="item.last_result_at" class="mt-1 text-xs text-gray-400">{{ t('monitorPolicy.lastResult') }}: {{ new Date(item.last_result_at).toLocaleString() }}</div>
     <!-- Metrics -->
     <MonitorMetricPair
       primary-icon="bolt"
@@ -65,7 +67,7 @@
     <MonitorAvailabilityRow
       :window-label="availabilityLabel"
       :value="availabilityValue"
-      :samples-label="extraModelsCountLabel"
+      :samples-label="[sampleCount == null ? '' : t('monitorPolicy.samples', { count: sampleCount }), extraModelsCountLabel].filter(Boolean).join(' · ')"
     />
 
     <!-- Timeline -->
@@ -106,6 +108,7 @@ const PROVIDER_TINT: Record<string, string> = {
 
 const props = defineProps<{
   item: UserMonitorView
+  sampleCount?: number
   window: '7d' | '15d' | '30d'
   availabilityValue: number | null
   countdownSeconds: number

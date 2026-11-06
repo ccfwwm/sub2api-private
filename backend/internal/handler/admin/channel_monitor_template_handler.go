@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"strconv"
 	"strings"
 	"time"
@@ -27,57 +28,60 @@ func NewChannelMonitorRequestTemplateHandler(templateService *service.ChannelMon
 // --- DTO ---
 
 type channelMonitorTemplateCreateRequest struct {
-	ProbeType                     string            `json:"probe_type"`
-	ImageProbeScheduleEnabled     bool              `json:"image_probe_schedule_enabled"`
-	CustomMethod                  string            `json:"custom_method"`
-	CustomPath                    string            `json:"custom_path"`
-	CustomBody                    map[string]any    `json:"custom_body"`
-	CustomResponseJSONPath        string            `json:"custom_response_json_path"`
-	CustomResponseRequireNonEmpty *bool             `json:"custom_response_require_non_empty"`
-	Name                          string            `json:"name" binding:"required,max=100"`
-	Provider                      string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok imagevideo"`
-	APIMode                       string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Description                   string            `json:"description" binding:"max=500"`
-	ExtraHeaders                  map[string]string `json:"extra_headers"`
-	BodyOverrideMode              string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride                  map[string]any    `json:"body_override"`
+	ProbeConfig                   domain.MonitorProbeConfig `json:"probe_config"`
+	ProbeType                     string                    `json:"probe_type"`
+	ImageProbeScheduleEnabled     bool                      `json:"image_probe_schedule_enabled"`
+	CustomMethod                  string                    `json:"custom_method"`
+	CustomPath                    string                    `json:"custom_path"`
+	CustomBody                    map[string]any            `json:"custom_body"`
+	CustomResponseJSONPath        string                    `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool                     `json:"custom_response_require_non_empty"`
+	Name                          string                    `json:"name" binding:"required,max=100"`
+	Provider                      string                    `json:"provider" binding:"required,oneof=openai anthropic gemini grok imagevideo"`
+	APIMode                       string                    `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Description                   string                    `json:"description" binding:"max=500"`
+	ExtraHeaders                  map[string]string         `json:"extra_headers"`
+	BodyOverrideMode              string                    `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  map[string]any            `json:"body_override"`
 }
 
 type channelMonitorTemplateUpdateRequest struct {
-	ProbeType                     *string            `json:"probe_type"`
-	ImageProbeScheduleEnabled     *bool              `json:"image_probe_schedule_enabled"`
-	CustomMethod                  *string            `json:"custom_method"`
-	CustomPath                    *string            `json:"custom_path"`
-	CustomBody                    json.RawMessage    `json:"custom_body"`
-	CustomResponseJSONPath        *string            `json:"custom_response_json_path"`
-	CustomResponseRequireNonEmpty *bool              `json:"custom_response_require_non_empty"`
-	Name                          *string            `json:"name" binding:"omitempty,max=100"`
-	APIMode                       *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
-	Description                   *string            `json:"description" binding:"omitempty,max=500"`
-	ExtraHeaders                  *map[string]string `json:"extra_headers"`
-	BodyOverrideMode              *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
-	BodyOverride                  *map[string]any    `json:"body_override"`
+	ProbeConfig                   *domain.MonitorProbeConfig `json:"probe_config"`
+	ProbeType                     *string                    `json:"probe_type"`
+	ImageProbeScheduleEnabled     *bool                      `json:"image_probe_schedule_enabled"`
+	CustomMethod                  *string                    `json:"custom_method"`
+	CustomPath                    *string                    `json:"custom_path"`
+	CustomBody                    json.RawMessage            `json:"custom_body"`
+	CustomResponseJSONPath        *string                    `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty *bool                      `json:"custom_response_require_non_empty"`
+	Name                          *string                    `json:"name" binding:"omitempty,max=100"`
+	APIMode                       *string                    `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	Description                   *string                    `json:"description" binding:"omitempty,max=500"`
+	ExtraHeaders                  *map[string]string         `json:"extra_headers"`
+	BodyOverrideMode              *string                    `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
+	BodyOverride                  *map[string]any            `json:"body_override"`
 }
 
 type channelMonitorTemplateResponse struct {
-	ProbeType                     string            `json:"probe_type"`
-	ImageProbeScheduleEnabled     bool              `json:"image_probe_schedule_enabled"`
-	CustomMethod                  string            `json:"custom_method"`
-	CustomPath                    string            `json:"custom_path"`
-	CustomBody                    map[string]any    `json:"custom_body"`
-	CustomResponseJSONPath        string            `json:"custom_response_json_path"`
-	CustomResponseRequireNonEmpty bool              `json:"custom_response_require_non_empty"`
-	ID                            int64             `json:"id"`
-	Name                          string            `json:"name"`
-	Provider                      string            `json:"provider"`
-	APIMode                       string            `json:"api_mode"`
-	Description                   string            `json:"description"`
-	ExtraHeaders                  map[string]string `json:"extra_headers"`
-	BodyOverrideMode              string            `json:"body_override_mode"`
-	BodyOverride                  map[string]any    `json:"body_override"`
-	CreatedAt                     string            `json:"created_at"`
-	UpdatedAt                     string            `json:"updated_at"`
-	AssociatedMonitors            int64             `json:"associated_monitors"`
+	ProbeConfig                   domain.MonitorProbeConfig `json:"probe_config"`
+	ProbeType                     string                    `json:"probe_type"`
+	ImageProbeScheduleEnabled     bool                      `json:"image_probe_schedule_enabled"`
+	CustomMethod                  string                    `json:"custom_method"`
+	CustomPath                    string                    `json:"custom_path"`
+	CustomBody                    map[string]any            `json:"custom_body"`
+	CustomResponseJSONPath        string                    `json:"custom_response_json_path"`
+	CustomResponseRequireNonEmpty bool                      `json:"custom_response_require_non_empty"`
+	ID                            int64                     `json:"id"`
+	Name                          string                    `json:"name"`
+	Provider                      string                    `json:"provider"`
+	APIMode                       string                    `json:"api_mode"`
+	Description                   string                    `json:"description"`
+	ExtraHeaders                  map[string]string         `json:"extra_headers"`
+	BodyOverrideMode              string                    `json:"body_override_mode"`
+	BodyOverride                  map[string]any            `json:"body_override"`
+	CreatedAt                     string                    `json:"created_at"`
+	UpdatedAt                     string                    `json:"updated_at"`
+	AssociatedMonitors            int64                     `json:"associated_monitors"`
 }
 
 func (h *ChannelMonitorRequestTemplateHandler) toResponse(c *gin.Context, t *service.ChannelMonitorRequestTemplate) *channelMonitorTemplateResponse {
@@ -98,6 +102,7 @@ func (h *ChannelMonitorRequestTemplateHandler) toResponse(c *gin.Context, t *ser
 		ExtraHeaders:                  headers,
 		BodyOverrideMode:              t.BodyOverrideMode,
 		BodyOverride:                  t.BodyOverride,
+		ProbeConfig:                   t.ProbeConfig,
 		ProbeType:                     t.ProbeType,
 		ImageProbeScheduleEnabled:     t.ImageProbeScheduleEnabled,
 		CustomMethod:                  t.CustomMethod,
@@ -169,6 +174,7 @@ func (h *ChannelMonitorRequestTemplateHandler) Create(c *gin.Context) {
 		ExtraHeaders:                  req.ExtraHeaders,
 		BodyOverrideMode:              req.BodyOverrideMode,
 		BodyOverride:                  req.BodyOverride,
+		ProbeConfig:                   req.ProbeConfig,
 		ProbeType:                     req.ProbeType,
 		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
 		CustomMethod:                  req.CustomMethod,
@@ -207,6 +213,7 @@ func (h *ChannelMonitorRequestTemplateHandler) Update(c *gin.Context) {
 		ExtraHeaders:                  req.ExtraHeaders,
 		BodyOverrideMode:              req.BodyOverrideMode,
 		BodyOverride:                  req.BodyOverride,
+		ProbeConfig:                   req.ProbeConfig,
 		ProbeType:                     req.ProbeType,
 		ImageProbeScheduleEnabled:     req.ImageProbeScheduleEnabled,
 		CustomMethod:                  req.CustomMethod,

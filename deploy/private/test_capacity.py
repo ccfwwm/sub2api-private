@@ -63,6 +63,20 @@ class CapacityCollectorTests(unittest.TestCase):
         self.assertIn('query_start', query)
         self.assertIn('\n', query)
         self.assertNotIn(r'\n', query)
+        self.assertIn('request_completions_last_minute', query)
+        self.assertIn('media_submissions_last_minute', query)
+        self.assertIn('temp_bytes', query)
+
+    def test_report_retains_peaks_and_handles_statistics_reset(self):
+        rows = [{'timestamp': f'2026-11-06T00:0{i}:00+00:00',
+                 'postgres': {'temp_bytes': temp, 'request_completions_last_minute': count,
+                              'media_submissions_last_minute': i}}
+                for i, (temp, count) in enumerate([(10, 3), (20, 90), (5, 4), (12, 2)])]
+        report = summarize(rows)
+        self.assertEqual(report['postgres']['request_completions_per_minute']['max'], 90)
+        self.assertEqual(report['postgres']['media_submissions_per_minute']['max'], 3)
+        self.assertEqual(report['postgres']['temp_bytes_growth'], 17)
+        self.assertFalse(report['sizing_gate']['ready_for_capacity_review'])
 
     def test_postgres_slow_query_probe_returns_fingerprints_without_query_text(self):
         core = {'pg_stat_statements_available': True, 'connections': 3, 'max_connections': 10}

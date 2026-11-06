@@ -11,6 +11,7 @@
         {{ displayValue }}
       </span>
       <span
+        v-if="value !== null"
         class="text-base font-semibold leading-none"
         :style="colorStyle"
       >%</span>
@@ -38,7 +39,7 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const displayValue = computed(() => {
-  if (props.value === null || Number.isNaN(props.value)) return t('monitorCommon.latencyEmpty')
+  if (props.value === null || Number.isNaN(props.value)) return t('monitorPolicy.noData')
   return props.value.toFixed(2)
 })
 

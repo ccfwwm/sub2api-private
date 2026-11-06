@@ -41,6 +41,7 @@
         :item="item"
         :window="window"
         :availability-value="resolveAvailability(item)"
+        :sample-count="resolveSampleCount(item)"
         :countdown-seconds="countdownSeconds"
         @click="emit('cardClick', item)"
       />
@@ -68,14 +69,22 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+function resolveSampleCount(item: UserMonitorView): number | undefined {
+ if (props.window === '7d') return item.sample_count_7d
+ const primary = props.detailCache[item.id]?.models.find(m => m.model === item.primary_model)
+ return props.window === '15d' ? primary?.sample_count_15d : primary?.sample_count_30d
+}
 function resolveAvailability(item: UserMonitorView): number | null {
-  if (props.window === '7d') {
+  if (item.data_error) return null
+ if (props.window === '7d') {
+ if (item.sample_count_7d === 0) return null
     return item.availability_7d ?? null
   }
   const detail = props.detailCache[item.id]
   if (!detail) return null
   const primary = detail.models.find(m => m.model === item.primary_model)
   if (!primary) return null
-  return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
+  if ((props.window === '15d' ? primary.sample_count_15d : primary.sample_count_30d) === 0) return null
+ return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
 }
 </script>

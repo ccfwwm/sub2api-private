@@ -11,11 +11,13 @@ services:
           cpus: '${CAPACITY_APP_CPU_RESERVATION:?set CAPACITY_APP_CPU_RESERVATION}'
           memory: '${CAPACITY_APP_MEMORY_RESERVATION:?set CAPACITY_APP_MEMORY_RESERVATION}'
     environment:
+      GOMEMLIMIT: '${CAPACITY_APP_GOMEMLIMIT:?set below the container memory limit}'
       DATABASE_MAX_OPEN_CONNS: '${CAPACITY_DATABASE_MAX_OPEN_CONNS:?coordinate with PostgreSQL max_connections}'
       DATABASE_MAX_IDLE_CONNS: '${CAPACITY_DATABASE_MAX_IDLE_CONNS:?set an evidence-based idle pool}'
       REDIS_POOL_SIZE: '${CAPACITY_REDIS_POOL_SIZE:?coordinate with Redis maxclients}'
       REDIS_MIN_IDLE_CONNS: '${CAPACITY_REDIS_MIN_IDLE_CONNS:?set an evidence-based idle pool}'
   postgres:
+    shm_size: '${CAPACITY_POSTGRES_SHM_SIZE:?set parallel query shared memory}'
     deploy:
       resources:
         limits:
@@ -30,7 +32,12 @@ services:
       -c shared_buffers=${CAPACITY_POSTGRES_SHARED_BUFFERS:?set from memory budget}
       -c effective_cache_size=${CAPACITY_POSTGRES_EFFECTIVE_CACHE_SIZE:?set from host memory budget}
       -c maintenance_work_mem=${CAPACITY_POSTGRES_MAINTENANCE_WORK_MEM:?set from maintenance budget}
+      -c autovacuum_work_mem=${CAPACITY_POSTGRES_AUTOVACUUM_WORK_MEM:?set per-worker maintenance budget}
+      -c work_mem=${CAPACITY_POSTGRES_WORK_MEM:?set bounded query operation budget}
+      -c max_wal_size=${CAPACITY_POSTGRES_MAX_WAL_SIZE:?coordinate with shared buffers}
   redis:
+    healthcheck:
+      test: ['CMD-SHELL', 'if [ -z "$$REDISCLI_AUTH" ]; then unset REDISCLI_AUTH; fi; exec redis-cli ping']
     deploy:
       resources:
         limits:
@@ -42,8 +49,8 @@ services:
     command: >-
       sh -c '
         redis-server \
-        --save 60 1 \
-        --appendonly yes \
+        --save "${CAPACITY_REDIS_SAVE:?preserve current RDB schedule}" \
+        --appendonly ${CAPACITY_REDIS_APPENDONLY:?preserve current persistence mode} \
         --appendfsync everysec \
         --maxclients ${CAPACITY_REDIS_MAXCLIENTS:?coordinate with REDIS_POOL_SIZE} \
         --maxmemory ${CAPACITY_REDIS_MAXMEMORY:?set below the Redis container limit} \

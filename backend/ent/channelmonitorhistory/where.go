@@ -60,6 +60,16 @@ func MonitorID(v int64) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldMonitorID, v))
 }
 
+// SampleID applies equality check predicate on the "sample_id" field. It's identical to SampleIDEQ.
+func SampleID(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldSampleID, v))
+}
+
+// RequestLatencyMs applies equality check predicate on the "request_latency_ms" field. It's identical to RequestLatencyMsEQ.
+func RequestLatencyMs(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldRequestLatencyMs, v))
+}
+
 // Model applies equality check predicate on the "model" field. It's identical to ModelEQ.
 func Model(v string) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldModel, v))
@@ -103,6 +113,131 @@ func MonitorIDIn(vs ...int64) predicate.ChannelMonitorHistory {
 // MonitorIDNotIn applies the NotIn predicate on the "monitor_id" field.
 func MonitorIDNotIn(vs ...int64) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldMonitorID, vs...))
+}
+
+// SampleIDEQ applies the EQ predicate on the "sample_id" field.
+func SampleIDEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldSampleID, v))
+}
+
+// SampleIDNEQ applies the NEQ predicate on the "sample_id" field.
+func SampleIDNEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldSampleID, v))
+}
+
+// SampleIDIn applies the In predicate on the "sample_id" field.
+func SampleIDIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldSampleID, vs...))
+}
+
+// SampleIDNotIn applies the NotIn predicate on the "sample_id" field.
+func SampleIDNotIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldSampleID, vs...))
+}
+
+// SampleIDGT applies the GT predicate on the "sample_id" field.
+func SampleIDGT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldSampleID, v))
+}
+
+// SampleIDGTE applies the GTE predicate on the "sample_id" field.
+func SampleIDGTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldSampleID, v))
+}
+
+// SampleIDLT applies the LT predicate on the "sample_id" field.
+func SampleIDLT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldSampleID, v))
+}
+
+// SampleIDLTE applies the LTE predicate on the "sample_id" field.
+func SampleIDLTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldSampleID, v))
+}
+
+// SampleIDContains applies the Contains predicate on the "sample_id" field.
+func SampleIDContains(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContains(FieldSampleID, v))
+}
+
+// SampleIDHasPrefix applies the HasPrefix predicate on the "sample_id" field.
+func SampleIDHasPrefix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasPrefix(FieldSampleID, v))
+}
+
+// SampleIDHasSuffix applies the HasSuffix predicate on the "sample_id" field.
+func SampleIDHasSuffix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasSuffix(FieldSampleID, v))
+}
+
+// SampleIDIsNil applies the IsNil predicate on the "sample_id" field.
+func SampleIDIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldSampleID))
+}
+
+// SampleIDNotNil applies the NotNil predicate on the "sample_id" field.
+func SampleIDNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldSampleID))
+}
+
+// SampleIDEqualFold applies the EqualFold predicate on the "sample_id" field.
+func SampleIDEqualFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEqualFold(FieldSampleID, v))
+}
+
+// SampleIDContainsFold applies the ContainsFold predicate on the "sample_id" field.
+func SampleIDContainsFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContainsFold(FieldSampleID, v))
+}
+
+// RequestLatencyMsEQ applies the EQ predicate on the "request_latency_ms" field.
+func RequestLatencyMsEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsNEQ applies the NEQ predicate on the "request_latency_ms" field.
+func RequestLatencyMsNEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsIn applies the In predicate on the "request_latency_ms" field.
+func RequestLatencyMsIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldRequestLatencyMs, vs...))
+}
+
+// RequestLatencyMsNotIn applies the NotIn predicate on the "request_latency_ms" field.
+func RequestLatencyMsNotIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldRequestLatencyMs, vs...))
+}
+
+// RequestLatencyMsGT applies the GT predicate on the "request_latency_ms" field.
+func RequestLatencyMsGT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsGTE applies the GTE predicate on the "request_latency_ms" field.
+func RequestLatencyMsGTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsLT applies the LT predicate on the "request_latency_ms" field.
+func RequestLatencyMsLT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsLTE applies the LTE predicate on the "request_latency_ms" field.
+func RequestLatencyMsLTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldRequestLatencyMs, v))
+}
+
+// RequestLatencyMsIsNil applies the IsNil predicate on the "request_latency_ms" field.
+func RequestLatencyMsIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldRequestLatencyMs))
+}
+
+// RequestLatencyMsNotNil applies the NotNil predicate on the "request_latency_ms" field.
+func RequestLatencyMsNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldRequestLatencyMs))
 }
 
 // ModelEQ applies the EQ predicate on the "model" field.

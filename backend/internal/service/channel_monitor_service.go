@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Wei-Shaw/sub2api/internal/media"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/google/uuid"
 	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +74,10 @@ type channelMonitorRuntimeReader interface {
 
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
+	checkLocks         sync.Map
+	activeRuns         sync.Map
+	asyncMu            sync.Mutex
+	runsRecovered      bool // guarded by asyncMu; failed recovery is retryable
 	mediaTemplateStore *media.Store
 	mediaMonitorLocks  sync.Map
 	repo               ChannelMonitorRepository
@@ -164,6 +171,9 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 	if err := validateExtraHeaders(p.ExtraHeaders); err != nil {
 		return nil, err
 	}
+	if err := s.validateResolvedMonitorPolicy(ctx, p.ProbeConfig, p.Provider, p.ProbeType, append([]string{p.PrimaryModel}, p.ExtraModels...), p.BodyOverride); err != nil {
+		return nil, err
+	}
 	if err := validateMonitorProbeSettings(p.Provider, p.ProbeType, p.CustomMethod, p.CustomPath, p.CustomResponseJSONPath); err != nil {
 		return nil, err
 	}
@@ -192,6 +202,7 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		ExtraHeaders:                  emptyHeadersIfNil(p.ExtraHeaders),
 		BodyOverrideMode:              defaultBodyMode(p.BodyOverrideMode),
 		BodyOverride:                  p.BodyOverride,
+		ProbeConfig:                   cloneMonitorPolicy(p.ProbeConfig),
 		ProbeType:                     defaultMonitorProbeType(p.ProbeType),
 		ImageProbeScheduleEnabled:     p.ImageProbeScheduleEnabled,
 		CustomMethod:                  defaultCustomProbeMethod(p.CustomMethod),
@@ -270,6 +281,7 @@ func (s *ChannelMonitorService) Duplicate(
 		ExtraHeaders:                  cloneChannelMonitorHeaders(source.ExtraHeaders),
 		BodyOverrideMode:              source.BodyOverrideMode,
 		BodyOverride:                  bodyOverride,
+		ProbeConfig:                   cloneMonitorPolicy(source.ProbeConfig),
 		ProbeType:                     source.ProbeType,
 		ImageProbeScheduleEnabled:     source.ImageProbeScheduleEnabled,
 		CustomMethod:                  source.CustomMethod,
@@ -476,6 +488,9 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err := validateMonitorMediaModels(existing.Provider, existing.PrimaryModel, existing.ExtraModels, existing.BodyOverride); err != nil {
 		return nil, err
 	}
+	if err := s.validateResolvedMonitorPolicy(ctx, existing.ProbeConfig, existing.Provider, existing.ProbeType, append([]string{existing.PrimaryModel}, existing.ExtraModels...), existing.BodyOverride); err != nil {
+		return nil, err
+	}
 	if err := validateMonitorProbeSettings(existing.Provider, existing.ProbeType, existing.CustomMethod, existing.CustomPath, existing.CustomResponseJSONPath); err != nil {
 		return nil, err
 	}
@@ -669,6 +684,19 @@ func (s *ChannelMonitorService) runCheck(ctx context.Context, id int64, schedule
 	if scheduled && (!m.Enabled || !monitorPeriodicProbeAllowed(m)) {
 		return nil, nil
 	}
+	lock, _ := s.checkLocks.LoadOrStore(id, &sync.Mutex{})
+	mu, ok := lock.(*sync.Mutex)
+	if !ok || !mu.TryLock() {
+		return nil, infraerrors.Conflict("CHANNEL_MONITOR_CHECK_RUNNING", "A monitor check is already running")
+	}
+	defer mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, monitorCheckLimit(m))
+	defer cancel()
+	if recovered, err := s.replayResultCheckpoints(ctx, m); err != nil {
+		return nil, err
+	} else if len(recovered) > 0 {
+		return recovered, nil
+	}
 	checkMode := defaultCheckMode(m.CheckMode)
 	if checkMode != MonitorCheckModeQuota && m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
@@ -679,8 +707,11 @@ func (s *ChannelMonitorService) runCheck(ctx context.Context, id int64, schedule
 		results = s.runMediaMonitor(ctx, m)
 		persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
-		s.persistCheckResults(persistCtx, m, results)
-		return results, nil
+		err = s.persistCheckResults(persistCtx, m, results)
+		if err != nil {
+			return results, err
+		}
+		return s.awaitMediaResults(ctx, m, results)
 	}
 	switch checkMode {
 	case MonitorCheckModeQuota:
@@ -691,8 +722,10 @@ func (s *ChannelMonitorService) runCheck(ctx context.Context, id int64, schedule
 	default:
 		results = s.runChecksConcurrent(ctx, m)
 	}
-	s.persistCheckResults(ctx, m, results)
-	return results, nil
+	persistCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer stop()
+	err = s.persistCheckResults(persistCtx, m, results)
+	return results, err
 }
 
 // runQuotaOnlyCheck quota 模式：一次配额抓取 → 单条 CheckResult
@@ -729,30 +762,46 @@ func attachQuotaSnapshot(results []*CheckResult, snapshot *domain.MonitorQuotaSn
 	}
 }
 
-// persistCheckResults 写入本次检测的历史记录并更新 last_checked_at。
-// 任一写库失败都只记日志，不影响调用方拿到 results（与 MVP 期望一致：宁可漏记历史也要先返回结果）。
-func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *ChannelMonitor, results []*CheckResult) {
+// persistCheckResults saves a durable receipt before committing database history.
+func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *ChannelMonitor, results []*CheckResult) error {
+	if len(results) == 0 {
+		return nil
+	}
+	runID := uuid.NewString()
+	for _, r := range results {
+		if r.SampleID == "" {
+			r.SampleID = runID
+		}
+		r.Message = truncateMessage(r.Message)
+	}
+	path, err := s.saveResultCheckpoint(m.ID, results)
+	if err != nil {
+		return fmt.Errorf("save monitor receipt: %w", err)
+	}
+	if err = s.writeCheckResults(ctx, m, results); err != nil {
+		slogMonitorSaveError(m.ID, err)
+		return err
+	}
+	if err = s.acknowledgeMediaReceipts(m, results); err != nil {
+		return err
+	}
+	if err = os.Remove(path); err != nil {
+		return fmt.Errorf("remove committed monitor receipt: %w", err)
+	}
+	return nil
+}
+func (s *ChannelMonitorService) writeCheckResults(ctx context.Context, m *ChannelMonitor, results []*CheckResult) error {
 	rows := make([]*ChannelMonitorHistoryRow, 0, len(results))
 	for _, r := range results {
-		rows = append(rows, &ChannelMonitorHistoryRow{
-			MonitorID:     m.ID,
-			Model:         r.Model,
-			Status:        r.Status,
-			LatencyMs:     r.LatencyMs,
-			PingLatencyMs: r.PingLatencyMs,
-			Message:       r.Message,
-			CheckedAt:     r.CheckedAt,
-			Quota:         r.Quota,
-		})
+		rows = append(rows, &ChannelMonitorHistoryRow{MonitorID: m.ID, Model: r.Model, Status: r.Status, LatencyMs: r.LatencyMs, PingLatencyMs: r.PingLatencyMs, Message: truncateMessage(r.Message), CheckedAt: r.CheckedAt, Quota: r.Quota, SampleID: r.SampleID, RequestLatencyMs: r.RequestLatencyMs})
+	}
+	if repo, ok := s.repo.(monitorAtomicRepository); ok {
+		return repo.SaveCheckResults(ctx, m.ID, rows, time.Now())
 	}
 	if err := s.repo.InsertHistoryBatch(ctx, rows); err != nil {
-		slog.Error("channel_monitor: insert history failed",
-			"monitor_id", m.ID, "name", m.Name, "error", err)
+		return err
 	}
-	if err := s.repo.MarkChecked(ctx, m.ID, time.Now()); err != nil {
-		slog.Error("channel_monitor: mark checked failed",
-			"monitor_id", m.ID, "error", err)
-	}
+	return s.repo.MarkChecked(ctx, m.ID, time.Now())
 }
 
 // runChecksConcurrent 对 primary + extra 模型并发执行检测。
@@ -775,6 +824,7 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 		ExtraHeaders:                  m.ExtraHeaders,
 		BodyOverrideMode:              m.BodyOverrideMode,
 		BodyOverride:                  m.BodyOverride,
+		ProbeConfig:                   cloneMonitorPolicy(m.ProbeConfig),
 		ProbeType:                     m.ProbeType,
 		CustomMethod:                  m.CustomMethod,
 		CustomPath:                    m.CustomPath,
@@ -1039,6 +1089,9 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 
 // applyMonitorAdvancedUpdate 处理自定义请求快照相关字段，从 applyMonitorUpdate 拆出避免过长。
 func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams, providerChanged bool) error {
+	if p.ProbeConfig != nil {
+		existing.ProbeConfig = cloneMonitorPolicy(*p.ProbeConfig)
+	}
 	if p.ProbeType != nil {
 		if defaultMonitorProbeType(existing.ProbeType) != defaultMonitorProbeType(*p.ProbeType) {
 			existing.ImageProbeScheduleEnabled = false

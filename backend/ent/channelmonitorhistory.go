@@ -22,6 +22,10 @@ type ChannelMonitorHistory struct {
 	ID int64 `json:"id,omitempty"`
 	// MonitorID holds the value of the "monitor_id" field.
 	MonitorID int64 `json:"monitor_id,omitempty"`
+	// SampleID holds the value of the "sample_id" field.
+	SampleID *string `json:"sample_id,omitempty"`
+	// RequestLatencyMs holds the value of the "request_latency_ms" field.
+	RequestLatencyMs *int `json:"request_latency_ms,omitempty"`
 	// Model holds the value of the "model" field.
 	Model string `json:"model,omitempty"`
 	// Status holds the value of the "status" field.
@@ -69,9 +73,9 @@ func (*ChannelMonitorHistory) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case channelmonitorhistory.FieldQuota:
 			values[i] = new([]byte)
-		case channelmonitorhistory.FieldID, channelmonitorhistory.FieldMonitorID, channelmonitorhistory.FieldLatencyMs, channelmonitorhistory.FieldPingLatencyMs:
+		case channelmonitorhistory.FieldID, channelmonitorhistory.FieldMonitorID, channelmonitorhistory.FieldRequestLatencyMs, channelmonitorhistory.FieldLatencyMs, channelmonitorhistory.FieldPingLatencyMs:
 			values[i] = new(sql.NullInt64)
-		case channelmonitorhistory.FieldModel, channelmonitorhistory.FieldStatus, channelmonitorhistory.FieldMessage:
+		case channelmonitorhistory.FieldSampleID, channelmonitorhistory.FieldModel, channelmonitorhistory.FieldStatus, channelmonitorhistory.FieldMessage:
 			values[i] = new(sql.NullString)
 		case channelmonitorhistory.FieldCheckedAt:
 			values[i] = new(sql.NullTime)
@@ -101,6 +105,20 @@ func (_m *ChannelMonitorHistory) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field monitor_id", values[i])
 			} else if value.Valid {
 				_m.MonitorID = value.Int64
+			}
+		case channelmonitorhistory.FieldSampleID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sample_id", values[i])
+			} else if value.Valid {
+				_m.SampleID = new(string)
+				*_m.SampleID = value.String
+			}
+		case channelmonitorhistory.FieldRequestLatencyMs:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field request_latency_ms", values[i])
+			} else if value.Valid {
+				_m.RequestLatencyMs = new(int)
+				*_m.RequestLatencyMs = int(value.Int64)
 			}
 		case channelmonitorhistory.FieldModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -191,6 +209,16 @@ func (_m *ChannelMonitorHistory) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("monitor_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.MonitorID))
+	builder.WriteString(", ")
+	if v := _m.SampleID; v != nil {
+		builder.WriteString("sample_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.RequestLatencyMs; v != nil {
+		builder.WriteString("request_latency_ms=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("model=")
 	builder.WriteString(_m.Model)

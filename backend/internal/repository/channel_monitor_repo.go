@@ -43,6 +43,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
 		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
+		SetProbeConfig(m.ProbeConfig).
 		SetProbeType(m.ProbeType).
 		SetImageProbeScheduleEnabled(m.ImageProbeScheduleEnabled).
 		SetCustomMethod(m.CustomMethod).
@@ -122,6 +123,7 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
 		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
+		SetProbeConfig(m.ProbeConfig).
 		SetProbeType(m.ProbeType).
 		SetImageProbeScheduleEnabled(m.ImageProbeScheduleEnabled).
 		SetCustomMethod(m.CustomMethod).
@@ -258,7 +260,7 @@ func (r *channelMonitorRepository) InsertHistoryBatch(ctx context.Context, rows 
 			SetMonitorID(row.MonitorID).
 			SetModel(row.Model).
 			SetStatus(channelmonitorhistory.Status(row.Status)).
-			SetMessage(row.Message).
+			SetMessage(service.NormalizeMonitorMessage(row.Message)).
 			SetCheckedAt(row.CheckedAt)
 		if row.LatencyMs != nil {
 			c = c.SetLatencyMs(*row.LatencyMs)
@@ -301,14 +303,15 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 	out := make([]*service.ChannelMonitorHistoryEntry, 0, len(rows))
 	for _, row := range rows {
 		entry := &service.ChannelMonitorHistoryEntry{
-			ID:            row.ID,
-			Model:         row.Model,
-			Status:        string(row.Status),
-			LatencyMs:     row.LatencyMs,
-			PingLatencyMs: row.PingLatencyMs,
-			Message:       row.Message,
-			CheckedAt:     row.CheckedAt,
-			Quota:         row.Quota,
+			RequestLatencyMs: row.RequestLatencyMs,
+			ID:               row.ID,
+			Model:            row.Model,
+			Status:           string(row.Status),
+			LatencyMs:        row.LatencyMs,
+			PingLatencyMs:    row.PingLatencyMs,
+			Message:          row.Message,
+			CheckedAt:        row.CheckedAt,
+			Quota:            row.Quota,
 		}
 		out = append(out, entry)
 	}
@@ -791,6 +794,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		Name:                          row.Name,
 		Provider:                      string(row.Provider),
 		APIMode:                       defaultAPIModeRepo(row.APIMode),
+		ProbeConfig:                   row.ProbeConfig,
 		ProbeType:                     row.ProbeType,
 		ImageProbeScheduleEnabled:     row.ImageProbeScheduleEnabled,
 		CustomMethod:                  row.CustomMethod,
