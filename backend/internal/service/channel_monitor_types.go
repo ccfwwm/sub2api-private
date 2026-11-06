@@ -294,8 +294,8 @@ type MonitorStatusSummary struct {
 // MonitorDataQuality distinguishes missing observations from an observed failure.
 type MonitorDataQuality struct {
 	SampleCount7d  int        `json:"sample_count_7d"`
-	SampleCount15d int        `json:"sample_count_15d,omitempty"`
-	SampleCount30d int        `json:"sample_count_30d,omitempty"`
+	SampleCount15d int        `json:"sample_count_15d"`
+	SampleCount30d int        `json:"sample_count_30d"`
 	LastResultAt   *time.Time `json:"last_result_at"`
 	Stale          bool       `json:"stale"`
 	DataError      bool       `json:"data_error"`

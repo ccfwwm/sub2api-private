@@ -464,6 +464,10 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message = "generation: task journal unreadable; no resubmission"
 			return res
 		}
+		if task.Capability.MediaType != "" {
+			policy = resolveMonitorPolicy(m.ProbeConfig, model, task.Capability.MediaType)
+			client.Timeout = policy.RequestTimeout
+		}
 		if task.ReceiptVersion > 0 && !task.HistoryPersisted && (task.Receipt != nil || task.State == "completed" || task.State == "blocked") {
 			if task.Receipt != nil {
 				*res = *task.Receipt

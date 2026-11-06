@@ -18,7 +18,7 @@ import (
 )
 
 func TestMonitorMessageUTF8JSONRoundtrip(t *testing.T) {
-	for _, msg := range []string{strings.Repeat("中", 400), strings.Repeat("😀", 200), strings.Repeat("a", 485) + "中" + strings.Repeat("b", 100), string([]byte{0xff}) + strings.Repeat("错", 200)} {
+	for _, msg := range []string{strings.Repeat("中", 400), strings.Repeat("😀", 200), strings.Repeat("a", 500), strings.Repeat("😀", 125), strings.Repeat("a", 485) + "中" + strings.Repeat("b", 100), string([]byte{0xff}) + strings.Repeat("错", 200)} {
 		out := truncateMessage(msg)
 		require.True(t, utf8.ValidString(out))
 		require.LessOrEqual(t, len(out), 500)
