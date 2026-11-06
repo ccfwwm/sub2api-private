@@ -95,6 +95,8 @@ func validateMonitorPolicy(c domain.MonitorProbeConfig, provider, probeType stri
 		kind := defaultMonitorProbeType(probeType)
 		async := false
 		if provider == MonitorProviderImageVideo {
+			kind = "image"
+			async = mediaConfig.Mode == "generation"
 			if cap := mediaConfig.Models[model].Capability; cap != nil {
 				kind = cap.MediaType
 				// A saved template reference is resolved again before submission.

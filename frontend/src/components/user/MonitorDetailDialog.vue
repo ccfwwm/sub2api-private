@@ -30,7 +30,11 @@
             :key="m.model"
             class="border-b border-gray-100 dark:border-dark-800"
           >
-            <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{{ formatMonitorModel(m.model) }}</td>
+            <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">
+              {{ formatMonitorModel(m.model) }}
+              <div class="mt-1 text-xs font-normal text-gray-500">{{ t('monitorPolicy.lastResult') }}: {{ m.last_result_at ? new Date(m.last_result_at).toLocaleString() : t('monitorPolicy.noData') }}</div>
+              <div class="text-xs font-normal text-gray-500">{{ t('monitorPolicy.samples', { count: m.sample_count_7d ?? 0 }) }}</div>
+            </td>
             <td class="py-2 pr-3">
               <span
                 class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
