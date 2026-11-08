@@ -4,7 +4,9 @@ import MediaDiagnostics from '../MediaDiagnostics.vue'
 import { mediaPreviewTimeoutMs } from '@/utils/mediaPreview'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), getById: vi.fn(), getAllIncludingInactive: vi.fn(), effective: vi.fn(), preview: vi.fn(), test: vi.fn(), detail: vi.fn(), artifactAccess: vi.fn() }))
+const keyApi = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { accounts: api, groups: api } }))
+vi.mock('@/api/keys', () => ({ keysAPI: keyApi }))
 vi.mock('@/api/media-protocols', () => ({ mediaProtocolsAPI: { effective: api.effective, preview: api.preview, test: api.test }, mediaPreviewTimeoutMs: () => 30000 }))
 vi.mock('@/api/media', () => ({ mediaAPI: { detail: api.detail, artifactAccess: api.artifactAccess } }))
 vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run: (action: () => Promise<void>) => action() }), isStepUpCancelled: () => false }))
@@ -31,6 +33,13 @@ const taskReview = () => ({
 beforeEach(() => {
   vi.resetAllMocks()
   api.getAllIncludingInactive.mockResolvedValue([{ id: 19, name: 'Video group', platform: 'imagevideo' }])
+  keyApi.list.mockResolvedValue({ items: [
+    { id: 1, group_id: 19, key: 'sk-older-key', name: 'Older group key', status: 'active', last_used_at: '2026-11-07T00:00:00Z', created_at: '2026-10-01T00:00:00Z', expires_at: null, quota: 0, quota_used: 0 },
+    { id: 2, group_id: 19, key: 'sk-group-key', name: 'Current group key', status: 'active', last_used_at: '2026-11-08T00:00:00Z', created_at: '2026-11-01T00:00:00Z', expires_at: null, quota: 0, quota_used: 0 },
+    { id: 3, group_id: 18, key: 'sk-wrong-group', name: 'Wrong group key', status: 'active', last_used_at: '2026-11-09T00:00:00Z', created_at: '2026-11-09T00:00:00Z', expires_at: null, quota: 0, quota_used: 0 },
+    { id: 4, group_id: 19, key: 'sk-expired-key', name: 'Expired group key', status: 'active', last_used_at: '2026-11-10T00:00:00Z', created_at: '2026-11-09T00:00:00Z', expires_at: '2020-01-01T00:00:00Z', quota: 0, quota_used: 0 },
+    { id: 5, group_id: 19, key: 'sk-empty-quota', name: 'Exhausted group key', status: 'active', last_used_at: '2026-11-11T00:00:00Z', created_at: '2026-11-10T00:00:00Z', expires_at: null, quota: 1, quota_used: 1 }
+  ], total: 5 })
   api.getById.mockResolvedValue(account())
   api.list.mockResolvedValue({ items: [], total: 0 })
   api.effective.mockResolvedValue({})
@@ -58,15 +67,38 @@ describe('media diagnostics selectors', () => {
     wrapper.unmount()
   })
 
+  it('automatically selects the most recently used active key bound to the selected group', async () => {
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    expect(keyApi.list).toHaveBeenCalledWith(1, 100, { group_id: 19, status: 'active' })
+    expect((wrapper.get('[aria-label="联调 API Key"]').element as HTMLInputElement).value).toBe('sk-group-key')
+    expect((wrapper.get('[aria-label="联调 API Key"]').element as HTMLInputElement).readOnly).toBe(true)
+    expect(wrapper.text()).toContain('已自动匹配：Current group key')
+    expect(wrapper.text()).not.toContain('sk-wrong-group')
+    wrapper.unmount()
+  })
+
+  it('does not select a key from another group, an expired key, or an exhausted key', async () => {
+    keyApi.list.mockResolvedValue({ items: [
+      { id: 3, group_id: 18, key: 'sk-wrong-group', name: 'Wrong group key', status: 'active', created_at: '2026-11-09T00:00:00Z', expires_at: null, quota: 0, quota_used: 0 },
+      { id: 4, group_id: 19, key: 'sk-expired-key', name: 'Expired group key', status: 'active', created_at: '2026-11-09T00:00:00Z', expires_at: '2020-01-01T00:00:00Z', quota: 0, quota_used: 0 },
+      { id: 5, group_id: 19, key: 'sk-empty-quota', name: 'Exhausted group key', status: 'active', created_at: '2026-11-10T00:00:00Z', expires_at: null, quota: 1, quota_used: 1 }
+    ], total: 3 })
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    expect((wrapper.get('[aria-label="联调 API Key"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).toContain('当前分组没有可用的 API Key')
+    wrapper.unmount()
+  })
+
   it('previews with the selected account, group, model and API key scope', async () => {
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.get('[aria-label="联调提示词"]').setValue('two reference frames')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
-      mode: 'effective', api_key: 'sk-local-preview', group_id: 19, account_id: 2139, operation: 'video',
+      mode: 'effective', api_key: 'sk-group-key', group_id: 19, account_id: 2139, operation: 'video',
       request: expect.objectContaining({ model: 'video-choice', seconds: 5, prompt: 'two reference frames' }), measure_media: false
     }))
     expect(wrapper.text()).toContain('输入请求')
@@ -79,7 +111,6 @@ describe('media diagnostics selectors', () => {
     api.preview.mockRejectedValueOnce(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('没有创建生成任务、没有扣费')
@@ -118,7 +149,6 @@ describe('media diagnostics selectors', () => {
       await wrapper.get(selector).trigger('change')
       await vi.waitFor(() => expect(wrapper.text()).toContain('second-' + item.filename))
     }
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({
@@ -149,7 +179,6 @@ describe('media diagnostics selectors', () => {
       wrapper.get(`[aria-label="参考${item.kind}拖放区域"]`).element.dispatchEvent(event)
       await vi.waitFor(() => expect(wrapper.text()).toContain(item.files[1][1]))
     }
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     const expected = Object.fromEntries(drops.map(item => [item.field, item.files.map(([content]) => ({
@@ -162,7 +191,6 @@ describe('media diagnostics selectors', () => {
   it('submits a paid test with an idempotency key, displays evidence, and recovers the same task', async () => {
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.get('[aria-label="联调提示词"]').setValue('test prompt')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
@@ -172,7 +200,7 @@ describe('media diagnostics selectors', () => {
 
     expect(api.test).toHaveBeenCalledTimes(1)
     expect(api.test).toHaveBeenCalledWith(expect.objectContaining({
-      api_key: 'sk-local-preview', operation: 'video', confirm_paid_submission: true,
+      api_key: 'sk-group-key', operation: 'video', confirm_paid_submission: true,
       request: expect.objectContaining({ model: 'video-choice', prompt: 'test prompt' })
     }), expect.any(String))
     const idempotencyKey = api.test.mock.calls[0][1]
@@ -198,7 +226,6 @@ describe('media diagnostics selectors', () => {
   it('submits a paid test directly without requiring a free preview', async () => {
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.get('[aria-label="联调提示词"]').setValue('direct request')
     await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
     await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
@@ -206,7 +233,7 @@ describe('media diagnostics selectors', () => {
 
     expect(api.preview).not.toHaveBeenCalled()
     expect(api.test).toHaveBeenCalledWith(expect.objectContaining({
-      api_key: 'sk-local-preview', confirm_paid_submission: true,
+      api_key: 'sk-group-key', confirm_paid_submission: true,
       request: expect.objectContaining({ model: 'video-choice', prompt: 'direct request' })
     }), expect.any(String))
     expect(wrapper.text()).toContain('任务 ID：task-91')
@@ -218,7 +245,6 @@ describe('media diagnostics selectors', () => {
     api.preview.mockReturnValueOnce(new Promise(resolve => { finishPreview = resolve }))
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     expect(wrapper.text()).toContain('预估处理中…')
 
@@ -241,15 +267,36 @@ describe('media diagnostics selectors', () => {
     api.detail.mockResolvedValueOnce({ record: { task: unresolved }, incoming_request: { model: 'video-choice' } })
     const wrapper = mount(MediaDiagnostics, options)
     await flushPromises()
-    await wrapper.get('[aria-label="联调 API Key"]').setValue('sk-local-preview')
     await wrapper.findAll('button').find(button => button.text() === '免费预览映射与估价')!.trigger('click')
     await flushPromises()
     await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
     await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('受理结果待核对')
-    const newTest = wrapper.findAll('button').find(button => button.text() === '开始新测试')!
+    const newTest = wrapper.findAll('button').find(button => button.text() === '重新测试（清空全部参数）')!
     expect((newTest.element as HTMLButtonElement).disabled).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('restarts a finished test with all parameters and the prior idempotency key cleared', async () => {
+    const wrapper = mount(MediaDiagnostics, options)
+    await flushPromises()
+    await wrapper.get('[aria-label="联调提示词"]').setValue('old prompt')
+    await wrapper.get('[aria-label="联调请求选项"]').setValue('{"model":"old-model","quality":"high"}')
+    await wrapper.get('[aria-label="确认真实生成可能收费"]').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === '提交真实生成请求')!.trigger('click')
+    await flushPromises()
+    const previousTestID = wrapper.text().match(/测试 ID：([0-9a-f-]+)/i)?.[1]
+    await wrapper.findAll('button').find(button => button.text() === '重新测试（清空全部参数）')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="联调分组"]').element).toHaveProperty('value', '')
+    expect(wrapper.get('[aria-label="联调账号"]').element).toHaveProperty('value', '')
+    expect(wrapper.get('[aria-label="联调模型"]').element).toHaveProperty('value', '')
+    expect((wrapper.get('[aria-label="联调提示词"]').element as HTMLTextAreaElement).value).toBe('A quiet valley')
+    expect(JSON.parse((wrapper.get('[aria-label="联调请求选项"]').element as HTMLTextAreaElement).value)).toEqual({ model: '' })
+    expect((wrapper.get('[aria-label="确认真实生成可能收费"]').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.text()).not.toContain('任务 ID：task-91')
+    expect(wrapper.text()).not.toContain(previousTestID)
     wrapper.unmount()
   })
 })

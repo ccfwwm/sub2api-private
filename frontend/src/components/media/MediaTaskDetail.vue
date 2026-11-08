@@ -7,7 +7,7 @@ const props = defineProps<{ record: MediaTaskRecord | null; admin?: boolean }>()
 const emit = defineEmits<{ close: []; updated: [] }>()
 const { locale } = useI18n()
 const tr = (zh: string, en: string) => locale.value.startsWith('zh') ? zh : en
-const error = ref(''), busy = ref(false), action = ref('review'), amount = ref(''), reason = ref(''), decision = ref('failed'), upstream = ref('')
+const error = ref(''), notice = ref(''), busy = ref(false), action = ref('review'), amount = ref(''), reason = ref(''), decision = ref('failed'), upstream = ref('')
 const disposition = ref('refund')
 const operationKey = ref(crypto.randomUUID())
 const number = (v: unknown) => v == null ? '—' : String(v)
@@ -16,6 +16,21 @@ const netCharge = (task: MediaTaskRecord['task']) => { const units = ledgerUnits
 const review = ref<MediaTaskReview | null>(null), loading = ref(false)
 const current = computed(() => review.value?.record || props.record)
 const latestResponse = computed(() => review.value?.upstream_response ?? review.value?.response)
+function recordedUpstreamID(value: unknown, depth = 0): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 3) return ''
+  const object = value as Record<string, unknown>
+  for (const field of ['upstream_task_id', 'task_id', 'job_id', 'id']) {
+    const candidate = object[field]
+    if ((typeof candidate === 'string' || typeof candidate === 'number') && String(candidate).trim()) return String(candidate).trim()
+  }
+  for (const field of ['task', 'job', 'data', 'result', 'output']) {
+    const candidate = recordedUpstreamID(object[field], depth + 1)
+    if (candidate) return candidate
+  }
+  return ''
+}
+const upstreamTaskID = computed(() => recordedUpstreamID(review.value?.submission?.response) || recordedUpstreamID(review.value?.upstream_response))
+const canQuickReconcile = computed(() => !!props.admin && !!current.value && ['unknown', 'failed'].includes(current.value.task.status) && current.value.task.billing.state === 'manual_review' && !!upstreamTaskID.value)
 const copied = ref('')
 async function copyEvidence(id: string, value: unknown) {
   try { await navigator.clipboard.writeText(JSON.stringify(value, null, 2)); copied.value = id }
@@ -51,7 +66,7 @@ function scheduleRefresh() {
 watch(() => [props.record?.task.id, props.admin], async () => {
   const generation = ++sequence
   clearTimeout(refreshTimer); detailVersion++
-  review.value = null; access.value = {}; copied.value = ''; error.value = ''; amount.value = ''; reason.value = ''; decision.value = 'failed'; upstream.value = ''; action.value = 'review'; disposition.value = 'refund'; operationKey.value = crypto.randomUUID(); busy.value = false; loading.value = false
+  review.value = null; access.value = {}; copied.value = ''; error.value = ''; notice.value = ''; amount.value = ''; reason.value = ''; decision.value = 'failed'; upstream.value = ''; action.value = 'review'; disposition.value = 'refund'; operationKey.value = crypto.randomUUID(); busy.value = false; loading.value = false
   artifactBusy.value = ''; artifactErrors.value = {}
   if (!props.record || generation !== sequence) return
   await loadDetails(true)
@@ -78,7 +93,7 @@ async function exportReview() {
 
 async function run(record: MediaTaskRecord) {
   if (!reason.value.trim()) { error.value = tr('请填写原因或核对凭据','Enter a reason or reconciliation evidence'); return }
-  busy.value = true; error.value = ''
+  busy.value = true; error.value = ''; notice.value = ''
   detailVersion++
   const generation = sequence
   try {
@@ -106,11 +121,32 @@ async function run(record: MediaTaskRecord) {
   }
   finally { if (generation === sequence) busy.value = false }
 }
+
+async function reconcileRecordedTask() {
+  const record = current.value
+  const upstreamID = upstreamTaskID.value
+  if (!record || !upstreamID || busy.value) return
+  busy.value = true; error.value = ''; notice.value = ''
+  const generation = sequence
+  try {
+    await mediaAPI.reconcile(record.task.id, 'query', upstreamID, '一键核对：仅查询已记录的上游受理任务。', record.task.billing.version)
+    emit('updated')
+    const latest = await mediaAPI.detail(record.task.id)
+    if (generation !== sequence) return
+    review.value = latest
+    notice.value = tr('已安排查询原上游任务，后台会更新任务状态与账务；本操作没有重新提交生成。','The original upstream task is queued for status and billing reconciliation. No generation request was resubmitted.')
+  } catch (cause) {
+    if (generation !== sequence) return
+    const failure = cause as { message?: string; response?: { data?: { error?: { message?: string } } } }
+    error.value = failure.response?.data?.error?.message || failure.message || String(cause)
+  } finally { if (generation === sequence) busy.value = false }
+}
 </script>
 <template>
   <BaseDialog :show="!!record" width="extra-wide" :title="tr('媒体任务详情','Media task details')" @close="emit('close')">
     <p v-if="loading" class="text-sm text-gray-500">{{ tr('正在读取最新状态…','Loading latest status…') }}</p>
     <p v-if="error" role="alert" class="mb-3 text-sm text-red-600">{{ error }}</p>
+    <p v-if="notice" role="status" class="mb-3 text-sm text-primary-700 dark:text-primary-300">{{ notice }}</p>
       <div v-if="current" class="mt-4 space-y-4 text-sm">
         <p class="break-all text-xs text-gray-500">{{ current.task.id }} · {{ new Date(current.task.created_at * 1000).toLocaleString() }}</p>
         <div class="flex items-center justify-between gap-3"><p class="break-all font-medium">{{ current.task.model }} · {{ current.media_type }} · {{ current.task.status }}</p><button class="btn btn-secondary" :disabled="loading || busy" @click="loadDetails()">{{ tr('刷新详情','Refresh details') }}</button></div>
@@ -122,9 +158,11 @@ async function run(record: MediaTaskRecord) {
         <p class="break-all text-xs text-gray-500">{{ tr('价格版本','Price version') }} {{ current.task.billing.price_version }}</p>
         <p v-if="current.task.diagnostic" class="text-amber-700 dark:text-amber-400">{{ current.task.diagnostic }}</p>
         <p v-if="admin" class="text-xs">{{ tr('账号','Account') }} {{ current.account_name }} (#{{ current.account_id }}) · {{ tr('用户','User') }} {{ current.user_email }} (#{{ current.user_id }}) · {{ tr('成本状态','Cost status') }} {{ current.cost_status || 'unknown' }} · {{ tr('成本','Cost') }} {{ current.cost_amount == null ? '—' : `$${current.cost_amount}` }} · {{ tr('毛利','Margin') }} {{ current.margin_amount == null ? '—' : `$${current.margin_amount}` }}</p>
-        <div v-if="admin" class="flex gap-3"><button class="btn btn-secondary" @click="exportReview">{{ tr('导出审查 JSON','Export review JSON') }}</button></div>
+        <div v-if="admin" class="flex flex-wrap gap-3"><button class="btn btn-secondary" @click="exportReview">{{ tr('导出审查 JSON','Export review JSON') }}</button><RouterLink to="/admin/media?tab=diagnostics" class="btn btn-secondary" data-testid="fresh-retest" @click="emit('close')">{{ tr('重新测试','Retest') }}</RouterLink></div>
         <details v-if="admin" open class="rounded-lg border p-3 dark:border-dark-600"><summary class="cursor-pointer">{{ tr('人工核对与账务操作','Manual review and accounting') }}</summary>
           <p class="mt-2 text-xs text-gray-500">{{ tr('适用于所有任务。金额为最终实收总额，不是追加金额；全额退回会释放预留并退还已扣费用。核对后停止自动处理，原始账务记录保留。','Available for every task. Amount is the final net charge. Full return releases holds and refunds charges. Review stops automatic processing and preserves the ledger.') }}</p>
+          <div v-if="canQuickReconcile" class="mt-3 flex flex-wrap items-center gap-3"><button type="button" class="btn btn-secondary" data-testid="quick-reconcile" :disabled="busy || loading" @click="reconcileRecordedTask">{{ busy ? tr('正在核对原任务…','Checking original task…') : tr('一键核对原任务','Reconcile original task') }}</button><span class="text-xs text-gray-500">{{ tr('使用已记录的上游任务 ID，只查询原任务，不会重复生成。','Uses the recorded upstream task ID and only queries the original task.') }}</span></div>
+          <p v-else-if="admin && current.task.billing.state === 'manual_review' && current.task.status === 'unknown'" class="mt-3 text-xs text-amber-700">{{ tr('当前记录没有可用的上游任务 ID，无法自动核对；请在“绑定原任务继续查询”中填写已有上游任务 ID。','No upstream task ID is recorded, so automatic reconciliation is unavailable. Enter the existing upstream task ID under “Bind existing task and resume”.') }}</p>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <select v-model="action" class="input"><option value="review">{{ tr('核对任务状态与费用','Review status and charge') }}</option><option value="cost">{{ tr('核实供应商成本','Verify supplier cost') }}</option><option value="reconcile">{{ tr('绑定原任务继续查询','Bind original task and resume') }}</option><option value="refund">{{ tr('部分退款（已结算任务）','Partial refund (settled tasks)') }}</option></select>
             <template v-if="action === 'review'">

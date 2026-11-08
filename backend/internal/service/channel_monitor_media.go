@@ -431,18 +431,14 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		ms := int(time.Since(start).Milliseconds())
 		res.RequestLatencyMs = &ms
 		total := ms
-		if !task.StartedAt.IsZero() {
-			end := time.Now()
-			if task.CompletedAt != nil {
-				end = *task.CompletedAt
-			}
-			total = int(end.Sub(task.StartedAt).Milliseconds())
+		if !task.StartedAt.IsZero() && task.CompletedAt != nil {
+			total = int(task.CompletedAt.Sub(task.StartedAt).Milliseconds())
 		}
 		res.LatencyMs = &total
 		if res.Status == MonitorStatusOperational || res.Status == MonitorStatusDegraded {
 			finalizeOperationalOrDegraded(res, time.Duration(total)*time.Millisecond, total, policy.NormalLatency)
 		}
-		if res.Status != MonitorStatusPending && task.IdempotencyKey != "" {
+		if task.IdempotencyKey != "" {
 			res.SampleID = task.IdempotencyKey
 		}
 		res.Message = truncateMessage(res.Message)
@@ -596,9 +592,20 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		if task.UpstreamID == "" && canRecover && task.IdempotencyKey != "" {
 			task.Account.IdempotencyKey = task.IdempotencyKey
 			upstream, err = recoverMonitorMediaTask(ctx, adapter, task)
-			if err != nil || upstream.ID == "" {
+			if err != nil {
 				res.Status = MonitorStatusFailed
 				res.Message = "generation: original task recovery unavailable; this availability probe failed without a user prompt; retry recovery on a later check; no resubmission"
+				return res
+			}
+			if upstream.ID == "" {
+				task.State = "unknown"
+				task.AcceptanceUncertain = true
+				res.Status = unresolvedMonitorTaskStatus(task, policy.ObservationTimeout)
+				res.Message = unresolvedMonitorTaskMessage(res.Status)
+				task.ResultStatus, task.Message = res.Status, res.Message
+				if s.saveMonitorMediaTask(path, task) != nil {
+					res.Status, res.Message = MonitorStatusError, "generation: task journal update failed; no resubmission"
+				}
 				return res
 			}
 			task.UpstreamID = upstream.ID
@@ -648,11 +655,15 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
 			task.State = "blocked"
 			if canRecover {
-				task.State = "submitting"
+				task.State = "unknown"
 			}
 			task.AcceptanceUncertain = true
 			res.Status = MonitorStatusFailed
 			res.Message = "generation: accepted response missing task ID; submission outcome is uncertain; this availability probe failed without a user prompt; the original task will be recovered when supported; no resubmission"
+			if canRecover {
+				res.Status = unresolvedMonitorTaskStatus(task, policy.ObservationTimeout)
+				res.Message = unresolvedMonitorTaskMessage(res.Status)
+			}
 			break
 		}
 		res.Status, res.Message = MonitorStatusPending, "generation: task in progress; 下次只查询原任务 "+task.UpstreamID
@@ -662,14 +673,16 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 		}
 	case "completed":
 		task.AcceptanceUncertain = false
+		completed := time.Now()
+		task.CompletedAt = &completed
 		if err := media.ValidateMonitorArtifacts(ctx, client, task.Capability, upstream.Artifacts, task.Account); err != nil {
 			task.State, res.Status, res.Message = "blocked", MonitorStatusFailed, "generation: result is not a valid deliverable artifact; this availability probe failed; a later check will try again; no resubmission in this request"
 		} else {
-			completed := time.Now()
-			task.CompletedAt = &completed
 			task.State, res.Status, res.Message = "completed", MonitorStatusOperational, "generation: 已校验实际 "+task.Capability.MediaType+" 文件；任务 "+task.UpstreamID
 		}
 	case "failed":
+		completed := time.Now()
+		task.CompletedAt = &completed
 		task.State, res.Status = "blocked", MonitorStatusFailed
 		task.AcceptanceUncertain = submittedThisCheck && !upstream.Rejected
 		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m)
@@ -692,23 +705,20 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 			res.Message += "; this availability probe failed; a later check will try again; no resubmission in this request"
 		}
 	default:
-		// The adapter uses "unknown" when a request may have been accepted but
-		// the response did not establish a task ID or final state. Keep the
-		// availability result failed while preserving the original request for
-		// read-only recovery/polling. Never turn an unknown acceptance into an
-		// implicit confirmation or a second generation request.
+		// An unknown response is unresolved, not a terminal generation failure.
+		// Keep it out of availability samples until the observation deadline,
+		// and only query the original operation while acceptance is uncertain.
 		canRecover := task.Account.TaskAPI || task.Capability.Template != nil && task.Capability.Template.Recover != nil
-		switch {
-		case task.UpstreamID != "":
-			task.State = "in_progress"
-		case canRecover:
-			task.State = "submitting"
-		default:
-			task.State = "blocked"
-		}
-		res.Status = MonitorStatusFailed
 		task.AcceptanceUncertain = true
-		res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; submission outcome is uncertain; this availability probe failed without a user prompt; the original task will be checked when supported; no resubmission"
+		if task.UpstreamID != "" || canRecover {
+			task.State = "unknown"
+			res.Status = unresolvedMonitorTaskStatus(task, policy.ObservationTimeout)
+			res.Message = unresolvedMonitorTaskMessage(res.Status)
+		} else {
+			task.State = "blocked"
+			res.Status = MonitorStatusFailed
+			res.Message = "generation: " + monitorMediaDiagnostic(upstream, m) + "; submission outcome is uncertain; this availability probe failed without a user prompt; no resubmission"
+		}
 	}
 	res.Message = truncateMessage(res.Message)
 	task.ResultStatus, task.Message = res.Status, res.Message
@@ -717,6 +727,20 @@ func (s *ChannelMonitorService) runMonitorMediaGeneration(ctx context.Context, m
 	}
 	res.Message = truncateMessage(res.Message)
 	return res
+}
+
+func unresolvedMonitorTaskStatus(task monitorMediaTask, timeout time.Duration) string {
+	if timeout > 0 && !task.StartedAt.IsZero() && time.Since(task.StartedAt) >= timeout {
+		return MonitorStatusFailed
+	}
+	return MonitorStatusPending
+}
+
+func unresolvedMonitorTaskMessage(status string) string {
+	if status == MonitorStatusFailed {
+		return "generation: acceptance remains unresolved after the observation deadline; original task retained for read-only reconciliation; no resubmission"
+	}
+	return "generation: acceptance is unresolved; original task retained for read-only reconciliation; no resubmission"
 }
 
 func recoverMonitorMediaTask(ctx context.Context, adapter *media.Adapter, task monitorMediaTask) (media.UpstreamResult, error) {
@@ -810,6 +834,19 @@ func (s *ChannelMonitorService) awaitMediaResults(ctx context.Context, m *Channe
 		return results, nil
 	}
 	intervals, nextPoll := map[string]time.Duration{}, map[string]time.Time{}
+	pollable := map[string]bool{}
+	isAcceptanceUnknown := func(model string) bool {
+		b, e := os.ReadFile(s.monitorMediaStatePath(m.ID, model))
+		if e != nil {
+			return false
+		}
+		plain, e := s.encryptor.Decrypt(string(b))
+		if e != nil {
+			return false
+		}
+		var task monitorMediaTask
+		return json.Unmarshal([]byte(plain), &task) == nil && task.State == "unknown"
+	}
 	for _, v := range results {
 		cap := c.Models[v.Model].Capability
 		// The frozen journal is authoritative after template edits or a restart.
@@ -832,12 +869,13 @@ func (s *ChannelMonitorService) awaitMediaResults(ctx context.Context, m *Channe
 		}
 		intervals[v.Model] = time.Duration(seconds) * time.Second
 		nextPoll[v.Model] = time.Now().Add(intervals[v.Model])
+		pollable[v.Model] = !isAcceptanceUnknown(v.Model)
 	}
 	for {
 		pending := false
 		var due time.Time
 		for _, v := range results {
-			if v.Status == MonitorStatusPending {
+			if v.Status == MonitorStatusPending && pollable[v.Model] {
 				pending = true
 				if due.IsZero() || nextPoll[v.Model].Before(due) {
 					due = nextPoll[v.Model]
@@ -859,7 +897,7 @@ func (s *ChannelMonitorService) awaitMediaResults(ctx context.Context, m *Channe
 		case <-timer.C:
 		}
 		for i, v := range results {
-			if v.Status != MonitorStatusPending || time.Now().Before(nextPoll[v.Model]) {
+			if v.Status != MonitorStatusPending || !pollable[v.Model] || time.Now().Before(nextPoll[v.Model]) {
 				continue
 			}
 			single := *m
@@ -869,6 +907,7 @@ func (s *ChannelMonitorService) awaitMediaResults(ctx context.Context, m *Channe
 			if len(next) > 0 {
 				results[i] = next[0]
 			}
+			pollable[v.Model] = !isAcceptanceUnknown(v.Model)
 			nextPoll[v.Model] = time.Now().Add(intervals[v.Model])
 		}
 		saveCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)

@@ -33,8 +33,7 @@ func (r *channelMonitorRepository) SaveCheckResults(ctx context.Context, id int6
 		_, err = tx.ExecContext(ctx, `INSERT INTO channel_monitor_histories(monitor_id,model,status,latency_ms,ping_latency_ms,message,checked_at,quota,sample_id,request_latency_ms)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
 		ON CONFLICT(monitor_id,model,sample_id) DO UPDATE SET status=excluded.status,latency_ms=excluded.latency_ms,
-		ping_latency_ms=excluded.ping_latency_ms,message=excluded.message,quota=excluded.quota,request_latency_ms=excluded.request_latency_ms,checked_at=excluded.checked_at
-		WHERE channel_monitor_histories.status<>excluded.status OR channel_monitor_histories.message<>excluded.message`, id, v.Model, v.Status, v.LatencyMs, v.PingLatencyMs, service.NormalizeMonitorMessage(v.Message), v.CheckedAt, quota, sample, v.RequestLatencyMs)
+		ping_latency_ms=excluded.ping_latency_ms,message=excluded.message,quota=excluded.quota,request_latency_ms=excluded.request_latency_ms,checked_at=excluded.checked_at`, id, v.Model, v.Status, v.LatencyMs, v.PingLatencyMs, service.NormalizeMonitorMessage(v.Message), v.CheckedAt, quota, sample, v.RequestLatencyMs)
 		if err != nil {
 			return fmt.Errorf("save monitor sample: %w", err)
 		}

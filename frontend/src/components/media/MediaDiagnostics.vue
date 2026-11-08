@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminAPI } from '@/api/admin'
+import { keysAPI } from '@/api/keys'
 import { mediaProtocolsAPI, mediaPreviewTimeoutMs } from '@/api/media-protocols'
 import { mediaAPI, type MediaArtifact, type MediaTask, type MediaTaskReview } from '@/api/media'
 import { accountMediaCapabilities } from '@/types/media'
@@ -17,6 +18,7 @@ const route = useRoute()
 const stepUp = useStepUp()
 const showKey = ref(false)
 const group = ref(String(route.query.group_id || '')), key = ref(''), account = ref(String(route.query.account_id || ''))
+const matchedKeyName = ref(''), keyMatchLoading = ref(false), keyMatchError = ref('')
 const groups = ref<AdminGroup[]>([]), accounts = ref<AccountListItem[]>([]), detail = ref<Account | null>(null)
 const prompt = ref('A quiet valley'), request = ref('{\n  "model": ""\n}'), operation = ref('video'), model = ref('')
 const materialText = ref<Record<MaterialKind, string>>({ image: '', video: '', audio: '' })
@@ -45,7 +47,7 @@ const selectedCapability = computed(() => models.value.find(item => item.model =
 const operations = computed(() => selectedCapability.value?.operations || [])
 const materialKinds: MaterialKind[] = ['image', 'video', 'audio']
 const materialLabels: Record<MaterialKind, string> = { image: '参考图片', video: '参考视频', audio: '参考音频' }
-let generation = 0, listGeneration = 0
+let generation = 0, listGeneration = 0, keyMatchGeneration = 0
 let defaultSeconds: number | undefined
 let taskGeneration = 0
 let taskTimer: ReturnType<typeof setTimeout> | undefined
@@ -222,9 +224,46 @@ async function loadAccounts(linked?: Account) {
   finally { if (version === listGeneration) loading.value = false }
 }
 
+async function matchGroupKey(groupID = group.value) {
+  const version = ++keyMatchGeneration
+  const id = Number(groupID)
+  key.value = ''; matchedKeyName.value = ''; keyMatchError.value = ''
+  if (!Number.isSafeInteger(id) || id <= 0) return
+  keyMatchLoading.value = true
+  try {
+    const response = await keysAPI.list(1, 100, { group_id: id, status: 'active' })
+    if (version !== keyMatchGeneration) return
+    const now = Date.now()
+    const candidates = response.items.filter(item => {
+      if (item.group_id !== id || item.status !== 'active' || !item.key?.trim()) return false
+      if (item.expires_at) {
+        const expiresAt = Date.parse(item.expires_at)
+        if (!Number.isFinite(expiresAt) || expiresAt <= now) return false
+      }
+      if (item.quota > 0 && item.quota_used >= item.quota) return false
+      return true
+    }).sort((a, b) => {
+      const usedA = a.last_used_at ? Date.parse(a.last_used_at) : 0
+      const usedB = b.last_used_at ? Date.parse(b.last_used_at) : 0
+      return usedB - usedA || Date.parse(b.created_at) - Date.parse(a.created_at)
+    })
+    const selected = candidates[0]
+    if (!selected) {
+      keyMatchError.value = '当前分组没有可用的 API Key，请先创建并绑定到该分组。'
+      return
+    }
+    key.value = selected.key
+    matchedKeyName.value = selected.name || `#${selected.id}`
+  } catch (cause) {
+    if (version === keyMatchGeneration) keyMatchError.value = `读取当前分组的 API Key 失败：${(cause as Error).message || String(cause)}`
+  } finally {
+    if (version === keyMatchGeneration) keyMatchLoading.value = false
+  }
+}
+
 async function changeGroup() {
   account.value = ''; detail.value = null; page.value = 1
-  await loadAccounts()
+  await Promise.all([loadAccounts(), matchGroupKey()])
 }
 
 function selectModel() {
@@ -321,8 +360,15 @@ async function runPreview() {
 
 function newTest() {
   if (taskTimer) clearTimeout(taskTimer)
-  taskGeneration++
+  taskGeneration++; generation++; listGeneration++; keyMatchGeneration++
   testKey.value = crypto.randomUUID()
+  group.value = ''; account.value = ''; model.value = ''; operation.value = 'video'
+  prompt.value = 'A quiet valley'; request.value = '{\n  "model": ""\n}'
+  key.value = ''; matchedKeyName.value = ''; keyMatchLoading.value = false; keyMatchError.value = ''
+  accounts.value = []; detail.value = null; total.value = 0; page.value = 1
+  materialText.value = { image: '', video: '', audio: '' }
+  uploaded.value = { image: [], video: [], audio: [] }
+  defaultSeconds = undefined
   paid.value = false
   submissionAttempted.value = false
   submissionInputChanged.value = false
@@ -333,7 +379,11 @@ function newTest() {
   task.value = null
   taskReview.value = null
   taskError.value = ''
+  effectiveResult.value = undefined; effectiveError.value = ''
+  previewResult.value = undefined; previewInput.value = undefined; previewLogs.value = []; previewError.value = ''
+  previewRevision.value = -1; previewBytes.value = 0
   previewStage.value = 'idle'
+  scopeError.value = ''; submitError.value = ''; error.value = ''
   artifactAccess.value = {}
   artifactErrors.value = {}
 }
@@ -460,7 +510,7 @@ onMounted(async () => {
       if (!group.value) group.value = String(linked.group_ids?.[0] || '')
     }
     if (!group.value) group.value = String(groups.value[0]?.id || '')
-    if (group.value) await loadAccounts(linked)
+    if (group.value) await Promise.all([loadAccounts(linked), matchGroupKey()])
   } catch (cause) { scopeError.value = (cause as Error).message }
   finally { loading.value = false }
 })
@@ -479,9 +529,9 @@ onMounted(async () => {
     <div class="grid gap-4 sm:grid-cols-3">
       <label class="text-sm">模型<select v-model="model" class="input mt-1 block w-full" aria-label="联调模型" @change="selectModel"><option value="">请选择模型</option><option v-for="item in models" :key="item.model" :value="item.model">{{ item.model }}{{ item.enabled ? '' : '（未启用）' }}</option></select></label>
       <label class="text-sm">请求操作<select v-model="operation" class="input mt-1 block w-full" aria-label="联调操作"><option v-for="op in operations" :key="op">{{ op }}</option></select></label>
-      <label class="text-sm">中转 API Key<div class="mt-1 flex gap-2"><input v-model="key" :type="showKey ? 'text' : 'password'" autocomplete="off" spellcheck="false" placeholder="粘贴中转密钥，如 sk-…" class="input block min-w-0 flex-1" aria-label="联调 API Key" /><button type="button" class="btn btn-secondary" @click="showKey = !showKey">{{ showKey ? '隐藏' : '显示' }}</button></div><RouterLink to="/keys" class="mt-1 block text-xs text-primary-600">创建或查看 API 密钥</RouterLink></label>
+      <label class="text-sm">中转 API Key<div class="mt-1 flex gap-2"><input v-model="key" :type="showKey ? 'text' : 'password'" :readonly="!!matchedKeyName" autocomplete="off" spellcheck="false" :placeholder="keyMatchLoading ? '正在匹配当前分组密钥…' : '当前分组没有可用密钥'" class="input block min-w-0 flex-1" aria-label="联调 API Key" /><button type="button" class="btn btn-secondary" :disabled="keyMatchLoading" @click="showKey = !showKey">{{ showKey ? '隐藏' : '显示' }}</button></div><span v-if="keyMatchLoading" role="status" class="mt-1 block text-xs text-gray-500">正在匹配当前分组的 API Key…</span><span v-else-if="matchedKeyName" class="mt-1 block text-xs text-primary-600">已自动匹配：{{ matchedKeyName }}</span><span v-else-if="keyMatchError" role="alert" class="mt-1 block text-xs text-amber-700">{{ keyMatchError }}</span><RouterLink to="/keys" class="mt-1 block text-xs text-primary-600">创建或查看 API 密钥</RouterLink></label>
     </div>
-    <p class="text-xs text-gray-500">API Key 必须属于当前分组。免费预览不会创建任务；实际提交按该 Key 的已发布绑定和价格走正常任务、上游及计费链路，可能产生费用。素材 URL 不会被读取；本地上传文件会转为 Base64，页面参数和日志中的编码内容会脱敏。</p>
+    <p class="text-xs text-gray-500">系统会自动匹配当前分组下最近使用的有效 API Key，切换分组时会重新匹配。免费预览不会创建任务；实际提交按该 Key 的已发布绑定和价格走正常任务、上游及计费链路，可能产生费用。素材 URL 不会被读取；本地上传文件会转为 Base64，页面参数和日志中的编码内容会脱敏。</p>
     <details v-if="effectiveResult || effectiveError" class="rounded-lg border p-3 dark:border-dark-600">
       <summary class="cursor-pointer text-sm font-medium">当前绑定检查（默认折叠）</summary>
       <p v-if="effectiveError" role="alert" class="mt-3 text-sm text-red-600">{{ effectiveError }}</p>
@@ -508,7 +558,7 @@ onMounted(async () => {
       <button type="button" class="btn btn-secondary" :disabled="previewBusy || loading || uploadsPending > 0 || !detail || !model || !operation" @click="runPreview">{{ uploadsPending ? '正在读取素材…' : previewBusy ? '预估处理中…' : '免费预览映射与估价' }}</button>
       <label class="flex items-center gap-2 text-sm"><input v-model="paid" type="checkbox" aria-label="确认真实生成可能收费" class="accent-primary-600" />我确认真实生成可能收费</label>
       <button type="button" class="btn btn-primary" :disabled="submitBusy || stepUpPending || (!submissionAttempted && (loading || uploadsPending > 0 || !detail || !model || !operation || !key || !paid))" @click="runPaidTest">{{ stepUpPending ? '等待安全验证…' : submitBusy ? '提交中…' : submissionAttempted ? '恢复 / 查询原测试' : '提交真实生成请求' }}</button>
-      <button v-if="submissionAttempted" type="button" class="btn btn-secondary" :disabled="submitBusy || stepUpPending || taskPending || (submissionUncertain && !task)" @click="newTest">开始新测试</button>
+      <button v-if="submissionAttempted" type="button" class="btn btn-secondary" :disabled="submitBusy || stepUpPending || taskPending || uploadsPending > 0 || (submissionUncertain && !task)" @click="newTest">重新测试（清空全部参数）</button>
       <span v-if="submissionAttempted" class="text-xs text-gray-500">测试 ID：{{ testKey }} · 重试只恢复原任务</span>
     </div>
     <div v-if="previewStage !== 'idle'" class="rounded-lg border p-3 text-sm dark:border-dark-600" :class="previewStage === 'failed' ? 'border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' : 'bg-gray-50 text-gray-700 dark:bg-dark-900 dark:text-gray-300'" role="status" aria-live="polite">
