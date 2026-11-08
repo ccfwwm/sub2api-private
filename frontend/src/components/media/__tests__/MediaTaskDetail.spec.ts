@@ -7,7 +7,7 @@ const api=vi.hoisted(()=>({review:vi.fn(),refund:vi.fn(),verifyCost:vi.fn(),reco
 vi.mock('@/api/media',()=>({mediaAPI:api}))
 vi.mock('vue-i18n',()=>({useI18n:()=>({locale:ref('zh')})}))
 const record={task:{id:'task-a',model:'MinimaxH3-2K',status:'unknown',created_at:123,billing:{version:7,quantities:{},state:'manual_review',accepted:'0',settled:'0',refunded:'0'},data:[]}} as unknown as MediaTaskRecord
-const create=(admin=true)=>mount(MediaTaskDetail,{props:{record,admin},global:{stubs:{BaseDialog:{template:'<div><slot /></div>'}}}})
+const create=(admin=true)=>mount(MediaTaskDetail,{props:{record,admin},global:{stubs:{BaseDialog:{template:'<div><slot /></div>'},RouterLink:{props:['to'],template:'<a :href="to"><slot /></a>'}}}})
 describe('Media administrative review',()=>{
  beforeEach(()=>{vi.clearAllMocks();api.detail.mockResolvedValue({record,request:{},response:{}});api.userDetail.mockResolvedValue({record});api.review.mockResolvedValue({})})
  it('hides administrative actions from ordinary users',()=>{const w=create(false);expect(w.find('details').exists()).toBe(false);expect(api.detail).not.toHaveBeenCalled();w.unmount()})
@@ -28,6 +28,29 @@ describe('Media administrative review',()=>{
   expect(w.get('[role="alert"]').text()).toContain('已刷新最新数据');expect(w.get('input[inputmode="decimal"]').element.value).toBe('0.2')
   await w.get('[data-testid="accounting-submit"]').trigger('click');await flushPromises()
   expect(api.review).toHaveBeenLastCalledWith('task-a','completed','0.2','核对已完成',8,expect.any(String));w.unmount()
+ })
+ it('reconciles an unknown task using the upstream ID recorded in its acceptance response',async()=>{
+  api.detail.mockResolvedValue({record,submission:{stage:'accepted',response:{data:{task_id:'provider-task-9'}}}})
+  api.reconcile.mockResolvedValue({ok:true})
+  const w=create();await flushPromises()
+  await w.get('[data-testid="quick-reconcile"]').trigger('click');await flushPromises()
+  expect(api.reconcile).toHaveBeenCalledWith('task-a','query','provider-task-9','一键核对：仅查询已记录的上游受理任务。',7)
+  expect(w.get('[role="status"]').text()).toContain('没有重新提交生成')
+  expect(w.emitted('updated')).toHaveLength(1)
+  w.unmount()
+ })
+ it('does not offer automatic reconciliation without a recorded upstream task ID',async()=>{
+  api.detail.mockResolvedValue({record,submission:{stage:'attempted',response:{accepted:true}}})
+  const w=create();await flushPromises()
+  expect(w.find('[data-testid="quick-reconcile"]').exists()).toBe(false)
+  expect(w.text()).toContain('没有可用的上游任务 ID')
+  w.unmount()
+ })
+ it('opens a fresh diagnostics form from a task without carrying the previous request',async()=>{
+  const w=create();await flushPromises()
+  expect(w.get('[data-testid="fresh-retest"]').attributes('href')).toBe('/admin/media?tab=diagnostics')
+  expect(w.get('[data-testid="fresh-retest"]').text()).toBe('重新测试')
+  w.unmount()
  })
 })
 

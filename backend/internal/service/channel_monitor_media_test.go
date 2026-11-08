@@ -321,7 +321,8 @@ func TestMediaMonitorRecoveryFailureIsFailedAndDoesNotResubmit(t *testing.T) {
 	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
 
 	first := s.runMediaMonitor(context.Background(), m)[0]
-	require.Equal(t, MonitorStatusFailed, first.Status)
+	require.Equal(t, MonitorStatusPending, first.Status)
+	require.Contains(t, first.Message, "acceptance is unresolved")
 	require.Equal(t, 1, posts)
 	require.NoError(t, s.acknowledgeMediaReceipts(m, []*CheckResult{first}))
 	second := s.runMediaMonitor(context.Background(), m)[0]
@@ -472,6 +473,80 @@ func TestMediaMonitorUnknownAcceptanceFailsThenRetriesOnNextCheck(t *testing.T) 
 	require.Equal(t, MonitorStatusFailed, next.Status)
 	require.Equal(t, first.Message, next.Message)
 	require.Equal(t, 1, posts)
+}
+
+func TestMediaMonitorUnresolvedAcceptanceStaysPendingAndUsesRequestLatency(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	t.Setenv("SUB2API_MONITOR_DATA_DIR", t.TempDir())
+	posts, recoveries, polls := 0, 0, 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			posts++
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"unknown"}`))
+		case r.URL.Path == "/v1/media/tasks/recover":
+			recoveries++
+			require.NotEmpty(t, r.URL.Query().Get("idempotency_key"))
+			_, _ = w.Write([]byte(`{"id":"recovered-task","status":"unknown"}`))
+		case r.URL.Path == "/v1/tasks/recovered-task":
+			polls++
+			_, _ = w.Write([]byte(`{"id":"recovered-task","status":"unknown"}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	entry := monitorTestMediaModel(t, "gpt-image-2", "gpt-image-2", "image-json", nil)
+	entry.Capability.Template.Mode = "async"
+	entry.Capability.Template.Query = &media.TemplateEndpoint{Method: http.MethodGet, Path: "/v1/tasks/{task_id}"}
+	entry.Capability.Template.Recover = &media.TemplateEndpoint{Method: http.MethodGet, Path: "/v1/media/tasks/recover", Query: map[string]string{"operation": "image", "idempotency_key": "{idempotency_key}"}}
+	entry.Capability.Template.Response.TaskID = []string{"id", "task_id"}
+	entry.Capability.Template.Response.Status = []string{"status", "state"}
+	entry.Capability.Template.Response.States["unknown"] = "unknown"
+	m := &ChannelMonitor{ID: 81, Provider: MonitorProviderImageVideo, Endpoint: server.URL, APIKey: "test-key", PrimaryModel: "gpt-image-2",
+		BodyOverride: map[string]any{"media_monitor": MonitorMediaConfig{Mode: "generation", Models: map[string]MonitorMediaModel{"gpt-image-2": entry}}}}
+	s := NewChannelMonitorService(nil, &duplicateChannelMonitorEncryptor{})
+
+	first := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, MonitorStatusPending, first.Status)
+	require.Contains(t, first.Message, "acceptance is unresolved")
+	require.NotEmpty(t, first.SampleID)
+	second := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, MonitorStatusPending, second.Status)
+	require.Equal(t, first.SampleID, second.SampleID)
+	require.Equal(t, 1, posts)
+	require.Equal(t, 1, recoveries)
+	require.Zero(t, polls)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	started := time.Now()
+	awaited, err := s.awaitMediaResults(ctx, m, []*CheckResult{second})
+	require.NoError(t, err)
+	require.Equal(t, MonitorStatusPending, awaited[0].Status)
+	require.Less(t, time.Since(started), 2*time.Second)
+	require.Zero(t, polls)
+
+	path := s.monitorMediaStatePath(m.ID, m.PrimaryModel)
+	stored, err := os.ReadFile(path)
+	require.NoError(t, err)
+	plain, err := s.encryptor.Decrypt(string(stored))
+	require.NoError(t, err)
+	var task monitorMediaTask
+	require.NoError(t, json.Unmarshal([]byte(plain), &task))
+	task.StartedAt = time.Now().Add(-2 * time.Hour)
+	require.NoError(t, s.saveMonitorMediaTask(path, task))
+
+	afterDeadline := s.runMediaMonitor(context.Background(), m)[0]
+	require.Equal(t, MonitorStatusFailed, afterDeadline.Status)
+	require.Contains(t, afterDeadline.Message, "observation deadline")
+	require.Equal(t, first.SampleID, afterDeadline.SampleID)
+	require.NotNil(t, afterDeadline.LatencyMs)
+	require.Less(t, *afterDeadline.LatencyMs, 5000)
+	require.Equal(t, 1, posts)
+	require.Equal(t, 1, recoveries)
+	require.Equal(t, 1, polls)
 }
 
 func TestMediaMonitorNewProbeRequiresExplicitPublishedTemplate(t *testing.T) {

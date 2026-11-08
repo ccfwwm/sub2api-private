@@ -1,13 +1,13 @@
 {
   "version": "v1.3.24",
   "status": "recorded",
-  "acceptance_state": "monitor-repair-pre-release-tests; real-connection-verified-on-v1.3.23; production-cutover-and-generation-pending; capacity-gates-pending",
+  "acceptance_state": "production-v1.3.24-cutover-and-real-video-verified; capacity-gates-pending",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
-  "verified_at": "2026-11-06T10:31:45Z",
-  "new_paid_submissions": 0,
+  "verified_at": "2026-11-06T12:43:30.692013+00:00",
+  "new_paid_submissions": 1,
   "requests_attempted": 1,
   "credentials_recorded": false,
-  "environment": "Monitor repair release preparation. Current production v1.3.23: a read-only GET /v1/models with monitor 19 credentials returned HTTP 200 in 608 ms. No generation was submitted for this pre-release record. gpt-image-2.5 is absent from the advertised model list and requires mapping verification before recovery. The new application has not yet been deployed. Historical generation cases below are baseline evidence only. Seven-day capacity sampling is active; resource limits remain unchanged pending baseline, isolated restore and 30-minute load gates.",
+  "environment": "Live v1.3.24 immediate cutover and migration 256 verified on all three public origins. Monitor 19 recovered with one gemini-omni-1.1-flash video submission: completed and settled, 10.026667 seconds at 1280x720, actual MP4 Range retrieval and ffprobe passed. One terminal sample, availability 100%; pending observations excluded. Admin and user production browser checks passed, including custom prompt/policy and 7/15/30-day windows. A separate disabled temporary connection monitor verified asynchronous run receipts and no-sample fields, then was deleted. Historical cases retained below are previous baseline evidence only. Capacity settings remain unchanged pending the full seven-day baseline and 30-minute 1.5x peak load gate.",
   "source_release": "v1.3.24",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
@@ -106,9 +106,96 @@
       "submission_attempts": 0,
       "generation_submitted": false,
       "verified_at": "2026-11-06T10:31:45Z"
+    },
+    {
+      "label": "monitor19-video-generation-v1324",
+      "verification": "real_generation",
+      "status": "completed",
+      "running_version": "v1.3.24",
+      "model": "gemini-omni-1.1-flash",
+      "submission_attempts": 1,
+      "generation_status": "completed",
+      "settlement_state": "settled",
+      "task_id": "mt_01d15829-b623-4798-b15f-2ac169d53e63",
+      "total_latency_ms": 92134,
+      "availability_7d": 100,
+      "terminal_samples": 1,
+      "same_idempotency_task_count": 1,
+      "history_persisted": true,
+      "artifact": {
+        "verified_at": "2026-11-06T12:43:30.692013+00:00",
+        "task_id": "mt_01d15829-b623-4798-b15f-2ac169d53e63",
+        "generation_submitted": false,
+        "task_http": 200,
+        "artifact_range_http": 206,
+        "artifact_mime": "video/mp4",
+        "artifact_header_valid": true,
+        "artifact_size_bytes": 5849575,
+        "ffprobe": {
+          "programs": [],
+          "streams": [
+            {
+              "codec_type": "video",
+              "width": 1280,
+              "height": 720
+            },
+            {
+              "codec_type": "audio"
+            }
+          ],
+          "format": {
+            "duration": "10.026667"
+          }
+        },
+        "billing": {
+          "state": "settled",
+          "reserved": "1.20000000",
+          "settled": "1.20000000",
+          "released": "0.00000000"
+        },
+        "same_idempotency_task_count": 1
+      },
+      "credentials_recorded": false
+    },
+    {
+      "label": "monitor-async-connection-v1324",
+      "verification": "real_connection",
+      "status": "completed",
+      "running_version": "v1.3.24",
+      "submission_attempts": 0,
+      "generation_submitted": false,
+      "receipt": {
+        "monitor_id": 24,
+        "new_paid_submissions": 0,
+        "started_at": "2026-11-06T12:39:27.796971+00:00",
+        "empty_sample_fields": {
+          "sample_count_7d": 0,
+          "last_result_at": null,
+          "data_error": false
+        },
+        "run_id": "0b5527ac-3148-4e2f-8074-f99268cba62c",
+        "start_request_ms": 210,
+        "state": "completed",
+        "result": {
+          "sample_id": "85ac028c-57c1-4787-b3af-42fde54a85b3",
+          "request_latency_ms": null,
+          "model": "gemini-omni-1.1-flash",
+          "status": "operational",
+          "latency_ms": 250,
+          "ping_latency_ms": null,
+          "message": "connection: model advertised; generation not checked",
+          "checked_at": "2026-11-06T20:39:28.509527556+08:00",
+          "quota": null
+        },
+        "sample_count": 1,
+        "availability_7d": 100,
+        "expires_at": "2026-11-07T20:39:28.50561+08:00",
+        "temporary_monitor_deleted": true
+      },
+      "credentials_recorded": false
     }
   ],
-  "source_release_commit": "b4ab17e61afb4fb213e16157882e840deb361a31",
+  "source_release_commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
   "previous_production": {
     "automatic_job": "b7d487f997df49d9a3d6c6bb0f42aca7",
     "manager_job": "9588e292f20f4b8b81cc80db1b8bd9ac",
@@ -144,6 +231,68 @@
     "real_channel_tested": false
   },
   "candidate_release": {
+    "version": "v1.3.24",
+    "published": true,
+    "production_cutover": true,
+    "real_channel_tested": true,
+    "new_paid_submissions": 1,
+    "source_commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
+    "release_build_run_id": 42209971826,
+    "application_digest": "sha256:76cbb06dcc542450e29e0fa497b49563b0232bb56bf412b452f63287b55d9be1",
+    "documentation_digest": "sha256:5cd3c1a3ca5d59e4906db9d976ac3a33bee3d5c6eacb1a0a52d6e204b4b946d3",
+    "source_tests_and_lint": "passed",
+    "image_smoke_and_restore_rehearsals": "passed",
+    "production_management_job_id": "b16e04fad8b94f439aefdd20807883f5",
+    "production_backup_id": "29ef775e2c0f4c64878c9b417675c99c",
+    "production_cutover_mode": "immediate"
+  },
+  "production_state_after_attempts": {
+    "verified_at": "2026-11-06T12:38:30.286002+00:00",
+    "version": "v1.3.24",
+    "commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
+    "manager_job": "b16e04fad8b94f439aefdd20807883f5",
+    "backup_id": "29ef775e2c0f4c64878c9b417675c99c",
+    "cutover_mode": "immediate",
+    "status": "succeeded",
+    "application_digest": "sha256:76cbb06dcc542450e29e0fa497b49563b0232bb56bf412b452f63287b55d9be1",
+    "documentation_digest": "sha256:5cd3c1a3ca5d59e4906db9d976ac3a33bee3d5c6eacb1a0a52d6e204b4b946d3",
+    "public": [
+      {
+        "origin": "https://code.aicodeme.xyz",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      },
+      {
+        "origin": "https://code.aicodeme.cn",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      },
+      {
+        "origin": "https://hkcode.aicodeme.xyz",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      }
+    ],
+    "protected_containers_unchanged": true,
+    "capacity_applied": false,
+    "migration_count": 311,
+    "migration_checksums_match": true,
+    "phase": "online_verified",
+    "new_paid_submissions": 1,
+    "real_channel_tested": true,
+    "monitor_id": 19,
+    "monitor_status": "operational",
+    "availability_7d": 100,
+    "sample_count_7d": 1,
+    "evidence_path": "docs/multimodal/PRODUCTION_MONITOR_REPAIR_20261106.evidence.json"
+  },
+  "candidate_release_before_v1324": {
     "version": "v1.3.23",
     "published": true,
     "production_cutover": true,
@@ -162,7 +311,7 @@
     "production_backup_id": "19a0d36205034498aac6860343ccf919",
     "production_cutover_mode": "immediate"
   },
-  "production_state_after_attempts": {
+  "production_state_before_v1324": {
     "version": "v1.3.23",
     "verified_at": "2026-11-03T14:28:55.577934Z",
     "status": "succeeded",

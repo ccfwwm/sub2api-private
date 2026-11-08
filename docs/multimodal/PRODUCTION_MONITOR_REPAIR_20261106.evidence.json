@@ -1,0 +1,204 @@
+{
+  "deployment": {
+    "verified_at": "2026-11-06T12:38:30.286002+00:00",
+    "version": "v1.3.24",
+    "commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
+    "manager_job": "b16e04fad8b94f439aefdd20807883f5",
+    "backup_id": "29ef775e2c0f4c64878c9b417675c99c",
+    "cutover_mode": "immediate",
+    "status": "succeeded",
+    "application_digest": "sha256:76cbb06dcc542450e29e0fa497b49563b0232bb56bf412b452f63287b55d9be1",
+    "documentation_digest": "sha256:5cd3c1a3ca5d59e4906db9d976ac3a33bee3d5c6eacb1a0a52d6e204b4b946d3",
+    "public": [
+      {
+        "origin": "https://code.aicodeme.xyz",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      },
+      {
+        "origin": "https://code.aicodeme.cn",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      },
+      {
+        "origin": "https://hkcode.aicodeme.xyz",
+        "health_http": 200,
+        "settings_http": 200,
+        "documentation_http": 200,
+        "version": "v1.3.24"
+      }
+    ],
+    "protected_containers_unchanged": true,
+    "capacity_applied": false,
+    "migration_count": 311,
+    "migration_checksums_match": true
+  },
+  "recovery": {
+    "configured_at": "2026-11-06T12:39:10.262440+00:00",
+    "monitor_id": 19,
+    "model": "gemini-omni-1.1-flash",
+    "enabled": true,
+    "template_id": "sub2api-monitor-video-recover",
+    "template_version": 4,
+    "manual_paid_runs": 0,
+    "first_generation_trigger": "scheduler-on-enable",
+    "original_task": {
+      "id": "mt_b7fc895b-6b08-4c66-a68e-2cc9d846b465",
+      "state": "failed",
+      "settlement_state": "released",
+      "reserved": 0.04,
+      "captured": 0.0,
+      "released": 0.04
+    }
+  },
+  "async_connection": {
+    "monitor_id": 24,
+    "new_paid_submissions": 0,
+    "started_at": "2026-11-06T12:39:27.796971+00:00",
+    "empty_sample_fields": {
+      "sample_count_7d": 0,
+      "last_result_at": null,
+      "data_error": false
+    },
+    "run_id": "0b5527ac-3148-4e2f-8074-f99268cba62c",
+    "start_request_ms": 210,
+    "state": "completed",
+    "result": {
+      "sample_id": "85ac028c-57c1-4787-b3af-42fde54a85b3",
+      "request_latency_ms": null,
+      "model": "gemini-omni-1.1-flash",
+      "status": "operational",
+      "latency_ms": 250,
+      "ping_latency_ms": null,
+      "message": "connection: model advertised; generation not checked",
+      "checked_at": "2026-11-06T20:39:28.509527556+08:00",
+      "quota": null
+    },
+    "sample_count": 1,
+    "availability_7d": 100,
+    "expires_at": "2026-11-07T20:39:28.50561+08:00",
+    "temporary_monitor_deleted": true
+  },
+  "artifact": {
+    "verified_at": "2026-11-06T12:43:30.692013+00:00",
+    "task_id": "mt_01d15829-b623-4798-b15f-2ac169d53e63",
+    "generation_submitted": false,
+    "task_http": 200,
+    "artifact_range_http": 206,
+    "artifact_mime": "video/mp4",
+    "artifact_header_valid": true,
+    "artifact_size_bytes": 5849575,
+    "ffprobe": {
+      "programs": [],
+      "streams": [
+        {
+          "codec_type": "video",
+          "width": 1280,
+          "height": 720
+        },
+        {
+          "codec_type": "audio"
+        }
+      ],
+      "format": {
+        "duration": "10.026667"
+      }
+    },
+    "billing": {
+      "state": "settled",
+      "reserved": "1.20000000",
+      "settled": "1.20000000",
+      "released": "0.00000000"
+    },
+    "same_idempotency_task_count": 1
+  },
+  "monitor": {
+    "id": 19,
+    "primary_model": "gemini-omni-1.1-flash",
+    "enabled": true,
+    "primary_status": "operational",
+    "primary_latency_ms": 92134,
+    "availability_7d": 100,
+    "sample_count_7d": 1,
+    "last_result_at": "2026-11-06T20:40:41.959472+08:00",
+    "stale": false,
+    "data_error": false
+  },
+  "detail": {
+    "id": 19,
+    "name": "图片音视频分组",
+    "provider": "imagevideo",
+    "group_name": "",
+    "models": [
+      {
+        "sample_count_7d": 1,
+        "sample_count_15d": 1,
+        "sample_count_30d": 1,
+        "last_result_at": "2026-11-06T20:40:41.959472+08:00",
+        "stale": false,
+        "data_error": false,
+        "model": "gemini-omni-1.1-flash",
+        "latest_status": "operational",
+        "latest_latency_ms": 92134,
+        "availability_7d": 100,
+        "availability_15d": 100,
+        "availability_30d": 100,
+        "avg_latency_7d_ms": 92134
+      }
+    ]
+  },
+  "same_idempotency_task_count": 1,
+  "history_persisted": true,
+  "capacity": {
+    "applied": false,
+    "window": {
+      "start_utc": "2026-11-06T10:53:18+00:00",
+      "end_utc": "2026-11-06T12:46:34+00:00",
+      "observed_days": 0.079,
+      "expected_interval_seconds": 60,
+      "max_gap_seconds": 64.0,
+      "gap_samples_over_2x_interval": 0
+    },
+    "sample_count": 109,
+    "health_failures": 0,
+    "collector_errors": {},
+    "sizing_gate": {
+      "ready_for_capacity_review": false,
+      "blockers": [
+        "observed window is shorter than 7 days"
+      ],
+      "decision": "Use these observations with the 1.5x peak load test. Set host and per-container limits only after restore validation; keep at least 20% host capacity available. Coordinate application pool totals with PostgreSQL max_connections and Redis pool totals with maxclients. This report never proposes resource values."
+    },
+    "load_gate_passed": false,
+    "post_change_24h_observation_complete": false
+  },
+  "credentials_recorded": false,
+  "history_counts": {
+    "terminal_samples": 1,
+    "pending_observations": 6,
+    "max_message_bytes": 94
+  },
+  "browser": {
+    "live_url": "https://code.aicodeme.xyz/admin/channels/monitor",
+    "version": "v1.3.24",
+    "admin_row": "图片音视频分组\n\t图片 / 视频 / 音频生成检测\t\ngemini-omni-1.1-flash\n正常\n实际结果时间: 2026/11/6 20:40:41\n\t100.00%\n有效样本：1\n\t92134\t\n\t\n立即检测\n复制\n历史结果\n编辑\n删除",
+    "credentials_recorded": false,
+    "policy": {
+      "normal_latency_seconds": 300,
+      "request_timeout_seconds": 180,
+      "observation_timeout_seconds": 3600,
+      "custom_prompt_present": true
+    },
+    "user_monitor_visible": true,
+    "user_windows": {
+      "7": "I\n图片音视频分组\n图片 / 视频 / 音频\ngemini-omni-1.1-flash\n正常\n实际结果时间: 2026/11/6 20:40:41\n对话延迟\n92134ms\n端点 PING\n-ms\n可用性 · 7 天\n100.00\n%\n有效样本：1\n近 60 次记录\n59S 后刷新\nPAST\nNOW",
+      "15": "I\n图片音视频分组\n图片 / 视频 / 音频\ngemini-omni-1.1-flash\n正常\n实际结果时间: 2026/11/6 20:40:41\n对话延迟\n92134ms\n端点 PING\n-ms\n可用性 · 15 天\n100.00\n%\n有效样本：1\n近 60 次记录\n58S 后刷新\nPAST\nNOW",
+      "30": "I\n图片音视频分组\n图片 / 视频 / 音频\ngemini-omni-1.1-flash\n正常\n实际结果时间: 2026/11/6 20:40:41\n对话延迟\n92134ms\n端点 PING\n-ms\n可用性 · 30 天\n100.00\n%\n有效样本：1\n近 60 次记录\n58S 后刷新\nPAST\nNOW"
+    }
+  },
+  "verification_scope": "Live v1.3.24 application and monitor recovery; capacity change gates are pending."
+}

@@ -26,7 +26,13 @@ func TestChannelMonitorAtomicReceiptAndPolicy(t *testing.T) {
 	now := time.Now().UTC()
 	row := &service.ChannelMonitorHistoryRow{MonitorID: m.ID, Model: "model", Status: service.MonitorStatusDegraded, Message: strings.Repeat("中文😀", 200), SampleID: "stable-media-task", CheckedAt: now}
 	require.NoError(t, repo.SaveCheckResults(ctx, m.ID, []*service.ChannelMonitorHistoryRow{row}, now))
-	require.NoError(t, repo.SaveCheckResults(ctx, m.ID, []*service.ChannelMonitorHistoryRow{row}, now))
+	later := *row
+	later.CheckedAt = now.Add(15 * time.Second)
+	require.NoError(t, repo.SaveCheckResults(ctx, m.ID, []*service.ChannelMonitorHistoryRow{&later}, later.CheckedAt))
+	history, err := repo.ListHistory(ctx, m.ID, "model", 10)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	require.WithinDuration(t, later.CheckedAt, history[0].CheckedAt, time.Millisecond)
 	a, err := repo.ComputeAvailability(ctx, m.ID, 7)
 	require.NoError(t, err)
 	require.Len(t, a, 1)
