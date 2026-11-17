@@ -1,0 +1,4 @@
+FROM RELEASE_IMAGE
+USER root
+RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /opt/yarn*
+USER 1000:1000
