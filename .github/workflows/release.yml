@@ -130,6 +130,7 @@ jobs:
       - run: python3 docs/multimodal/verify_spec.py
       - run: python3 docs/multimodal/test_public_clients.py
       - run: python3 -m unittest discover -s deploy/private -p 'test_*.py' -v
+      - run: python3 -m unittest discover -s deploy/new-production -p 'test_*.py' -v
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.14.0
@@ -284,6 +285,13 @@ jobs:
           sha256sum 252_media_account_concurrency_diagnostics.sql >> checksums.txt
           sha256sum 253_scoped_admin_api_keys.sql 254_group_image_count_billing.sql >> checksums.txt
           sha256sum 255_channel_monitor_probe_config.sql 256_channel_monitor_policy_and_runs.sql >> checksums.txt
+          cp backend/migrations/257_add_usage_logs_api_key_cost_index_notx.sql ./257_add_usage_logs_api_key_cost_index_notx.sql
+          cp backend/migrations/258_mcp_oauth.sql ./258_mcp_oauth.sql
+          cp backend/migrations/259_openai_cache_write_ttl.sql ./259_openai_cache_write_ttl.sql
+          cp backend/migrations/260_group_force_openai_ultrafast.sql ./260_group_force_openai_ultrafast.sql
+          cp backend/migrations/261_group_usage_rollup_nonblocking_build.sql ./261_group_usage_rollup_nonblocking_build.sql
+          cp backend/migrations/262_channel_pricing_ultrafast_multiplier.sql ./262_channel_pricing_ultrafast_multiplier.sql
+          sha256sum 257_add_usage_logs_api_key_cost_index_notx.sql 258_mcp_oauth.sql 259_openai_cache_write_ttl.sql 260_group_force_openai_ultrafast.sql 261_group_usage_rollup_nonblocking_build.sql 262_channel_pricing_ultrafast_multiplier.sql >> checksums.txt
           git rev-parse HEAD > management-source.txt
           python3 deploy/private/package_manager.py --output server-management.tar.gz
           sha256sum server-management.tar.gz management-source.txt > management-checksums.txt
@@ -315,4 +323,10 @@ jobs:
             254_group_image_count_billing.sql
             255_channel_monitor_probe_config.sql
             256_channel_monitor_policy_and_runs.sql
+            257_add_usage_logs_api_key_cost_index_notx.sql
+            258_mcp_oauth.sql
+            259_openai_cache_write_ttl.sql
+            260_group_force_openai_ultrafast.sql
+            261_group_usage_rollup_nonblocking_build.sql
+            262_channel_pricing_ultrafast_multiplier.sql
             docs-image-inspect.json

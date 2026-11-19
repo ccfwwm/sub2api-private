@@ -41,7 +41,7 @@ class AutomaticDeployTests(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'checksum'):
     stage_reviewed_migrations(assets,release)
 
- def test_publishing_cannot_call_production_workflow_and_manual_deploy_selects_cutover_mode(self):
+ def test_publishing_cannot_call_production_workflow_and_migrated_deploy_always_drains(self):
   root=Path(__file__).resolve().parents[2]
   release=(root/'.github/workflows/release.yml').read_text(encoding='utf-8')
   deploy=(root/'.github/workflows/deploy-production.yml').read_text(encoding='utf-8')
@@ -51,8 +51,11 @@ class AutomaticDeployTests(unittest.TestCase):
   self.assertIn('  workflow_dispatch:',deploy)
   self.assertIn("'immediate':job.get('immediate', False)",source)
   self.assertIn("'immediate':len(words) == 3",source)
-  self.assertIn('      immediate:',deploy)
-  self.assertIn('DEPLOY_COMMAND+=" --immediate"',deploy)
+  self.assertNotIn('      immediate:',deploy)
+  self.assertIn('bash deploy/new-production/client.sh',deploy)
+  migrated=(root/'deploy/new-production/handler.py').read_text(encoding='utf-8')
+  self.assertIn("phase('waiting_for_idle')",migrated)
+  self.assertIn("status.get('draining') is True and status.get('active') == 0",migrated)
  def test_release_workflows_publish_every_reviewed_upstream_migration_asset(self):
   root=Path(__file__).resolve().parents[2]
   upstream=('242_group_i18n.sql','243_gemini_cached_contents.sql',

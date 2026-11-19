@@ -95,6 +95,26 @@ def controller():
     return MigratedController({'production_dir': str(COMPOSE.parent), 'state_dir': str(STATE), 'database_container': PG, 'health_urls': []})
 
 
+def execute_reviewed(files, c, container=None):
+    from reviewed_upgrade import apply
+    app_role = 'sub2api'
+    if container:
+        prefix = ['docker', 'exec', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'sub2api', '-d', 'sub2api']
+    else:
+        env = dict(x.split('=', 1) for x in inspect(APP)['Config']['Env'] if '=' in x)
+        app_role = env['DATABASE_USER']
+        # Administrator credentials remain in the host-only env file. Never
+        # deserialize or print them in the release job.
+        prefix = ['docker', 'exec', '--env-file', '/var/lib/migration-20261117/sub2api/admin.env', PG,
+                  'sh', '-c', 'exec psql -X -qAt -v ON_ERROR_STOP=1 -U "$PGUSER" -d "$PGDATABASE" "$@"', 'sh']
+
+    def execute(settings, sql):
+        args = prefix + (['-c', settings] if settings else []) + ['-c', sql]
+        run(args, timeout=1900)
+
+    apply(files, execute, lambda sql: c.sql(sql, container), app_role)
+
+
 def deploy(version, source, prepare_only, phase):
     from controller import validate_manifest, manifest_images, PROTECTED
     manifest = read(source / 'deployment.json')
@@ -105,9 +125,9 @@ def deploy(version, source, prepare_only, phase):
     if version == current['version'] and not prepare_only:
         return {**current, 'already_deployed': True}
     c = controller()
-    # This preserves the ordinary deployment schema guard. A new schema requires
-    # the separately reviewed SQL procedure, never implicit startup migration.
-    c.assert_migrations(manifest)
+    from reviewed_upgrade import validate as validate_upgrade
+    before_migrations = c.migrations()
+    reviewed = validate_upgrade(version, before_migrations, manifest['migrations'], source / 'migrations')
     for name, digest in manifest['migrations'].items():
         sql = (source / 'migrations' / name).read_text().replace('\r\n', '\n').strip().encode()
         if hashlib.sha256(sql).hexdigest() != digest:
@@ -156,6 +176,10 @@ def deploy(version, source, prepare_only, phase):
         actual = {table: c.sql(c.fingerprint_sql(table), pg) for table in PROTECTED}
         if actual != expected:
             raise ValueError('isolated restore protected-table fingerprints differ')
+        phase('reviewed_migration_rehearsal')
+        execute_reviewed(reviewed, c, pg)
+        if c.migrations(pg) != manifest['migrations']:
+            raise ValueError('reviewed clone migration inventory differs')
         probe_data = source / 'probe-data'
         probe_data.mkdir(mode=0o700)
         os.chown(probe_data, 1000, 1000)
@@ -164,21 +188,37 @@ def deploy(version, source, prepare_only, phase):
         env.update(DATABASE_HOST='127.0.0.1', DATABASE_PORT='5432', DATABASE_USER='sub2api', DATABASE_DBNAME='sub2api', DATABASE_PASSWORD='', DATABASE_SSLMODE='disable', REDIS_HOST='127.0.0.1', REDIS_PORT='6379', REDIS_PASSWORD=password, AUTO_SETUP='true', IMAGE_DEPLOY_DRAIN_FILE='/app/data/probe-drain')
         (source / 'probe.env').write_text(''.join(k+'='+v+'\n' for k,v in env.items() if '\n' not in v))
         run(['docker', 'run', '-d', '--name', redis, '--network', 'container:' + pg, inspect(REDIS)['Image'], 'redis-server', '--save', '', '--requirepass', password])
-        run(['docker', 'run', '-d', '--name', candidate, '--network', 'container:' + pg, '--user', '1000:1000', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m', '--env-file', source / 'probe.env', '-v', str(probe_data)+':/app/data', app_image])
-        for _ in range(90):
-            if subprocess.run(['docker', 'exec', candidate, 'wget', '-q', '-T', '2', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], capture_output=True).returncode == 0:
-                break
-            time.sleep(2)
-        else:
-            raise ValueError('candidate failed against the isolated database clone')
+        for image in [current['app_image'], app_image]:
+            run(['docker', 'run', '-d', '--name', candidate, '--network', 'container:' + pg, '--user', '1000:1000', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m', '--env-file', source / 'probe.env', '-v', str(probe_data)+':/app/data', image])
+            for _ in range(90):
+                if subprocess.run(['docker', 'exec', candidate, 'wget', '-q', '-T', '2', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], capture_output=True).returncode == 0:
+                    break
+                time.sleep(2)
+            else:
+                raise ValueError('new or rollback application failed against the migrated clone')
+            run(['docker', 'exec', candidate, 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/api/v1/settings/public'])
+            run(['docker', 'stop', '--time', '120', candidate])
+            run(['docker', 'rm', candidate])
         if c.migrations(pg) != manifest['migrations']:
             raise ValueError('candidate changed the reviewed migration inventory')
-        c.assert_migrations(manifest)
+        if c.migrations() != before_migrations:
+            raise ValueError('production migration inventory drifted during rehearsal')
     finally:
         for name in (candidate, redis, pg):
             subprocess.run(['docker', 'rm', '-fv', name], capture_output=True)
     if prepare_only:
         return {'version': version, 'backup': str(backup), 'restore_verified': True, 'production_changed': False}
+    if reviewed:
+        phase('reviewed_production_migrations')
+        fresh_backup = source / 'pre-migration-backup'
+        fresh_backup.mkdir(mode=0o700)
+        c.backup_database(fresh_backup)
+        if c.migrations() != before_migrations:
+            raise ValueError('production migration inventory changed before execution')
+        execute_reviewed(reviewed, c)
+        atomic(source / 'migration-receipt.json', {'version': version, 'files': [f[0] for f in reviewed],
+                                                 'before': before_migrations, 'after': c.migrations()})
+    c.assert_migrations(manifest)
     phase('waiting_for_idle')
     info = inspect(APP)
     env = dict(x.split('=', 1) for x in info['Config']['Env'] if '=' in x)

@@ -28,7 +28,7 @@ export const apiClient: AxiosInstance = axios.create({
 })
 
 function parseRetryAfterSeconds(value: unknown): number | undefined {
-  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return undefined
   const seconds = Number(value)
   if (!Number.isFinite(seconds) || seconds <= 0) return undefined
   return Math.min(Math.ceil(seconds), 24 * 60 * 60)
@@ -270,6 +270,7 @@ apiClient.interceptors.response.use(
         message: apiData.message || apiData.detail || error.message,
         metadata: apiData.metadata,
         retryAfterSeconds: parseRetryAfterSeconds(error.response.headers?.['retry-after']),
+        retry_after_seconds: parseRetryAfterSeconds(error.response.headers?.['retry-after']),
       })
     }
 
