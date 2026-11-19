@@ -1,18 +1,49 @@
 {
   "version": "v1.3.26",
   "status": "recorded",
-  "acceptance_state": "upstream-v0.2.23-merged; prior-media-evidence-historical-only; production-text-acceptance-pending",
+  "acceptance_state": "production-text-verified; 30-minute-observation-completed-with-transient-probe-errors-recovered; prior-media-evidence-historical-only",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
-  "verified_at": "2026-11-06T12:43:30.692013+00:00",
-  "new_paid_submissions": 0,
-  "requests_attempted": 0,
+  "verified_at": "2026-11-20T01:45:11.152506+08:00",
+  "new_paid_submissions": 2,
+  "requests_attempted": 2,
   "credentials_recorded": false,
-  "environment": "Production is v1.3.25 on hardened migrated host 206.82.2.46. v1.3.26 retains the prior real-channel baseline explicitly as historical evidence. New frontend/backend and migration checks are separate CI gates; production acceptance will be recorded after cutover.",
-  "source_release": "v1.3.25",
-  "reuse_scope": "Historical completed media cases retained as historical baseline only. No v1.3.26 paid media generation. New production text verification is pending deployment with a total USD 1 cap.",
+  "environment": "Production v1.3.26 on hardened host 206.82.2.46; active Hong Kong proxy 154.36.164.186. Browser login, direct text and HK streaming text verified. The approximately 30-minute observation caught one transient external-probe failure at its final sample; all three endpoints returned 200 on immediate follow-up.",
+  "source_release": "v1.3.26",
+  "reuse_scope": "Prior media cases are historical only; no new paid media generation. Two new production text requests cost USD 0.00078292 under the USD 1 cap.",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
+    {
+      "label": "v1326-direct-and-hk-text-acceptance",
+      "verification": "real_connection",
+      "status": "completed",
+      "running_version": "v1.3.26",
+      "verified_at": "2026-11-20T00:59:39+08:00",
+      "model": "gpt-6.1-sol",
+      "submission_attempts": 2,
+      "actual_cost_usd": "0.00078292",
+      "credentials_recorded": false,
+      "requests": [
+        {
+          "endpoint": "https://code.aicodeme.xyz/v1/responses",
+          "stream": false,
+          "http_status": 200,
+          "duration_ms": 1723,
+          "output_tokens": 5,
+          "actual_cost_usd": "0.00016536"
+        },
+        {
+          "endpoint": "https://hkcode.aicodeme.xyz/v1/responses",
+          "stream": true,
+          "http_status": 200,
+          "duration_ms": 1858,
+          "first_token_ms": 1854,
+          "output_tokens": 5,
+          "actual_cost_usd": "0.00061756"
+        }
+      ],
+      "evidence_scope": "HTTP, tokens, billing and source IP cross-checked from application logs and usage rows; response bodies not persisted; no paid retries."
+    },
     {
       "label": "foxrouter-single-image-standard-connection",
       "verification": "real_connection",
@@ -196,7 +227,7 @@
       "credentials_recorded": false
     }
   ],
-  "source_release_commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
+  "source_release_commit": "4bfa7cdfd427b78aa0a267768914c58868c5fdc9",
   "previous_production": {
     "automatic_job": "b7d487f997df49d9a3d6c6bb0f42aca7",
     "manager_job": "9588e292f20f4b8b81cc80db1b8bd9ac",
@@ -231,7 +262,48 @@
     "production_backup_id": "52a50e7df2444d229706fdc153c760c2",
     "real_channel_tested": false
   },
-  "candidate_release": {
+  "candidate_release_before_v1324": {
+    "version": "v1.3.23",
+    "published": true,
+    "production_cutover": true,
+    "real_channel_tested": false,
+    "new_paid_submissions": 0,
+    "source_commit": "fba2fc0fe87a85d32762a5b4fe956b67a1df3c5b",
+    "release_build_run_id": 41640915567,
+    "finalize_run_id": 41645953357,
+    "application_digest": "sha256:c693c004ffcb9497c5d6656b357f3e382f929b6a77eb79875837edbfeb1258fe",
+    "documentation_digest": "sha256:7e6508464637ea6a951d3eeaa822de192f5feec7b3d033b4e2a45c1f0c84605d",
+    "source_tests_and_lint": "passed",
+    "image_smoke_and_restore_rehearsals": "passed",
+    "release_publication": "authorized GitHub CLI after Actions HTTP 403",
+    "production_deployment_run_id": 41651720707,
+    "production_management_job_id": "8b5d8a041df549e4b11762068d135c7f",
+    "production_backup_id": "19a0d36205034498aac6860343ccf919",
+    "production_cutover_mode": "immediate"
+  },
+  "production_state_before_v1324": {
+    "version": "v1.3.23",
+    "verified_at": "2026-11-03T14:28:55.577934Z",
+    "status": "succeeded",
+    "phase": "online_verified",
+    "cutover_mode": "immediate",
+    "automatic_job": "08b1219d51204ff88c9f622e7e11f420",
+    "manager_job": "8b5d8a041df549e4b11762068d135c7f",
+    "backup_id": "19a0d36205034498aac6860343ccf919",
+    "application_digest": "sha256:c693c004ffcb9497c5d6656b357f3e382f929b6a77eb79875837edbfeb1258fe",
+    "documentation_digest": "sha256:7e6508464637ea6a951d3eeaa822de192f5feec7b3d033b4e2a45c1f0c84605d",
+    "protected_containers_unchanged": true,
+    "migration_count": 310,
+    "migration_checksums_match": true,
+    "new_probe_defaults_unchanged": {
+      "channel_monitors": 0,
+      "channel_monitor_request_templates": 0
+    },
+    "new_paid_submissions": 0,
+    "real_channel_tested": false
+  },
+  "actual_cost_usd": "0.00078292",
+  "historical_candidate_release_v1324": {
     "version": "v1.3.24",
     "published": true,
     "production_cutover": true,
@@ -247,7 +319,7 @@
     "production_backup_id": "29ef775e2c0f4c64878c9b417675c99c",
     "production_cutover_mode": "immediate"
   },
-  "production_state_after_attempts": {
+  "historical_production_state_after_attempts_v1324": {
     "verified_at": "2026-11-06T12:38:30.286002+00:00",
     "version": "v1.3.24",
     "commit": "f150f0d80b9ca8f0175f5486b84c77551f02e7dc",
@@ -293,44 +365,118 @@
     "sample_count_7d": 1,
     "evidence_path": "docs/multimodal/PRODUCTION_MONITOR_REPAIR_20261106.evidence.json"
   },
-  "candidate_release_before_v1324": {
-    "version": "v1.3.23",
-    "published": true,
-    "production_cutover": true,
-    "real_channel_tested": false,
-    "new_paid_submissions": 0,
-    "source_commit": "fba2fc0fe87a85d32762a5b4fe956b67a1df3c5b",
-    "release_build_run_id": 41640915567,
-    "finalize_run_id": 41645953357,
-    "application_digest": "sha256:c693c004ffcb9497c5d6656b357f3e382f929b6a77eb79875837edbfeb1258fe",
-    "documentation_digest": "sha256:7e6508464637ea6a951d3eeaa822de192f5feec7b3d033b4e2a45c1f0c84605d",
-    "source_tests_and_lint": "passed",
-    "image_smoke_and_restore_rehearsals": "passed",
-    "release_publication": "authorized GitHub CLI after Actions HTTP 403",
-    "production_deployment_run_id": 41651720707,
-    "production_management_job_id": "8b5d8a041df549e4b11762068d135c7f",
-    "production_backup_id": "19a0d36205034498aac6860343ccf919",
-    "production_cutover_mode": "immediate"
-  },
-  "production_state_before_v1324": {
-    "version": "v1.3.23",
-    "verified_at": "2026-11-03T14:28:55.577934Z",
+  "production_state_after_attempts": {
+    "verified_at": "2026-11-20T01:45:11.152506+08:00",
+    "version": "v1.3.26",
+    "commit": "4bfa7cdfd427b78aa0a267768914c58868c5fdc9",
+    "manager_job": "51beef8e61424fd394cdf0d1528ab502",
     "status": "succeeded",
     "phase": "online_verified",
-    "cutover_mode": "immediate",
-    "automatic_job": "08b1219d51204ff88c9f622e7e11f420",
-    "manager_job": "8b5d8a041df549e4b11762068d135c7f",
-    "backup_id": "19a0d36205034498aac6860343ccf919",
-    "application_digest": "sha256:c693c004ffcb9497c5d6656b357f3e382f929b6a77eb79875837edbfeb1258fe",
-    "documentation_digest": "sha256:7e6508464637ea6a951d3eeaa822de192f5feec7b3d033b4e2a45c1f0c84605d",
-    "protected_containers_unchanged": true,
-    "migration_count": 310,
+    "cutover_mode": "immediate-with-in-flight-drain",
+    "application_digest": "sha256:7bcf3c8baf6454a2dad59eef1f826195b28e00381b3094b3195cf9c28f8ff3fc",
+    "documentation_digest": "sha256:9129423e49946d429ac44639eec577a40dac02389b7a332a6e8fce0e8afa90fc",
+    "migration_count": 317,
     "migration_checksums_match": true,
-    "new_probe_defaults_unchanged": {
-      "channel_monitors": 0,
-      "channel_monitor_request_templates": 0
+    "new_paid_submissions": 2,
+    "real_channel_tested": true,
+    "media_generation_tested": false,
+    "protected_containers_unchanged": true,
+    "nginx_unchanged": true,
+    "cutover_transient_errors": {
+      "window": "2026-11-20 00:56:46–00:58:12 +08:00",
+      "http_503": 754,
+      "http_502": 125,
+      "auth_me_requests": 825
     },
-    "new_paid_submissions": 0,
-    "real_channel_tested": false
+    "observation": {
+      "status": "completed_with_transient_probe_errors_recovered",
+      "started_at": "2026-11-20T00:59:34.316770+08:00",
+      "completed_at": "2026-11-20T01:29:09.548500+08:00",
+      "sample_span_seconds": 1775,
+      "samples": 30,
+      "health_checks": 90,
+      "healthy_checks": 88,
+      "health_probe_errors": [
+        {
+          "at": "2026-11-20T01:29:09.548500+08:00",
+          "probe": {
+            "base": "https://code.aicodeme.cn",
+            "error": "TimeoutError"
+          }
+        },
+        {
+          "at": "2026-11-20T01:29:09.548500+08:00",
+          "probe": {
+            "base": "https://hkcode.aicodeme.xyz",
+            "error": "URLError"
+          }
+        }
+      ],
+      "app_restarts": 0,
+      "protected_containers_unchanged": true,
+      "nginx_unchanged": true,
+      "blacklist_preserved": true,
+      "sampled_5xx_routes": {
+        "/api/v1/user/mcp/config": 1
+      },
+      "unexpected_sampled_5xx_routes": {},
+      "load_1m_range": [
+        0.0,
+        0.49
+      ],
+      "mem_available_gib_range": [
+        54.33,
+        54.44
+      ],
+      "sampling_note": "Per-minute health probes and preceding 60-second HTTP windows; not a full request census.",
+      "recovery_confirmation": {
+        "verified_at": "2026-11-20T01:45:11.152506+08:00",
+        "probes": [
+          {
+            "base": "http://127.0.0.1:8081",
+            "status": 200,
+            "version": "1.3.26"
+          },
+          {
+            "base": "https://code.aicodeme.cn",
+            "status": 200,
+            "version": "1.3.26"
+          },
+          {
+            "base": "https://hkcode.aicodeme.xyz",
+            "status": 200,
+            "version": "1.3.26"
+          }
+        ],
+        "app": {
+          "running": true,
+          "restart_count": 0,
+          "image": "sha256:78b7d27e0e95c17b668fedcf3e46b2316810ee503ebfa2db34b24d764c31312b"
+        }
+      },
+      "post_recovery_http_census": {
+        "from": "2026-11-20T00:58:13+08:00",
+        "checked_at": "2026-11-20T01:26:16.694609+08:00",
+        "tail_covers_start": true,
+        "request_count": 3540,
+        "statuses": {
+          "200": 3125,
+          "401": 196,
+          "403": 211,
+          "404": 4,
+          "304": 1,
+          "301": 1,
+          "503": 2
+        },
+        "5xx": [
+          {
+            "uri": "/api/v1/user/mcp/config",
+            "status": 503,
+            "count": 2
+          }
+        ]
+      }
+    },
+    "evidence_path": "docs/multimodal/DEPLOY-v1.3.26.md"
   }
 }
