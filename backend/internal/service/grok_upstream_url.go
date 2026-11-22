@@ -53,7 +53,7 @@ func grokOperatorPolicyValidator(cfg *config.Config) xai.BaseURLValidator {
 	}
 	return func(raw string) (string, error) {
 		return urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-			AllowedHosts:     cfg.Security.URLAllowlist.UpstreamHosts,
+			AllowedHosts:     cfg.Security.URLAllowlist.EffectiveUpstreamHosts(),
 			RequireAllowlist: true,
 			AllowPrivate:     cfg.Security.URLAllowlist.AllowPrivateHosts,
 		})

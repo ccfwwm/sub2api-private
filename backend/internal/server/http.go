@@ -163,7 +163,12 @@ func ProvideHTTPServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	}
 
 	httpHandler = pkghttputil.WithBodyReadTimeout(httpHandler, time.Duration(cfg.Gateway.RequestBodyReadTimeoutSeconds)*time.Second)
-	server.Handler = pkghttputil.WithWriteTimeout(httpHandler, time.Duration(cfg.Gateway.DownstreamWriteTimeoutSeconds)*time.Second)
+	server.Handler = withUpstreamAllowlistStatus(pkghttputil.WithWriteTimeout(httpHandler, time.Duration(cfg.Gateway.DownstreamWriteTimeoutSeconds)*time.Second), &cfg.Security.URLAllowlist)
+	if cfg.Security.URLAllowlist.UpstreamHostsFile != "" {
+		ctx, cancel := context.WithCancel(context.Background())
+		server.RegisterOnShutdown(cancel)
+		go cfg.Security.URLAllowlist.WatchUpstreamAllowlist(ctx)
+	}
 	return server
 }
 

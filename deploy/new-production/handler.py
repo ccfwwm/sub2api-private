@@ -16,6 +16,10 @@ APP = 'migration-sub-app-production'
 DOCS = 'migration-sub-docs-production'
 PG = 'migration-sub-postgres'
 REDIS = 'migration-sub-redis'
+ALLOWLIST_ENV = 'SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS_FILE'
+ALLOWLIST_DIR = Path('/var/lib/transithub/sub2api-allowlist')
+ALLOWLIST_TARGET = '/run/sub2api-allowlist'
+ALLOWLIST_STATUS = 'http://127.0.0.1:8080/internal/upstream-allowlist/status'
 
 
 def valid_revision(value):
@@ -115,6 +119,36 @@ def execute_reviewed(files, c, container=None):
     apply(files, execute, lambda sql: c.sql(sql, container), app_role)
 
 
+def allowlist_rehearsal(source):
+    app = read(COMPOSE)['services']['app']
+    if not app.get('environment', {}).get(ALLOWLIST_ENV):
+        return {}, [], None
+    expected = ALLOWLIST_TARGET + '/hosts.json'
+    mounts = app.get('volumes', [])
+    if app['environment'][ALLOWLIST_ENV] != expected or not any(
+            mount.get('type') == 'bind' and mount.get('source') == str(ALLOWLIST_DIR)
+            and mount.get('target') == ALLOWLIST_TARGET and mount.get('read_only') is True
+            for mount in mounts if isinstance(mount, dict)):
+        raise ValueError('expected read-only upstream allowlist directory mount')
+    snapshot = source / 'probe-allowlist'
+    snapshot.mkdir()
+    snapshot.chmod(0o755)
+    with (ALLOWLIST_DIR / 'hosts.json').open('rb') as policy:
+        data = policy.read((256 << 10) + 1)
+    if len(data) > 256 << 10:
+        raise ValueError('upstream allowlist file exceeds the size limit')
+    snapshot_file = snapshot / 'hosts.json'
+    snapshot_file.write_bytes(data)
+    snapshot_file.chmod(0o644)
+    return {ALLOWLIST_ENV: expected}, ['-v', str(snapshot) + ':' + ALLOWLIST_TARGET + ':ro'], hashlib.sha256(data).hexdigest()
+
+
+def verify_allowlist(container, expected):
+    receipt = json.loads(run(['docker', 'exec', container, 'wget', '-qO-', ALLOWLIST_STATUS]))
+    if receipt.get('version') != expected:
+        raise ValueError('upstream allowlist receipt does not match the expected version')
+
+
 def deploy(version, source, prepare_only, phase):
     from controller import validate_manifest, manifest_images, PROTECTED
     manifest = read(source / 'deployment.json')
@@ -184,12 +218,15 @@ def deploy(version, source, prepare_only, phase):
         probe_data.mkdir(mode=0o700)
         os.chown(probe_data, 1000, 1000)
         env = dict(x.split('=', 1) for x in inspect(APP)['Config']['Env'] if '=' in x)
+        policy_env, policy_mount, policy_version = allowlist_rehearsal(source)
+        env.pop(ALLOWLIST_ENV, None)
+        env.update(policy_env)
         password = secrets.token_hex(24)
         env.update(DATABASE_HOST='127.0.0.1', DATABASE_PORT='5432', DATABASE_USER='sub2api', DATABASE_DBNAME='sub2api', DATABASE_PASSWORD='', DATABASE_SSLMODE='disable', REDIS_HOST='127.0.0.1', REDIS_PORT='6379', REDIS_PASSWORD=password, AUTO_SETUP='true', IMAGE_DEPLOY_DRAIN_FILE='/app/data/probe-drain')
         (source / 'probe.env').write_text(''.join(k+'='+v+'\n' for k,v in env.items() if '\n' not in v))
         run(['docker', 'run', '-d', '--name', redis, '--network', 'container:' + pg, inspect(REDIS)['Image'], 'redis-server', '--save', '', '--requirepass', password])
         for image in [current['app_image'], app_image]:
-            run(['docker', 'run', '-d', '--name', candidate, '--network', 'container:' + pg, '--user', '1000:1000', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m', '--env-file', source / 'probe.env', '-v', str(probe_data)+':/app/data', image])
+            run(['docker', 'run', '-d', '--name', candidate, '--network', 'container:' + pg, '--user', '1000:1000', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m', '--env-file', source / 'probe.env', '-v', str(probe_data)+':/app/data', *policy_mount, image])
             for _ in range(90):
                 if subprocess.run(['docker', 'exec', candidate, 'wget', '-q', '-T', '2', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], capture_output=True).returncode == 0:
                     break
@@ -197,6 +234,8 @@ def deploy(version, source, prepare_only, phase):
             else:
                 raise ValueError('new or rollback application failed against the migrated clone')
             run(['docker', 'exec', candidate, 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/api/v1/settings/public'])
+            if policy_version and image == app_image:
+                verify_allowlist(candidate, policy_version)
             run(['docker', 'stop', '--time', '120', candidate])
             run(['docker', 'rm', candidate])
         if c.migrations(pg) != manifest['migrations']:
@@ -257,6 +296,9 @@ def deploy(version, source, prepare_only, phase):
         atomic(COMPOSE, target)
         run(compose() + ['up', '-d', '--no-deps', '--pull', 'never', 'app', 'docs'])
         health('http://127.0.0.1:8081/health')
+        if policy_version:
+            live_policy = (ALLOWLIST_DIR / 'hosts.json').read_bytes()
+            verify_allowlist(APP, hashlib.sha256(live_policy).hexdigest())
         marker.unlink(missing_ok=True)
         result = verify()
         if result['version'] != version:

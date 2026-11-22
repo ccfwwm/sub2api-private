@@ -155,6 +155,11 @@ security:
   #   - "True-Client-IP"
   #   - "X-CDN-Client-IP"
   url_allowlist:
+    # Optional absolute path to a JSON array of exact DNS hostnames. When set,
+    # mount the containing directory read-only and replace the file atomically.
+    # The first file must be valid at startup. Invalid updates retain the last
+    # applied list. A valid empty array denies all custom upstream hosts.
+    upstream_hosts_file: ""
     # Enable URL allowlist validation (disable to skip all URL checks)
     # 启用 URL 白名单验证（禁用则跳过所有 URL 检查）
     enabled: false
