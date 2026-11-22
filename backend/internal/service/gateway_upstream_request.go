@@ -1028,7 +1028,7 @@ func (s *GatewayService) validateUpstreamBaseURL(raw string) (string, error) {
 		return normalized, nil
 	}
 	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		AllowedHosts:     s.cfg.Security.URLAllowlist.EffectiveUpstreamHosts(),
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
 	})

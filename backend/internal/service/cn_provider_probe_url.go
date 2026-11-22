@@ -27,7 +27,7 @@ func cnValidateProbeURL(cfg *config.Config, raw string) (string, error) {
 	}
 	if cfg != nil && cfg.Security.URLAllowlist.Enabled {
 		normalized, err := urlvalidator.ValidateHTTPSURL(trimmed, urlvalidator.ValidationOptions{
-			AllowedHosts:     cfg.Security.URLAllowlist.UpstreamHosts,
+			AllowedHosts:     cfg.Security.URLAllowlist.EffectiveUpstreamHosts(),
 			RequireAllowlist: true,
 			AllowPrivate:     cfg.Security.URLAllowlist.AllowPrivateHosts,
 		})

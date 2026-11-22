@@ -9,5 +9,12 @@ var ProviderSet = wire.NewSet(
 
 // ProvideConfig 提供应用配置
 func ProvideConfig() (*Config, error) {
-	return LoadForBootstrap()
+	cfg, err := LoadForBootstrap()
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.Security.URLAllowlist.loadUpstreamAllowlist(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }

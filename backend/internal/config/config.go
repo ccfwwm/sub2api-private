@@ -897,6 +897,8 @@ func (c *Config) SetTrustForwardedIPForAPIKeyACL(enabled bool) {
 type URLAllowlistConfig struct {
 	Enabled           bool     `mapstructure:"enabled"`
 	UpstreamHosts     []string `mapstructure:"upstream_hosts"`
+	UpstreamHostsFile string   `mapstructure:"upstream_hosts_file"`
+	upstreamAllowlist *upstreamAllowlist
 	PricingHosts      []string `mapstructure:"pricing_hosts"`
 	CRSHosts          []string `mapstructure:"crs_hosts"`
 	AllowPrivateHosts bool     `mapstructure:"allow_private_hosts"`
@@ -2185,6 +2187,7 @@ func setDefaults() {
 
 	// Security
 	viper.SetDefault("security.url_allowlist.enabled", false)
+	viper.SetDefault("security.url_allowlist.upstream_hosts_file", "")
 	viper.SetDefault("security.url_allowlist.upstream_hosts", []string{
 		"api.openai.com",
 		"api.anthropic.com",
