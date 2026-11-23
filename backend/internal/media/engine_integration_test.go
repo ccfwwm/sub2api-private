@@ -96,6 +96,9 @@ func TestEngineRecoversArtifactsAndSettlementWithoutResubmission(t *testing.T) {
 	artifacts, err := s.Artifacts(ctx, task.ID)
 	require.NoError(t, err)
 	require.Len(t, artifacts, 1)
+	var storedSources int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(source_encrypted) FROM media_artifacts WHERE task_id=$1`, task.ID).Scan(&storedSources))
+	require.Zero(t, storedSources, "only the media file should contain the output payload")
 	require.Equal(t, []string{"1"}, task.Quantities["successful_outputs"])
 	b, f := moneyState(t, db, snap.Identity.UserID)
 	require.Equal(t, "9.40000000", b)
