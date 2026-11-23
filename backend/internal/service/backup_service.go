@@ -192,7 +192,8 @@ type BackupService struct {
 	shuttingDown  atomic.Bool        // 阻止新备份启动
 	bgCtx         context.Context    // 所有后台操作的 parent context
 	bgCancel      context.CancelFunc // 取消所有活跃后台操作
-	partSizeBytes int64              // 分卷阈值；生产使用 4 GiB，测试可注入更小值
+	tempDir       string
+	partSizeBytes int64 // 分卷阈值；生产使用 4 GiB，测试可注入更小值
 }
 
 func NewBackupService(
@@ -212,6 +213,7 @@ func NewBackupService(
 		dumper:                  dumper,
 		bgCtx:                   bgCtx,
 		bgCancel:                bgCancel,
+		tempDir:                 strings.TrimSpace(os.Getenv("SUB2API_BACKUP_TEMP_DIR")),
 		partSizeBytes:           defaultBackupPartSizeBytes,
 		instanceID:              uuid.NewString(),
 	}
@@ -815,12 +817,21 @@ func (s *BackupService) executeBackup(record *BackupRecord, objectStore BackupOb
 	}
 }
 
+func (s *BackupService) createTempFile(pattern string) (*os.File, error) {
+	if s.tempDir != "" {
+		if err := os.MkdirAll(s.tempDir, 0700); err != nil {
+			return nil, fmt.Errorf("prepare backup temporary directory: %w", err)
+		}
+	}
+	return os.CreateTemp(s.tempDir, pattern)
+}
+
 func (s *BackupService) createCompressedBackupFile(ctx context.Context) (string, int64, error) {
 	dumpReader, err := s.dumper.Dump(ctx)
 	if err != nil {
 		return "", 0, fmt.Errorf("pg_dump: %w", err)
 	}
-	archive, err := os.CreateTemp("", "sub2api-backup-*.sql.gz")
+	archive, err := s.createTempFile("sub2api-backup-*.sql.gz")
 	if err != nil {
 		_ = dumpReader.Close()
 		return "", 0, fmt.Errorf("create backup archive: %w", err)
@@ -1125,7 +1136,7 @@ func (s *BackupService) downloadBackupParts(ctx context.Context, objectStore Bac
 		}
 	}
 
-	archive, err := os.CreateTemp("", "sub2api-restore-*.sql.gz")
+	archive, err := s.createTempFile("sub2api-restore-*.sql.gz")
 	if err != nil {
 		return "", fmt.Errorf("create restore archive: %w", err)
 	}
