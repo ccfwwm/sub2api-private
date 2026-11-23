@@ -140,6 +140,15 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		}
 	}
 
+	if prefix := prefixAffinityInContext(ctx); prefix != nil && stickyAccountID == 0 && sessionHash != "" && cfg.LoadBatchEnabled && s.concurrencyService != nil && group != nil {
+		stickyAccountID = prefix.read(ctx, s.cache, groupID, group.Platform, requestedModel, s.accountRepo.GetByID, func(account *Account, rule PrefixAffinityRule) bool {
+			return account.GetMappedModel(requestedModel) == rule.UpstreamModel
+		})
+		if stickyAccountID > 0 {
+			stickySource = "prompt_prefix"
+		}
+	}
+
 	// [DEBUG-STICKY] 调度器入口日志
 	slog.Info("sticky.scheduler_entry",
 		"group_id", derefGroupID(groupID),

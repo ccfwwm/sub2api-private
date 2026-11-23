@@ -70,6 +70,18 @@ func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64
 	return c.rdb.Del(ctx, key).Err()
 }
 
+var compareAndSetPrefixAffinityScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if not current or current == ARGV[1] or current == ARGV[2] then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+end
+return 1
+`)
+
+func (c *gatewayCache) CompareAndSetPrefixAffinity(ctx context.Context, groupID int64, key string, previous, accountID int64, ttl time.Duration) error {
+	return compareAndSetPrefixAffinityScript.Run(ctx, c.rdb, []string{buildSessionKey(groupID, key)}, previous, accountID, ttl.Milliseconds()).Err()
+}
+
 var claimOpenAIResponsesSessionWindowScript = redis.NewScript(`
 local previous = redis.call('GET', KEYS[1])
 redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])

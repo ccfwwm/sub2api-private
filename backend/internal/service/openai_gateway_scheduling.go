@@ -1157,6 +1157,22 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			stickyAccountID = accountID
 		}
 	}
+	if prefix := prefixAffinityInContext(ctx); prefix != nil && stickyAccountID == 0 && sessionHash != "" && cfg.LoadBatchEnabled && s.concurrencyService != nil {
+		stickyAccountID = prefix.read(ctx, s.cache, groupID, platform, requestedModel, s.accountRepo.GetByID, func(account *Account, rule PrefixAffinityRule) bool {
+			mapped := resolveOpenAIForwardModel(account, requestedModel, "")
+			if normalizeOpenAIModelForUpstream(account, mapped) != rule.UpstreamModel {
+				return false
+			}
+			protocol := s.resolveUpstreamProtocolFor(ctx, account, APIProtocolChatCompletions, mapped)
+			switch rule.UpstreamEndpoint {
+			case "/v1/responses":
+				return protocol == APIProtocolResponses
+			case "/v1/chat/completions":
+				return protocol == APIProtocolChatCompletions
+			}
+			return false
+		})
+	}
 	ctx = withOpenAIImageSizeStickyAccount(ctx, stickyAccountID)
 	if s.concurrencyService == nil || !cfg.LoadBatchEnabled {
 		account, stickyHit, err := s.selectAccountForModelWithExclusionsStickyHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability, preferLowUpstreamRate)
@@ -1405,6 +1421,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if selectErr != nil {
 					return nil, true, selectErr
 				}
+				selection.preserveStickyBinding = stickySpillover
 				if sessionHash != "" && !stickySpillover && !gatewayProfitControlGateActive(ctx) {
 					_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
 				}
@@ -1444,6 +1461,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if selectErr != nil {
 					return nil, selectErr
 				}
+				selection.preserveStickyBinding = stickySpillover
 				if sessionHash != "" && !stickySpillover && !gatewayProfitControlGateActive(ctx) {
 					_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
 				}
@@ -1488,12 +1506,16 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 			continue
 		}
-		return s.newSelectionResult(ctx, fresh, false, nil, &AccountWaitPlan{
+		selection, err := s.newSelectionResult(ctx, fresh, false, nil, &AccountWaitPlan{
 			AccountID:      fresh.ID,
 			MaxConcurrency: fresh.Concurrency,
 			Timeout:        cfg.FallbackWaitTimeout,
 			MaxWaiting:     cfg.FallbackMaxWaiting,
 		})
+		if selection != nil {
+			selection.preserveStickyBinding = stickySpillover
+		}
+		return selection, err
 	}
 
 	if requireCompact && baseCandidateCount > 0 {

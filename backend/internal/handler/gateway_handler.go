@@ -312,6 +312,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	} else if apiKey.Group != nil {
 		platform = apiKey.Group.Platform
 	}
+	if apiKey.GroupID != nil && platform == service.PlatformAnthropic {
+		ctx := service.WithPrefixAffinity(c.Request.Context(), *apiKey.GroupID, apiKey.ID, platform,
+			"/v1/messages", reqModel, body, parsedReq.MetadataUserID != "" || service.ExtractClientSessionID(c) != "")
+		c.Request = c.Request.WithContext(ctx)
+		if parsedReq.MetadataUserID == "" {
+			sessionHash = h.gatewayService.ResolveNativeMessagesSessionHash(ctx, c, sessionHash, apiKey, reqModel)
+		}
+	}
 	sessionKey := sessionHash
 	if platform == service.PlatformGemini && sessionHash != "" {
 		sessionKey = "gemini:" + sessionHash
@@ -1140,6 +1148,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
+			h.gatewayService.RecordMessagesPrefixAffinity(c.Request.Context(), currentAPIKey.GroupID, account, result)
 			submitForwardUsage(result)
 			// 转发成功，会话槽保持既有空闲超时语义
 			upstreamServedSession = true
