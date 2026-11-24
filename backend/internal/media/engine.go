@@ -673,11 +673,7 @@ func (e *Engine) collectArtifacts(ctx context.Context, t StoredTask, artifacts [
 				return err
 			}
 		}
-		encrypted, err := e.Blobs.Seal([]byte(artifact.Source))
-		if err != nil {
-			return err
-		}
-		r, err := e.Store.DB.ExecContext(ctx, `INSERT INTO media_artifacts(task_id,key,media_type,mime_type,size_bytes,duration_seconds,content_hash,source_encrypted,file_path,available,filename) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,true,$11 FROM media_tasks WHERE id=$1 AND lease_epoch=$10 AND settlement_state IN ('held','pending_usage') ON CONFLICT(task_id,content_hash) DO UPDATE SET available=true`, t.ID, publicKey, artifact.Type, artifact.MIME, artifact.Size, artifact.Duration, hash, encrypted, path, t.Epoch, safeArtifactFilename(artifact.Filename))
+		r, err := e.Store.DB.ExecContext(ctx, `INSERT INTO media_artifacts(task_id,key,media_type,mime_type,size_bytes,duration_seconds,content_hash,file_path,available,filename) SELECT $1,$2,$3,$4,$5,$6,$7,$8,true,$10 FROM media_tasks WHERE id=$1 AND lease_epoch=$9 AND settlement_state IN ('held','pending_usage') ON CONFLICT(task_id,content_hash) DO UPDATE SET available=true`, t.ID, publicKey, artifact.Type, artifact.MIME, artifact.Size, artifact.Duration, hash, path, t.Epoch, safeArtifactFilename(artifact.Filename))
 		if err = requireOne(r, err); err != nil {
 			return err
 		}

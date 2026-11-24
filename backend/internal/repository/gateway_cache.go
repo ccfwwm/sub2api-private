@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -38,6 +39,17 @@ func buildOpenAIResponsesSessionWindowKey(groupID int64, sessionHash string) str
 
 func (c *gatewayCache) GetSessionAccountID(ctx context.Context, groupID int64, sessionHash string) (int64, error) {
 	key := buildSessionKey(groupID, sessionHash)
+	if service.TextRouteEnforced(ctx) {
+		snapshot, err := c.getTextStickySnapshot(ctx, key)
+		if err != nil {
+			return 0, err
+		}
+		service.ObserveTextSticky(ctx, key, snapshot)
+		if snapshot.AccountID == 0 {
+			return 0, service.ErrStickySessionNotFound
+		}
+		return snapshot.AccountID, nil
+	}
 	accountID, err := c.rdb.Get(ctx, key).Int64()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -50,12 +62,55 @@ func (c *gatewayCache) GetSessionAccountID(ctx context.Context, groupID int64, s
 
 func (c *gatewayCache) SetSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64, ttl time.Duration) error {
 	key := buildSessionKey(groupID, sessionHash)
-	return c.rdb.Set(ctx, key, accountID, ttl).Err()
+	if !service.TextRouteEnforced(ctx) {
+		_, err := c.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, key, accountID, ttl)
+			pipe.Set(ctx, key+":revision", uuid.NewString(), ttl)
+			return nil
+		})
+		return err
+	}
+	return service.StageTextSticky(ctx, key, accountID, func() (service.TextStickySnapshot, error) {
+		return c.getTextStickySnapshot(ctx, key)
+	}, func(writeCtx context.Context, expected service.TextStickySnapshot) error {
+		return commitTextStickyScript.Run(writeCtx, c.rdb, []string{key, key + ":revision"},
+			expected.AccountID, expected.Revision, accountID, uuid.NewString(), ttl.Milliseconds()).Err()
+	})
+}
+
+var commitTextStickyScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1]) or '0'
+local revision = redis.call('GET', KEYS[2]) or ''
+if current ~= ARGV[1] or revision ~= ARGV[2] then
+  return 0
+end
+redis.call('SET', KEYS[1], ARGV[3], 'PX', ARGV[5])
+redis.call('SET', KEYS[2], ARGV[4], 'PX', ARGV[5])
+return 1
+`)
+
+func (c *gatewayCache) getTextStickySnapshot(ctx context.Context, key string) (service.TextStickySnapshot, error) {
+	values, err := c.rdb.MGet(ctx, key, key+":revision").Result()
+	if err != nil {
+		return service.TextStickySnapshot{}, err
+	}
+	account, _ := values[0].(string)
+	revision, _ := values[1].(string)
+	var id int64
+	if account != "" {
+		id, err = strconv.ParseInt(account, 10, 64)
+	}
+	return service.TextStickySnapshot{AccountID: id, Revision: revision}, err
 }
 
 func (c *gatewayCache) RefreshSessionTTL(ctx context.Context, groupID int64, sessionHash string, ttl time.Duration) error {
 	key := buildSessionKey(groupID, sessionHash)
-	return c.rdb.Expire(ctx, key, ttl).Err()
+	_, err := c.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Expire(ctx, key, ttl)
+		pipe.Expire(ctx, key+":revision", ttl)
+		return nil
+	})
+	return err
 }
 
 // DeleteSessionAccountID 删除粘性会话与账号的绑定关系。
@@ -67,7 +122,23 @@ func (c *gatewayCache) RefreshSessionTTL(ctx context.Context, groupID int64, ses
 // or unschedulable), allowing subsequent requests to select a new available account.
 func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error {
 	key := buildSessionKey(groupID, sessionHash)
-	return c.rdb.Del(ctx, key).Err()
+	if service.TextRouteEnforced(ctx) {
+		service.InvalidateTextSticky(ctx, key)
+		return nil
+	}
+	return c.rdb.Del(ctx, key, key+":revision").Err()
+}
+
+var compareAndSetPrefixAffinityScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if not current or current == ARGV[1] or current == ARGV[2] then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+end
+return 1
+`)
+
+func (c *gatewayCache) CompareAndSetPrefixAffinity(ctx context.Context, groupID int64, key string, previous, accountID int64, ttl time.Duration) error {
+	return compareAndSetPrefixAffinityScript.Run(ctx, c.rdb, []string{buildSessionKey(groupID, key)}, previous, accountID, ttl.Milliseconds()).Err()
 }
 
 var claimOpenAIResponsesSessionWindowScript = redis.NewScript(`

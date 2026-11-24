@@ -428,6 +428,9 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 				return nil, err
 			}
 			recordGatewayStreamHeartbeat(c, written)
+			if h.pingFormat == SSEPingFormatComment {
+				service.RecordOpenAIQueueHeartbeat(c, written)
+			}
 			flusher.Flush()
 
 		case <-timer.C:

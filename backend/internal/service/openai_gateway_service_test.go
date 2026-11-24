@@ -1292,10 +1292,21 @@ func TestOpenAISelectAccountWithLoadAwareness_StickyCapacitySpilloverKeepsBindin
 	require.NotNil(t, selection.Account)
 	require.Equal(t, int64(2), selection.Account.ID, "capacity spillover should use the other account for this request")
 	require.True(t, selection.Acquired)
+	require.True(t, selection.PreservesStickyBinding())
 	require.Equal(t, int64(1), cache.sessionBindings["openai:"+sessionHash], "capacity spillover must not migrate the durable sticky binding")
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
+
+	concurrencyCache.acquireResults[2] = false
+	concurrencyCache.loadMap[2].LoadRate = 100
+	svc.concurrencyService = NewConcurrencyService(concurrencyCache)
+	selection, err = svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", map[int64]struct{}{})
+	require.NoError(t, err)
+	require.NotNil(t, selection.WaitPlan)
+	require.False(t, selection.Acquired)
+	require.True(t, selection.PreservesStickyBinding())
+	require.Equal(t, int64(1), cache.sessionBindings["openai:"+sessionHash])
 }
 
 func TestOpenAISelectAccountWithLoadAwareness_PrefersLowerLoad(t *testing.T) {

@@ -305,6 +305,9 @@ func (s *httpUpstreamService) upstreamDrainTimeout() time.Duration {
 // doUpstreamRequest owns cancellation for one attempt, without cancelling the
 // caller's context (which may be detached for billing or reused for retries).
 func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...time.Duration) (*http.Response, error) {
+	if !service.ClaimTextRouteSend(req.Context()) {
+		return nil, service.ErrTextRouteAttemptBudget
+	}
 	var drainTimeout time.Duration
 	if len(drainTimeouts) > 0 {
 		drainTimeout = drainTimeouts[0]
@@ -314,6 +317,14 @@ func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...
 	if err != nil {
 		cancel()
 		return resp, err
+	}
+	if service.IsTextInference(req.Context()) && resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		cancel()
+		_ = resp.Body.Close()
+		return service.TextInferenceRedirectErrorResponse(req), nil
+	}
+	if service.IsTextInference(req.Context()) {
+		resp.Header.Del("Location")
 	}
 	decompressResponseBody(resp)
 	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
@@ -370,6 +381,10 @@ func (s *httpUpstreamService) httpClientForUpstreamRequest(client *http.Client, 
 			return http.ErrUseLastResponse
 		}
 		return &clone
+	case service.IsTextInference(ctx):
+		clone := *client
+		clone.CheckRedirect = s.checkTextInferenceRedirect
+		return &clone
 	case service.HTTPUpstreamPublicHostsOnly(ctx) && client.CheckRedirect == nil:
 		clone := *client
 		clone.CheckRedirect = s.redirectChecker
@@ -377,6 +392,24 @@ func (s *httpUpstreamService) httpClientForUpstreamRequest(client *http.Client, 
 	default:
 		return client
 	}
+}
+
+func (s *httpUpstreamService) checkTextInferenceRedirect(req *http.Request, via []*http.Request) error {
+	// Permit one same-origin redirect that preserves the inference POST and its
+	// body. Reject redirects that would change credentials, destination or method.
+	if len(via) != 1 || req.Response == nil || req.URL.User != nil || req.Method != http.MethodPost ||
+		(req.Response.StatusCode != http.StatusTemporaryRedirect && req.Response.StatusCode != http.StatusPermanentRedirect) ||
+		!strings.EqualFold(req.URL.Scheme, via[0].URL.Scheme) ||
+		!strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+		return http.ErrUseLastResponse
+	}
+	if err := s.redirectChecker(req, via); err != nil {
+		return err
+	}
+	if !service.ClaimTextRouteSend(req.Context()) {
+		return http.ErrUseLastResponse
+	}
+	return nil
 }
 
 // grokAccessDeniedFallbackTransport preserves the subscription CLI proxy as
@@ -415,6 +448,9 @@ func (t *grokAccessDeniedFallbackTransport) RoundTrip(req *http.Request) (*http.
 
 	fallbackReq, err := newGrokOfficialAPIFallbackRequest(req)
 	if err != nil {
+		return resp, nil
+	}
+	if !service.ClaimTextRouteSend(req.Context()) {
 		return resp, nil
 	}
 	fallbackResp, fallbackErr := t.base.RoundTrip(fallbackReq)
