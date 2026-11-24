@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
@@ -45,7 +46,9 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 				caps = append(caps, cap)
 			}
 			calls := []string{}
+			var callsMu sync.Mutex
 			var taskID string
+			mode := ""
 			png := pngFixture(t)
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 				var body map[string]any
@@ -53,12 +56,25 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 					t.Error(err)
 				}
 				model := fmt.Sprint(body["model"])
+				callsMu.Lock()
 				calls = append(calls, model)
-				if request.Header.Get("Idempotency-Key") != taskID {
+				currentMode := mode
+				currentTaskID := taskID
+				callsMu.Unlock()
+				if request.Header.Get("Idempotency-Key") != currentTaskID {
 					t.Error("task idempotency key changed")
 				}
 				w.Header().Set("Content-Type", "application/json")
-				if model != "upstream-model-2" {
+				switch currentMode {
+				case "uncertain":
+					w.WriteHeader(http.StatusGatewayTimeout)
+					_, _ = fmt.Fprint(w, `{}`)
+					return
+				case "accepted_failure":
+					_, _ = fmt.Fprint(w, `{"id":"failed-after-acceptance","status":"failed"}`)
+					return
+				}
+				if model != "upstream-model-2" || currentMode == "exhausted" {
 					w.WriteHeader(http.StatusTooManyRequests)
 					_, _ = fmt.Fprint(w, `{"error":{"code":"fail_to_fetch_task","message":"upstream capacity exhausted"}}`)
 					return
@@ -103,7 +119,9 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			require.NotNil(t, selected)
 			task, err := engine.Create(ctx, *selected, operation, input, nil, snap.Identity, "single-reserve")
 			require.NoError(t, err)
+			callsMu.Lock()
 			taskID = task.ID
+			callsMu.Unlock()
 			require.Len(t, task.Snapshot.Routing.Candidates, 3, "compatible accounts should be frozen at admission")
 			require.Equal(t, accounts[0], task.AccountID)
 			first, err := store.ClaimTask(ctx, task.ID)
@@ -128,7 +146,10 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			require.NoError(t, engine.Process(ctx, *next))
 			task, err = store.GetTask(ctx, task.ID)
 			require.NoError(t, err)
-			require.Equal(t, []string{"upstream-model-0", "upstream-model-2"}, calls)
+			callsMu.Lock()
+			sentModels := append([]string(nil), calls...)
+			callsMu.Unlock()
+			require.Equal(t, []string{"upstream-model-0", "upstream-model-2"}, sentModels)
 			require.Len(t, task.Snapshot.Routing.Attempts, 2)
 			var reserves int
 			require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_ledger_entries WHERE task_id=$1 AND kind='reserve'`, task.ID).Scan(&reserves))
@@ -139,6 +160,44 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			} else {
 				require.Equal(t, "in_progress", task.State)
 				require.Equal(t, "backup-job", task.UpstreamID)
+			}
+			if operation != "video" {
+				return
+			}
+			for _, scenario := range []struct {
+				mode, terminal, settlement string
+				attempts                   int
+			}{
+				{"uncertain", "unknown", "manual_review", 1},
+				{"accepted_failure", "failed", "released", 1},
+				{"exhausted", "failed", "released", 3},
+			} {
+				callsMu.Lock()
+				mode, calls = scenario.mode, nil
+				callsMu.Unlock()
+				fresh, createErr := engine.Create(ctx, *selected, operation, input, nil, snap.Identity, scenario.mode)
+				require.NoError(t, createErr)
+				callsMu.Lock()
+				taskID = fresh.ID
+				callsMu.Unlock()
+				for range scenario.attempts {
+					leased, claimErr := store.ClaimTask(ctx, fresh.ID)
+					require.NoError(t, claimErr)
+					require.NotNil(t, leased)
+					require.NoError(t, engine.Process(ctx, *leased))
+				}
+				fresh, err = store.GetTask(ctx, fresh.ID)
+				require.NoError(t, err)
+				require.Equal(t, scenario.terminal, fresh.State)
+				require.Equal(t, scenario.settlement, fresh.Settlement)
+				require.Len(t, fresh.Snapshot.Routing.Attempts, scenario.attempts)
+				if scenario.mode == "accepted_failure" {
+					require.Equal(t, "failed-after-acceptance", fresh.UpstreamID)
+				}
+				callsMu.Lock()
+				sent := len(calls)
+				callsMu.Unlock()
+				require.Equal(t, scenario.attempts, sent)
 			}
 		})
 	}
