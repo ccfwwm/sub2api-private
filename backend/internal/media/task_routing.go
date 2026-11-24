@@ -92,11 +92,11 @@ func sameSale(first, candidate Snapshot) bool {
 }
 
 func compatibleOutput(first, candidate Capability) bool {
-	if first.MediaType != candidate.MediaType || !sameJSON(first.OutputFormats, candidate.OutputFormats) {
+	if first.MediaType != candidate.MediaType {
 		return false
 	}
 	if first.Template == nil || candidate.Template == nil {
-		return first.Template == nil && candidate.Template == nil
+		return first.Template == nil && candidate.Template == nil && sameJSON(first.OutputFormats, candidate.OutputFormats)
 	}
 	return canonicalMediaMIME(first.Template.Response.MIME) == canonicalMediaMIME(candidate.Template.Response.MIME) &&
 		(first.Template.Response.PCMToWAV != nil) == (candidate.Template.Response.PCMToWAV != nil)
@@ -220,6 +220,13 @@ func fitsMediaSpecifications(cap Capability, request Request) bool {
 	} {
 		if value := stringValue(request.Conditions[key]); value != "" && len(allowed) > 0 &&
 			!slices.ContainsFunc(allowed, func(candidate string) bool { return strings.EqualFold(candidate, value) }) {
+			return false
+		}
+	}
+	if format := strings.ToLower(stringValue(request.Conditions["output_format"])); format != "" &&
+		len(cap.OutputFormats) == 0 && cap.Template != nil {
+		mime := canonicalMediaMIME(cap.MediaType + "/" + format)
+		if mime != canonicalMediaMIME(cap.Template.Response.MIME) {
 			return false
 		}
 	}
