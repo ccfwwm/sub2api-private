@@ -52,7 +52,7 @@ func loadPrefixAffinityRules() []PrefixAffinityRule {
 		return prefixAffinityRules.rules
 	}
 	prefixAffinityRules.refreshAt = now.Add(2 * time.Second)
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G703 -- The path comes from an operator-configured environment variable.
 	var rules []PrefixAffinityRule
 	if err != nil || json.Unmarshal(raw, &rules) != nil {
 		prefixAffinityRules.rules = nil
