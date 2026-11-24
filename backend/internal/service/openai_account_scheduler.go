@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"container/heap"
 	"context"
 	"errors"
@@ -1458,7 +1459,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			continue
 		}
 		if !textRouteCandidateAllowed(ctx, account, req.RequestedModel) || s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel) {
-			filterStats.exclude("runtime_blocked")
+			filterStats.exclude(cmp.Or(nativeMediaRouteBlockReason(ctx, account), "runtime_blocked"))
 			continue
 		}
 		// require_privacy_set is a group-scoped eligibility gate. Do not mutate the
@@ -2179,6 +2180,12 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	previousResponseCanMove bool,
 	useUpstreamTokenCost bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	if preferred, ok := preferIndependentNativeMedia(ctx); ok {
+		selection, decision, err := s.selectAccountWithSchedulerBySize(preferred, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) && !errors.Is(err, ErrNoAvailableCompactAccounts) {
+			return selection, decision, err
+		}
+	}
 	if preferred, ok := preferIndependentTextRoute(ctx, excludedIDs); ok {
 		selection, decision, err := s.selectAccountWithSchedulerBySize(preferred, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
 		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) && !errors.Is(err, ErrNoAvailableCompactAccounts) {

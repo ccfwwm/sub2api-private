@@ -39,6 +39,7 @@ type Engine struct {
 	Adapter        *Adapter
 	Lookup         AccountLookup
 	Invalidate     CacheInvalidate
+	Routes         *RoutePolicy
 	// BackgroundWorkers bounds simultaneous polls, recovery and artifact work.
 	// New submissions use the account budget and never wait for this pool.
 	BackgroundWorkers int
@@ -265,7 +266,6 @@ func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, iden
 			return Snapshot{}, 0, Calculation{}, fail(409, "estimate_configuration_changed", "Template, binding or account configuration changed; refresh estimate")
 		}
 	}
-	identity.Multiplier = EffectiveMultiplier(cap, identity)
 	var account Account
 	for _, id := range cap.AccountIDs {
 		a, err := e.Lookup(id, identity.GroupID)
@@ -277,34 +277,40 @@ func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, iden
 	if account.ID == 0 {
 		return Snapshot{}, 0, Calculation{}, fail(503, "channel_unavailable", "No configured account is currently eligible")
 	}
-	sale, err := ResolvePrice(cards, cap, identity, req.Operation, false, account.ID, time.Now())
+	snapshot, quote, err := snapshotForAccount(cards, cap, req, identity, account, time.Now())
+	return snapshot, account.ID, quote, err
+}
+
+func snapshotForAccount(cards []PriceCard, cap Capability, req Request, identity Identity, account Account, now time.Time) (Snapshot, Calculation, error) {
+	identity.Multiplier = EffectiveMultiplier(cap, identity)
+	sale, err := ResolvePrice(cards, cap, identity, req.Operation, false, account.ID, now)
 	if err != nil {
-		return Snapshot{}, 0, Calculation{}, err
+		return Snapshot{}, Calculation{}, err
 	}
 	if sale.TimeMultiplier != "" {
 		a, er := decimal.NewFromString(identity.TimeMultiplier)
 		if er != nil {
-			return Snapshot{}, 0, Calculation{}, er
+			return Snapshot{}, Calculation{}, er
 		}
 		b, er := decimal.NewFromString(sale.TimeMultiplier)
 		if er != nil {
-			return Snapshot{}, 0, Calculation{}, er
+			return Snapshot{}, Calculation{}, er
 		}
 		identity.TimeMultiplier = a.Mul(b).String()
 	}
 	rule, err := MatchRule(sale, req.Conditions)
 	if err != nil {
-		return Snapshot{}, 0, Calculation{}, err
+		return Snapshot{}, Calculation{}, err
 	}
 	quote, maximum, err := Quote(sale, rule, req, identity)
 	if err != nil {
-		return Snapshot{}, 0, quote, err
+		return Snapshot{}, quote, err
 	}
 	snapshot := Snapshot{Capability: cap, Sale: sale, SaleRule: rule, Identity: identity, Request: req, Maximum: maximum, CostMultiplier: account.CostMultiplier}
 	if snapshot.CostMultiplier == "" {
 		snapshot.CostMultiplier = "1"
 	}
-	cost, err := ResolvePrice(cards, cap, identity, req.Operation, true, account.ID, time.Now())
+	cost, err := ResolvePrice(cards, cap, identity, req.Operation, true, account.ID, now)
 	if err == nil {
 		costRule, err := MatchRule(cost, req.Conditions)
 		if err == nil {
@@ -312,7 +318,7 @@ func (e *Engine) Snapshot(ctx context.Context, cap Capability, req Request, iden
 			snapshot.CostRule = &costRule
 		}
 	}
-	return snapshot, account.ID, quote, nil
+	return snapshot, quote, nil
 }
 
 // EffectiveMultiplier is shared by estimates, task snapshots and the simulator.
@@ -374,6 +380,9 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 		// another supplier job; the worker owns all new submissions.
 		return *previous, nil
 	}
+	if e.Routes.Enabled(identity.GroupID) {
+		return e.createRoutedTask(ctx, cap, operation, p, uploads, identity, idem, hash)
+	}
 	req, err := e.PrepareRequest(ctx, cap, operation, p, uploads)
 	if err != nil {
 		return StoredTask{}, err
@@ -382,8 +391,11 @@ func (e *Engine) Create(ctx context.Context, cap Capability, operation string, p
 	if err != nil {
 		return StoredTask{}, err
 	}
-	id := NewTaskID()
-	path, err := e.Blobs.WriteJSON(id, "request", req)
+	return e.persistTask(ctx, NewTaskID(), "request", snapshot, req, accountID, idem, hash)
+}
+
+func (e *Engine) persistTask(ctx context.Context, id, blob string, snapshot Snapshot, req Request, accountID int64, idem, hash string) (StoredTask, error) {
+	path, err := e.Blobs.WriteJSON(id, blob, req)
 	if err != nil {
 		return StoredTask{}, err
 	}
@@ -435,6 +447,10 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 	if t.State == "failed" {
 		return e.settleTask(ctx, t, "failure")
 	}
+	if t.State == "submitting" && t.SubmissionClaim && !t.RecoveryClaim &&
+		t.Snapshot.Routing != nil && e.Routes.Enabled(t.Identity.GroupID) {
+		return e.processRoutedSubmission(ctx, t)
+	}
 	account, err := e.Lookup(t.AccountID, t.Identity.GroupID)
 	if err != nil {
 		return err
@@ -485,6 +501,10 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 	} else {
 		return e.deferTask(ctx, t, "Acceptance requires operator reconciliation")
 	}
+	return e.completeProcessing(ctx, t, account, result, err)
+}
+
+func (e *Engine) completeProcessing(ctx context.Context, t StoredTask, account Account, result UpstreamResult, err error) error {
 	if err != nil {
 		return e.deferTask(ctx, t, "Temporary upstream query failure")
 	}

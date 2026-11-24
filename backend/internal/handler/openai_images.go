@@ -157,6 +157,11 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)
 	requestCtx := service.WithOpenAIImageSizeRouting(service.WithOpenAIImagesEndpoint(service.WithOpenAIImageGenerationIntent(c.Request.Context())), parsed.Size)
+	operation := "image"
+	if strings.HasSuffix(parsed.Endpoint, "/edits") {
+		operation = "image_edit"
+	}
+	requestCtx, mediaRouting := service.StartNativeMediaRouting(requestCtx, derefGroupID(apiKey.GroupID), operation, routingModel)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -239,6 +244,9 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		reqLog.Debug("openai.images.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
+		if mediaRouting != nil && !selection.Acquired && selection.WaitPlan != nil {
+			reqLog.Info("native_media_account_concurrency_wait", zap.Int64("account_id", account.ID))
+		}
 		accountReleaseFunc, slotResult := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, parsed.Stream, &streamStarted, reqLog)
 		if slotResult == openAISlotAcquireProfitVetoed {
 			// Images 调度不装利润门，此分支实际不可达；防御性排除重选并受同一否决上限约束。
@@ -249,7 +257,18 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			continue
 		}
 		if slotResult != openAISlotAcquireOK {
+			if mediaRouting != nil {
+				reqLog.Warn("native_media_account_slot_unavailable", zap.Int64("account_id", account.ID))
+			}
 			return
+		}
+		finishMedia, admitted := mediaRouting.Begin(requestCtx, account)
+		if !admitted {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			failedAccountIDs[account.ID] = struct{}{}
+			continue
 		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
@@ -267,6 +286,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			}()
 			return h.gatewayService.ForwardImages(requestCtx, c, account, body, parsed, channelMapping.MappedModel)
 		}()
+		finishMedia(err == nil && result != nil, err)
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
 		responseLatencyMs := forwardDurationMs
@@ -324,7 +344,11 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 						)
 						return
 					}
-					if failoverErr.RetryableOnSameAccount {
+					if !mediaRouting.CanSwitch(failoverErr) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
+					if mediaRouting == nil && failoverErr.RetryableOnSameAccount {
 						retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
 						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
 							sameAccountRetryCount[account.ID]++

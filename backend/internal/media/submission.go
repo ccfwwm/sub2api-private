@@ -165,11 +165,27 @@ func safeReviewValue(value any, secrets []string, depth int, preserveMedia bool)
 
 // Historical tasks have no receipt; never infer outgoing bytes from their input snapshot.
 func (e *Engine) ReadSubmission(id string) *Submission {
+	return e.readSubmission(id, "submission")
+}
+
+func (e *Engine) ReadTaskSubmission(task StoredTask) *Submission {
+	if route := task.Snapshot.Routing; route != nil && len(route.Attempts) > 0 {
+		attempt := route.Attempts[len(route.Attempts)-1]
+		if attempt.AccountID == task.AccountID {
+			if receipt := e.readSubmission(task.ID, fmt.Sprintf("submission-%d", attempt.Epoch)); receipt != nil {
+				return receipt
+			}
+		}
+	}
+	return e.ReadSubmission(task.ID)
+}
+
+func (e *Engine) readSubmission(id, key string) *Submission {
 	if e.Blobs == nil || !strings.HasPrefix(id, "mt_") || strings.ContainsAny(id, "/\\.\x00") {
 		return nil
 	}
 	var receipt Submission
-	if e.Blobs.ReadJSON(filepath.Join(e.Blobs.Root, id, "submission"), &receipt) != nil {
+	if e.Blobs.ReadJSON(filepath.Join(e.Blobs.Root, id, key), &receipt) != nil {
 		return nil
 	}
 	return &receipt

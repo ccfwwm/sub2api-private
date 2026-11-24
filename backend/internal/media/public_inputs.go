@@ -45,7 +45,7 @@ func (e *Engine) PublicInputs(t StoredTask) *PublicInputSummary {
 		return nil
 	}
 	result := InputSummary(req)
-	if receipt := e.ReadSubmission(t.ID); receipt != nil {
+	if receipt := e.ReadTaskSubmission(t); receipt != nil {
 		result.Stage = receipt.Stage
 	} else {
 		result.Stage = "unrecorded"

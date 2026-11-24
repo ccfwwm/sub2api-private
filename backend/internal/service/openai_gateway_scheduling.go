@@ -4,6 +4,7 @@ package service
 // 负载感知调度、配额自动暂停判定、并发槽位获取。仅做代码搬迁，无任何行为变更。
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1312,7 +1313,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			continue
 		}
 		if !textRouteCandidateAllowed(ctx, acc, requestedModel) || s.isOpenAIAccountRequestRuntimeBlocked(acc, requestedModel) {
-			filterStats.exclude("runtime_blocked")
+			filterStats.exclude(cmp.Or(nativeMediaRouteBlockReason(ctx, acc), "runtime_blocked"))
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel, requireCompact) {

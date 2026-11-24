@@ -573,6 +573,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			return
 		}
 	}
+	var mediaRouting *service.NativeMediaRouting
+	if cachedContentBinding == nil && service.IsGeminiImageGenerationIntent(body, modelName) {
+		ctx, route := service.StartNativeMediaRouting(c.Request.Context(), derefGroupID(apiKey.GroupID), "gemini_image", modelName)
+		if route != nil {
+			mediaRouting = route
+			c.Request = c.Request.WithContext(service.WithTextInference(ctx, false))
+		}
+	}
 	prepareTextRoute(c, h.cfg, sessionKey, body)
 	fs := NewFailoverState(maxAccountSwitches, hasBoundSession)
 
@@ -621,6 +629,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 					message = "No available Gemini accounts: " + err.Error()
 				}
 				googleError(c, cls.Status, message)
+				return
+			}
+			if mediaRouting != nil {
+				if fs.LastFailoverErr == nil {
+					googleError(c, http.StatusServiceUnavailable, "No available Gemini media accounts")
+				} else {
+					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
+				}
 				return
 			}
 			action := fs.HandleSelectionExhausted(c.Request.Context())
@@ -743,6 +759,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 		// 账号槽位/等待计数需要在超时或断开时安全回收
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+		finishMedia, mediaAdmitted := mediaRouting.Begin(c.Request.Context(), account)
+		if !mediaAdmitted {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			fs.FailedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 
 		// 5) forward (根据平台分流)
 		textAttempt, textAdmitted := service.BeginTextRouteAttempt(c.Request.Context(), account, modelName)
@@ -753,6 +777,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			fs.FailedAccountIDs[account.ID] = struct{}{}
 			continue
 		}
+		writerSizeBeforeForward := c.Writer.Size()
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -774,6 +799,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		} else {
 			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
 		}
+		finishMedia(err == nil && result != nil && !result.ClientDisconnect, err)
 		finishTextRoute(c, textAttempt, err == nil && result != nil && !result.ClientDisconnect, err)
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
@@ -781,6 +807,15 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				if mediaRouting != nil {
+					if !mediaRouting.CanSwitch(failoverErr) || c.Writer.Size() != writerSizeBeforeForward {
+						h.handleGeminiFailoverExhausted(c, failoverErr)
+						return
+					}
+					next := *failoverErr
+					next.RetryableOnSameAccount = false
+					failoverErr = &next
+				}
 				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch failoverAction {
 				case FailoverContinue:

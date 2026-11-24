@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -158,6 +159,8 @@ func sameMediaOrigin(a, b *url.URL) bool {
 
 // Every redirect and DNS resolution is checked, including download domains.
 // Authorization is only supplied to the configured origin, never to a CDN.
+var errMediaOriginUnreachable = errors.New("media origin unreachable")
+
 func SafeClient(allowPrivate bool) *http.Client {
 	dialer := &net.Dialer{Timeout: 15 * time.Second}
 	transport := &http.Transport{Proxy: nil, ResponseHeaderTimeout: 150 * time.Second, MaxIdleConns: 512, MaxIdleConnsPerHost: 128, IdleConnTimeout: 60 * time.Second,
@@ -181,7 +184,7 @@ func SafeClient(allowPrivate bool) *http.Client {
 					return conn, nil
 				}
 			}
-			return nil, fmt.Errorf("media origin unreachable")
+			return nil, errMediaOriginUnreachable
 		}}
 	return &http.Client{Transport: transport, Timeout: 180 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) > 5 {

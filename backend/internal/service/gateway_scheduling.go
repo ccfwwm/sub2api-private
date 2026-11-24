@@ -99,6 +99,12 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 // metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 // sub2apiUserID: 系统用户 ID，用于二维亲和调度
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+	if preferred, ok := preferIndependentNativeMedia(ctx); ok {
+		selection, err := s.selectAccountWithLoadAwareness(preferred, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) {
+			return selection, err
+		}
+	}
 	if preferred, ok := preferIndependentTextRoute(ctx, excludedIDs); ok {
 		selection, err := s.selectAccountWithLoadAwareness(preferred, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
 		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) {

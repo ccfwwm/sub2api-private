@@ -173,7 +173,7 @@ func textRouteBlocked(ctx context.Context, account *Account, model string) bool 
 }
 
 func textRouteCandidateAllowed(ctx context.Context, account *Account, model string) bool {
-	if account == nil || textRouteBlocked(ctx, account, model) {
+	if account == nil || !mediaRouteCandidateAllowed(ctx, account) || textRouteBlocked(ctx, account, model) {
 		return false
 	}
 	route := textRouteFromContext(ctx)

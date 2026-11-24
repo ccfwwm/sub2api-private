@@ -17,6 +17,7 @@ func (h *MediaHandler) MarkBillingDelegate(c *gin.Context) {
 	if h == nil || c.Request.Method != http.MethodPost {
 		return
 	}
+	h.AttachRouting(c)
 	operation := ""
 	path := c.Request.URL.Path
 	switch {
@@ -56,6 +57,12 @@ func (h *MediaHandler) MarkBillingDelegate(c *gin.Context) {
 		cap, err := h.Engine.Capability(c.Request.Context(), model, operation, media.Identity{GroupID: key.Group.ID})
 		return err == nil && cap != nil
 	})
+}
+
+func (h *MediaHandler) AttachRouting(c *gin.Context) {
+	if h != nil && h.Engine != nil && h.Engine.Routes != nil {
+		c.Request = c.Request.WithContext(service.WithMediaRoutePolicy(c.Request.Context(), h.Engine.Routes))
+	}
 }
 func (h *MediaHandler) Models(c *gin.Context, next gin.HandlerFunc) {
 	if h == nil {

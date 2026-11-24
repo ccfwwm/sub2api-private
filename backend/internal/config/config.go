@@ -1052,8 +1052,10 @@ const (
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
 	// TextRoutingMode controls the shared text routing policy (off, observe, enforce).
-	TextRoutingMode    string `mapstructure:"text_routing_mode"`
-	TextRoutingPercent int    `mapstructure:"text_routing_percent"`
+	TextRoutingMode       string `mapstructure:"text_routing_mode"`
+	TextRoutingPercent    int    `mapstructure:"text_routing_percent"`
+	MediaFailoverMode     string `mapstructure:"media_failover_mode"`
+	MediaFailoverGroupIDs string `mapstructure:"media_failover_group_ids"`
 	// MinOutputTokens is the minimum max_output_tokens used when
 	// converting Chat Completions or Anthropic requests to Responses.
 	MinOutputTokens int `mapstructure:"min_output_tokens"`
@@ -2603,6 +2605,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_http2.enabled", true)
 	viper.SetDefault("gateway.text_routing_mode", "off")
 	viper.SetDefault("gateway.text_routing_percent", 100)
+	viper.SetDefault("gateway.media_failover_mode", "off")
+	viper.SetDefault("gateway.media_failover_group_ids", "")
 	viper.SetDefault("gateway.openai_http2.allow_proxy_fallback_to_http1", true)
 	viper.SetDefault("gateway.openai_http2.fallback_error_threshold", 2)
 	viper.SetDefault("gateway.openai_http2.fallback_window_seconds", 60)
