@@ -22,7 +22,7 @@ type NativeMediaRouting struct {
 	group     int64
 	operation string
 	model     string
-	origin    string
+	origins   map[string]bool
 	sends     int
 }
 
@@ -31,7 +31,7 @@ func StartNativeMediaRouting(ctx context.Context, group int64, operation, model 
 	if !policy.Enabled(group) {
 		return ctx, nil
 	}
-	route := &NativeMediaRouting{policy: policy, group: group, operation: operation, model: model}
+	route := &NativeMediaRouting{policy: policy, group: group, operation: operation, model: model, origins: make(map[string]bool)}
 	return context.WithValue(ctx, nativeMediaSelectionKey{}, route), route
 }
 
@@ -61,7 +61,7 @@ func nativeMediaRouteBlockReason(ctx context.Context, account *Account) string {
 		return ""
 	}
 	target := route.target(account)
-	if ctx.Value(independentNativeMediaKey{}) == true && route.origin == target.Origin {
+	if ctx.Value(independentNativeMediaKey{}) == true && route.origins[target.Origin] {
 		return "media_same_origin"
 	}
 	if route.policy.RetryIn(ctx, target) > 0 {
@@ -72,7 +72,7 @@ func nativeMediaRouteBlockReason(ctx context.Context, account *Account) string {
 
 func preferIndependentNativeMedia(ctx context.Context) (context.Context, bool) {
 	route, _ := ctx.Value(nativeMediaSelectionKey{}).(*NativeMediaRouting)
-	if route == nil || route.origin == "" {
+	if route == nil || len(route.origins) == 0 {
 		return ctx, false
 	}
 	return context.WithValue(ctx, independentNativeMediaKey{}, true), true
@@ -99,7 +99,7 @@ func (r *NativeMediaRouting) Begin(ctx context.Context, account *Account) (finis
 		if errors.As(err, &failure) {
 			scope = nativeMediaRejection(failure)
 			if scope != "" {
-				r.origin = target.Origin
+				r.origins[target.Origin] = true
 				delay = media.MediaRetryAfter(failure.ResponseHeaders, failure.ResponseBody, time.Now())
 			}
 		}

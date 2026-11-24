@@ -574,7 +574,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 	}
 	var mediaRouting *service.NativeMediaRouting
-	if cachedContentBinding == nil && service.IsGeminiImageGenerationIntent(body, modelName) {
+	if cachedContentBinding == nil && action != "countTokens" && service.IsGeminiImageGenerationIntent(body, modelName) {
 		ctx, route := service.StartNativeMediaRouting(c.Request.Context(), derefGroupID(apiKey.GroupID), "gemini_image", modelName)
 		if route != nil {
 			mediaRouting = route
@@ -808,7 +808,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				if mediaRouting != nil {
-					if !mediaRouting.CanSwitch(failoverErr) || c.Writer.Size() != writerSizeBeforeForward {
+					if !mediaRouting.CanSwitch(failoverErr) || c.Writer.Size() != writerSizeBeforeForward || result != nil && result.ImageCount > 0 {
 						h.handleGeminiFailoverExhausted(c, failoverErr)
 						return
 					}

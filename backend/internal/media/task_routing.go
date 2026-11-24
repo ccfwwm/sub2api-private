@@ -360,8 +360,23 @@ func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current
 			return err
 		}
 		routes := slices.Clone(routing.Candidates)
+		triedOrigins := map[string]bool{current.Origin: true}
+		for _, attempt := range routing.Attempts {
+			for _, route := range routes {
+				if route.AccountID == attempt.AccountID {
+					triedOrigins[route.Origin] = true
+					break
+				}
+			}
+		}
 		slices.SortStableFunc(routes, func(a, b SubmissionRoute) int {
-			return routeOriginRank(a, current) - routeOriginRank(b, current)
+			if triedOrigins[a.Origin] == triedOrigins[b.Origin] {
+				return 0
+			}
+			if triedOrigins[a.Origin] {
+				return 1
+			}
+			return -1
 		})
 		for _, route := range routes {
 			if route.AccountID == current.AccountID || slices.ContainsFunc(routing.Attempts, func(attempt SubmissionAttempt) bool {
@@ -407,11 +422,4 @@ func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current
 	slog.InfoContext(ctx, "media_submission_routes_exhausted", "task_id", task.ID, "group_id", task.Identity.GroupID,
 		"account_id", task.AccountID, "attempts", len(routing.Attempts), "upstream_status", result.UpstreamStatusCode)
 	return e.completeProcessing(ctx, task, Account{}, result, nil)
-}
-
-func routeOriginRank(route, current SubmissionRoute) int {
-	if route.Origin == current.Origin {
-		return 1
-	}
-	return 0
 }
