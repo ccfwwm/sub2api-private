@@ -253,6 +253,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	responsesSemanticOutputSeen := false
 	capacityFailoverSuppressedLogged := false
 	failedMessage := ""
+	reportedHTTP2 := false
 	clientOutputStarted := false
 	codexFailureTerminal := account != nil && account.IsOpenAIOAuthLike()
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
@@ -409,10 +410,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			if openAIStreamClientOutputStarted(c, clientOutputStarted) && !clientDisconnected {
 				s.recordOpenAIProxyStreamDisconnect(account, errors.New("stream ended before terminal event"), upstreamRequestID)
 			}
-			return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
+			return resultWithUsage(), markTextRouteStreamFailure(fmt.Errorf("stream usage incomplete: missing terminal event"))
 		}
 		if sawFailedEvent {
-			return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage)
+			return resultWithUsage(), openAIResponsesTerminalError(failedMessage, reportedHTTP2)
 		}
 		logOpenAISuccessMissingUsage(ctx, c, account, resp, usage, terminalEventType, clientDisconnected)
 		return resultWithUsage(), nil
@@ -483,7 +484,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		s.recordOpenAIProxyStreamDisconnect(account, scanErr, upstreamRequestID)
 		code, message := classifyOpenAIUpstreamStreamReadError(scanErr)
 		sendErrorEvent(code, message)
-		return resultWithUsage(), fmt.Errorf("stream read error: %w", scanErr), true
+		return resultWithUsage(), fmt.Errorf("stream read error: %w", newOpenAIUpstreamStreamReadError(scanErr)), true
 	}
 	// Upstream keepalive events bypass the first-output stage the same way the
 	// comment keepalive does: Codex resets its stream idle timer only on parsed
@@ -574,6 +575,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 					sawResponseFailed = true
 				}
 				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
+				reportedHTTP2 = isOpenAIReportedHTTP2StreamFailure(dataBytes, failedMessage)
 				if failedMessage == "" {
 					failedMessage = "Upstream response failed"
 				}
@@ -977,7 +979,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 
 		case <-intervalCh:
 			if failureDelivered {
-				return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage)
+				return resultWithUsage(), openAIResponsesTerminalError(failedMessage, reportedHTTP2)
 			}
 			lastRead := time.Unix(0, atomic.LoadInt64(&lastReadAt))
 			if remaining := streamInterval - time.Since(lastRead); remaining > 0 {

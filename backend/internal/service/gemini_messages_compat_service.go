@@ -2236,7 +2236,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					finished:         finishReason != "",
 				}, nil
 			}
-			return nil, fmt.Errorf("stream read error: %w", err)
+			return nil, markTextRouteStreamFailure(fmt.Errorf("stream read error: %w", err))
 		}
 
 		if !strings.HasPrefix(line, "data:") {

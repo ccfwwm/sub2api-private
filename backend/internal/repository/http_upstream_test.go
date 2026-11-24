@@ -51,6 +51,75 @@ func TestHTTPUpstreamDoCanDisableRedirectsPerRequest(t *testing.T) {
 	require.Zero(t, redirectedCalls.Load())
 }
 
+func TestTextInferenceRedirectsStayOnGateway(t *testing.T) {
+	var externalCalls atomic.Int64
+	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		externalCalls.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(external.Close)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/move":
+			http.Redirect(w, r, "/responses", http.StatusTemporaryRedirect)
+		case "/external":
+			http.Redirect(w, r, external.URL, http.StatusTemporaryRedirect)
+		case "/get":
+			http.Redirect(w, r, "/responses", http.StatusFound)
+		default:
+			body, _ := io.ReadAll(r.Body)
+			if r.Method != http.MethodPost || string(body) != "request" || r.Header.Get("Authorization") != "Bearer test" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Location", external.URL)
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+	client := NewHTTPUpstream(nil)
+	ctx := service.WithTextInference(t.Context(), true)
+	for path, status := range map[string]int{"/move": 200, "/external": 502, "/get": 502} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstream.URL+path, strings.NewReader("request"))
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer test")
+		resp, err := client.Do(req, "", 1, 1)
+		require.NoError(t, err)
+		require.Equal(t, status, resp.StatusCode, path)
+		require.Empty(t, resp.Header.Get("Location"), path)
+		require.NoError(t, resp.Body.Close())
+	}
+	require.Zero(t, externalCalls.Load())
+}
+
+func TestTextInferenceSendBudgetIncludesRedirects(t *testing.T) {
+	var calls atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.URL.Path == "/move" {
+			http.Redirect(w, r, "/responses", http.StatusPermanentRedirect)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+	client := NewHTTPUpstream(nil)
+	ctx := service.WithTextRoutePolicy(service.WithTextInference(t.Context(), true), "enforce", 100, "session", "/v1/responses", false)
+	for _, path := range []string{"/move", "/responses"} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstream.URL+path, strings.NewReader("request"))
+		require.NoError(t, err)
+		resp, err := client.Do(req, "", 1, 1)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode)
+		require.NoError(t, resp.Body.Close())
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstream.URL+"/responses", strings.NewReader("request"))
+	require.NoError(t, err)
+	_, err = client.Do(req, "", 1, 1)
+	require.ErrorIs(t, err, service.ErrTextRouteAttemptBudget)
+	require.EqualValues(t, 3, calls.Load())
+}
+
 func TestHTTPUpstreamDoWithTLSPlainHTTPUsesConfiguredHTTPProxy(t *testing.T) {
 	var upstreamCalls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

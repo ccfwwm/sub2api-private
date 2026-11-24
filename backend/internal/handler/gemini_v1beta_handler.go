@@ -573,6 +573,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			return
 		}
 	}
+	prepareTextRoute(c, h.cfg, sessionKey, body)
 	fs := NewFailoverState(maxAccountSwitches, hasBoundSession)
 
 	// 单账号分组首次 503 就不设模型限流标记，避免设 29s 限流导致后续请求连续快速失败；
@@ -744,6 +745,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 		// 5) forward (根据平台分流)
+		textAttempt, textAdmitted := service.BeginTextRouteAttempt(c.Request.Context(), account, modelName)
+		if !textAdmitted {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			fs.FailedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -765,6 +774,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		} else {
 			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
 		}
+		finishTextRoute(c, textAttempt, err == nil && result != nil && !result.ClientDisconnect, err)
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}

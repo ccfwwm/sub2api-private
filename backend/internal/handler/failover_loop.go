@@ -204,13 +204,13 @@ func (s *FailoverState) HandleFailoverError(
 		return FailoverCanceled
 	}
 	s.LastFailoverErr = failoverErr
-	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
+	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() || !service.TextRouteAllowsReplay(ctx) {
 		return FailoverExhausted
 	}
 
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
 	retryCount := s.SameAccountRetryCount[accountID]
-	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
+	sameAccountRetry := allowTextSameAccountRetry(ctx, failoverErr, retryCount, retryLimit)
 	if needForceCacheBilling(s.hasBoundSession, failoverErr, sameAccountRetry) {
 		s.ForceCacheBilling = true
 	}
@@ -278,6 +278,9 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 	// 不代表账号耗尽，直接按取消终止。
 	if ctx.Err() != nil {
 		return FailoverCanceled
+	}
+	if service.TextRouteEnforced(ctx) {
+		return FailoverExhausted
 	}
 
 	if s.LastFailoverErr != nil &&

@@ -60,6 +60,16 @@ func startOpenAISSEKeepalive(c *gin.Context, interval time.Duration) func() {
 		return func() {}
 	}
 	originalWriter := c.Writer
+	// A second upstream attempt may start its own keepalive. Preserve the
+	// accounting for comments sent while the first attempt was in flight.
+	if _, nested := originalWriter.(*openAICompactKeepaliveWriter); !nested {
+		previous, _ := c.Get(openAICompactSSEKeepaliveKey)
+		if prior, ok := previous.(*openAICompactSSEKeepalive); ok && prior != nil {
+			prior.mu.Lock()
+			recordOpenAIStreamKeepaliveBytes(c, prior.bytes)
+			prior.mu.Unlock()
+		}
+	}
 	k := &openAICompactSSEKeepalive{
 		writer: originalWriter,
 		stop:   make(chan struct{}),
@@ -97,6 +107,12 @@ func startOpenAISSEKeepalive(c *gin.Context, interval time.Duration) func() {
 			c.Writer = originalWriter
 		}
 	}
+}
+
+// RecordOpenAIQueueHeartbeat excludes a pre-forward SSE comment from the
+// same output boundary used by Responses streaming and handler failover.
+func RecordOpenAIQueueHeartbeat(c *gin.Context, written int) {
+	recordOpenAIStreamKeepaliveBytes(c, written)
 }
 
 // beat 在锁内提交（首次）响应头并写出一条 SSE 注释行；返回 false 表示心跳已
@@ -188,8 +204,8 @@ func OpenAICompactKeepaliveAdjustedWrittenSize(c *gin.Context) int {
 			k.mu.Unlock()
 		}
 	}
-	if size < 0 {
-		return size
+	if size <= 0 {
+		return -1
 	}
 	keepaliveBytes := compactKeepaliveBytes + streamKeepaliveBytes
 	if keepaliveBytes <= 0 {

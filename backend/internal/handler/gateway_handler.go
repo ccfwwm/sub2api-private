@@ -325,6 +325,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		sessionKey = "gemini:" + sessionHash
 	}
 
+	prepareTextRoute(c, h.cfg, sessionKey, body)
 	// 查询粘性会话绑定的账号 ID
 	var sessionBoundAccountID int64
 	if sessionKey != "" {
@@ -499,6 +500,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 			// 转发请求 - 根据账号平台分流
+			textAttempt, textAdmitted := service.BeginTextRouteAttempt(c.Request.Context(), account, reqModel)
+			if !textAdmitted {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				fs.FailedAccountIDs[account.ID] = struct{}{}
+				continue
+			}
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
@@ -521,6 +530,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			} else {
 				result, err = h.geminiCompatService.Forward(requestCtx, c, account, body)
 			}
+			finishTextRoute(c, textAttempt, err == nil && result != nil && !result.ClientDisconnect, err)
 			if accountReleaseFunc != nil {
 				accountReleaseFunc()
 			}
@@ -915,6 +925,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 			// 转发请求 - 根据账号平台分流
 			c.Set("parsed_request", attemptParsedReq)
+			textAttempt, textAdmitted := service.BeginTextRouteAttempt(c.Request.Context(), account, reqModel)
+			if !textAdmitted {
+				if queueRelease != nil {
+					queueRelease()
+				}
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				fs.FailedAccountIDs[account.ID] = struct{}{}
+				continue
+			}
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
@@ -933,6 +954,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				result, err = h.antigravityGatewayService.Forward(requestCtx, c, account, attemptBody, hasBoundSession)
 			} else {
 				result, err = h.gatewayService.Forward(requestCtx, c, account, attemptParsedReq)
+			}
+			if err != nil {
+				finishTextRoute(c, textAttempt, false, err)
 			}
 
 			// 兜底释放串行锁（正常情况已通过回调提前释放）
@@ -1149,6 +1173,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			h.gatewayService.RecordMessagesPrefixAffinity(c.Request.Context(), currentAPIKey.GroupID, account, result)
+			finishTextRoute(c, textAttempt, result != nil && !result.ClientDisconnect, nil)
 			submitForwardUsage(result)
 			// 转发成功，会话槽保持既有空闲超时语义
 			upstreamServedSession = true
