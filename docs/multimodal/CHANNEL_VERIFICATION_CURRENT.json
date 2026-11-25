@@ -1,5 +1,5 @@
 {
-  "version": "v1.3.28",
+  "version": "v1.3.29",
   "status": "recorded",
   "acceptance_state": "frontend-release; production-ui-acceptance-pending; prior-real-channel-evidence-historical-only",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
@@ -7,9 +7,9 @@
   "new_paid_submissions": 0,
   "requests_attempted": 0,
   "credentials_recorded": false,
-  "environment": "The v1.3.28 candidate changes public frontend pages only. Channel evidence below was collected on the original versions indicated in the cases. There were no new channel requests for this candidate.",
+  "environment": "The v1.3.29 candidate updates the public frontend and the Gorilla WebSocket dependency. Channel evidence below was collected on the original versions indicated in the cases. There were no new channel requests for this candidate.",
   "source_release": "v1.3.26",
-  "reuse_scope": "The candidate uses the v1.3.27 production backend and migration inventory. Historical real-channel results retain their original verification dates and versions.",
+  "reuse_scope": "The candidate retains the v1.3.27 gateway business code and migration inventory. Historical real-channel results retain their original verification dates and versions.",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
