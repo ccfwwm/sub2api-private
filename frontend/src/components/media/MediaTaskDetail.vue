@@ -166,6 +166,11 @@ async function reconcileRecordedTask() {
               <span v-if="attempt.upstream_code"> · {{ attempt.upstream_code }}</span>
               <span v-if="attempt.reason"> · {{ attempt.reason }}</span>
               <span v-if="attempt.account_id === current.account_id && ['in_progress', 'completed'].includes(attempt.outcome)"> · {{ tr('接手账号', 'Accepted by upstream') }}</span>
+              <div v-if="attempt.terminal" class="text-sm text-gray-500">
+                {{ tr('查询终态', 'Final status from polling') }} · {{ attempt.terminal.outcome }} · HTTP {{ attempt.terminal.upstream_status }}
+                <span v-if="attempt.terminal.upstream_code"> · {{ attempt.terminal.upstream_code }}</span>
+                <span v-if="attempt.terminal.reason"> · {{ attempt.terminal.reason }}</span>
+              </div>
             </li>
           </ol>
         </details>

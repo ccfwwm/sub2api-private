@@ -32,14 +32,22 @@ type SubmissionRoute struct {
 }
 
 type SubmissionAttempt struct {
-	AccountID int64     `json:"account_id"`
-	Epoch     int64     `json:"lease_epoch"`
-	StartedAt time.Time `json:"started_at"`
-	Outcome   string    `json:"outcome"`
-	Status    int       `json:"upstream_status,omitempty"`
-	Code      string    `json:"upstream_code,omitempty"`
-	Reason    string    `json:"reason,omitempty"`
-	RequestID string    `json:"upstream_request_id,omitempty"`
+	AccountID int64               `json:"account_id"`
+	Epoch     int64               `json:"lease_epoch"`
+	StartedAt time.Time           `json:"started_at"`
+	Outcome   string              `json:"outcome"`
+	Status    int                 `json:"upstream_status,omitempty"`
+	Code      string              `json:"upstream_code,omitempty"`
+	Reason    string              `json:"reason,omitempty"`
+	RequestID string              `json:"upstream_request_id,omitempty"`
+	Terminal  *SubmissionTerminal `json:"terminal,omitempty"`
+}
+
+type SubmissionTerminal struct {
+	Outcome string `json:"outcome"`
+	Status  int    `json:"upstream_status"`
+	Code    string `json:"upstream_code,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 func (r SubmissionRoute) target(group int64, operation string) RouteTarget {
@@ -338,7 +346,11 @@ func (e *Engine) processRoutedSubmission(ctx context.Context, task StoredTask) e
 			result.RetryAfter = 30 * time.Second
 		}
 	}
-	e.Routes.Finish(ctx, target, owner, scope, result.RetryAfter, result.Accepted)
+	// An asynchronous recovery probe is still testing the route after it gets
+	// a job ID. Release it on a terminal poll or let its Redis lease expire.
+	if err != nil || !result.Accepted || result.ID == "" || result.Status != "in_progress" {
+		e.Routes.Finish(ctx, target, owner, scope, result.RetryAfter, result.Accepted)
+	}
 	attempt := &routing.Attempts[len(routing.Attempts)-1]
 	attempt.Outcome = result.Status
 	if canSwitch {
@@ -356,6 +368,43 @@ func (e *Engine) processRoutedSubmission(ctx context.Context, task StoredTask) e
 			"account_id", task.AccountID, "attempts", len(routing.Attempts))
 	}
 	return e.completeProcessing(ctx, task, account, result, err)
+}
+
+func (e *Engine) recordRoutedTerminal(task StoredTask, account Account, result *UpstreamResult) (RouteTarget, string, RejectionScope) {
+	routing := task.Snapshot.Routing
+	if routing == nil || len(routing.Attempts) == 0 || task.UpstreamID == "" ||
+		result.UpstreamStatusCode < http.StatusOK || result.UpstreamStatusCode >= http.StatusMultipleChoices ||
+		(result.ID != "" && result.ID != task.UpstreamID) ||
+		(result.Status != "failed" && result.Status != "completed") {
+		return RouteTarget{}, "", ""
+	}
+	attempt := &routing.Attempts[len(routing.Attempts)-1]
+	if attempt.AccountID != task.AccountID || attempt.Terminal != nil {
+		return RouteTarget{}, "", ""
+	}
+	attempt.Terminal = &SubmissionTerminal{Outcome: result.Status, Status: result.UpstreamStatusCode,
+		Code: sanitizeMediaDiagnostic(result.UpstreamCode), Reason: sanitizeMediaDiagnostic(result.Diagnostic)}
+	if !e.Routes.Enabled(task.Identity.GroupID) {
+		return RouteTarget{}, "", ""
+	}
+	for _, route := range routing.Candidates {
+		if route.AccountID != task.AccountID || route.Origin != RouteOrigin(account.BaseURL, account.Platform) {
+			continue
+		}
+		var scope RejectionScope
+		if result.Status == "failed" && result.ID == task.UpstreamID && len(result.Artifacts) == 0 &&
+			strings.EqualFold(strings.TrimSpace(result.UpstreamCode), "video_generation_failed") &&
+			strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.UpstreamMessage)), "upstream channel is temporarily unavailable.") {
+			// The provider explicitly identifies a channel failure. Use it only
+			// for new requests, as the accepted job may have incurred a cost.
+			scope = RejectionOrigin
+			if result.RetryAfter <= 0 {
+				result.RetryAfter = 30 * time.Second
+			}
+		}
+		return route.target(task.Identity.GroupID, task.Snapshot.Request.Operation), fmt.Sprintf("%s:%d", task.ID, attempt.Epoch), scope
+	}
+	return RouteTarget{}, "", ""
 }
 
 func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current SubmissionRoute, request Request, result UpstreamResult) error {

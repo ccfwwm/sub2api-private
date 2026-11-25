@@ -490,6 +490,9 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	// error metadata without treating that response as a retryable submission.
 	if result.Status == "failed" {
 		result.UpstreamCode, result.UpstreamMessage = mediaUpstreamObjectErrorDetails(object, account.Key)
+		if !submission {
+			result.RetryAfter = MediaRetryAfter(response.Header, raw, time.Now())
+		}
 		if result.Diagnostic == "" {
 			result.Diagnostic = result.UpstreamMessage
 		}

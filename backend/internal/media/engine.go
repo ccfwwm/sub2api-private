@@ -527,9 +527,17 @@ func (e *Engine) completeProcessing(ctx context.Context, t StoredTask, account A
 			result.Status = "submitting"
 		}
 	}
+	target, probeOwner, scope := e.recordRoutedTerminal(t, account, &result)
 	// Completion and its response persist before downloading; a crash resumes here.
 	if err = e.Store.Progress(ctx, t, result, path); err != nil {
 		return err
+	}
+	if probeOwner != "" {
+		e.Routes.Finish(ctx, target, probeOwner, scope, result.RetryAfter, scope == "")
+		if scope != "" {
+			slog.InfoContext(ctx, "media_generation_route_cooldown", "task_id", t.ID, "group_id", t.Identity.GroupID,
+				"account_id", t.AccountID, "upstream_code", result.UpstreamCode, "retry_after_seconds", retrySeconds(result.RetryAfter))
+		}
 	}
 	current, err := e.Store.GetTask(ctx, t.ID)
 	if err != nil {

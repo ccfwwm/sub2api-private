@@ -10,9 +10,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/media"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -201,4 +206,121 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestManagedMediaTerminalChannelFailureRoutesNewTasksToBackup(t *testing.T) {
+	db := testDB(t)
+	snapshot := fixture(t, db, "10")
+	defer cleanupMediaTasks(t, db, snapshot.Identity.UserID)
+	primary := snapshot.Capability.AccountIDs[0]
+	var backup int64
+	require.NoError(t, db.QueryRow(`INSERT INTO accounts(name,platform,type,credentials,concurrency)
+		VALUES('media-backup-'||gen_random_uuid(),'openai','apikey','{}',10) RETURNING id`).Scan(&backup))
+	_, err := db.Exec(`INSERT INTO account_groups(account_id,group_id) VALUES ($1,$3),($2,$3)`, primary, backup, snapshot.Identity.GroupID)
+	require.NoError(t, err)
+	capability := snapshot.Capability
+	capability.Enabled, capability.Status = true, "enabled"
+	capability.Operations, capability.Formats = []string{"video"}, []string{"json"}
+	capability.TemplateRef = &media.TemplateRef{ID: "video-reference-arrays", Version: 1}
+	capability.Limits.MaxRequestBytes, capability.Limits.ObservationSeconds = ptr(int64(1<<20)), ptr(600)
+	alternate := capability
+	alternate.ID, alternate.AccountIDs = "backup-video", []int64{backup}
+
+	var primaryPosts, backupPosts atomic.Int32
+	var policyFailure atomic.Bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			if strings.HasPrefix(r.Host, "127.0.0.1:") {
+				_, _ = fmt.Fprintf(w, `{"id":"primary-%d","status":"queued"}`, primaryPosts.Add(1))
+			} else {
+				_, _ = fmt.Fprintf(w, `{"id":"backup-%d","status":"queued"}`, backupPosts.Add(1))
+			}
+			return
+		}
+		id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+		if policyFailure.Load() {
+			_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","error":{"code":"content_policy_violation","message":"Content policy refusal"}}`, id)
+			return
+		}
+		w.Header().Set("Retry-After", "60")
+		_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","error":{"code":"video_generation_failed","message":"Upstream channel is temporarily unavailable. Please retry later or route to another channel."}}`, id)
+	}))
+	defer upstream.Close()
+	redisServer := miniredis.RunT(t)
+	now := time.Now()
+	redisServer.SetTime(now)
+	redisClient := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	defer redisClient.Close()
+	store := &media.Store{DB: db}
+	blobs, err := media.NewBlobStore(t.TempDir(), strings.Repeat("r", 32))
+	require.NoError(t, err)
+	engine := media.NewEngine(store, blobs, func(id, group int64) (media.Account, error) {
+		base := upstream.URL
+		if id == backup {
+			base = strings.Replace(base, "127.0.0.1", "localhost", 1)
+		}
+		return media.Account{ID: id, BaseURL: base, Key: "fixture", Allowed: group == snapshot.Identity.GroupID}, nil
+	}, nil)
+	defer engine.Stop()
+	engine.Adapter.Client = media.SafeClient(true)
+	engine.Routes, err = media.NewRoutePolicy("enforce", "", repository.NewMediaRouteHealth(redisClient))
+	require.NoError(t, err)
+	price := saleCardForIntegration(capability, snapshot.SaleRule, snapshot.Identity.GroupID)
+	engine.Config = func(context.Context, int64) ([]media.Capability, []media.PriceCard, error) {
+		return []media.Capability{capability, alternate}, []media.PriceCard{price}, nil
+	}
+	ctx := t.Context()
+	input := map[string]any{"model": capability.Model, "prompt": "fixture", "seconds": 30}
+	selected, err := engine.SelectCapability(ctx, capability.Model, "video", input, nil, snapshot.Identity)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	create := func(key string) media.StoredTask {
+		t.Helper()
+		task, createErr := engine.Create(ctx, *selected, "video", input, nil, snapshot.Identity, key)
+		require.NoError(t, createErr)
+		return task
+	}
+	process := func(task media.StoredTask) media.StoredTask {
+		t.Helper()
+		_, updateErr := db.Exec(`UPDATE media_tasks SET next_poll_at=now() WHERE id=$1`, task.ID)
+		require.NoError(t, updateErr)
+		claim, claimErr := store.ClaimTask(ctx, task.ID)
+		require.NoError(t, claimErr)
+		require.NotNil(t, claim)
+		require.NoError(t, engine.Process(ctx, *claim))
+		updated, getErr := store.GetTask(ctx, task.ID)
+		require.NoError(t, getErr)
+		return updated
+	}
+	first := process(create("original"))
+	require.Equal(t, "primary-1", first.UpstreamID)
+	first = process(first)
+	require.Equal(t, "primary-1", first.UpstreamID)
+	require.Equal(t, "failed", first.State)
+	require.Equal(t, "released", first.Settlement)
+	require.Equal(t, "1.00000000", first.Released)
+	require.Contains(t, first.Diagnostic, "retry_after_seconds=60")
+	require.Len(t, first.Snapshot.Routing.Attempts, 1)
+	attempt := first.Snapshot.Routing.Attempts[0]
+	require.Equal(t, "in_progress", attempt.Outcome)
+	require.NotNil(t, attempt.Terminal)
+	require.Equal(t, "video_generation_failed", attempt.Terminal.Code)
+	require.Equal(t, first.ID, create("original").ID)
+	require.EqualValues(t, 1, primaryPosts.Load())
+
+	redisServer.SetTime(now.Add(31 * time.Second))
+	second := process(create("independent"))
+	require.Equal(t, backup, second.AccountID)
+	require.Equal(t, "backup-1", second.UpstreamID)
+	require.EqualValues(t, 1, backupPosts.Load())
+
+	redisServer.SetTime(now.Add(61 * time.Second))
+	probe := process(create("recovery-probe"))
+	require.Equal(t, "primary-2", probe.UpstreamID)
+	require.Equal(t, backup, create("while-probing").AccountID)
+	policyFailure.Store(true)
+	probe = process(probe)
+	require.Equal(t, "released", probe.Settlement)
+	require.Equal(t, primary, create("after-policy-failure").AccountID)
 }
