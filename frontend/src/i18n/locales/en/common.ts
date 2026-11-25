@@ -225,6 +225,14 @@ export default {
 
   // Auth
   auth: {
+    portal: {
+      headline: 'Bring AI into your workflow',
+      caption: 'Manage API keys, connect to models and track usage for every request.',
+      showPassword: 'Show password',
+      hidePassword: 'Hide password',
+      pauseMotion: 'Pause nebula animation',
+      resumeMotion: 'Resume nebula animation',
+    },
     welcomeBack: 'Welcome Back',
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',
