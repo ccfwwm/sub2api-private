@@ -1,11 +1,11 @@
 <template>
-  <AuthLayout>
+  <AuthLayout portal>
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
-        </h2>
+        </h1>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.signInToAccount') }}
         </p>
@@ -28,6 +28,7 @@
               required
               autofocus
               autocomplete="email"
+              :aria-invalid="Boolean(errors.email)"
               :disabled="authActionDisabled"
               class="input pl-11"
               :class="{ 'input-error': errors.email }"
@@ -51,6 +52,7 @@
               :type="showPassword ? 'text' : 'password'"
               required
               autocomplete="current-password"
+              :aria-invalid="Boolean(errors.password)"
               :disabled="authActionDisabled"
               class="input pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
@@ -58,6 +60,8 @@
             />
             <button
               type="button"
+              :aria-label="t(showPassword ? 'auth.portal.hidePassword' : 'auth.portal.showPassword')"
+              aria-controls="password"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
               class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"

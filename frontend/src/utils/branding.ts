@@ -1,4 +1,15 @@
 import { sanitizeUrl } from '@/utils/url'
+import ciyuanLogo from '@/assets/landing/ciyuan.webp'
+
+export const ciyuanSiteUrl = 'https://code.aicodeme.xyz'
+
+export function isCiyuanBrand(siteName: string, siteOrigin: string): boolean {
+  return siteName.trim() === '词元互联' || siteOrigin === ciyuanSiteUrl
+}
+
+export function gatewayBrandLogo(siteName: string, siteOrigin: string, configuredLogo: string): string {
+  return isCiyuanBrand(siteName, siteOrigin) ? ciyuanLogo : configuredLogo || ciyuanLogo
+}
 
 export function updateFavicon(logoUrl: string): void {
   const sanitizedLogoUrl = sanitizeUrl(logoUrl, {
