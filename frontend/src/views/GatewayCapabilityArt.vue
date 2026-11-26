@@ -154,9 +154,6 @@ const { t } = useI18n()
 @keyframes capability-preview { to { transform: scale(1.17) rotate(9deg); } }
 @keyframes capability-scan { to { transform: translateX(400%); } }
 .capability-media-audio path.capability-moving { stroke: #eefffb; }
-.capability-art path.capability-moving,
-.capability-media-image img,
-.capability-media-timeline::after { animation-play-state: var(--landing-motion-state, running); }
 
 @media (prefers-reduced-motion: reduce) {
   .capability-art path.capability-moving { display: none; }

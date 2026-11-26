@@ -23,11 +23,8 @@ export default {
       response: '返回响应',
       tools: '工具与应用',
       models: '模型',
-      demo: '演示链路',
       requestPath: '{tool} → {gateway} → {model}',
       responsePath: '{model} → {gateway} → {tool}',
-      pauseMotion: '暂停首页动画',
-      resumeMotion: '继续首页动画',
     },
     landing: {
       brand: '词元互联',
