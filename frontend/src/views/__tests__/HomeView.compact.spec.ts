@@ -172,6 +172,19 @@ describe('HomeView compact mode', () => {
     expect(wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/model-plaza?embedded=1')).toBe(true)
   })
 
+  it('keeps public animation and route controls free of playback buttons and example text', async () => {
+    const wrapper = mountHome()
+    const landing = wrapper.get('[data-testid="default-home"]')
+    expect(landing.find('.landing-motion').exists()).toBe(false)
+    expect(landing.find('.flow-summary').exists()).toBe(false)
+    expect(landing.get('.flow-hub-orbit').attributes('aria-hidden')).toBe('true')
+    expect(landing.get('.flow-hub-name').text()).toBe('Test site')
+
+    await landing.get('.flow-modes button:last-child').trigger('click')
+    expect(landing.get('.flow-diagram').classes()).toContain('flow-returning')
+    wrapper.unmount()
+  })
+
   it('hides the model plaza link when the feature is disabled', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,

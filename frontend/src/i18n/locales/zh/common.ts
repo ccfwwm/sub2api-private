@@ -230,8 +230,6 @@ export default {
       caption: '管理 API Key、接入模型，并查看每次调用的用量。',
       showPassword: '显示密码',
       hidePassword: '隐藏密码',
-      pauseMotion: '暂停星云动画',
-      resumeMotion: '继续星云动画',
     },
     welcomeBack: '欢迎回来',
     signInToAccount: '登录您的账户以继续',

@@ -23,11 +23,8 @@ export default {
       response: 'Return response',
       tools: 'Tools and apps',
       models: 'Models',
-      demo: 'Example route',
       requestPath: '{tool} → {gateway} → {model}',
       responsePath: '{model} → {gateway} → {tool}',
-      pauseMotion: 'Pause homepage animations',
-      resumeMotion: 'Resume homepage animations',
     },
     landing: {
       brand: 'Sub2API',

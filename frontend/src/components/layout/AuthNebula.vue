@@ -1,5 +1,5 @@
 <template>
-  <aside class="auth-nebula" :class="{ 'auth-nebula-paused': paused }" :aria-label="siteName">
+  <aside class="auth-nebula" :aria-label="siteName">
     <div class="auth-nebula-space" aria-hidden="true">
       <picture class="auth-nebula-photo">
         <source media="(max-width: 800px)" :srcset="nebulaMobile" />
@@ -21,16 +21,11 @@
       <p class="auth-nebula-caption">{{ subtitle || t('auth.portal.caption') }}</p>
     </div>
 
-    <button class="auth-nebula-motion" type="button" :aria-label="motionLabel" :title="motionLabel" @click="paused = !paused">
-      <Icon :name="paused ? 'play' : 'pause'" size="sm" aria-hidden="true" />
-    </button>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
 import { featuredGatewayModels } from '@/components/common/gatewayModelBrands'
 import nebula from '@/assets/landing/nebula.webp'
 import nebulaMobile from '@/assets/landing/nebula-mobile.webp'
@@ -38,8 +33,6 @@ import nebulaMobile from '@/assets/landing/nebula-mobile.webp'
 defineProps<{ siteName: string; subtitle?: string }>()
 
 const { t } = useI18n()
-const paused = ref(false)
-const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' : 'auth.portal.pauseMotion'))
 </script>
 
 <style scoped>
@@ -86,7 +79,7 @@ const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' :
   width: 100%;
   height: 100%;
   mask-image: radial-gradient(circle, #000 48%, transparent 69%);
-  animation: nebula-rotate 42s linear infinite;
+  animation: nebula-rotate 22s linear infinite;
 }
 
 .auth-nebula-dust {
@@ -100,13 +93,12 @@ const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' :
     radial-gradient(circle at 29% 49%, #64e4ff 0 1px, transparent 4px),
     radial-gradient(circle at 49% 8%, #7d9fff 0 1px, transparent 4px),
     radial-gradient(circle at 88% 48%, #89ffff 0 1px, transparent 4px);
-  animation: nebula-drift 10s ease-in-out infinite alternate;
+  animation: nebula-drift 7s ease-in-out infinite alternate;
 }
 
 @keyframes nebula-rotate { to { transform: rotate(360deg); } }
 @keyframes nebula-drift { to { opacity: .9; transform: translate(2%, -2%) scale(1.085); } }
 
-.auth-nebula-paused :is(.auth-nebula-photo img, .auth-nebula-dust) { animation-play-state: paused; }
 
 .auth-nebula-models {
   position: absolute;
@@ -140,7 +132,6 @@ const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' :
 .auth-nebula-models .auth-nebula-model-kimi { top: 77%; right: 26%; animation-delay: -5.2s; }
 
 @keyframes nebula-model-drift { to { transform: translate(3px, -8px); } }
-.auth-nebula-paused .auth-nebula-models li { animation-play-state: paused; }
 
 .auth-nebula-icon {
   display: grid;
@@ -157,22 +148,6 @@ const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' :
 .auth-nebula-headline { margin: 8px 0 12px; font-size: clamp(30px, 4.1vw, 60px); font-weight: 800; line-height: 1.13; letter-spacing: -.04em; text-wrap: balance; }
 .auth-nebula-caption { max-width: 350px; color: #b9cbe1; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
 
-.auth-nebula-motion {
-  position: absolute;
-  right: 19px;
-  bottom: 19px;
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid #6a8bb6;
-  border-radius: 9px;
-  color: #eaf6ff;
-  background: #0d203c;
-}
-.auth-nebula-motion:hover { background: #1c3e65; }
-.auth-nebula-motion:focus-visible { outline: 2px solid #9fecf7; outline-offset: 3px; }
-
 @media (max-width: 800px) {
   .auth-nebula { min-height: 212px; padding: 22px 22px 64px; border-radius: 16px; }
   .auth-nebula-photo { top: 47%; left: 70%; width: 92%; }
@@ -180,16 +155,14 @@ const motionLabel = computed(() => t(paused.value ? 'auth.portal.resumeMotion' :
   .auth-nebula-copy { max-width: min(240px, 83%); }
   .auth-nebula-headline { margin-bottom: 0; font-size: clamp(23px, 5.3vw, 31px); }
   .auth-nebula-caption { display: none; }
-  .auth-nebula-models { display: flex; align-items: center; gap: 6px; inset: auto 62px 18px 22px; }
+  .auth-nebula-models { display: flex; align-items: center; gap: 6px; inset: auto 22px 18px; }
   .auth-nebula-models li { position: static; padding: 3px; border-radius: 7px; animation: none; }
   .auth-nebula-icon { width: 25px; height: 25px; }
   .auth-nebula-icon img { width: 16px; height: 16px; }
   .auth-nebula-model-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .auth-nebula-motion { right: 13px; bottom: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .auth-nebula-photo img, .auth-nebula-dust, .auth-nebula-models li { animation: none; }
-  .auth-nebula-motion { display: none; }
 }
 </style>

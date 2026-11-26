@@ -51,7 +51,6 @@ const paths = {
 }
 
 @keyframes background-transmit { from { stroke-dashoffset: 6; } to { stroke-dashoffset: -100; } }
-:global(.landing-motion-paused .data-flow-packet) { animation-play-state: paused; }
 
 @media (prefers-reduced-motion: reduce) {
   .data-flow-packet { display: none; }

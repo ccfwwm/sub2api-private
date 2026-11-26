@@ -62,8 +62,6 @@
   margin-inline: auto;
 }
 
-.landing-motion-paused { --landing-motion-state: paused; }
-
 .landing :is(a, button):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
@@ -187,21 +185,6 @@
   background: radial-gradient(ellipse at 77% 48%, var(--hero-halo), transparent 64%);
   content: "";
 }
-
-.landing-motion {
-  position: absolute;
-  right: max(22px, calc((100% - 1200px) / 2));
-  bottom: 20px;
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  color: var(--muted);
-  background: var(--surface);
-}
-.landing-motion:hover { color: var(--accent); background: var(--hover); }
 
 .landing-hero-inner { padding-block: 74px 86px; }
 
@@ -488,7 +471,6 @@
 }
 
 @keyframes science-glow { from { opacity: .25; } to { opacity: .86; } }
-.landing-motion-paused .landing-science-intro::before { animation-play-state: paused; }
 
 .landing-science-brand {
   display: flex;
@@ -595,7 +577,6 @@
 
 .landing-science-features li:nth-child(even) .landing-science-feature-pulse { animation-delay: -3.5s; }
 @keyframes science-feature-trace { from { stroke-dashoffset: 8; } 64%, to { stroke-dashoffset: -100; } }
-.landing-motion-paused .landing-science-feature-pulse { animation-play-state: paused; }
 
 .landing-science-features h3 {
   margin: 12px 0 5px;
@@ -627,7 +608,6 @@
 }
 
 @keyframes footer-signal { to { background-position-x: right; } }
-.landing-motion-paused .landing-footer::before { animation-play-state: paused; }
 
 .landing-footer-inner,
 .landing-footer nav {
@@ -697,7 +677,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-motion { display: none; }
   .landing-science-feature-pulse { display: none; }
   .landing-science-intro::before, .landing-footer::before { animation: none; }
 

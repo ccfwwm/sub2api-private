@@ -1,5 +1,5 @@
 <template>
-  <div class="landing" :class="{ 'landing-motion-paused': motionPaused }" data-testid="default-home">
+  <div class="landing" data-testid="default-home">
     <a href="#landing-main" class="landing-skip">{{ t('home.landing.skip') }}</a>
     <header class="landing-header">
       <div class="landing-shell landing-header-inner">
@@ -28,7 +28,7 @@
 
     <main id="landing-main" tabindex="-1">
       <section class="landing-hero" aria-labelledby="gateway-title">
-        <OrbitArtwork class="landing-hero-art" animated :paused="motionPaused" />
+        <OrbitArtwork class="landing-hero-art" />
         <div class="landing-shell landing-hero-inner">
           <p class="landing-label"><span class="landing-signal"></span>{{ t('home.landing.gatewayLabel') }}</p>
           <h1 id="gateway-title">
@@ -48,13 +48,10 @@
             </a>
           </div>
         </div>
-        <button type="button" class="landing-motion" :aria-label="motionLabel" :title="motionLabel" @click="motionPaused = !motionPaused">
-          <Icon :name="motionPaused ? 'play' : 'pause'" size="sm" aria-hidden="true" />
-        </button>
       </section>
 
       <GatewayFlow class="landing-shell" :site-name="siteName" :site-logo="siteLogo"
-        :show-model-plaza-entry="showModelPlazaEntry" :paused="motionPaused" />
+        :show-model-plaza-entry="showModelPlazaEntry" />
 
       <section id="capabilities" class="landing-shell landing-section" aria-labelledby="capabilities-title">
         <p class="landing-label">{{ t('home.landing.capabilitiesLabel') }}</p>
@@ -141,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import OrbitArtwork from '@/components/common/OrbitArtwork.vue'
@@ -167,8 +164,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const { copied, copyToClipboard } = useClipboard()
 
-const motionPaused = ref(false)
-const motionLabel = computed(() => t(motionPaused.value ? 'home.flow.resumeMotion' : 'home.flow.pauseMotion'))
 
 const gatewayCards = computed(() => [
   { key: 'models', to: props.showModelPlazaEntry ? '/model-plaza?embedded=1' : '/keys' },

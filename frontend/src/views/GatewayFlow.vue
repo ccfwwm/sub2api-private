@@ -20,13 +20,15 @@
         <span id="flow-tools-label">{{ t('home.flow.tools') }}</span>
         <span id="flow-models-label">{{ t('home.flow.models') }}</span>
       </div>
-      <div class="flow-diagram" :class="{ 'flow-returning': returning, 'flow-paused': paused }">
+      <div class="flow-diagram" :class="{ 'flow-returning': returning }">
         <svg class="flow-wires" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true">
           <path v-for="(tool, index) in tools" :key="tool.label" :d="toolPath(index)" />
           <path v-for="(model, index) in models" :key="model.id" :d="modelPath(index)" />
           <g :key="`${toolIndex}-${modelIndex}-${returning}`">
             <path class="flow-selected" :d="toolPath(toolIndex)" />
             <path class="flow-selected" :d="modelPath(modelIndex)" />
+            <path class="flow-pulse flow-pulse-trail flow-pulse-tool" :d="toolPath(toolIndex)" pathLength="100" />
+            <path class="flow-pulse flow-pulse-trail flow-pulse-model" :d="modelPath(modelIndex)" pathLength="100" />
             <path class="flow-pulse flow-pulse-tool" :d="toolPath(toolIndex)" pathLength="100" />
             <path class="flow-pulse flow-pulse-model" :d="modelPath(modelIndex)" pathLength="100" />
           </g>
@@ -43,7 +45,7 @@
         <div class="flow-hub">
           <span class="flow-hub-orbit" aria-hidden="true"></span>
           <div class="flow-hub-mark"><img :src="siteLogo" alt="" width="72" height="72" /></div>
-          <span>{{ siteName }}</span>
+          <span class="flow-hub-name">{{ siteName }}</span>
         </div>
 
         <div class="flow-nodes" role="group" aria-labelledby="flow-models-label">
@@ -55,12 +57,9 @@
         </div>
       </div>
 
-      <div class="flow-summary">
-        <p aria-live="polite">
-          <span>{{ t('home.flow.demo') }}</span>
-          <strong>{{ t(returning ? 'home.flow.responsePath' : 'home.flow.requestPath', { tool: tools[toolIndex].label, model: models[modelIndex].label, gateway: siteName }) }}</strong>
-        </p>
-        <router-link v-if="showModelPlazaEntry" to="/model-plaza?embedded=1">
+      <p class="sr-only" aria-live="polite">{{ t(returning ? 'home.flow.responsePath' : 'home.flow.requestPath', { tool: tools[toolIndex].label, model: models[modelIndex].label, gateway: siteName }) }}</p>
+      <div v-if="showModelPlazaEntry" class="flow-footer">
+        <router-link to="/model-plaza?embedded=1">
           {{ t('nav.modelPlaza') }} <Icon name="arrowRight" size="xs" aria-hidden="true" />
         </router-link>
       </div>
@@ -76,7 +75,7 @@ import { featuredGatewayModels, gatewayModels as models } from '@/components/com
 import codexLogo from '@/assets/landing/logos/codex.webp'
 import workbuddyLogo from '@/assets/landing/logos/workbuddy.svg'
 
-defineProps<{ siteName: string; siteLogo: string; showModelPlazaEntry: boolean; paused: boolean }>()
+defineProps<{ siteName: string; siteLogo: string; showModelPlazaEntry: boolean }>()
 
 const { t } = useI18n()
 const tools = [
@@ -108,7 +107,8 @@ function modelPath(index: number) {
   --flow-active: #e0f4ff;
   --flow-line: #bbcee4;
   --flow-route: #2380c4;
-  --flow-pulse: #0050b0;
+  --flow-pulse: #004cb6;
+  --flow-trail: #28a9f1;
   --flow-grid: #a6bfe320;
   scroll-margin-top: 22px;
   margin-block: 57px 0;
@@ -121,6 +121,7 @@ function modelPath(index: number) {
   --flow-line: #39516d;
   --flow-route: #508ce0;
   --flow-pulse: #9df8ff;
+  --flow-trail: #4db6ff;
   --flow-grid: #6587c018;
 }
 
@@ -212,27 +213,18 @@ function modelPath(index: number) {
 
 .flow-wires .flow-pulse {
   stroke: var(--flow-pulse);
-  stroke-width: 3;
+  stroke-width: 5;
   stroke-linecap: round;
-  stroke-dasharray: 9 191;
-  animation: flow-transmit 3s linear infinite;
+  stroke-dasharray: 1.35 23.65;
+  filter: drop-shadow(0 0 2px var(--flow-trail));
+  animation: flow-transmit 1.45s linear infinite;
 }
 
-.flow-wires .flow-pulse-model { animation-delay: 1.5s; }
-.flow-returning .flow-wires .flow-pulse { animation-name: flow-receive; }
-.flow-returning .flow-wires .flow-pulse-model { animation-delay: 0s; }
-.flow-returning .flow-wires .flow-pulse-tool { animation-delay: 1.5s; }
-.flow-paused .flow-wires .flow-pulse { animation-play-state: paused; }
+.flow-wires .flow-pulse-trail { stroke: var(--flow-trail); stroke-width: 3.5; stroke-dasharray: 7 18; opacity: .82; }
+.flow-wires .flow-pulse-model { animation-delay: -.55s; }
+.flow-returning .flow-wires .flow-pulse { animation-direction: reverse; }
 
-@keyframes flow-transmit {
-  from { stroke-dashoffset: 9; }
-  50%, to { stroke-dashoffset: -100; }
-}
-
-@keyframes flow-receive {
-  from { stroke-dashoffset: -100; }
-  50%, to { stroke-dashoffset: 9; }
-}
+@keyframes flow-transmit { to { stroke-dashoffset: -25; } }
 
 .flow-nodes {
   display: grid;
@@ -271,7 +263,7 @@ function modelPath(index: number) {
 .flow-nodes button:hover,
 .flow-nodes button[aria-pressed='true'] { border-color: var(--flow-route); background: var(--flow-active); }
 
-.flow-hub { display: grid; position: relative; place-self: center; justify-items: center; }
+.flow-hub { display: grid; position: relative; isolation: isolate; place-self: center; justify-items: center; }
 
 .flow-hub-orbit {
   position: absolute;
@@ -286,7 +278,6 @@ function modelPath(index: number) {
 }
 
 @keyframes flow-hub-rotate { to { transform: rotate(360deg); } }
-.flow-paused .flow-hub-orbit { animation-play-state: paused; }
 
 .flow-hub-mark {
   display: grid;
@@ -301,7 +292,7 @@ function modelPath(index: number) {
 
 .flow-hub img { width: 72px; height: 72px; object-fit: contain; border-radius: 16px; }
 
-.flow-hub > span {
+.flow-hub-name {
   position: absolute;
   top: calc(100% + 13px);
   max-width: 180%;
@@ -314,11 +305,10 @@ function modelPath(index: number) {
   white-space: nowrap;
 }
 
-.flow-summary {
+.flow-footer {
   display: flex;
   min-height: 57px;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 4px 14px;
   margin-top: 11px;
@@ -327,11 +317,8 @@ function modelPath(index: number) {
   font-size: 13px;
 }
 
-.flow-summary p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin: 0; }
-.flow-summary p span { color: var(--muted); }
-.flow-summary p strong { color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
-.flow-summary a { display: inline-flex; min-height: 36px; align-items: center; gap: 6px; color: var(--accent); font-weight: 700; }
-.flow-summary a:hover { text-decoration: underline; }
+.flow-footer a { display: inline-flex; min-height: 36px; align-items: center; gap: 6px; color: var(--accent); font-weight: 700; }
+.flow-footer a:hover { text-decoration: underline; }
 
 @media (max-width: 720px) {
   .flow { margin-top: 52px; }
@@ -341,7 +328,7 @@ function modelPath(index: number) {
   .flow-brand-icon img { width: 15px; height: 15px; }
   .flow-hub-mark { width: 60px; height: 60px; border-radius: 15px; }
   .flow-hub img { width: 44px; height: 44px; border-radius: 9px; }
-  .flow-hub > span { font-size: 11px; }
+  .flow-hub-name { font-size: 11px; }
 }
 
 @media (max-width: 350px) {
