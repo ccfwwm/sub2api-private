@@ -3,7 +3,7 @@
     <div class="dashboard-hero__art" aria-hidden="true">
       <span class="dashboard-hero__orbit"></span>
       <span class="dashboard-hero__orbit dashboard-hero__orbit--outer"></span>
-      <img :src="siteLogo || '/logo.svg'" alt="" width="60" height="60" />
+      <img :src="brandLogo" alt="" width="60" height="60" />
     </div>
     <div class="dashboard-hero__body">
       <h2 id="dashboard-hero-title">{{ title }}</h2>
@@ -16,10 +16,12 @@
 import { computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { sanitizeUrl } from '@/utils/url'
+import { consoleBrandLogo } from '@/utils/branding'
 
 defineProps<{ title: string }>()
 const appStore = useAppStore()
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
+const brandLogo = computed(() => consoleBrandLogo(appStore.siteName || '', window.location.origin, siteLogo.value))
 </script>
 
 <style scoped>

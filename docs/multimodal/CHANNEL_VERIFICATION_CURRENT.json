@@ -1,5 +1,5 @@
 {
-  "version": "v1.3.32",
+  "version": "v1.3.33",
   "status": "recorded",
   "acceptance_state": "isolated-regression-tested; production-acceptance-pending; prior-real-channel-evidence-historical-only",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
@@ -7,9 +7,9 @@
   "new_paid_submissions": 0,
   "requests_attempted": 0,
   "credentials_recorded": false,
-  "environment": "The candidate adds a public video status fix to v1.3.31, which includes the public-page motion update and managed media retries with an account circuit breaker. Automated tests use isolated fixtures.",
+  "environment": "The candidate adds Beijing-time automatic console appearance to v1.3.32, which includes the public-page motion update, managed media retries, account circuit breaker and video artifact readiness. Automated tests use isolated fixtures.",
   "source_release": "v1.3.26",
-  "reuse_scope": "The database migration inventory matches v1.3.31. Historical channel results retain their original versions and dates.",
+  "reuse_scope": "The database migration inventory matches v1.3.32. Historical channel results retain their original versions and dates.",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
