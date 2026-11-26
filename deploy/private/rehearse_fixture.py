@@ -17,6 +17,20 @@ import uuid
 from controller import Controller, manifest_images, run
 
 
+def validate_docs_content(html, knowledge, legacy):
+    if '词元互联 · 接口文档' not in html:
+        raise ValueError('fixture documentation route content check failed')
+    knowledge_ids = {article.get('id') for article in knowledge if isinstance(article, dict)}
+    if not {'cc-switch-config', 'api-404-html'} <= knowledge_ids:
+        raise ValueError('fixture configuration documentation check failed')
+    legacy_data = legacy.get('data') if isinstance(legacy, dict) else None
+    if not isinstance(legacy_data, dict) or legacy_data.get('slug') != 'imagevideo' or not any(
+        isinstance(section, dict) and section.get('id') == 'gpt-edit'
+        for section in legacy_data.get('content', [])
+    ):
+        raise ValueError('fixture legacy documentation contract check failed')
+
+
 def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise SystemExit('Disposable GitHub-hosted CI runner required')
@@ -88,8 +102,9 @@ def main():
                 run(c.compose() + ['up', '-d', '--no-deps', 'docs-web'])
                 c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8082/health'], 60)
                 html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
-                if '词元互联图片、视频与音乐接口文档' not in html:
-                    raise ValueError('fixture documentation route content check failed')
+                knowledge = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/knowledge-content.json']))
+                legacy = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/api/v1/public-docs/imagevideo']))
+                validate_docs_content(html, knowledge, legacy)
             # Mark the current container's writable layer to prove rollback captures
             # the runtime, not merely the original base image.
             run(['docker', 'exec', '-u', '0', 'sub2api', 'touch', '/app/fixture-runtime-marker'])
