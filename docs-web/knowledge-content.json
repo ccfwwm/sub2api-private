@@ -1,0 +1,1970 @@
+[
+  {
+    "id": "cc-switch-config",
+    "title": "CC Switch 配置教程",
+    "subtitle": "从控制台导入 API Key，再由 CC Switch 管理本机不同 AI 工具的服务商配置。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "CC Switch 管理的是本机客户端配置。先在词元互联创建 API Key，再从密钥列表导入，最后在 CC Switch 里启用对应服务商。不同模型平台通常需要各自有权限的 Key。"
+      },
+      {
+        "kind": "heading",
+        "text": "安装 CC Switch"
+      },
+      {
+        "kind": "text",
+        "text": "从 CC Switch 官方下载页或 GitHub Releases 选择与你的操作系统和处理器架构匹配的版本。首次从浏览器导入前，先启动一次 CC Switch，让系统注册 ccswitch:// 链接处理程序。"
+      },
+      {
+        "kind": "heading",
+        "text": "从词元互联导入"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "步骤",
+          "操作"
+        ],
+        "rows": [
+          [
+            "创建 API Key",
+            "在控制台的 API 密钥页面创建或选中密钥，检查所属分组与模型权限。"
+          ],
+          [
+            "导入",
+            "在密钥行选择“导入到 CCS”，浏览器提示打开 CC Switch 时允许打开。"
+          ],
+          [
+            "核对",
+            "在确认页核对供应商、目标工具、API 地址和密钥，再确认导入。"
+          ],
+          [
+            "启用",
+            "进入 Claude Code、Codex 或 Gemini CLI 对应工具页，启用刚导入的配置。"
+          ],
+          [
+            "重启客户端",
+            "切换配置后重启 Codex 和 Gemini CLI。Claude Code 通常在新会话读取配置。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "词元互联会按目标工具使用对应协议地址。Claude Code 和 Gemini CLI 使用服务根地址 https://code.aicodeme.xyz，Codex 使用 OpenAI Responses 配置。导入后仍需核对模型名是否在当前 Key 的可用模型列表中。"
+      },
+      {
+        "kind": "heading",
+        "text": "手动添加配置"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "工具",
+          "协议与地址",
+          "关键字段"
+        ],
+        "rows": [
+          [
+            "Claude Code",
+            "Anthropic Messages，https://code.aicodeme.xyz",
+            "ANTHROPIC_AUTH_TOKEN、ANTHROPIC_BASE_URL"
+          ],
+          [
+            "Codex",
+            "Responses，https://code.aicodeme.xyz/v1",
+            "model_provider、wire_api = responses、OPENAI_API_KEY"
+          ],
+          [
+            "Gemini CLI",
+            "Gemini 原生，https://code.aicodeme.xyz",
+            "GEMINI_API_KEY、GOOGLE_GEMINI_BASE_URL"
+          ]
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "toml",
+        "label": "Codex config.toml 示例",
+        "text": "model = \"YOUR_MODEL_ID\"\nmodel_provider = \"aicodeme\"\n\n[model_providers.aicodeme]\nname = \"词元互联\"\nbase_url = \"https://code.aicodeme.xyz/v1\"\nenv_key = \"OPENAI_API_KEY\"\nwire_api = \"responses\""
+      },
+      {
+        "kind": "heading",
+        "text": "导入失败或配置未生效"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "检查方式"
+        ],
+        "rows": [
+          [
+            "导入没有反应",
+            "启动一次 CC Switch，并允许浏览器打开外部应用；仍失败时手动配置。"
+          ],
+          [
+            "工具仍请求旧服务商",
+            "确认当前启用的是词元互联配置，并检查系统环境变量是否覆盖配置文件。"
+          ],
+          [
+            "Codex 或 Gemini 仍用旧地址",
+            "完全退出并重启工具，使它重新读取配置。"
+          ],
+          [
+            "401 或模型不存在",
+            "检查 Key 状态、分组、模型 ID 和最终请求 URL。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "API Key 会保存在本机客户端配置中。不要公开分享配置文件或截图里的密钥。"
+      },
+      {
+        "kind": "heading",
+        "text": "CC Switch 常见问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "问题",
+          "处理方式"
+        ],
+        "rows": [
+          [
+            "CC Switch 是什么，是否收费",
+            "CC Switch 是在本机管理 Claude Code、Codex、Gemini CLI 等工具服务商配置的开源桌面工具。请从项目官方发布渠道下载。词元互联 API Key 的调用费用按控制台的计费规则产生。"
+          ],
+          [
+            "点击“导入到 CCS”没有反应",
+            "先启动一次 CC Switch，让系统注册 ccswitch:// 链接处理程序。再次导入时允许浏览器打开外部应用。仍未打开时手动添加同一服务商配置。"
+          ],
+          [
+            "已经启用，但客户端仍使用旧地址",
+            "在 CC Switch 确认目标工具当前启用的是词元互联配置，再检查客户端配置文件和环境变量是否覆盖地址。完全退出并重新启动客户端。"
+          ],
+          [
+            "401 或 invalid_api_key",
+            "检查 API Key 是否有效、导入时目标工具是否正确，以及客户端使用的鉴权变量是否被其他配置覆盖。"
+          ],
+          [
+            "model not exist",
+            "使用当前 Key 模型目录里的完整模型 ID，并检查该工具是否选择正确的接口协议。"
+          ],
+          [
+            "换电脑后如何继续使用",
+            "CC Switch 的配置保存在本机。新设备需安装客户端并重新导入或配置 API Key；若旧设备丢失或共享过配置，应在控制台检查并轮换密钥。"
+          ],
+          [
+            "升级到 v4 后界面变了，配置还在吗",
+            "v4 调整了界面布局。升级后进入对应工具的服务商设置检查词元互联配置和启用状态。若配置缺失，先查看升级前的数据备份，再重新导入或手动添加。"
+          ],
+          [
+            "余额卡片或用量查询失败",
+            "CC Switch 通过 GET /v1/usage 查询额度。核对导入地址与 Key 状态，并确认完整路径只有一个 /v1。/v1/sub2api/billing 返回 Key 计费倍率，不是余额。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "nodejs-environment",
+    "title": "Node.js 安装与环境变量配置",
+    "subtitle": "为 Codex CLI、Gemini CLI、Claude Code npm 安装版等工具准备运行环境。",
+    "blocks": [
+      {
+        "kind": "heading",
+        "text": "确认是否需要安装"
+      },
+      {
+        "kind": "text",
+        "text": "先运行 node --version 和 npm --version。已有受支持版本时无需重复安装。独立安装版 Claude Code 或桌面客户端可能不依赖 Node.js。"
+      },
+      {
+        "kind": "heading",
+        "text": "安装 Node.js"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "系统",
+          "常用方式",
+          "注意"
+        ],
+        "rows": [
+          [
+            "Windows",
+            "Node.js 官网 LTS 安装包，或 winget install OpenJS.NodeJS.LTS",
+            "安装后重新打开终端。"
+          ],
+          [
+            "macOS",
+            "Homebrew 安装 LTS 版，或使用官网 pkg",
+            "使用版本管理器时按其说明设置 PATH。"
+          ],
+          [
+            "Linux",
+            "使用 nvm 安装 LTS 版",
+            "避免 sudo 安装全局 npm 包。"
+          ]
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "检查版本和全局包目录",
+        "text": "node --version\nnpm --version\nnpm prefix -g"
+      },
+      {
+        "kind": "heading",
+        "text": "安装 SDK 并发出首个请求"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "创建 Node.js 项目",
+        "text": "mkdir aicodeme-demo\ncd aicodeme-demo\nnpm init -y\nnpm install openai"
+      },
+      {
+        "kind": "code",
+        "language": "javascript",
+        "label": "index.mjs",
+        "text": "import OpenAI from \"openai\"\n\nconst client = new OpenAI({\n  apiKey: process.env.OPENAI_API_KEY,\n  baseURL: \"https://code.aicodeme.xyz/v1\",\n})\n\nconst response = await client.chat.completions.create({\n  model: \"YOUR_MODEL_ID\",\n  messages: [{ role: \"user\", content: \"你好\" }],\n})\n\nconsole.log(response.choices[0]?.message?.content)"
+      },
+      {
+        "kind": "heading",
+        "text": "常见安装问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "错误",
+          "处理方法"
+        ],
+        "rows": [
+          [
+            "node 或 npm 找不到",
+            "检查安装与 PATH，然后重新打开终端。"
+          ],
+          [
+            "claude、codex 命令找不到",
+            "检查 npm prefix -g 对应目录是否在 PATH 中。nvm 切换 Node 版本后可能需要重装全局工具。"
+          ],
+          [
+            "EBADENGINE",
+            "Node 版本低于工具要求，升级后重新安装工具。"
+          ],
+          [
+            "Windows 的 npm.ps1 被禁止",
+            "可使用 npm.cmd，或按组织的 Windows 执行策略处理。"
+          ],
+          [
+            "EACCES",
+            "使用 nvm 等用户级版本管理器，避免 sudo 修改系统 npm 目录。"
+          ],
+          [
+            "ETIMEDOUT",
+            "检查网络、npm registry 和残留的 npm proxy 配置。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "模型 ID 从当前 Key 可见的模型目录复制。不要把真实 API Key 写进源码、提交记录或公开配置文件。"
+      }
+    ]
+  },
+  {
+    "id": "codex-config",
+    "title": "Codex CLI 与桌面版配置",
+    "subtitle": "用 OpenAI Responses 协议连接词元互联。Base URL 带 /v1，模型名从当前 Key 的模型列表获取。",
+    "blocks": [
+      {
+        "kind": "heading",
+        "text": "配置前准备"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "项目",
+          "设置"
+        ],
+        "rows": [
+          [
+            "配置文件",
+            "macOS/Linux：~/.codex/config.toml；Windows：%USERPROFILE%\\.codex\\config.toml"
+          ],
+          [
+            "API Key",
+            "使用有目标文本模型权限的 Key，并在 Codex 进程环境中设置 OPENAI_API_KEY。"
+          ],
+          [
+            "模型 ID",
+            "从 GET /v1/models 返回的 id 字段复制。"
+          ],
+          [
+            "协议",
+            "Responses，wire_api 使用 responses。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "配置自定义 provider"
+      },
+      {
+        "kind": "code",
+        "language": "toml",
+        "label": "config.toml",
+        "text": "model = \"YOUR_MODEL_ID\"\nmodel_provider = \"aicodeme\"\n\n[model_providers.aicodeme]\nname = \"词元互联\"\nbase_url = \"https://code.aicodeme.xyz/v1\"\nenv_key = \"OPENAI_API_KEY\"\nwire_api = \"responses\""
+      },
+      {
+        "kind": "text",
+        "text": "若文件已有其他设置，只调整 provider 相关项，不要覆盖整个文件。model_provider 与 model_providers.<名称> 中的名称必须一致。Base URL 到 /v1 为止，不要追加 /responses。"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "macOS / Linux 当前终端",
+        "text": "export OPENAI_API_KEY=\"YOUR_API_KEY\""
+      },
+      {
+        "kind": "code",
+        "language": "powershell",
+        "label": "Windows PowerShell 当前终端",
+        "text": "$env:OPENAI_API_KEY=\"YOUR_API_KEY\""
+      },
+      {
+        "kind": "heading",
+        "text": "测试连接"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "查询可用模型",
+        "text": "curl https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $OPENAI_API_KEY\""
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "Codex 短请求",
+        "text": "codex exec \"用一句话介绍你自己\""
+      },
+      {
+        "kind": "heading",
+        "text": "常见问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "检查内容"
+        ],
+        "rows": [
+          [
+            "401 或请求到了官方地址",
+            "确认自定义 provider、Base URL 和当前进程的 OPENAI_API_KEY。Codex 版本可能忽略仅设置 OPENAI_BASE_URL 的配置。"
+          ],
+          [
+            "404 / model not found",
+            "检查 /v1 是否缺失或重复，模型 ID 是否属于当前 Key。"
+          ],
+          [
+            "桌面版与 CLI 表现不同",
+            "完全退出再启动。图形应用可能无法继承 shell 脚本中的环境变量。"
+          ],
+          [
+            "502 或持续重连",
+            "确认主模型是文本模型，并检查 Key 的模型权限。"
+          ],
+          [
+            "请求过大或频繁压缩",
+            "减少大文件与截图输入，必要时新开会话。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "codex-cli",
+    "title": "Codex CLI 使用与验证",
+    "subtitle": "先确认 CLI 实际读取了词元互联 provider，再从短请求开始测试。",
+    "blocks": [
+      {
+        "kind": "heading",
+        "text": "检查安装与配置"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "查看版本",
+        "text": "codex --version"
+      },
+      {
+        "kind": "text",
+        "text": "先按 Codex 配置文章创建自定义 provider 并设置 API Key，再从同一个终端启动 Codex。若界面提示登录官方账户，检查 provider 是否生效。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "检查项",
+          "正确状态"
+        ],
+        "rows": [
+          [
+            "Provider",
+            "使用 config.toml 中声明的 aicodeme provider。"
+          ],
+          [
+            "Base URL",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          [
+            "协议",
+            "Responses。"
+          ],
+          [
+            "模型",
+            "当前 Key 可调用模型列表中的精确 ID。"
+          ],
+          [
+            "Key",
+            "启动 Codex 的终端进程能读取 OPENAI_API_KEY。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "日常使用"
+      },
+      {
+        "kind": "text",
+        "text": "从目标项目目录启动 Codex。先让它只读项目结构和测试命令，再逐项执行开发任务。需要修改文件时，明确目标和验收条件，完成后检查 diff 并运行相关测试。"
+      },
+      {
+        "kind": "heading",
+        "text": "桌面版与编辑器插件"
+      },
+      {
+        "kind": "text",
+        "text": "配置读取方式会随客户端版本变化。检查应用实际读取的 config.toml 路径和 provider。修改后完全退出并重启应用。图形程序启动时可能不会继承仅在终端配置的环境变量。"
+      }
+    ]
+  },
+  {
+    "id": "codex-desktop",
+    "title": "Codex 桌面版配置与故障排查",
+    "subtitle": "桌面应用可能与终端拥有不同的环境变量，使用前确认它加载了正确的自定义 provider。",
+    "blocks": [
+      {
+        "kind": "heading",
+        "text": "复用 Codex 配置"
+      },
+      {
+        "kind": "text",
+        "text": "先配置 ~/.codex/config.toml 中的自定义 provider、Responses 协议与词元互联地址。桌面版、CLI 或编辑器插件是否共用该文件取决于当前版本和系统用户，检查应用实际读取的配置路径。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "项目",
+          "配置值"
+        ],
+        "rows": [
+          [
+            "Provider",
+            "config.toml 中声明的 aicodeme provider。"
+          ],
+          [
+            "Base URL",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          [
+            "协议",
+            "Responses"
+          ],
+          [
+            "API Key",
+            "通过 OPENAI_API_KEY 或应用支持的安全配置提供。"
+          ],
+          [
+            "模型",
+            "当前 Key 可调用模型列表中的精确 ID。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "桌面版 401，但终端正常"
+      },
+      {
+        "kind": "text",
+        "text": "图形应用通常继承桌面会话启动时的环境，而不是 shell 配置文件中的变量。将 Key 配置到当前用户的系统环境变量，或通过 CC Switch 管理 provider，然后完全退出桌面应用再打开。"
+      },
+      {
+        "kind": "heading",
+        "text": "仍在请求官方服务"
+      },
+      {
+        "kind": "text",
+        "text": "确认应用没有停留在官方账户登录模式，配置文件路径正确，model_provider 指向词元互联 provider。修改后重启并发送短请求。"
+      }
+    ]
+  },
+  {
+    "id": "codex-import",
+    "title": "Codex 接入飞书",
+    "subtitle": "通过飞书机器人或自动化流程调用本地 Codex 服务时，保留 Codex 进程原有的 API 配置。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "飞书机器人、第三方桥接程序和 Codex CLI 是不同组件。先确认桥接程序能启动本地 Codex，并在同一进程环境中读取 OPENAI_API_KEY 与 Codex 配置。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "组件",
+          "检查项"
+        ],
+        "rows": [
+          [
+            "飞书侧",
+            "机器人已配置事件订阅、应用权限和消息回调。"
+          ],
+          [
+            "桥接程序",
+            "启动命令、工作目录和运行账户与预期一致。"
+          ],
+          [
+            "Codex",
+            "model_provider 指向词元互联，wire_api 使用 Responses。"
+          ],
+          [
+            "网络",
+            "桥接主机能访问 https://code.aicodeme.xyz。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "API Key 属于服务端凭据，应保存在运行服务的安全配置中，不要写进飞书消息、机器人回复或客户端日志。"
+      }
+    ]
+  },
+  {
+    "id": "claude-code-config",
+    "title": "Claude Code 配置与故障排查",
+    "subtitle": "使用 Anthropic Messages 原生协议时，Base URL 填词元互联根地址，不带 /v1。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "项目",
+          "设置"
+        ],
+        "rows": [
+          [
+            "API Key",
+            "使用有目标 Claude 模型权限的 Key。"
+          ],
+          [
+            "Base URL",
+            "https://code.aicodeme.xyz"
+          ],
+          [
+            "推荐认证变量",
+            "ANTHROPIC_AUTH_TOKEN"
+          ],
+          [
+            "模型",
+            "从当前 Key 的模型列表选择。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "写入 settings.json"
+      },
+      {
+        "kind": "text",
+        "text": "用户设置通常位于 ~/.claude/settings.json，Windows 位于用户目录下的 .claude\\settings.json。已有文件时只合并 env 字段，不要覆盖其他配置。"
+      },
+      {
+        "kind": "code",
+        "language": "json",
+        "label": "~/.claude/settings.json",
+        "text": "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": \"https://code.aicodeme.xyz\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"YOUR_API_KEY\"\n  }\n}"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "macOS / Linux 当前终端",
+        "text": "export ANTHROPIC_BASE_URL=\"https://code.aicodeme.xyz\"\nexport ANTHROPIC_AUTH_TOKEN=\"YOUR_API_KEY\"\nclaude"
+      },
+      {
+        "kind": "code",
+        "language": "powershell",
+        "label": "Windows PowerShell 当前终端",
+        "text": "$env:ANTHROPIC_BASE_URL=\"https://code.aicodeme.xyz\"\n$env:ANTHROPIC_AUTH_TOKEN=\"YOUR_API_KEY\"\nclaude"
+      },
+      {
+        "kind": "text",
+        "text": "Claude Code 的 ANTHROPIC_AUTH_TOKEN 会作为 Bearer 凭据发送。Anthropic SDK 常见默认方式是 x-api-key。词元互联网关同时接受这两种 Header。不要在 URL 参数中传 Key，也不要同时配置多个相互冲突的认证变量。客户端会自行追加 /v1/messages，Base URL 不要重复带 /v1。"
+      },
+      {
+        "kind": "heading",
+        "text": "验证连接"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "检查并启动",
+        "text": "claude doctor\nclaude --model YOUR_MODEL_ID"
+      },
+      {
+        "kind": "text",
+        "text": "会话内运行 /status 查看当前连接信息。若仍提示官方登录，说明自定义认证配置可能没有加载。"
+      },
+      {
+        "kind": "heading",
+        "text": "常见问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "检查与处理"
+        ],
+        "rows": [
+          [
+            "401",
+            "检查 Key 完整性、状态、认证变量和当前进程配置。"
+          ],
+          [
+            "404 / model not found",
+            "Base URL 不带 /v1，模型 ID 必须属于当前 Key。"
+          ],
+          [
+            "启动后要求官方登录",
+            "重新检查 API Key 鉴权变量，重开终端并查看是否有其他配置覆盖。"
+          ],
+          [
+            "修改后无变化",
+            "检查 settings.json、系统环境变量与 shell 启动文件是否配置冲突。"
+          ],
+          [
+            "429 / 503",
+            "等待限流恢复、降低并发或选择可用模型。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "claude-code-usage",
+    "title": "Claude Code 使用教程",
+    "subtitle": "检查模型权限、请求上下文和费用后再开始较长任务。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "任务",
+          "建议"
+        ],
+        "rows": [
+          [
+            "查看仓库",
+            "先让工具总结目录、入口文件和测试命令。"
+          ],
+          [
+            "修改功能",
+            "给出目标行为和验收条件，分阶段检查 diff。"
+          ],
+          [
+            "调试 API",
+            "保留请求时间、模型 ID、HTTP 状态和请求 ID，不记录 Key。"
+          ],
+          [
+            "切换模型",
+            "确认新模型在当前 API Key 的模型列表和所属分组中开放。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "Claude Code 发起 Messages API 请求。若自定义服务商只兼容 Chat Completions，请使用支持该协议的客户端或切换到对应接口，不要在 Anthropic 配置中强行使用 OpenAI 请求体。"
+      }
+    ]
+  },
+  {
+    "id": "gemini-api-cli",
+    "title": "Gemini API 与 Gemini CLI 配置",
+    "subtitle": "Gemini 原生接口使用根地址和 /v1beta/models 路径。CLI 使用 GEMINI_API_KEY 与 GOOGLE_GEMINI_BASE_URL。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "场景",
+          "Base URL",
+          "请求路径"
+        ],
+        "rows": [
+          [
+            "Gemini CLI / 原生 REST",
+            "https://code.aicodeme.xyz",
+            "/v1beta/models/{model}:generateContent"
+          ],
+          [
+            "OpenAI 兼容 SDK",
+            "https://code.aicodeme.xyz/v1",
+            "/v1/chat/completions"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "配置 Gemini CLI"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "macOS / Linux 当前终端",
+        "text": "export GEMINI_API_KEY=\"YOUR_API_KEY\"\nexport GOOGLE_GEMINI_BASE_URL=\"https://code.aicodeme.xyz\"\ngemini"
+      },
+      {
+        "kind": "code",
+        "language": "powershell",
+        "label": "Windows PowerShell 当前终端",
+        "text": "$env:GEMINI_API_KEY=\"YOUR_API_KEY\"\n$env:GOOGLE_GEMINI_BASE_URL=\"https://code.aicodeme.xyz\"\ngemini"
+      },
+      {
+        "kind": "text",
+        "text": "Gemini CLI 设置字段会随版本变化。选择 API Key 鉴权，并确认最终请求指向词元互联的 /v1beta/models 路径。根地址不要追加 /v1beta，避免重复拼接。"
+      },
+      {
+        "kind": "heading",
+        "text": "原生 REST 请求"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "generateContent",
+        "text": "curl \"https://code.aicodeme.xyz/v1beta/models/YOUR_MODEL_ID:generateContent\" \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"你好\"}]}]}'"
+      },
+      {
+        "kind": "text",
+        "text": "流式生成使用 :streamGenerateContent，并按 Gemini 流式响应格式读取。原生 Gemini 请求体使用 contents 与 parts，不要把 OpenAI messages 结构发到此路径。"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "查询当前 Key 可用的模型",
+        "text": "curl \"https://code.aicodeme.xyz/v1beta/models\" \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\""
+      },
+      {
+        "kind": "heading",
+        "text": "常见问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "错误",
+          "处理方式"
+        ],
+        "rows": [
+          [
+            "401",
+            "检查 Key 和 x-goog-api-key 请求头。"
+          ],
+          [
+            "404",
+            "检查根地址、/v1beta 前缀、模型 ID 和请求动作。"
+          ],
+          [
+            "API key group platform is not gemini",
+            "确认控制台 Key 分组和模型平台权限。"
+          ],
+          [
+            "仍提示 Google 登录",
+            "在 Gemini CLI 中切换为 API Key 认证后重新启动。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "trae-solo-config",
+    "title": "TRAE SOLO 自定义模型配置",
+    "subtitle": "在自定义模型设置中按协议选择 OpenAI Chat Completions 或 Anthropic Messages。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "进入设置中的模型页面，选择添加模型和自定义模型。菜单文案会随 TRAE 版本变化，可在设置内搜索“模型”。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "字段",
+          "GPT / OpenAI 兼容",
+          "Claude / Anthropic"
+        ],
+        "rows": [
+          [
+            "API 格式",
+            "OpenAI Chat Completions",
+            "Anthropic Messages"
+          ],
+          [
+            "完整 URL",
+            "关闭时填 https://code.aicodeme.xyz/v1；打开时填完整 /v1/chat/completions URL。",
+            "打开时填 https://code.aicodeme.xyz/v1/messages。"
+          ],
+          [
+            "API Key",
+            "有目标模型权限的词元互联 Key",
+            "有目标模型权限的词元互联 Key"
+          ],
+          [
+            "模型 ID",
+            "从 Key 的模型列表复制",
+            "从 Key 的模型列表复制"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "“完整 URL”关闭时先确认 TRAE 会自动追加的路径。不要在 /v1 后重复添加 /chat/completions。Claude 应选择 Anthropic Messages 格式。"
+      },
+      {
+        "kind": "heading",
+        "text": "验证与排错"
+      },
+      {
+        "kind": "text",
+        "text": "先发送一条短消息。401 检查 Key 和平台权限，404 核对完整 URL 开关与最终路径，model not found 时从模型目录复制准确 ID。能力选项不确定时保持默认，再按目标模型支持情况启用。"
+      }
+    ]
+  },
+  {
+    "id": "workbuddy-config",
+    "title": "WorkBuddy 自定义模型配置",
+    "subtitle": "WorkBuddy 自定义模型使用 OpenAI Chat Completions。检查地址补全和工具调用设置。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "进入 WorkBuddy 设置中的模型管理，添加自定义模型。菜单名称会随应用版本调整。"
+      },
+      {
+        "kind": "code",
+        "language": "text",
+        "label": "配置值",
+        "text": "服务商：自定义\n接口地址：https://code.aicodeme.xyz/v1\nAPI Key：YOUR_API_KEY\n模型名：YOUR_MODEL_ID"
+      },
+      {
+        "kind": "heading",
+        "text": "高级设置"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "选项",
+          "设置建议"
+        ],
+        "rows": [
+          [
+            "自定义协议",
+            "若关闭时自动追加 /chat/completions，地址填写到 /v1。若开启，按界面说明填写完整 URL。"
+          ],
+          [
+            "工具调用",
+            "模型支持且需要文件、表格等 Agent 操作时启用。"
+          ],
+          [
+            "图片与推理能力",
+            "按所选模型能力启用；不确定时先保留默认值。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "保存后执行测试连接，再回到对话中手动选中新模型进行短任务测试。测试连接会产生一次真实模型请求。"
+      },
+      {
+        "kind": "heading",
+        "text": "常见问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "处理方法"
+        ],
+        "rows": [
+          [
+            "401",
+            "检查 Key 是否完整有效，接口地址是否指向词元互联。"
+          ],
+          [
+            "404",
+            "检查自定义协议开关和最终 URL，避免重复添加路径。"
+          ],
+          [
+            "测试通过但执行任务失败",
+            "确认模型支持工具调用，并检查 WorkBuddy 对应能力是否启用。"
+          ],
+          [
+            "仍使用内置模型",
+            "关闭自动模型选择，手动选中自定义模型。"
+          ],
+          [
+            "Claude 调用费用较高",
+            "确认当前兼容协议是否支持 Anthropic 原生缓存，并查看实际计费记录。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "openclaw-config",
+    "title": "OpenClaw 自定义模型配置",
+    "subtitle": "在 openclaw.json 中声明词元互联 provider、模型 ID 和默认模型。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "在 ~/.openclaw/openclaw.json 的 models.providers 中增加自定义 provider。Windows 用户可在用户目录的 .openclaw 文件夹查找配置。已有配置时合并字段，不要覆盖整个文件。"
+      },
+      {
+        "kind": "code",
+        "language": "json",
+        "label": "openclaw.json",
+        "text": "{\n  \"models\": {\n    \"mode\": \"merge\",\n    \"providers\": {\n      \"aicodeme\": {\n        \"baseUrl\": \"https://code.aicodeme.xyz/v1\",\n        \"apiKey\": \"YOUR_API_KEY\",\n        \"api\": \"openai-completions\",\n        \"models\": [\n          { \"id\": \"YOUR_MODEL_ID\", \"name\": \"词元互联模型\", \"contextWindow\": 128000, \"maxTokens\": 8192 }\n        ]\n      }\n    }\n  },\n  \"agents\": {\n    \"defaults\": { \"model\": { \"primary\": \"aicodeme/YOUR_MODEL_ID\" } }\n  }\n}"
+      },
+      {
+        "kind": "text",
+        "text": "模型 ID 必须与当前 Key 可调用列表一致。contextWindow 和 maxTokens 应按模型能力填写，示例值不是模型能力保证。配置含 API Key，不要上传或分享。"
+      },
+      {
+        "kind": "heading",
+        "text": "验证与重启"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "验证配置",
+        "text": "openclaw doctor\nopenclaw models list\nopenclaw gateway restart"
+      },
+      {
+        "kind": "heading",
+        "text": "常见错误"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "处理方式"
+        ],
+        "rows": [
+          [
+            "模型列表没有 provider",
+            "检查 JSON 结构和 provider 字段，再运行 doctor。"
+          ],
+          [
+            "401",
+            "检查 apiKey、baseUrl 和 Key 状态。"
+          ],
+          [
+            "model not found",
+            "检查 models 数组中的 id 与默认模型 provider/id。"
+          ],
+          [
+            "改完未生效",
+            "重启网关，并确认运行中的用户读取了刚编辑的配置。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hermes-agent-config",
+    "title": "Hermes Agent 自定义模型配置",
+    "subtitle": "在 config.yaml 中声明 custom provider，通过本机 .env 提供 API Key。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "运行 hermes model 选择自定义 endpoint，或编辑 ~/.hermes/config.yaml。配置模式随版本变化，保存前用 hermes doctor 检查。"
+      },
+      {
+        "kind": "code",
+        "language": "yaml",
+        "label": "~/.hermes/config.yaml",
+        "text": "model:\n  default: YOUR_MODEL_ID\n  provider: custom\n  base_url: https://code.aicodeme.xyz/v1\n  key_env: AICODEME_API_KEY\n  context_length: 128000"
+      },
+      {
+        "kind": "code",
+        "language": "text",
+        "label": "~/.hermes/.env",
+        "text": "AICODEME_API_KEY=YOUR_API_KEY"
+      },
+      {
+        "kind": "text",
+        "text": "key_env 必须与 .env 变量名完全一致。不要将真实 Key 写入可共享的 config.yaml。context_length 按模型实际能力设置。"
+      },
+      {
+        "kind": "heading",
+        "text": "验证连接"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "诊断并测试",
+        "text": "hermes doctor\nhermes chat -q \"你好\" --oneshot"
+      },
+      {
+        "kind": "heading",
+        "text": "常见错误"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "检查方法"
+        ],
+        "rows": [
+          [
+            "请求去了默认服务商",
+            "确认 provider 为 custom，base_url 位于当前版本要求的配置节点。"
+          ],
+          [
+            "401",
+            "核对 .env 变量名与 key_env，并检查 Key 状态。"
+          ],
+          [
+            "model not found",
+            "从当前 Key 模型列表复制模型 ID。"
+          ],
+          [
+            "上下文长度过小",
+            "按模型实际能力调整 context_length。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "why-aicodeme",
+    "title": "为什么选择词元互联",
+    "subtitle": "通过统一 API Key 连接控制台当前开放的模型和媒体能力。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "能力",
+          "说明"
+        ],
+        "rows": [
+          [
+            "多协议接口",
+            "根据模型提供 OpenAI、Anthropic、Gemini 等对应协议入口。"
+          ],
+          [
+            "统一密钥",
+            "API Key 仅能调用其权限范围内的模型。"
+          ],
+          [
+            "在线调试",
+            "加载 Key 可用模型，编辑请求并查看同步、流式或异步响应。"
+          ],
+          [
+            "媒体任务",
+            "托管媒体生成提供估价、任务状态和结果查询能力。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "实际模型、计费、速率限制和响应能力以控制台当前配置为准。"
+      }
+    ]
+  },
+  {
+    "id": "about-aicodeme",
+    "title": "关于词元互联",
+    "subtitle": "词元互联提供 API 接入与模型调用的统一控制台和网关入口。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "API 服务根地址为 https://code.aicodeme.xyz。使用前在控制台创建 API Key，并查看模型权限、价格和使用记录。"
+      },
+      {
+        "kind": "text",
+        "text": "遇到请求问题时记录客户端、模型、时间、状态码和 request ID，反馈时遮盖完整密钥。"
+      }
+    ]
+  },
+  {
+    "id": "openai-compatible",
+    "title": "OpenAI 兼容接入与 Base URL",
+    "subtitle": "先确认客户端如何拼接路径，再设置词元互联地址。OpenAI 兼容请求使用 /v1 路径。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "客户端配置方式",
+          "Base URL"
+        ],
+        "rows": [
+          [
+            "OpenAI SDK，或明确要求填写 API 前缀的兼容客户端",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          [
+            "客户端会自动追加 /v1 的配置项",
+            "https://code.aicodeme.xyz"
+          ],
+          [
+            "Gemini 原生客户端",
+            "https://code.aicodeme.xyz，路径从 /v1beta/models 开始"
+          ],
+          [
+            "Anthropic Messages 客户端",
+            "https://code.aicodeme.xyz，路径为 /v1/messages"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "确认客户端拼接规则"
+      },
+      {
+        "kind": "text",
+        "text": "Base URL 是客户端的 API 前缀，不是完整的生成请求地址。OpenAI SDK 常见调用路径为 /v1/chat/completions 或 /v1/responses。若客户端自行追加 /v1，Base URL 就不应再带 /v1。最终请求路径中版本前缀只应出现一次。"
+      },
+      {
+        "kind": "code",
+        "language": "js",
+        "label": "Node.js OpenAI SDK",
+        "text": "import OpenAI from 'openai'\n\nconst client = new OpenAI({\n  apiKey: process.env.AICODEME_API_KEY,\n  baseURL: 'https://code.aicodeme.xyz/v1'\n})\n\nconst result = await client.chat.completions.create({\n  model: 'YOUR_MODEL_ID',\n  messages: [{ role: 'user', content: '你好' }]\n})\nconsole.log(result.choices[0].message.content)"
+      },
+      {
+        "kind": "code",
+        "language": "python",
+        "label": "Python OpenAI SDK",
+        "text": "from openai import OpenAI\nimport os\n\nclient = OpenAI(\n    api_key=os.environ[\"AICODEME_API_KEY\"],\n    base_url=\"https://code.aicodeme.xyz/v1\",\n)\n\nresult = client.chat.completions.create(\n    model=\"YOUR_MODEL_ID\",\n    messages=[{\"role\": \"user\", \"content\": \"你好\"}],\n)\nprint(result.choices[0].message.content)"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "先验证地址和鉴权",
+        "text": "curl https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "heading",
+        "text": "常见路径问题"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "实际请求路径",
+          "原因与处理"
+        ],
+        "rows": [
+          [
+            "/v1/v1/chat/completions",
+            "Base URL 和客户端都追加了 /v1。移除其中一处。"
+          ],
+          [
+            "/v1/chat/completions/chat/completions",
+            "客户端字段要求的是 Base URL，但填入了完整接口路径。"
+          ],
+          [
+            "/chat/completions",
+            "客户端没有追加 /v1。将 Base URL 设置为 https://code.aicodeme.xyz/v1。"
+          ],
+          [
+            "请求发往其他域名",
+            "检查是否仍在使用默认上游地址，或代理、环境变量覆盖了 Base URL。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "确认请求发往词元互联 API 地址。不要在 URL 参数中放 API Key。若请求路径正确但返回模型不存在，请按“模型不存在”文章检查当前 Key 的模型列表和权限。"
+      }
+    ]
+  },
+  {
+    "id": "api-key-401",
+    "title": "401 invalid_api_key 怎么解决",
+    "subtitle": "先确定协议对应的鉴权头，再确认 Key、目标地址和客户端配置实际生效。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "协议或检查项",
+          "确认方式"
+        ],
+        "rows": [
+          [
+            "OpenAI 兼容接口",
+            "Authorization: Bearer YOUR_API_KEY"
+          ],
+          [
+            "Anthropic Messages",
+            "使用 x-api-key，并携带 anthropic-version: 2023-06-01。网关也接受 Bearer 鉴权。"
+          ],
+          [
+            "Gemini 原生接口",
+            "推荐使用 x-goog-api-key。网关也接受 Authorization: Bearer。"
+          ],
+          [
+            "Key 状态",
+            "在词元互联控制台确认该 Key 存在、未禁用、未过期且属于预期账户。"
+          ],
+          [
+            "请求目标",
+            "确认请求发往 https://code.aicodeme.xyz，而非上游厂商地址或旧环境。"
+          ],
+          [
+            "客户端覆盖",
+            "检查环境变量、代理、CC Switch 配置和客户端自定义 Header 是否覆盖了 Key。"
+          ],
+          [
+            "密钥文本",
+            "删除首尾空格、换行和引号，避免在 Key 字段里重复填写 Bearer 前缀。"
+          ]
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "OpenAI 兼容接口鉴权检查",
+        "text": "curl https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "Gemini 原生鉴权检查",
+        "text": "curl https://code.aicodeme.xyz/v1beta/models \\\n  -H \"x-goog-api-key: $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "heading",
+        "text": "区分认证错误与其他状态码"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "结果",
+          "下一步"
+        ],
+        "rows": [
+          [
+            "401",
+            "核对 Key 是否正确、请求头是否到达服务端、Key 是否有效。"
+          ],
+          [
+            "403",
+            "认证可能已通过，继续检查 Key 分组、模型权限、IP 限制或功能权限。"
+          ],
+          [
+            "429",
+            "通常表示频率、并发或额度限制，检查错误正文和 Retry-After。"
+          ],
+          [
+            "200 但工具仍报错",
+            "检查客户端是否使用了另一套配置、模型或服务地址。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "不要把完整 API Key 放进工单、截图、命令记录或在线排错网站。若 Key 曾公开，请在控制台禁用并重新创建。反馈时保留 HTTP 状态、请求路径、时间和 request ID，并遮盖密钥。"
+      }
+    ]
+  },
+  {
+    "id": "api-404-html",
+    "title": "404 或错误里出现网页内容",
+    "subtitle": "API 请求若返回 HTML 页面，通常需要先检查目标域名、Base URL 和代理路由。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "正常的 API 错误通常返回 JSON。若响应正文是网页 HTML、登录页或前端首页，说明请求可能落到了网站页面路由，而不是 API 接口。先确认完整请求 URL 和响应头，不要只根据客户端弹出的“404”判断模型问题。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "检查项",
+          "处理方法"
+        ],
+        "rows": [
+          [
+            "目标域名",
+            "确认请求发往 https://code.aicodeme.xyz，而不是控制台前端、旧域名或上游厂商域名。"
+          ],
+          [
+            "Base URL",
+            "OpenAI SDK 常用 https://code.aicodeme.xyz/v1。客户端会自动追加 /v1 时，Base URL 使用根地址。"
+          ],
+          [
+            "完整路径",
+            "检查最终请求是否为 /v1/models、/v1/chat/completions、/v1/responses 或对应原生协议路径。避免重复拼接路径。"
+          ],
+          [
+            "反向代理",
+            "确认 API 路径被转发到网关，而不是由前端 history fallback 返回 index.html。"
+          ],
+          [
+            "响应头",
+            "检查 Content-Type。text/html 通常表示请求进入了网页路由；application/json 才是 API 常见响应格式。"
+          ],
+          [
+            "模型路径",
+            "若路径和响应均为 JSON，再使用当前 Key 查询模型目录并核对模型 ID。"
+          ]
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "检查 API 是否返回 JSON",
+        "text": "curl -i https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "text",
+        "text": "如果 curl 返回网页 HTML，记录实际请求 URL、HTTP 状态和 Content-Type，联系服务维护人员检查反向代理路由。不要在问题反馈中粘贴完整 API Key。"
+      }
+    ]
+  },
+  {
+    "id": "model-not-exist",
+    "title": "model not exist / 模型不存在",
+    "subtitle": "使用当前 API Key 可见的精确模型 ID，并确认请求协议与接口路径相匹配。",
+    "blocks": [
+      {
+        "kind": "heading",
+        "text": "先从当前 Key 查询模型"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "OpenAI 兼容模型目录",
+        "text": "curl https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "Gemini 原生模型目录",
+        "text": "curl https://code.aicodeme.xyz/v1beta/models \\\n  -H \"x-goog-api-key: $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "可能原因",
+          "处理方法"
+        ],
+        "rows": [
+          [
+            "模型 ID 拼写、大小写或后缀不一致",
+            "从当前 Key 的模型列表复制完整 ID，不要自行补充厂商名或版本后缀。"
+          ],
+          [
+            "Key 分组没有开放该模型",
+            "检查控制台的 Key 分组、模型白名单、渠道绑定和模型启用状态。"
+          ],
+          [
+            "模型列表与请求协议不匹配",
+            "OpenAI Chat、Responses、Anthropic Messages 与 Gemini 原生请求使用不同路径和请求体。"
+          ],
+          [
+            "客户端改写或别名映射模型名",
+            "关闭客户端模型映射，先用模型目录返回的 ID 直接测试。"
+          ],
+          [
+            "模型在其他 Key 或账户可用",
+            "不同 Key 的分组和权限可能不同。用实际发起请求的 Key 查询目录。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "检查完整请求"
+      },
+      {
+        "kind": "text",
+        "text": "确认模型 ID 在请求 JSON 的 model 字段中没有额外空格，URL 路径没有重复的 /v1。Gemini 原生路径中的模型名位于 /v1beta/models/{model}:generateContent。Anthropic 请求需使用 /v1/messages 和 Messages 格式。"
+      },
+      {
+        "kind": "text",
+        "text": "部分网关会用 404 或其他错误格式表示路由缺失。判断时同时看 HTTP 状态、错误正文、模型目录和请求路径，不要只按上游厂商的公开模型清单推断当前 Key 已开通。"
+      }
+    ]
+  },
+  {
+    "id": "chatgpt-model-not-found",
+    "title": "ChatGPT / Codex 显示 model not found",
+    "subtitle": "Codex 自定义 provider 使用 OpenAI Responses 协议，确认 provider、模型 ID 和配置文件均已生效。",
+    "blocks": [
+      {
+        "kind": "code",
+        "language": "toml",
+        "label": "Codex config.toml 示例",
+        "text": "model = \"YOUR_MODEL_ID\"\nmodel_provider = \"aicodeme\"\n\n[model_providers.aicodeme]\nname = \"词元互联\"\nbase_url = \"https://code.aicodeme.xyz/v1\"\nwire_api = \"responses\"\nenv_key = \"AICODEME_API_KEY\""
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "检查项",
+          "确认内容"
+        ],
+        "rows": [
+          [
+            "Provider",
+            "model_provider 的值与 model_providers 下的配置名称完全一致。"
+          ],
+          [
+            "协议",
+            "Codex provider 使用 Responses，wire_api 设置为 responses。"
+          ],
+          [
+            "Base URL",
+            "填写 https://code.aicodeme.xyz/v1，避免重复添加 /v1 或完整接口路径。"
+          ],
+          [
+            "模型 ID",
+            "从发起请求的 API Key 调用 GET /v1/models，复制完整模型 ID。"
+          ],
+          [
+            "环境变量",
+            "启动 Codex 的用户会话中存在配置指定的环境变量，值为词元互联 API Key。"
+          ],
+          [
+            "配置文件",
+            "确认 Codex 正在读取预期用户目录中的 config.toml，修改后完全退出并重启。"
+          ]
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "验证 Key 和模型目录",
+        "text": "curl https://code.aicodeme.xyz/v1/models \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "text",
+        "text": "ChatGPT 官方账户登录和第三方 API Key 接入是两种不同方式。若界面仍要求官方登录，检查 Codex 是否已选中自定义 provider。使用其他 ChatGPT 客户端时，应确认它支持自定义 Base URL 和 Responses 协议。"
+      }
+    ]
+  },
+  {
+    "id": "cline-roo-config",
+    "title": "Cline / Roo Code 配置教程",
+    "subtitle": "为 Cline 或 Roo Code 选择 OpenAI Compatible 接口，并确认扩展最终请求路径。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "在扩展的 API Provider 设置中选择 OpenAI Compatible 或 OpenAI Compatible API。Cline 与 Roo Code 的字段名称会随版本变化，填写时以页面里的 Base URL、API Key、Model ID 和上下文长度字段为准。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "字段",
+          "填写内容"
+        ],
+        "rows": [
+          [
+            "API Provider",
+            "OpenAI Compatible / OpenAI Compatible API"
+          ],
+          [
+            "Base URL",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          [
+            "API Key",
+            "词元互联控制台创建的 API Key"
+          ],
+          [
+            "Model ID",
+            "当前 API Key 模型目录中的精确模型 ID"
+          ],
+          [
+            "上下文长度",
+            "按当前模型能力填写，不要将示例值当作模型上限"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "保存后验证"
+      },
+      {
+        "kind": "text",
+        "text": "先使用扩展自带的连接测试，再在新会话里发送一条短消息。查看扩展输出或网络日志，确认请求发往词元互联，路径为 /v1/chat/completions 或该扩展实际支持的 OpenAI 兼容路径。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "处理方法"
+        ],
+        "rows": [
+          [
+            "404",
+            "检查 Base URL 和扩展是否都会追加 /v1 或 /chat/completions，修正重复或缺少的路径片段。"
+          ],
+          [
+            "401",
+            "检查 Key 是否有效、API Provider 是否选对，以及扩展是否覆盖 Authorization Header。"
+          ],
+          [
+            "模型不存在",
+            "从实际使用的 Key 模型目录复制模型 ID，并关闭自动别名。"
+          ],
+          [
+            "工具调用或编辑失败",
+            "确认扩展使用的接口支持所需的工具调用格式，再检查模型能力和扩展版本。"
+          ],
+          [
+            "使用 Anthropic provider",
+            "仅在当前模型和服务端支持 Messages 协议时使用。Anthropic provider 应发送 Messages 格式，不能只把 OpenAI Chat 的 Base URL 填进去。"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "api-errors",
+    "title": "API 报错大全",
+    "subtitle": "先读取 HTTP 状态和错误正文，再按请求路径、模型权限和任务状态逐项排查。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "状态码",
+          "常见原因",
+          "处理建议"
+        ],
+        "rows": [
+          [
+            "400",
+            "JSON 无效、缺少必填字段、参数类型错误或请求体与协议不匹配。",
+            "检查错误正文指向的字段，确认请求路径对应的协议和 JSON 结构。"
+          ],
+          [
+            "401",
+            "API Key 缺失、错误、已禁用，或鉴权头没有到达服务端。",
+            "检查 Authorization Bearer、Anthropic x-api-key 或 Gemini x-goog-api-key。"
+          ],
+          [
+            "403",
+            "Key 已识别，但账户、分组、模型、IP 或功能权限不满足。",
+            "检查控制台的 Key 状态、分组权限、IP 限制和模型开放状态。"
+          ],
+          [
+            "404",
+            "请求路径、模型路由或任务编号未找到。",
+            "检查 Base URL 的 /v1 前缀、协议路径、模型 ID 和任务 ID。"
+          ],
+          [
+            "408 / 超时",
+            "客户端等待时间不足、网络中断，或上游响应时间较长。",
+            "保存请求时间、路径和 request ID。任务型请求先查询原任务状态，再决定后续操作。"
+          ],
+          [
+            "409",
+            "请求与当前任务状态冲突，或资源状态不允许当前操作。",
+            "读取错误正文和任务状态，确认操作是否已提交或已结束。"
+          ],
+          [
+            "413",
+            "请求体或上传素材超过大小限制。",
+            "压缩素材、减少文件数量，并确认模型和接口的素材限制。"
+          ],
+          [
+            "415",
+            "Content-Type 或上传文件格式不受支持。",
+            "JSON 请求使用 application/json，文件上传按接口要求使用 multipart/form-data。"
+          ],
+          [
+            "422",
+            "字段格式合法，但组合不符合模型或媒体任务要求。",
+            "按错误正文修正字段值、素材类型、模板或生成参数。"
+          ],
+          [
+            "429",
+            "请求频率、并发、速率限制或额度限制。",
+            "降低并发，遵循 Retry-After，并检查 Key 限额与账户使用情况。"
+          ],
+          [
+            "5xx",
+            "网关、渠道或上游服务暂时异常。",
+            "记录时间、路径、模型、HTTP 状态和可用的 request ID。付费任务先核对受理状态，不要盲目重复创建。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "响应体与请求记录"
+      },
+      {
+        "kind": "text",
+        "text": "优先保留 HTTP 状态码、错误正文、请求路径、模型 ID、发生时间和服务返回的 request ID。若返回 Retry-After，按该值等待。排错材料中遮盖 API Key、Authorization、Cookie 及提示词中的隐私内容。"
+      },
+      {
+        "kind": "heading",
+        "text": "提交超时与异步任务"
+      },
+      {
+        "kind": "text",
+        "text": "收到 HTTP 202 和任务编号时，使用对应任务查询接口轮询该任务。付费任务提交后若连接断开且没有收到编号，不要立即重复 POST。媒体调试器可使用本地保存的幂等标识恢复核对原任务；先确认原任务未受理，再发起新任务。同步文本请求若网络中断，也应先根据服务返回的 request ID 或使用记录核实后再重试。"
+      }
+    ]
+  },
+  {
+    "id": "balance-query",
+    "title": "API 余额查询",
+    "subtitle": "区分账户余额、API Key 用量与当前 Key 的计费信息，不同接口返回的数据含义不同。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "CC Switch 的余额或用量卡片通过 GET /v1/usage 读取当前 API Key 对应的额度或账户信息。账户余额、订阅额度和 Key 自身限额会返回不同字段。"
+      },
+      {
+        "kind": "endpoint",
+        "method": "GET",
+        "path": "/v1/usage"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "查询当前 Key 的用量与剩余额度",
+        "text": "curl https://code.aicodeme.xyz/v1/usage \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "Key 类型",
+          "响应中的额度信息"
+        ],
+        "rows": [
+          [
+            "设置了总额度的 API Key",
+            "quota.limit、quota.used、quota.remaining；并提供顶层 remaining 和 unit。"
+          ],
+          [
+            "仅设置速率限额的 API Key",
+            "rate_limits 数组中包含 5 小时、1 天或 7 天窗口的 limit、used 和 remaining。"
+          ],
+          [
+            "无限额钱包账户",
+            "返回账户余额字段 balance 和 remaining，unit 为 USD。"
+          ],
+          [
+            "订阅账户",
+            "按订阅规则返回 remaining、planName 和 subscription 信息。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "若 CC Switch 提示查询失败，先检查导入的 Base URL 是否正确、API Key 是否有效，以及该 Key 是否有可显示的额度或速率限额。确认请求路径恰好为 /v1/usage，不应出现 /v1/v1/usage。"
+      },
+      {
+        "kind": "heading",
+        "text": "计费信息接口"
+      },
+      {
+        "kind": "endpoint",
+        "method": "GET",
+        "path": "/v1/sub2api/billing"
+      },
+      {
+        "kind": "text",
+        "text": "GET /v1/sub2api/billing 返回当前 API Key 的计费倍率和计费上下文，不是账户余额查询接口。余额和使用记录也可在词元互联控制台查看。"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "查询 Key 计费倍率",
+        "text": "curl https://code.aicodeme.xyz/v1/sub2api/billing \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\""
+      }
+    ]
+  },
+  {
+    "id": "image-api",
+    "title": "生图 API 接入",
+    "subtitle": "OpenAI 图片协议支持文生图和参考图编辑，模型与权限以 API Key 为准。",
+    "blocks": [
+      {
+        "kind": "endpoint",
+        "method": "POST",
+        "path": "/v1/images/generations"
+      },
+      {
+        "kind": "endpoint",
+        "method": "POST",
+        "path": "/v1/images/edits"
+      },
+      {
+        "kind": "code",
+        "language": "json",
+        "label": "文生图请求",
+        "text": "{\n  \"model\": \"YOUR_IMAGE_MODEL\",\n  \"prompt\": \"一只坐在窗边的橘猫，柔和自然光\",\n  \"size\": \"1024x1024\",\n  \"n\": 1\n}"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "异步图片请求",
+        "text": "curl https://code.aicodeme.xyz/v1/images/generations/async \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"YOUR_IMAGE_MODEL\",\"prompt\":\"一只橘猫\",\"n\":1}'"
+      },
+      {
+        "kind": "text",
+        "text": "标准请求可能同步返回图片，也可能由托管能力返回 HTTP 202 和任务编号。独立异步图片接口返回 poll_url，按返回地址查询状态。参考图编辑使用 /v1/images/edits，图片素材格式和大小以模型能力为准。"
+      }
+    ]
+  },
+  {
+    "id": "banana-image-api",
+    "title": "香蕉生图 API",
+    "subtitle": "使用 Key 中实际开放的 Gemini 图片模型和原生 Gemini 请求格式。",
+    "blocks": [
+      {
+        "kind": "endpoint",
+        "method": "POST",
+        "path": "/v1beta/models/{model}:generateContent"
+      },
+      {
+        "kind": "code",
+        "language": "json",
+        "label": "Gemini 图片请求",
+        "text": "{\n  \"contents\": [{\n    \"role\": \"user\",\n    \"parts\": [{\"text\": \"生成一张产品海报，主体清晰，暖色棚拍\"}]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"IMAGE\", \"TEXT\"],\n    \"imageConfig\": {\"aspectRatio\": \"1:1\", \"imageSize\": \"1K\"}\n  }\n}"
+      },
+      {
+        "kind": "text",
+        "text": "将 {model} 替换为 API Key 可调用列表中的确切模型名称。输出图片可能位于 candidates[].content.parts[].inlineData；按字段读取，不要假定图片始终在固定下标。支持的比例、分辨率和响应模态以模型能力为准。"
+      }
+    ]
+  },
+  {
+    "id": "claude-api-cn",
+    "title": "Claude API 接入与网络配置",
+    "subtitle": "使用 Anthropic Messages 协议时，区分客户端 Base URL、请求路径和 API Key 权限。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "项目",
+          "配置"
+        ],
+        "rows": [
+          [
+            "Base URL",
+            "https://code.aicodeme.xyz"
+          ],
+          [
+            "路径",
+            "/v1/messages"
+          ],
+          [
+            "认证头",
+            "Anthropic SDK 常用 x-api-key；Claude Code 的 ANTHROPIC_AUTH_TOKEN 使用 Authorization: Bearer。网关均支持。"
+          ],
+          [
+            "版本头",
+            "anthropic-version: 2023-06-01"
+          ],
+          [
+            "模型",
+            "当前 Key 模型目录中的模型 ID"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "Claude Code、Anthropic SDK 和 Messages 客户端使用 Anthropic 请求格式。Base URL 不带 /v1，客户端通常会自行追加 /v1/messages。"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "最小 Messages 请求",
+        "text": "curl https://code.aicodeme.xyz/v1/messages \\\n  -H \"Authorization: Bearer $ANTHROPIC_AUTH_TOKEN\" \\\n  -H \"anthropic-version: 2023-06-01\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"model\":\"YOUR_MODEL_ID\",\"max_tokens\":128,\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}'"
+      },
+      {
+        "kind": "heading",
+        "text": "连接失败时"
+      },
+      {
+        "kind": "text",
+        "text": "401 检查 Key、认证头和客户端环境变量；404 检查是否重复添加 /v1/messages；model not found 检查当前 Key 的模型权限。Claude Code 推荐将 API Key 设置到 ANTHROPIC_AUTH_TOKEN，该变量会通过 Bearer 鉴权发送。"
+      }
+    ]
+  },
+  {
+    "id": "chatgpt-cn",
+    "title": "ChatGPT 与 API 接入方式说明",
+    "subtitle": "ChatGPT 官方账号与词元互联 API Key 是不同的客户端和鉴权方式。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "目标",
+          "配置方式"
+        ],
+        "rows": [
+          [
+            "使用 ChatGPT 官方网页或应用",
+            "按官方账户登录和套餐设置操作。"
+          ],
+          [
+            "通过 API 调用模型",
+            "使用 SDK、curl 或支持自定义 API provider 的客户端，Base URL 为 https://code.aicodeme.xyz/v1。"
+          ],
+          [
+            "使用 Codex CLI",
+            "在 config.toml 配置自定义 provider，并使用 Responses 协议。"
+          ],
+          [
+            "选择模型",
+            "从当前 API Key 的 /v1/models 列表中选择。"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "将 API Key 输入官方账户登录框不会把官方应用转换成 API 客户端。需要 API 接入时，应在支持自定义 provider 的工具中设置词元互联地址。"
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "OpenAI 兼容请求",
+        "text": "curl https://code.aicodeme.xyz/v1/chat/completions \\\n  -H \"Authorization: Bearer $OPENAI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"model\":\"YOUR_MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}'"
+      },
+      {
+        "kind": "text",
+        "text": "遇到 model not found 时，先查询模型列表，再核对 provider、协议和 Key 权限。"
+      }
+    ]
+  },
+  {
+    "id": "api-relay-selection",
+    "title": "API 服务接入与选型检查",
+    "subtitle": "按协议兼容、模型权限、计费可见性和任务恢复能力核对 API 接入。",
+    "blocks": [
+      {
+        "kind": "table",
+        "headers": [
+          "检查项",
+          "需要确认的内容"
+        ],
+        "rows": [
+          [
+            "协议",
+            "客户端使用 Chat Completions、Responses、Anthropic Messages 还是 Gemini 原生格式。"
+          ],
+          [
+            "Base URL",
+            "不同协议的地址与路径拼接规则是否清楚。"
+          ],
+          [
+            "模型权限",
+            "当前 Key 可调用模型是否能查询，模型 ID 是否明确。"
+          ],
+          [
+            "计费信息",
+            "能否查看使用记录、Key 限额和媒体任务费用状态。"
+          ],
+          [
+            "异步任务",
+            "任务是否返回 ID、查询地址和可恢复状态。"
+          ],
+          [
+            "故障排查",
+            "错误是否包含 HTTP 状态码、可读信息和 request ID。"
+          ],
+          [
+            "密钥管理",
+            "能否按项目设置权限、额度、过期时间或 IP 白名单。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "接入测试顺序"
+      },
+      {
+        "kind": "text",
+        "text": "先用短文本验证地址和鉴权，再查询模型目录，随后测试实际使用的协议、流式或媒体参数。通过后核对使用记录与费用。付费异步任务超时后，应查询原任务，不要未经确认立即重复提交。"
+      },
+      {
+        "kind": "text",
+        "text": "不同模型和客户端功能并不完全相同。应以当前 Key 的能力目录、接口响应和实际使用记录确认。"
+      }
+    ]
+  },
+  {
+    "id": "cursor-openai-compatible",
+    "title": "Cursor 自定义 OpenAI 兼容模型",
+    "subtitle": "在 Cursor 支持自定义 Base URL 的版本中使用词元互联地址和模型 ID。",
+    "blocks": [
+      {
+        "kind": "text",
+        "text": "打开 Cursor 设置中的 Models 或 Models & API Keys 页面，启用 OpenAI API Key 并设置 Base URL。菜单会随版本变化。"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "字段",
+          "填写内容"
+        ],
+        "rows": [
+          [
+            "OpenAI API Key",
+            "YOUR_API_KEY"
+          ],
+          [
+            "Override OpenAI Base URL",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          [
+            "模型",
+            "当前 Key 模型目录中的精确模型 ID"
+          ]
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "若 Cursor 提供添加自定义模型入口，使用模型列表中的原始 ID。检查是否重复拼接 /v1 或 /chat/completions。"
+      },
+      {
+        "kind": "heading",
+        "text": "验证与排错"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "检查内容"
+        ],
+        "rows": [
+          [
+            "401",
+            "确认自定义 Base URL 已启用，Key 有效且无额外空格。"
+          ],
+          [
+            "404",
+            "检查版本前缀和最终请求路径。"
+          ],
+          [
+            "模型不存在",
+            "从当前 Key 的模型列表复制模型 ID。"
+          ],
+          [
+            "仍请求官方端点",
+            "检查当前版本是否支持覆盖 Base URL，并选中自定义模型。"
+          ]
+        ]
+      }
+    ]
+  }
+]

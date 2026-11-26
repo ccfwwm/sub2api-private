@@ -141,16 +141,8 @@
         ],
         "rows": [
           [
-            "国内入口",
-            "https://code.aicodeme.cn"
-          ],
-          [
-            "直连入口",
+            "接口地址",
             "https://code.aicodeme.xyz"
-          ],
-          [
-            "香港入口",
-            "https://hkcode.aicodeme.xyz"
           ]
         ]
       },

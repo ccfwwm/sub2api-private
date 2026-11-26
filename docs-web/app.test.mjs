@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, fullMarkdown, inputMaterialsFor, loadDocsVersion, optionValues, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
+import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, endpointForStreaming, fullMarkdown, inputMaterialsFor, loadDocsVersion, navigationGroups, optionValues, parseErrorMessage, parseGeneralModels, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
@@ -14,6 +14,40 @@ test('public requests preserve all references without selecting a supplier proto
   assert.equal(request.reference_images,undefined)
   assert.deepEqual(buildRequest({...cap,model:'renamed',request_format:'anything'},'video',{prompt:'test'},{image:images}).images,images)
   assert.deepEqual(buildRequest(cap,'video',{prompt:'test'},{image:[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}]}).images,[{b64_json:'AA==',mime_type:'image/png',role:'first_frame'}])
+})
+
+test('general model catalogs preserve protocol metadata and build sync and streaming requests',()=>{
+  const models=parseGeneralModels({data:[{id:'gpt-test',owned_by:'openai'},{id:'claude-test',type:'model'},{id:'jev-latest',type:'model'},{id:'image-only',owned_by:'sub2api'}]},{models:[{name:'models/gemini-test'}]})
+  assert.deepEqual(models.find(model=>model.model==='gpt-test').operations,['chat_completions','responses','messages'])
+  assert.deepEqual(models.find(model=>model.model==='gemini-test').operations,['gemini_content'])
+  assert.deepEqual(models.find(model=>model.model==='jev-latest').operations,['systemone'])
+  assert.equal(models.some(model=>model.model==='image-only'),false)
+  assert.equal(endpointFor('gemini_content','gemini-test'),'/v1beta/models/gemini-test:generateContent')
+  assert.equal(endpointForStreaming('gemini_content','gemini-test',true),'/v1beta/models/gemini-test:streamGenerateContent?alt=sse')
+  assert.equal(endpointForStreaming('gemini_content','gemini-test',false),'/v1beta/models/gemini-test:generateContent')
+  assert.deepEqual(buildRequest({model:'gpt-test'},'chat_completions',{prompt:'hello',stream:'true'}),{model:'gpt-test',messages:[{role:'user',content:'hello'}],stream:true})
+  assert.deepEqual(buildRequest({model:'gpt-test'},'responses',{prompt:'hello',stream:'false'}),{model:'gpt-test',input:'hello',stream:false})
+  assert.match(parseErrorMessage('{"error":{"message":"denied"}}'),/denied/)
+})
+
+test('configuration and troubleshooting navigation resolves every page from its content collection',async()=>{
+  const knowledge=JSON.parse(await readFile(new URL('./knowledge-content.json',import.meta.url),'utf8'))
+  const general=JSON.parse(await readFile(new URL('./general-content.json',import.meta.url),'utf8'))
+  const media=JSON.parse(await readFile(new URL('../docs/multimodal/imagevideo-content.json',import.meta.url),'utf8'))
+  const ids=new Set([...knowledge,...general,...media].map(section=>section.id))
+  assert.ok(navigationGroups.some(group=>group.title==='快速上手'))
+  assert.ok(navigationGroups.some(group=>group.title==='客户端配置与接入选型'))
+  assert.ok(navigationGroups.some(group=>group.title==='常见报错与排查'))
+  assert.ok(navigationGroups.find(group=>group.title==='常见报错与排查').sections.includes('api-404-html'))
+  for(const group of navigationGroups)for(const id of group.sections)assert.ok(ids.has(id),`${id} should have a rendered document`)
+  assert.match(knowledge.find(section=>section.id==='api-key-401').title,/401/)
+  assert.match(JSON.stringify(knowledge.find(section=>section.id==='api-key-401')),/x-goog-api-key/)
+  assert.ok(knowledge.find(section=>section.id==='chatgpt-model-not-found').blocks.some(block=>block.text?.includes('wire_api = "responses"')))
+  assert.ok(knowledge.find(section=>section.id==='cc-switch-config').blocks.some(block=>block.text==='CC Switch 常见问题'))
+  assert.match(knowledge.find(section=>section.id==='api-404-html').title,/404/)
+  assert.match(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/https:\/\/code\.aicodeme\.xyz\/v1\/chat\/completions/)
+  assert.doesNotMatch(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/\n\+/)
+  assert.doesNotMatch(fullMarkdown([...knowledge,...general,...media]),/apikl\.ai|code\.aicodeme\.cn/)
 })
 
 test('documentation sidebar version follows public settings and has a safe fallback', async()=>{
@@ -125,9 +159,11 @@ test('large async submissions get a bounded upload timeout and retain a recovery
   assert.equal(requestTimeoutMs('GET','/v1/tasks/task-1'),30000)
 })
 
-test('Grok video is part of the video API category; only four media API categories are exposed',()=>{
-  const mediaCategories=categories.filter(category=>category.ops.length>0)
+test('Grok video is part of the video API category alongside the general interface categories',()=>{
+  const mediaOperations=['image','image_edit','gemini_image','video','audio','chat_music','speech']
+  const mediaCategories=categories.filter(category=>category.ops.some(operation=>mediaOperations.includes(operation)))
   assert.equal(mediaCategories.length,4)
+  assert.equal(categories.find(category=>category.id==='text').title,'文本与对话')
   assert.equal(categories.some(category=>category.id==='grok-video'),false)
   assert.ok(categories.find(category=>category.id==='video').sections.includes('grok-video-image'))
 })

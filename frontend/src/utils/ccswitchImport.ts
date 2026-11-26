@@ -38,7 +38,11 @@ export const CC_SWITCH_USAGE_SCRIPT = `({
       headers: { "Authorization": "Bearer {{apiKey}}" }
     },
     extractor: function(response) {
-      const remaining = response?.remaining ?? response?.quota?.remaining ?? response?.balance;
+      const rateLimitValues = Array.isArray(response?.rate_limits)
+        ? response.rate_limits.map(limit => Number(limit?.remaining)).filter(Number.isFinite)
+        : [];
+      const rateLimitRemaining = rateLimitValues.length ? Math.min(...rateLimitValues) : undefined;
+      const remaining = response?.remaining ?? response?.quota?.remaining ?? response?.balance ?? rateLimitRemaining;
       const unit = response?.unit ?? response?.quota?.unit ?? "USD";
       return {
         isValid: response?.is_active ?? response?.isValid ?? true,

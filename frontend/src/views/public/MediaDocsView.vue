@@ -10,7 +10,7 @@ const source = computed(() => (import.meta.env.DEV ? '/media-docs/index.html' : 
   <MediaPublicLayout>
     <div class="relative">
     <p v-if="loading" role="status" class="absolute left-4 top-4 text-sm text-gray-500">正在加载文档…</p>
-    <iframe :src="source" title="多媒体接口文档与在线调试" class="w-full rounded-xl border bg-white dark:border-dark-700" style="height:calc(100dvh - 132px); min-height:400px" referrerpolicy="same-origin" @load="loading = false" />
+    <iframe :src="source" title="词元互联接口文档与在线调试" class="w-full rounded-xl border bg-white dark:border-dark-700" style="height:calc(100dvh - 116px); min-height:480px" referrerpolicy="same-origin" @load="loading = false" />
     </div>
   </MediaPublicLayout>
 </template>
