@@ -37,7 +37,11 @@ type MediaHandler struct {
 	cache   *service.BillingCacheService
 }
 
-func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler, groups service.GroupRepository, channels *service.ChannelService, accountTests *service.AccountTestService, monitors *service.ChannelMonitorService) (*MediaHandler, error) {
+func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRepository, keys *service.APIKeyService, cache *service.BillingCacheService, gateway *service.OpenAIGatewayService, openAI *OpenAIGatewayHandler, groups service.GroupRepository, channels *service.ChannelService, accountTests *service.AccountTestService, monitors *service.ChannelMonitorService, health media.RouteHealth) (*MediaHandler, error) {
+	routes, err := media.NewRoutePolicy(cfg.Gateway.MediaFailoverMode, cfg.Gateway.MediaFailoverGroupIDs, health)
+	if err != nil {
+		return nil, err
+	}
 	root := os.Getenv("SUB2API_MEDIA_DATA_DIR")
 	if root == "" {
 		root = filepath.Join("data", "media")
@@ -68,7 +72,7 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		if concurrency < 1 {
 			concurrency = 1
 		}
-		return media.Account{ID: id, Concurrency: concurrency, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
+		return media.Account{ID: id, Priority: a.Priority, Concurrency: concurrency, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
 	}
 	invalidate := func(identity media.Identity) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -90,6 +94,7 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		return nil
 	}
 	engine := media.NewEngine(&media.Store{DB: db}, blobs, lookup, invalidate)
+	engine.Routes = routes
 	accountTests.SetMediaTemplateStore(engine.Store)
 	monitors.SetMediaTemplateStore(engine.Store)
 	engine.Config = service.UnifiedMediaConfig(accounts, groups, channels)

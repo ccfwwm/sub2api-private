@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -303,10 +304,14 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	defer cancel()
 	var stage atomic.Value
 	stage.Store("连接")
+	var gotConnection atomic.Bool
+	var failedHandshake atomic.Bool
 	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		DNSStart:          func(httptrace.DNSStartInfo) { stage.Store("域名解析") },
 		ConnectStart:      func(string, string) { stage.Store("连接") },
 		TLSHandshakeStart: func() { stage.Store("TLS 握手") },
+		TLSHandshakeDone:  func(_ tls.ConnectionState, err error) { failedHandshake.Store(err != nil) },
+		GotConn:           func(httptrace.GotConnInfo) { gotConnection.Store(true) },
 		WroteRequest: func(info httptrace.WroteRequestInfo) {
 			stage.Store("等待响应头")
 			if info.Err == nil && account.ObserveSubmission != nil {
@@ -343,9 +348,23 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	if mime != "" {
 		req.Header.Set("Content-Type", mime)
 	}
-	response, e := a.Client.Do(protectMediaCredentials(req, account.Key))
+	client := a.Client
+	if submission && account.RouteSubmission {
+		// A redirected generation may already have been accepted at the first URL.
+		// Keep it on its original route for reconciliation.
+		scoped := *client
+		scoped.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		client = &scoped
+		req.GetBody = nil
+	}
+	response, e := client.Do(protectMediaCredentials(req, account.Key))
 	if e != nil {
 		if submission {
+			if account.RouteSubmission && !gotConnection.Load() && ctx.Err() != context.Canceled &&
+				(failedHandshake.Load() || definitelyBeforeMediaSubmit(e)) {
+				return UpstreamResult{Status: "failed", Rejected: true, Retryable: true, Failover: RejectionOrigin,
+					Diagnostic: "Upstream connection failed before submission"}, nil
+			}
 			reason := "传输中断"
 			var network net.Error
 			if errors.Is(e, context.Canceled) {
@@ -384,6 +403,17 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 			_ = json.Unmarshal(raw, &object)
 		}
 		upstreamRequestID := mediaUpstreamRequestID(response, object, account.Key)
+		if account.RouteSubmission {
+			if possible := parseResult(object, cap); possible.Accepted {
+				possible.Response, possible.UpstreamRequestID, possible.UpstreamStatusCode = raw, upstreamRequestID, response.StatusCode
+				return possible, nil
+			}
+			if response.Header.Get("Location") != "" || response.Header.Get("X-Task-ID") != "" ||
+				response.Header.Get("X-Job-ID") != "" || hasMediaAcceptanceEvidence(object) {
+				return UpstreamResult{Status: "unknown", Response: raw, Diagnostic: "Upstream response may contain acceptance evidence; reconcile original task",
+					UpstreamRequestID: upstreamRequestID, UpstreamStatusCode: response.StatusCode}, nil
+			}
+		}
 		status := response.StatusCode
 		if status >= 500 || status == http.StatusRequestTimeout {
 			if nestedStatus := explicitUpstreamHTTPStatus(raw); nestedStatus == http.StatusTooManyRequests {
@@ -392,7 +422,9 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 		// A complete 503 response is an explicit rejection, not a lost response.
 		// Gateway timeouts can still conceal acceptance and require recovery.
-		if status >= 500 && status != http.StatusServiceUnavailable || status == http.StatusRequestTimeout {
+		scope := MediaRejectionScope(status, raw)
+		if status >= 500 && status != http.StatusServiceUnavailable || status == http.StatusRequestTimeout ||
+			account.RouteSubmission && ((status == http.StatusServiceUnavailable && scope == "") || status >= 300 && status < 400) {
 			diagnostic := fmt.Sprintf("Upstream HTTP %d; acceptance not confirmed", response.StatusCode)
 			code, message := mediaUpstreamErrorDetails(raw, account.Key)
 			if code != "" || message != "" {
@@ -433,7 +465,8 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		}
 		return UpstreamResult{Status: "failed", Response: raw, Diagnostic: diagnostic, UpstreamCode: code,
 			UpstreamMessage: message, UpstreamRequestID: upstreamRequestID, UpstreamStatusCode: status, Rejected: true,
-			Retryable: status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || retryAfter > 0, RetryAfter: retryAfter}, nil
+			Retryable:  status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable || retryAfter > 0,
+			RetryAfter: retryAfter, Failover: scope}, nil
 	}
 	if cap.Template != nil && cap.Template.Mode == "sync_binary" {
 		mime := strings.Split(response.Header.Get("Content-Type"), ";")[0]
@@ -457,6 +490,9 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 	// error metadata without treating that response as a retryable submission.
 	if result.Status == "failed" {
 		result.UpstreamCode, result.UpstreamMessage = mediaUpstreamObjectErrorDetails(object, account.Key)
+		if !submission {
+			result.RetryAfter = MediaRetryAfter(response.Header, raw, time.Now())
+		}
 		if result.Diagnostic == "" {
 			result.Diagnostic = result.UpstreamMessage
 		}
@@ -474,6 +510,85 @@ func (a *Adapter) call(ctx context.Context, account Account, cap Capability, met
 		result.Diagnostic = "Unrecognized successful response; do not resubmit"
 	}
 	return result, nil
+}
+
+func definitelyBeforeMediaSubmit(err error) bool {
+	var dns *net.DNSError
+	var network *net.OpError
+	return errors.Is(err, errMediaOriginUnreachable) ||
+		errors.As(err, &dns) || errors.As(err, &network) && network.Op == "dial"
+}
+
+// MediaRejectionScope classifies complete upstream replies with no evidence
+// of acceptance. JSON error codes avoid replaying provider policy refusals.
+func MediaRejectionScope(status int, raw []byte) RejectionScope {
+	var object map[string]any
+	if len(bytes.TrimSpace(raw)) != 0 && (len(raw) > 8192 || json.Unmarshal(raw, &object) != nil || object == nil) {
+		return ""
+	}
+	if hasMediaAcceptanceEvidence(object) {
+		return ""
+	}
+	code, message := mediaUpstreamObjectErrorDetails(object, "")
+	code = strings.ToLower(strings.TrimSpace(code))
+	message = strings.ToLower(message)
+	switch code {
+	case "content_policy_violation", "content_filter", "content_policy", "cyber_policy", "safety_violation", "invalid_request_error":
+		return ""
+	}
+	if strings.Contains(message, "content policy") || strings.Contains(message, "safety policy") || strings.Contains(message, "cyber_policy") {
+		return ""
+	}
+	capacity := code == "overloaded" || code == "overloaded_error" || code == "capacity_exhausted" ||
+		code == "upstream_overloaded" || code == "no_capacity" ||
+		code == "fail_to_fetch_task" && (strings.Contains(message, "负载已饱和") || strings.Contains(message, "capacity"))
+	switch status {
+	case http.StatusTooManyRequests:
+		if capacity {
+			return RejectionOrigin
+		}
+		return RejectionAccount
+	case http.StatusServiceUnavailable:
+		if capacity {
+			return RejectionOrigin
+		}
+	case http.StatusUnauthorized, http.StatusForbidden:
+		switch code {
+		case "invalid_api_key", "invalid_token", "token_expired", "account_disabled", "account_suspended", "authentication_error":
+			return RejectionAccount
+		}
+	}
+	return ""
+}
+
+func hasMediaAcceptanceEvidence(object map[string]any) bool {
+	for _, field := range []string{"id", "task_id", "job_id", "operation_id", "upstream_task_id"} {
+		if stringValue(object[field]) != "" {
+			return true
+		}
+	}
+	switch strings.ToLower(stringValue(object["status"])) {
+	case "accepted", "queued", "pending", "running", "in_progress", "completed", "succeeded":
+		return true
+	}
+	for _, field := range []string{"data", "output", "result", "task", "job", "artifacts", "images", "audio", "video"} {
+		switch value := object[field].(type) {
+		case []any:
+			if len(value) > 0 {
+				return true
+			}
+		case map[string]any:
+			// Restrict inspection to known result envelopes.
+			if len(value) > 0 {
+				return true
+			}
+		case string:
+			if value != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func mediaUpstreamRequestID(response *http.Response, object map[string]any, secret string) string {
@@ -617,6 +732,10 @@ func parseRetryAfter(header string, raw []byte, now time.Time) time.Duration {
 		}
 	}
 	return 0
+}
+
+func MediaRetryAfter(headers http.Header, body []byte, now time.Time) time.Duration {
+	return parseRetryAfter(headers.Get("Retry-After"), body, now)
 }
 
 func clampRetryAfter(delay time.Duration) time.Duration {

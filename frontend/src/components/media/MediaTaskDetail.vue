@@ -157,6 +157,23 @@ async function reconcileRecordedTask() {
         <div class="flex flex-wrap gap-2"><span v-for="(values,key) in current.task.billing.quantities" :key="key" class="rounded bg-gray-100 px-2 py-1 text-xs dark:bg-dark-800">{{ key }}: {{ values.join(' + ') }}</span></div>
         <p class="break-all text-xs text-gray-500">{{ tr('价格版本','Price version') }} {{ current.task.billing.price_version }}</p>
         <p v-if="current.task.diagnostic" class="text-amber-700 dark:text-amber-400">{{ current.task.diagnostic }}</p>
+        <details v-if="admin && review?.submission_attempts?.length" open class="rounded-lg border p-3 dark:border-dark-600">
+          <summary class="cursor-pointer">{{ tr('上游提交记录', 'Upstream submission attempts') }}</summary>
+          <ol class="mt-2 space-y-2">
+            <li v-for="attempt in review.submission_attempts" :key="attempt.lease_epoch">
+              <span>#{{ attempt.account_id }} · {{ attempt.outcome }}</span>
+              <span v-if="attempt.upstream_status"> · HTTP {{ attempt.upstream_status }}</span>
+              <span v-if="attempt.upstream_code"> · {{ attempt.upstream_code }}</span>
+              <span v-if="attempt.reason"> · {{ attempt.reason }}</span>
+              <span v-if="attempt.account_id === current.account_id && ['in_progress', 'completed'].includes(attempt.outcome)"> · {{ tr('接手账号', 'Accepted by upstream') }}</span>
+              <div v-if="attempt.terminal" class="text-sm text-gray-500">
+                {{ tr('查询终态', 'Final status from polling') }} · {{ attempt.terminal.outcome }} · HTTP {{ attempt.terminal.upstream_status }}
+                <span v-if="attempt.terminal.upstream_code"> · {{ attempt.terminal.upstream_code }}</span>
+                <span v-if="attempt.terminal.reason"> · {{ attempt.terminal.reason }}</span>
+              </div>
+            </li>
+          </ol>
+        </details>
         <p v-if="admin" class="text-xs">{{ tr('账号','Account') }} {{ current.account_name }} (#{{ current.account_id }}) · {{ tr('用户','User') }} {{ current.user_email }} (#{{ current.user_id }}) · {{ tr('成本状态','Cost status') }} {{ current.cost_status || 'unknown' }} · {{ tr('成本','Cost') }} {{ current.cost_amount == null ? '—' : `$${current.cost_amount}` }} · {{ tr('毛利','Margin') }} {{ current.margin_amount == null ? '—' : `$${current.margin_amount}` }}</p>
         <div v-if="admin" class="flex flex-wrap gap-3"><button class="btn btn-secondary" @click="exportReview">{{ tr('导出审查 JSON','Export review JSON') }}</button><RouterLink to="/admin/media?tab=diagnostics" class="btn btn-secondary" data-testid="fresh-retest" @click="emit('close')">{{ tr('重新测试','Retest') }}</RouterLink></div>
         <details v-if="admin" open class="rounded-lg border p-3 dark:border-dark-600"><summary class="cursor-pointer">{{ tr('人工核对与账务操作','Manual review and accounting') }}</summary>

@@ -169,6 +169,7 @@ type Upload struct {
 	Data  []byte `json:"data"`
 }
 type Snapshot struct {
+	Routing        *SubmissionRoutes   `json:"submission_routes,omitempty"`
 	Inputs         *PublicInputSummary `json:"inputs,omitempty"`
 	CostMultiplier string              `json:"cost_multiplier"`
 	Capability     Capability          `json:"capability"`
@@ -230,14 +231,17 @@ type UpstreamResult struct {
 	UpstreamRequestID      string
 	UpstreamStatusCode     int
 	Response               json.RawMessage
+	PartialOutput          bool
 	Artifacts              []Artifact
 	Quantities             map[string][]string
 	Accepted               bool
 	Rejected               bool
 	Retryable              bool
 	RetryAfter             time.Duration
+	Failover               RejectionScope
 }
 type Account struct {
+	Priority               int
 	ObserveSubmission      func(Submission) error `json:"-"`
 	CostMultiplier         string
 	ID                     int64
@@ -246,8 +250,9 @@ type Account struct {
 	Allowed                bool
 	// TaskAPI is set only for the local durable gateway protocol, never guessed
 	// for supplier requests. These fields are not part of capability snapshots.
-	TaskAPI        bool
-	IdempotencyKey string
+	TaskAPI         bool
+	IdempotencyKey  string
+	RouteSubmission bool
 }
 type AccountLookup func(id int64, groupID int64) (Account, error)
 type CacheInvalidate func(ctxIdentity Identity) error

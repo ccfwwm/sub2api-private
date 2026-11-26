@@ -1412,15 +1412,8 @@ func ParseTemplateResponse(object map[string]any, cap Capability) UpstreamResult
 	state := strings.ToLower(first(t.Response.Status))
 	if isExplicitTemplateFailure(state) {
 		r.Status = "failed"
-		r.Diagnostic = first(t.Response.Errors)
-		return r
-	}
-	if mapped, ok := t.Response.States[state]; ok {
+	} else if mapped, ok := t.Response.States[state]; ok {
 		r.Status = mapped
-	}
-	if r.Status == "failed" {
-		r.Diagnostic = first(t.Response.Errors)
-		return r
 	}
 	add := func(source string) {
 		if source == "" {
@@ -1500,6 +1493,12 @@ func ParseTemplateResponse(object map[string]any, cap Capability) UpstreamResult
 				r.Artifacts[len(r.Artifacts)-1].Filename = safeArtifactFilename(get(rule.Filename))
 			}
 		}
+	}
+	if r.Status == "failed" {
+		r.PartialOutput = len(r.Artifacts) > 0
+		r.Artifacts = nil
+		r.Diagnostic = first(t.Response.Errors)
+		return r
 	}
 	if t.Mode == "sync_json" && len(r.Artifacts) > 0 && state == "" {
 		r.Status = "completed"

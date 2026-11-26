@@ -71,6 +71,10 @@ export interface MediaTaskReview {
   upstream_response?: Record<string, unknown>
   submission?: MediaSubmission | null
   submission_status?: string
+  submission_attempts?: {
+    account_id: number; lease_epoch: number; started_at: string; outcome: string; upstream_status?: number; upstream_code?: string; reason?: string
+    terminal?: { outcome: string; upstream_status: number; upstream_code?: string; reason?: string }
+  }[]
   record: MediaTaskRecord
   request: Record<string, unknown>
   response: Record<string, unknown>

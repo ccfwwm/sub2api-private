@@ -126,21 +126,26 @@ func (a *Adapter) pollTemplate(ctx context.Context, task StoredTask, account Acc
 		if err != nil {
 			return result, err
 		}
-		result, err = a.call(ctx, account, cap, t.ArtifactList.Method, path, nil, "", false)
-		if err == nil && result.Status != "failed" && len(result.Artifacts) > 0 {
-			var object map[string]any
-			_ = json.Unmarshal(result.Response, &object)
-			explicit := false
-			for _, p := range t.Response.Status {
-				if len(extractValues(object, p)) > 0 {
-					explicit = true
-				}
-			}
-			if !explicit {
-				result.Status = "completed"
-				result.Accepted = true
+		artifacts, err := a.call(ctx, account, cap, t.ArtifactList.Method, path, nil, "", false)
+		if err != nil || artifacts.Status == "failed" || len(artifacts.Artifacts) == 0 {
+			// The generation succeeded. A result-list failure should only
+			// retry delivery of the existing job.
+			return UpstreamResult{}, fmt.Errorf("media artifact list is unavailable")
+		}
+		artifacts.ID = result.ID
+		var object map[string]any
+		_ = json.Unmarshal(artifacts.Response, &object)
+		explicit := false
+		for _, p := range t.Response.Status {
+			if len(extractValues(object, p)) > 0 {
+				explicit = true
 			}
 		}
+		if !explicit {
+			artifacts.Status = "completed"
+			artifacts.Accepted = true
+		}
+		result = artifacts
 	}
 	return result, err
 }

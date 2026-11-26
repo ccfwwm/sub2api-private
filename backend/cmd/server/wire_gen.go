@@ -331,7 +331,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageDownloadService := service.NewBatchImageDownloadService(batchImageRepository, accountRepository, batchImageDownloadLimiter, configConfig)
 	batchImageCleanupService := service.ProvideBatchImageCleanupService(batchImageRepository, accountRepository, configConfig)
 	batchImageHandler := handler.ProvideBatchImageHandler(batchImagePublicService, batchImageDownloadService, batchImageCleanupService, openAIGatewayHandler)
-	mediaHandler, err := handler.NewMediaHandler(db, configConfig, accountRepository, apiKeyService, billingCacheService, openAIGatewayService, openAIGatewayHandler, groupRepository, channelService, accountTestService, channelMonitorService)
+	routeHealth := repository.NewMediaRouteHealth(redisClient)
+	mediaHandler, err := handler.NewMediaHandler(db, configConfig, accountRepository, apiKeyService, billingCacheService, openAIGatewayService, openAIGatewayHandler, groupRepository, channelService, accountTestService, channelMonitorService, routeHealth)
 	if err != nil {
 		return nil, err
 	}

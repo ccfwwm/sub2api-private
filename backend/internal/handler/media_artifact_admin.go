@@ -68,7 +68,10 @@ func (h *MediaHandler) adminTaskReview(c *gin.Context) (gin.H, error) {
 		}
 	}
 	result["submission"] = nil
-	receipt := h.Engine.ReadSubmission(t.ID)
+	if routes := t.Snapshot.Routing; routes != nil && len(routes.Attempts) > 0 {
+		result["submission_attempts"] = routes.Attempts
+	}
+	receipt := h.Engine.ReadTaskSubmission(t)
 	if receipt != nil {
 		result["submission"] = receipt
 		result["upstream_request"] = gin.H{

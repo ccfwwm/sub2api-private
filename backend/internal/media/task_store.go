@@ -184,6 +184,9 @@ func mediaResultDiagnostic(result UpstreamResult) string {
 	if result.UpstreamStatusCode > 0 {
 		fields = append(fields, fmt.Sprintf("upstream_status_code=%d", result.UpstreamStatusCode))
 	}
+	if result.RetryAfter > 0 && !strings.Contains(base, "retry_after_seconds=") {
+		fields = append(fields, fmt.Sprintf("retry_after_seconds=%d", retrySeconds(result.RetryAfter)))
+	}
 	if len(fields) == 0 {
 		return base
 	}
@@ -653,8 +656,101 @@ func (s *Store) Progress(ctx context.Context, t StoredTask, result UpstreamResul
 	if status == "completed" {
 		settlement = "pending_usage"
 	}
-	r, e := s.DB.ExecContext(ctx, `UPDATE media_tasks SET state=$1,settlement_state=$2,upstream_id=coalesce(nullif($3,''),upstream_id),result_path=coalesce(nullif($4,''),result_path),quantities=quantities||$5::jsonb,diagnostic=$6,lease_until=CASE WHEN $1='completed' THEN lease_until ELSE NULL END,next_poll_at=now()+make_interval(secs=>$7),completed_at=CASE WHEN $1 IN ('completed','failed') THEN coalesce(completed_at,now()) ELSE completed_at END,version=version+1 WHERE id=$8 AND lease_epoch=$9 AND settlement_state IN ('held','pending_usage')`, status, settlement, result.ID, path, q, mediaResultDiagnostic(result), t.Snapshot.Capability.Delivery.PollSeconds, t.ID, t.Epoch)
+	var routing any
+	if t.Snapshot.Routing != nil {
+		encoded, err := json.Marshal(t.Snapshot.Routing)
+		if err != nil {
+			return err
+		}
+		routing = encoded
+	}
+	r, e := s.DB.ExecContext(ctx, `UPDATE media_tasks SET state=$1,settlement_state=$2,upstream_id=coalesce(nullif($3,''),upstream_id),result_path=coalesce(nullif($4,''),result_path),quantities=quantities||$5::jsonb,diagnostic=$6,lease_until=CASE WHEN $1='completed' THEN lease_until ELSE NULL END,next_poll_at=now()+make_interval(secs=>$7),completed_at=CASE WHEN $1 IN ('completed','failed') THEN coalesce(completed_at,now()) ELSE completed_at END,version=version+1,snapshot=CASE WHEN $10::jsonb IS NULL THEN snapshot ELSE jsonb_set(snapshot,'{submission_routes}',$10::jsonb) END WHERE id=$8 AND lease_epoch=$9 AND settlement_state IN ('held','pending_usage')`, status, settlement, result.ID, path, q, mediaResultDiagnostic(result), t.Snapshot.Capability.Delivery.PollSeconds, t.ID, t.Epoch, routing)
 	return requireOne(r, e)
+}
+
+func (s *Store) beginRoutedSubmission(ctx context.Context, task StoredTask) error {
+	routing, err := json.Marshal(task.Snapshot.Routing)
+	if err != nil {
+		return err
+	}
+	return requireOne(s.DB.ExecContext(ctx, `UPDATE media_tasks SET snapshot=jsonb_set(snapshot,'{submission_routes}',$1::jsonb),version=version+1
+		WHERE id=$2 AND lease_epoch=$3 AND account_id=$4 AND lease_until>now() AND state='submitting' AND settlement_state='held'
+		AND coalesce(upstream_id,'')='' AND accepted=0 AND captured=0`, routing, task.ID, task.Epoch, task.AccountID))
+}
+
+func (t StoredTask) canRetryAcceptedJob() bool {
+	accepted, acceptedErr := number(t.Accepted)
+	captured, capturedErr := number(t.Captured)
+	return t.State == "in_progress" && t.Settlement == "held" &&
+		acceptedErr == nil && accepted.IsZero() && capturedErr == nil && captured.IsZero()
+}
+
+func (s *Store) requeueOnRoute(ctx context.Context, task StoredTask, route SubmissionRoute, path string, quantities map[string][]string, result UpstreamResult) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := lockTask(ctx, tx, task.ID)
+	if err != nil {
+		return err
+	}
+	newSubmission := current.State == "submitting" && current.UpstreamID == "" &&
+		!result.Accepted && result.ID == "" && !result.PartialOutput && len(result.Artifacts) == 0
+	failedJob := current.canRetryAcceptedJob() && retryableMediaJobFailure(current, result)
+	if current.Epoch != task.Epoch || current.AccountID != task.AccountID || current.UpstreamID != task.UpstreamID ||
+		current.Settlement != "held" || current.LeaseUntil == nil || !current.LeaseUntil.After(time.Now()) ||
+		(!newSubmission && !failedJob) {
+		return fail(409, "stale_lease", "Media submission can no longer be moved")
+	}
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("media-account:%d", route.AccountID)); err != nil {
+		return err
+	}
+	capacity, err := mediaAccountCapacity(ctx, tx, route.AccountID)
+	if err != nil {
+		return err
+	}
+	var allowed bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM accounts a JOIN account_groups ag ON ag.account_id=a.id
+		WHERE a.id=$1 AND ag.group_id=$2 AND a.status='active' AND a.schedulable AND a.deleted_at IS NULL
+		AND coalesce(a.rate_limit_reset_at<=now(),true) AND coalesce(a.temp_unschedulable_until<=now(),true)
+		AND coalesce(a.overload_until<=now(),true) AND (NOT a.auto_pause_on_expired OR coalesce(a.expires_at>now(),true)))`, route.AccountID, task.Identity.GroupID).Scan(&allowed)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fail(503, "media_account_unavailable", "Backup media account is no longer eligible")
+	}
+	usage, err := mediaAccountUsage(ctx, tx, route.AccountID)
+	if err != nil {
+		return err
+	}
+	if usage.Total >= capacity {
+		return fail(429, "account_concurrency_exhausted", "Backup media account concurrency exhausted")
+	}
+	next := current.Snapshot
+	next.Routing = task.Snapshot.Routing
+	next.Request.Parameters = map[string]any{"request_blob": path}
+	route.assign(&next)
+	snapshot, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+	if quantities == nil {
+		quantities = map[string][]string{}
+	}
+	inputQuantities, err := json.Marshal(quantities)
+	if err != nil {
+		return err
+	}
+	err = requireOne(tx.ExecContext(ctx, `UPDATE media_tasks SET account_id=$1,snapshot=$2,state='queued',next_poll_at=now(),
+		lease_until=NULL,upstream_id=NULL,result_path=NULL,completed_at=NULL,quantities=$5,diagnostic='',version=version+1
+		WHERE id=$3 AND lease_epoch=$4 AND lease_until>now() AND settlement_state='held' AND accepted=0 AND captured=0`,
+		route.AccountID, snapshot, task.ID, task.Epoch, inputQuantities))
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func requireOne(r sql.Result, e error) error {
