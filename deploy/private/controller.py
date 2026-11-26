@@ -700,8 +700,10 @@ class Controller:
                 raise ValueError("running documentation image does not match requested digest")
             self.wait_command(["docker", "exec", docs_name, "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/health"], 60)
             html = run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/imagevideo"]).decode(errors="replace")
-            if "词元互联图片、视频与音乐接口文档" not in html:
-                raise ValueError("documentation route content check failed")
+            knowledge = json.loads(run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/knowledge-content.json"]))
+            legacy = json.loads(run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/api/v1/public-docs/imagevideo"]))
+            from docs_contract import validate_docs_contract
+            validate_docs_contract(html, knowledge, legacy)
         if self.config.get("manage_docs_proxy", True):
             from manage import Manager
             Manager(self.state, self.root, docs_proxy_enabled=self.config.get("docs_proxy_enabled", True)).sync_docs_proxy(bool(docs_image))
