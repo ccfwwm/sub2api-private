@@ -5,6 +5,8 @@ COPY docs-web/server.mjs /app/server.mjs
 COPY docs-web/index.html /app/index.html
 COPY docs-web/app.mjs docs-web/styles.css /app/
 COPY docs/multimodal/imagevideo-content.json /app/content.json
+COPY docs-web/general-content.json /app/general-content.json
+COPY docs-web/knowledge-content.json /app/knowledge-content.json
 COPY frontend/public/examples/imagevideo.py frontend/public/examples/imagevideo.mjs /app/examples/
 
 EXPOSE 8080

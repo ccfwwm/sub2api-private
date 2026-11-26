@@ -690,7 +690,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
-    { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
+    { path: '/media-docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/media-tasks', label: t('nav.mediaTasks'), icon: BatchImageIcon },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -816,7 +816,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
-    { path: '/media-docs', label: t('nav.imagevideoDocs'), icon: BatchImageIcon },
+    { path: '/media-docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

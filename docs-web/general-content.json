@@ -1,0 +1,46 @@
+[
+  {
+    "id": "guide",
+    "title": "快速接入",
+    "subtitle": "使用词元互联 API Key 调用当前分组开放的模型。",
+    "blocks": [
+      { "kind": "heading", "text": "连接信息" },
+      { "kind": "endpoint", "method": "BASE URL", "path": "" },
+      { "kind": "text", "text": "所有接口使用 https://code.aicodeme.xyz 作为根地址。请求需要携带 API Key，模型名称从当前 Key 可用的模型列表中选择。" },
+      { "kind": "heading", "text": "鉴权" },
+      { "kind": "code", "language": "http", "label": "请求头", "text": "Authorization: Bearer YOUR_API_KEY\nContent-Type: application/json" },
+      { "kind": "heading", "text": "发送第一条文本请求" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1/chat/completions" },
+      { "kind": "code", "language": "json", "label": "cURL", "text": "curl https://code.aicodeme.xyz/v1/chat/completions \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"YOUR_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}'" },
+      { "kind": "heading", "text": "同步、流式与异步" },
+      { "kind": "text", "text": "Chat Completions、Responses、Anthropic Messages 和 Gemini generateContent 可按各自接口选择即时响应或流式响应。图片异步任务使用 /v1/images/generations/async 或 /v1/images/edits/async 查询 /v1/images/tasks/{task_id}。视频和托管媒体生成通过对应任务接口查询进度与结果。每个接口支持的模式以本页调试器中可选模式为准。" },
+      { "kind": "heading", "text": "请求建议" },
+      { "kind": "table", "headers": ["步骤", "说明"], "rows": [["选择模型", "先调用 GET /v1/models，使用返回的模型名称。"], ["提交前检查", "校验模型、请求格式和素材限制。媒体任务可使用调试器中的免费估价预览。"], ["处理异步响应", "保存服务返回的任务 ID 和轮询地址，按接口返回的状态继续查询。"], ["保护密钥", "不要将 API Key 放入公开代码库或客户端日志。"]] },
+      { "kind": "heading", "text": "请求失败" },
+      { "kind": "text", "text": "错误响应通常包含 error.type、error.message 和 HTTP 状态码。检查 API Key、分组权限、模型名称、接口请求格式和素材格式后再重试。若提交超时且未确认是否受理，不要自动重复提交付费生成请求。" }
+    ]
+  },
+  {
+    "id": "text-api",
+    "title": "文本与对话接口",
+    "subtitle": "按 API Key 的渠道协议选择兼容接口。模型列表由 GET /v1/models 返回。",
+    "blocks": [
+      { "kind": "heading", "text": "OpenAI Chat Completions" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1/chat/completions" },
+      { "kind": "code", "language": "json", "label": "同步请求", "text": "{\n  \"model\": \"YOUR_MODEL\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"你好\"}],\n  \"stream\": false\n}" },
+      { "kind": "heading", "text": "OpenAI Responses" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1/responses" },
+      { "kind": "code", "language": "json", "label": "同步请求", "text": "{\n  \"model\": \"YOUR_MODEL\",\n  \"input\": \"你好\",\n  \"stream\": false\n}" },
+      { "kind": "heading", "text": "Anthropic Messages" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1/messages" },
+      { "kind": "code", "language": "json", "label": "同步请求", "text": "{\n  \"model\": \"YOUR_MODEL\",\n  \"max_tokens\": 1024,\n  \"messages\": [{\"role\": \"user\", \"content\": \"你好\"}],\n  \"stream\": false\n}" },
+      { "kind": "heading", "text": "Gemini generateContent" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1beta/models/{model}:generateContent" },
+      { "kind": "code", "language": "json", "label": "同步请求", "text": "{\n  \"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"你好\"}]}]\n}" },
+      { "kind": "heading", "text": "TypeSafe System One" },
+      { "kind": "endpoint", "method": "POST", "path": "/v1/systemone" },
+      { "kind": "code", "language": "json", "label": "同步请求", "text": "{\n  \"model\": \"jev-latest\",\n  \"state\": {},\n  \"questions\": {\"answer\": {\"type\": \"noul\", \"instructions\": \"回答问题\"}},\n  \"stream\": false\n}" },
+      { "kind": "text", "text": "流式请求在支持的接口中设置 stream=true。TypeSafe System One 不支持流式模式。所有路径、参数和请求格式按网关现有接口执行，模型与功能是否开放由当前 API Key 的分组权限决定。" }
+    ]
+  }
+]

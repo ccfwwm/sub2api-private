@@ -185,4 +185,18 @@ describe('CC Switch usage script', () => {
       expect(usageUrlFor(endpoint)).toBe('https://api.example.com/v1/usage')
     }
   })
+
+  it('uses the most restrictive rate limit when the key has no total quota', () => {
+    const script = CC_SWITCH_USAGE_SCRIPT.replaceAll('{{baseUrl}}', 'https://api.example.com').replaceAll('{{apiKey}}', 'sk-test')
+    // eslint-disable-next-line no-new-func
+    const config = new Function(`return ${script}`)() as { extractor: (response: unknown) => { remaining: number; unit: string } }
+    const result = config.extractor({
+      rate_limits: [
+        { window: '5h', limit: 10, used: 2, remaining: 8 },
+        { window: '1d', limit: 20, used: 15, remaining: 5 }
+      ]
+    })
+
+    expect(result).toEqual({ isValid: true, remaining: 5, unit: 'USD' })
+  })
 })

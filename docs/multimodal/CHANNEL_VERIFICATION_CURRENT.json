@@ -1,15 +1,15 @@
 {
-  "version": "v1.3.33",
+  "version": "v1.3.34",
   "status": "recorded",
   "acceptance_state": "isolated-regression-tested; production-acceptance-pending; prior-real-channel-evidence-historical-only",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
-  "verified_at": "2026-11-20T01:45:11.152506+08:00",
+  "verified_at": "2026-11-26T19:32:26.598Z",
   "new_paid_submissions": 0,
   "requests_attempted": 0,
   "credentials_recorded": false,
-  "environment": "The candidate adds Beijing-time automatic console appearance to v1.3.32, which includes the public-page motion update, managed media retries, account circuit breaker and video artifact readiness. Automated tests use isolated fixtures.",
+  "environment": "The candidate rebuilds API documentation, sidebar integration, and browser debugging on the v1.3.33 production baseline. Standalone documentation and public client checks use isolated fixtures.",
   "source_release": "v1.3.26",
-  "reuse_scope": "The database migration inventory matches v1.3.32. Historical channel results retain their original versions and dates.",
+  "reuse_scope": "The database migration inventory matches v1.3.33. Historical channel results retain their original versions and dates.",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
@@ -421,7 +421,7 @@
       },
       "unexpected_sampled_5xx_routes": {},
       "load_1m_range": [
-        0.0,
+        0,
         0.49
       ],
       "mem_available_gib_range": [
@@ -461,11 +461,11 @@
         "request_count": 3540,
         "statuses": {
           "200": 3125,
+          "301": 1,
+          "304": 1,
           "401": 196,
           "403": 211,
           "404": 4,
-          "304": 1,
-          "301": 1,
           "503": 2
         },
         "5xx": [

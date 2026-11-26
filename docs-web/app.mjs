@@ -1,5 +1,8 @@
 export const profilesForCategory = (profiles, category) => profiles.filter(p => Array.isArray(p.operations) && p.operations.some(op => category.ops.includes(op)))
 export const optionValues = values => Array.isArray(values) ? values : []
+export function parseErrorMessage(body) {
+  try{const data=JSON.parse(body);return data?.error?.message||data?.message||body.slice(0,400)}catch{return String(body).slice(0,400)||'请求失败'}
+}
 export const API_ORIGIN = 'https://code.aicodeme.xyz'
 export function docsVersionBadge(version) {
   const value=typeof version==='string'?version.trim():''
@@ -21,11 +24,22 @@ export async function loadDocsVersion(fetcher=globalThis.fetch,origin=globalThis
   return docsVersionBadge()
 }
 export const categories = [
+  { id:'guide', title:'快速接入', sections:['guide'], ops:[] },
+  { id:'text', title:'文本与对话', sections:['text-api'], ops:['chat_completions','responses','messages','gemini_content','systemone'] },
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
   { id:'gemini-image', title:'Gemini协议生图', sections:['gemini','gemini-result'], ops:['gemini_image'] },
   { id:'video', title:'视频生成', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference'], ops:['video'] },
   { id:'audio', title:'音乐与语音', sections:['audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'], ops:['audio','chat_music','speech'] },
-  { id:'guide', title:'快速开始与通用任务', sections:['start','models','tasks','errors','clients'], ops:[] },
+  { id:'tasks', title:'任务查询与错误处理', sections:['start','models','tasks','errors','clients'], ops:[] },
+]
+export const navigationGroups = [
+  { title:'快速上手', sections:['cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config','why-aicodeme','about-aicodeme'] },
+  { title:'客户端配置与接入选型', sections:['claude-api-cn','chatgpt-cn','cline-roo-config','cursor-openai-compatible','api-relay-selection','openai-compatible'] },
+  { title:'常见报错与排查', sections:['api-key-401','api-404-html','model-not-exist','chatgpt-model-not-found','api-errors','balance-query','errors'] },
+  { title:'图片接口接入', sections:['image-api','banana-image-api'] },
+  { title:'文本与图片接口', sections:['guide','text-api','gpt-text','gpt-edit','gpt-result','gemini','gemini-result'] },
+  { title:'视频与音频接口', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
+  { title:'模型、任务与客户端', sections:['start','models','tasks','clients'] },
 ]
 export function sectionMarkdown(section) {
   const row = cells => '| '+cells.map(v=>String(v).replaceAll('|','\\|').replaceAll('\n','<br>')).join(' | ')+' |'
@@ -37,9 +51,29 @@ export function sectionMarkdown(section) {
     return b.text
   }).join('\n\n')
 }
-export const fullMarkdown = sections => '# 词元互联图片、视频与音乐接口文档\n\n根地址：'+API_ORIGIN+'\n\n'+sections.map(sectionMarkdown).join('\n\n')
+export const fullMarkdown = sections => '# 词元互联接口文档\n\n根地址：'+API_ORIGIN+'\n\n'+sections.map(sectionMarkdown).join('\n\n')
 export function endpointFor(operation, model) {
-  return {image:'/v1/images/generations',image_edit:'/v1/images/edits',video:'/v1/videos',audio:'/v1/audio/generations',speech:'/v1/audio/speech',chat_music:'/v1/chat/completions',gemini_image:`/v1beta/models/${encodeURIComponent(model)}:generateContent`}[operation]
+  return {image:'/v1/images/generations',image_edit:'/v1/images/edits',video:'/v1/videos',audio:'/v1/audio/generations',speech:'/v1/audio/speech',chat_music:'/v1/chat/completions',gemini_image:`/v1beta/models/${encodeURIComponent(model)}:generateContent`,chat_completions:'/v1/chat/completions',responses:'/v1/responses',messages:'/v1/messages',gemini_content:`/v1beta/models/${encodeURIComponent(model)}:generateContent`,systemone:'/v1/systemone'}[operation]
+}
+export function endpointForStreaming(operation, model, streaming) {
+  const endpoint=endpointFor(operation,model)
+  return operation==='gemini_content'&&streaming?endpoint.replace(/:generateContent$/,'')+':streamGenerateContent?alt=sse':endpoint
+}
+export function parseGeneralModels(payload, geminiPayload) {
+  const byID=new Map()
+  const add=(id,operations,owner='')=>{
+    const model=String(id||'').replace(/^models\//,'').trim()
+    if(!model||owner==='sub2api')return
+    const existing=byID.get(model)
+    byID.set(model,{model,media_type:'text',operations:[...new Set([...(existing?.operations||[]),...operations])]})
+  }
+  for(const item of Array.isArray(payload?.data)?payload.data:[]) {
+    const id=item?.id||item?.name
+    if(String(id)==='jev-latest')add(id,['systemone'])
+    else add(id,['chat_completions','responses','messages'],item?.owned_by)
+  }
+  for(const item of Array.isArray(geminiPayload?.models)?geminiPayload.models:[])add(item?.name,['gemini_content'])
+  return [...byID.values()].sort((a,b)=>a.model.localeCompare(b.model))
 }
 export function previewRequestTimeoutMs(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength
@@ -90,6 +124,14 @@ export function inputMaterialsFor(cap) {
   return { ...(operations.includes('video') ? {image:{},video:{},audio:{}} : {}), ...Object.fromEntries(Object.entries(materials).map(([kind,rule])=>[kind,rule&&typeof rule==='object'&&!Array.isArray(rule)?rule:{}])), ...(operations.includes('image_edit') && !materials.mask ? { mask: { max_file_bytes: 50 * 1048576 } } : {}) }
 }
 export function buildRequest(cap, operation, fields, materials={}) {
+  if(['chat_completions','responses','messages','gemini_content','systemone'].includes(operation)) {
+    const prompt=fields.prompt||''
+    if(operation==='chat_completions')return {model:cap.model,messages:[{role:'user',content:prompt}],stream:fields.stream==='true'}
+    if(operation==='responses')return {model:cap.model,input:prompt,stream:fields.stream==='true'}
+    if(operation==='messages')return {model:cap.model,max_tokens:Number(fields.max_tokens)||1024,messages:[{role:'user',content:prompt}],stream:fields.stream==='true'}
+    if(operation==='gemini_content')return {contents:[{role:'user',parts:[{text:prompt}]}]}
+    return {model:'jev-latest',state:{},questions:{answer:{type:'noul',instructions:prompt||'回答问题'}}}
+  }
   const p={model:cap.model,public_profile_id:cap.profile_id,prompt:fields.prompt,async:true,n:1}
   for(const key of ['size','quality','background','output_format','resolution','ratio','lyrics','bpm','audio_format','negative_prompt']) if(fields[key]!=='' && fields[key]!=null) p[key]=fields[key]
   if(fields.seconds!=='' && fields.seconds!=null) p.seconds=Number(fields.seconds)
@@ -128,35 +170,132 @@ const escape = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','
 const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b64_json'||(key==='data'&&/^[A-Za-z0-9+/\r\n]+={0,2}$/.test(value))||value.startsWith('data:')||value.length>4000)?`[编码内容已省略，${value.length} 字符]`:value,2)
 
 async function start() {
-  const sections=await (await fetch(new URL('./content.json',import.meta.url))).json()
-  let category=categories[0],tab='接口文档',profiles=[],key='',pending=parsePendingRecovery(localStorage.getItem('media-docs.pending-task.v1')||''),running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0
+  const [sections,generalSections,knowledgeSections]=await Promise.all([fetch(new URL('./content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./general-content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./knowledge-content.json',import.meta.url)).then(response=>response.json())])
+  let category=categories[0],activeSectionID=category.sections[0],tab='文档',profiles=[],generalModels=[],key='',pending=parsePendingRecovery(localStorage.getItem('media-docs.pending-task.v1')||''),running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0,docSearch=''
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><aside><a class="brand" href="/" target="_top">词元互联</a><nav></nav><div class="aside-foot"><span id="api-version">MEDIA API</span><a href="https://code.aicodeme.cn" target="_top">国内入口 ↗</a><a href="https://code.aicodeme.xyz" target="_top">直连入口 ↗</a><a href="https://hkcode.aicodeme.xyz" target="_top">香港入口 ↗</a><button id="theme">☾ 深色</button><p>Key 仅保存在本页内存。关闭或刷新后清除。</p></div></aside><main><header><h1></h1><div><div class="tools"><a id="create-key" class="primary" href="/keys?create=1&amp;platform=imagevideo" target="_top">创建图片音频视频 Key</a><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="输入密钥（API Key）" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">拉取模型</button><button id="copy-all">复制全部 Markdown</button><button id="export">导出文档</button></div><div class="notice" role="status" id="notice">请先填写密钥，加载可用模型后即可在线调试。</div></div></header><div class="tabs" role="tablist"></div><article></article><footer>词元互联 · 所有生成请求均经过本站 API。<br>接口地址 ${API_ORIGIN} · <a href="./examples/imagevideo.py" download>Python 客户端</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 客户端</a></footer></main>`
+  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><div class="portal-grid"><aside><a class="brand" href="/" target="_top">词元互联</a><label class="nav-search">搜索文档<input id="doc-search" type="search" placeholder="搜索教程、错误码、接口" aria-label="搜索文档"></label><nav aria-label="文档目录"></nav><div class="aside-foot"><span id="api-version">接口文档</span><button id="theme">☾ 深色</button><p>调试 Key 仅保存在本页内存。关闭页面后清除。</p></div></aside><main><header><div><span class="eyebrow">开发者文档</span><h1></h1></div><div id="header-controls"><div class="tools"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="调试时输入 API Key" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">加载可用模型</button></div><div class="notice" role="status" id="notice">在线调试时填写 API Key。</div></div></header><div class="tabs" role="tablist"></div><div class="content-grid"><article></article><nav id="page-toc" aria-label="本页目录"></nav></div><footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer></main></div>`
   const $=s=>root.querySelector(s)
+  let parentThemeObserver=null
+  if(new URLSearchParams(location.search).get('embedded')==='1'){
+    const syncTheme=()=>{
+      let dark=document.documentElement.classList.contains('dark')
+      try{dark=parent.document.documentElement.classList.contains('dark')}catch{}
+      document.body.classList.toggle('dark',dark)
+      const button=$('#theme');if(button)button.textContent=dark?'☀ 浅色':'☾ 深色'
+    }
+    syncTheme()
+    try{parentThemeObserver=new parent.MutationObserver(syncTheme);parentThemeObserver.observe(parent.document.documentElement,{attributes:true,attributeFilter:['class']})}catch{}
+  }
   loadDocsVersion().then(label=>{const badge=$('#api-version');if(badge)badge.textContent=label})
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
-  const selectedSections=()=>sections.filter(s=>category.sections.includes(s.id))
+  const allSections=()=>[...knowledgeSections,...generalSections,...sections]
+  const selectedSections=()=>allSections().filter(section=>section.id===activeSectionID)
+  const categoryForSection=id=>categories.find(item=>item.sections.includes(id))||categories[0]
   const code=b=>`<div class="code"><div class="code-title"><span>${escape(b.label)}</span><button data-copy>复制</button></div><pre><code>${escape(b.text)}</code></pre></div>`
   const block=b=>b.kind==='heading'?`<h3>${escape(b.text)}</h3>`:b.kind==='text'?`<p>${escape(b.text)}</p>`:b.kind==='endpoint'?`<div class="endpoint"><b>${escape(b.method)}</b><code>${escape(API_ORIGIN+b.path)}</code></div>`:b.kind==='code'?code(b):`<div class="table"><table><thead><tr>${b.headers.map(x=>`<th>${escape(x)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r=>`<tr>${r.map(c=>`<td>${escape(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  function renderNavigation() {
+    const docs=allSections()
+    $('nav').innerHTML=navigationGroups.map(group=>{
+      const items=group.sections.map(id=>docs.find(section=>section.id===id)).filter(Boolean)
+        .filter(section=>!docSearch||`${section.title} ${section.subtitle} ${JSON.stringify(section.blocks)}`.toLowerCase().includes(docSearch))
+      if(!items.length)return ''
+      return `<details class="nav-group" open><summary>${escape(group.title)}</summary><div>${items.map(section=>`<a href="#${section.id}" class="${section.id===activeSectionID?'active':''}">${escape(section.navTitle||section.title)}</a>`).join('')}</div></details>`
+    }).join('')||'<p class="nav-empty">没有匹配的文档</p>'
+  }
   function view() {
-    $('h1').textContent=category.title; document.title=category.title+' · 词元互联'
-    $('nav').innerHTML=categories.map(c=>`<a href="#${c.id}" class="${c===category?'active':''}">${c.title}</a>`).join('')
-    $('.tabs').innerHTML=['接口文档','输入示例','输出示例','在线调试'].map(t=>`<button role="tab" aria-selected="${t===tab}" class="${t===tab?'active':''}">${t}</button>`).join('')
+    const page=selectedSections()[0]
+    $('h1').textContent=page?.title||category.title; document.title=(page?.title||category.title)+' · 词元互联'
+    $('#page-toc').hidden=tab==='在线调试'
+    $('#header-controls').hidden=tab!=='在线调试'
+    renderNavigation()
+    const tabs=category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
+    if(!tabs.includes(tab))tab=tabs[0]
+    $('.tabs').innerHTML=tabs.map(t=>`<button role="tab" aria-selected="${t===tab}" class="${t===tab?'active':''}">${t}</button>`).join('')
     if(tab==='在线调试') {debug();return}
-    $('article').innerHTML=selectedSections().map(s=>{
-      const blocks=s.blocks.filter(b=>tab==='接口文档'?b.kind!=='code'||b.language==='http':b.kind==='code'&&(tab==='输出示例'?b.language==='json':b.language!=='json'&&b.language!=='http'))
-      return blocks.length?`<section id="${escape(s.id)}" class="hash-anchor"><h2>${escape(s.title)}</h2><p>${escape(s.subtitle)}</p>${blocks.map(block).join('')}</section>`:''
-    }).join('')+`<div class="buttons"><button id="copy-group">复制本类 Markdown</button></div>`
-    $('#copy-group').onclick=()=>copy(selectedSections().map(sectionMarkdown).join('\n\n'))
+    const blocks=(page?.blocks||[]).map((block,index)=>({block,id:`page-heading-${index}`})).filter(({block})=>{
+      if(tab==='文档'||tab==='接口文档')return block.kind!=='code'||block.language==='http'
+      if(tab==='代码示例')return block.kind==='code'
+      return block.kind==='code'&&(tab==='输出示例'?block.language==='json':block.language!=='json'&&block.language!=='http')
+    })
+    $('article').innerHTML=page?`<section id="page-top" class="hash-anchor"><h2>${escape(page.title)}</h2><p class="page-subtitle">${escape(page.subtitle)}</p>${blocks.map(({block:item,id})=>item.kind==='heading'?`<h3 id="${id}" class="hash-anchor">${escape(item.text)}</h3>`:block(item)).join('')}<div class="buttons"><button id="copy-group">复制本页 Markdown</button></div></section>`:''
+    const headings=blocks.flatMap(({block,id})=>block.kind==='heading'?[{id,text:block.text}]:[])
+    $('#page-toc').innerHTML=`<strong>本页目录</strong><button data-toc-target="page-top">${escape(page?.navTitle||page?.title||'')}</button>${headings.map(item=>`<button data-toc-target="${item.id}">${escape(item.text)}</button>`).join('')}`
+    $('#page-toc').onclick=event=>{const target=event.target.closest('[data-toc-target]');if(target)document.getElementById(target.dataset.tocTarget)?.scrollIntoView({behavior:'smooth',block:'start'})}
+    $('#copy-group').onclick=()=>copy(page?sectionMarkdown(page):'')
     $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>copy(button.closest('.code').querySelector('code').textContent))
   }
-  const filtered=()=>profilesForCategory(profiles,category)
+  const filtered=()=>category.id==='text'?generalModels:profilesForCategory(profiles,category)
+  function debugText() {
+    const protocols=[{id:'chat_completions',label:'OpenAI Chat Completions'},{id:'responses',label:'OpenAI Responses'},{id:'messages',label:'Anthropic Messages'},{id:'gemini_content',label:'Gemini generateContent'},{id:'systemone',label:'TypeSafe System One'}]
+    const available=generalModels.flatMap(model=>model.operations.map(operation=>({model:model.model,operation})))
+    if(!available.length){$('article').innerHTML='<p>当前 API Key 未发现通用文本模型。请检查 Key 的分组和模型权限，或选择图片、视频、音乐与语音目录查看多媒体模型。</p>';return}
+    $('article').innerHTML=`<p>模型列表按当前 API Key 的分组和白名单加载。同步接口可返回 JSON，支持流式的接口可切换 SSE。发送可能产生费用，请先核对请求体和所选模型。</p><div class="fields"><label>接口协议<select id="text-operation" aria-label="选择接口协议">${protocols.filter(protocol=>available.some(item=>item.operation===protocol.id)).map(protocol=>`<option value="${protocol.id}">${protocol.label}</option>`).join('')}</select></label><label>模型<select id="text-model" aria-label="选择模型"></select></label><label id="text-stream-field">响应方式<select id="text-stream"><option value="false">同步 JSON</option><option value="true">流式响应</option></select></label><label id="text-token-field">最大输出 Token<input id="text-max-tokens" type="number" value="1024" min="1"></label></div><label class="wide">提示词<textarea id="text-prompt" placeholder="输入要发送给模型的问题"></textarea></label><label class="request-editor">可编辑请求 JSON<textarea id="text-request" spellcheck="false" aria-label="可编辑请求 JSON"></textarea></label><div class="buttons"><button id="send-text" class="primary" disabled>发送请求</button><button id="stop-text" disabled>停止等待</button></div><label class="confirm-paid"><input id="confirm-text-paid" type="checkbox"> 我确认请求可能产生费用</label><p class="status" id="text-status" role="status" aria-live="polite">输入 API Key 并加载模型后即可调试。</p><div id="text-error" class="error" role="alert"></div><section class="debug-panels"><div class="code"><div class="code-title"><span>请求路径</span></div><pre id="text-endpoint">尚未选择接口</pre></div><div class="code"><div class="code-title"><span>响应内容</span><button id="copy-text-response">复制</button></div><pre id="text-response">尚无响应</pre></div></section>`
+    const operation=$('#text-operation'),model=$('#text-model'),request=$('#text-request'),response=$('#text-response'),send=$('#send-text'),stop=$('#stop-text'),status=$('#text-status'),error=$('#text-error'),confirmation=$('#confirm-text-paid')
+    let controller=null,sequence=0
+    const renderRequest=()=>{
+      const op=operation.value,selected=model.value,profile=generalModels.find(item=>item.model===selected),cap={model:selected}
+      if(!profile||!profile.operations.includes(op)){request.value='';$('#text-endpoint').textContent='请选择当前 Key 可用的模型和接口';return}
+      const payload=buildRequest(cap,op,{prompt:$('#text-prompt').value,stream:$('#text-stream').value,max_tokens:$('#text-max-tokens').value})
+      request.value=JSON.stringify(payload,null,2)
+      const endpoint=endpointForStreaming(op,selected,$('#text-stream').value==='true')
+      $('#text-endpoint').textContent=`POST ${API_ORIGIN}${endpoint}`
+      $('#text-token-field').hidden=op!=='messages'
+      $('#text-stream-field').hidden=op==='systemone'
+      $('#text-stream').disabled=op==='systemone'
+      send.disabled=!key||!confirmation.checked
+    }
+    const populateModels=()=>{
+      const op=operation.value
+      const rows=generalModels.filter(item=>item.operations.includes(op))
+      model.innerHTML=rows.map(item=>`<option value="${escape(item.model)}">${escape(item.model)}</option>`).join('')
+      model.disabled=rows.length===0
+      if(!rows.length){status.textContent='当前 Key 未发现该接口可用的模型。请刷新模型目录或切换接口协议。';request.value='';$('#text-endpoint').textContent='没有匹配的模型';send.disabled=true;return}
+      renderRequest()
+    }
+    operation.onchange=populateModels
+    model.onchange=renderRequest
+    $('#text-stream').onchange=renderRequest
+    $('#text-max-tokens').oninput=renderRequest
+    $('#text-prompt').oninput=renderRequest
+    confirmation.onchange=()=>{send.disabled=!key||!model.value||!confirmation.checked}
+    $('#copy-text-response').onclick=()=>copy(response.textContent||'')
+    $('#text-request').oninput=()=>{try{JSON.parse(request.value);const op=operation.value,path=endpointForStreaming(op,model.value,op==='gemini_content'&&$('#text-stream').value==='true');$('#text-endpoint').textContent=`POST ${API_ORIGIN}${path}`}catch(error){$('#text-error').textContent=`JSON 格式错误：${error.message}`}}
+    const readEventStream=async stream=>{
+      const reader=stream.getReader(),decoder=new TextDecoder();let text=''
+      while(true){const {done,value}=await reader.read();if(done)break;text+=decoder.decode(value,{stream:true});response.textContent=text}
+      return text
+    }
+    send.onclick=async()=>{
+      if(!key||!confirmation.checked||!model.value)return
+      let payload
+      try{payload=JSON.parse(request.value);if(!payload||Array.isArray(payload)||typeof payload!=='object')throw Error('请求 JSON 必须是对象')}catch(e){error.textContent=`JSON 格式错误：${e.message}`;return}
+      const current=++sequence;controller=new AbortController();send.disabled=true;stop.disabled=false;error.textContent='';status.textContent='请求已发送，等待响应。';response.textContent='等待响应…'
+      const op=operation.value,streaming=op==='gemini_content'?$('#text-stream').value==='true':payload.stream===true,path=endpointForStreaming(op,model.value,streaming)
+      const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json',...(op==='messages'?{'anthropic-version':'2023-06-01'}:{})}
+      $('#text-endpoint').textContent=`POST ${API_ORIGIN}${path}`
+      const started=performance.now()
+      try{
+        const result=await fetch(path,{method:'POST',headers,body:JSON.stringify(payload),credentials:'omit',cache:'no-store',redirect:'error',signal:AbortSignal.any([AbortSignal.timeout(streaming?185000:120000),controller.signal])})
+        const contentType=result.headers.get('content-type')||''
+        const body=contentType.includes('text/event-stream')?await readEventStream(result.body):await result.text()
+        response.textContent=body
+        if(!result.ok)throw Error(`HTTP ${result.status}：${parseErrorMessage(body)}`)
+        if(!contentType.includes('text/event-stream')){try{response.textContent=JSON.stringify(JSON.parse(body),null,2)}catch{}}
+        status.textContent=`请求完成 · HTTP ${result.status} · ${Math.round(performance.now()-started)} ms`
+      }catch(e){if(current===sequence){error.textContent=e.message||String(e);status.textContent=controller?.signal.aborted?'已停止等待':'请求未完成。请先确认服务端是否已处理，再决定是否重新发送。'}}
+      finally{if(current===sequence){controller=null;stop.disabled=true;send.disabled=!confirmation.checked}}
+    }
+    stop.onclick=()=>{sequence++;controller?.abort();controller=null;stop.disabled=true;send.disabled=!confirmation.checked;status.textContent='已停止等待响应。若请求已送达服务端，停止等待不会撤回请求。'}
+    if(available.length){operation.value=protocols.find(protocol=>available.some(item=>item.operation===protocol.id))?.id||'';populateModels()}
+  }
   function debug() {
+    if(category.id==='text'){debugText();return}
     const options=filtered(), uploads={}, uploadJobs=new Set()
-    $('article').innerHTML=`<p>流程：标准操作请求 → 免费预览与估价 → 本站返回任务 ID → 查询提交阶段 → 查看成品与账单。免费预览不会创建生成任务或扣费；真实提交只有收到 HTTP 202 并保存任务 ID 后才表示本站已受理。连接中断时保留原幂等 ID，按同一操作的恢复端点查询，不自动再次 POST。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model" aria-label="选择调试模型"><option value="">${loadingModels?'正在加载模型…':options.length?'请选择模型':key?'当前分类暂无可用模型':'粘贴 API Key 后自动加载可用模型'}</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.group_name||p.profile_id?.slice(-8)||'')}</option>`).join('')}</select></label></div><p id="model-hint">${key ? (options.length ? `当前分类有 ${options.length} 个模型能力` : '请检查 Key 的分组、模型启用状态和渠道定价，或切换分类。') : '正在展示公开模型目录。输入中转 Key 后自动加载可调用能力。'}</p><div id="parameters"></div><div class="buttons"><button id="preview" disabled>免费预览映射与估价</button><button id="submit" class="primary" disabled>提交真实生成（可能收费）</button><button id="recover" ${pending?'':'disabled'}>恢复 / 查询原任务</button><button id="stop">停止轮询</button><button id="new">开始新任务</button></div><p class="status task-summary" id="task-status" role="status" aria-live="polite">${pending?.id?`已有任务 ${escape(pending.id)}，点击“恢复 / 查询原任务”。`:'尚未提交真实生成请求。'}</p><details class="debug-evidence"><summary>原始请求、响应与联调日志（默认折叠，Base64 已脱敏）</summary><div class="debug-panels">${code({label:'标准提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'任务查询响应',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section></details><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
+    let requestDirty=false
+    $('article').innerHTML=`<p>流程：标准操作请求 → 免费预览与估价 → 本站返回任务 ID → 查询提交阶段 → 查看成品与账单。免费预览不会创建生成任务或扣费；真实提交只有收到 HTTP 202 并保存任务 ID 后才表示本站已受理。连接中断时保留原幂等 ID，按同一操作的恢复端点查询，不自动再次 POST。</p><div class="fields"><label class="wide">模型 / 能力配置<select id="model" aria-label="选择调试模型"><option value="">${loadingModels?'正在加载模型…':options.length?'请选择模型':key?'当前分类暂无可用模型':'粘贴 API Key 后自动加载可用模型'}</option>${options.map((p,i)=>`<option value="${i}">${escape(p.model)} · ${escape(p.media_type)} · ${escape(p.group_name||p.profile_id?.slice(-8)||'')}</option>`).join('')}</select></label></div><p id="model-hint">${key ? (options.length ? `当前分类有 ${options.length} 个模型能力` : '请检查 Key 的分组、模型启用状态和渠道定价，或切换分类。') : '正在展示公开模型目录。输入中转 Key 后自动加载可调用能力。'}</p><div id="parameters"></div><label class="request-editor">可编辑请求 JSON<textarea id="media-request" spellcheck="false" aria-label="可编辑请求 JSON" placeholder="选择模型并填写参数后，请求 JSON 会显示在这里。"></textarea></label><div class="buttons"><button id="preview" disabled>免费预览映射与估价</button><button id="submit" class="primary" disabled>提交真实生成（可能收费）</button><button id="recover" ${pending?'':'disabled'}>恢复 / 查询原任务</button><button id="stop">停止轮询</button><button id="new">开始新任务</button></div><p class="status task-summary" id="task-status" role="status" aria-live="polite">${pending?.id?`已有任务 ${escape(pending.id)}，点击“恢复 / 查询原任务”。`:'尚未提交真实生成请求。'}</p><details class="debug-evidence"><summary>原始请求、响应与联调日志（默认折叠，Base64 已脱敏）</summary><div class="debug-panels">${code({label:'标准提交请求 JSON（Base64 已脱敏）',text:'尚未提交'})}${code({label:'任务查询响应',text:'尚无响应'})}</div><section class="debug-log"><h3>联调日志</h3><ol id="debug-log-list"></ol></section></details><div id="debug-error" class="error" role="alert"></div><div class="artifacts"></div>`
     const codes=$('article').querySelectorAll('.code code')
     const confirmation=document.createElement('label'), confirmPaid=document.createElement('input')
     confirmation.className='confirm-paid';confirmPaid.id='confirm-paid';confirmPaid.type='checkbox'
@@ -197,7 +336,23 @@ async function start() {
       $('#preview').disabled=running||!key||!!cap.catalog_only
       if(cap.catalog_only)$('#model-hint').textContent='已选择公开目录模型。粘贴中转 Key 后自动匹配可调用配置。'
       installUploads()
+      requestDirty=false
+      $('#parameters').addEventListener('input',()=>{requestDirty=false;syncRequestDraft()})
+      $('#parameters').addEventListener('change',()=>{requestDirty=false;syncRequestDraft()})
+      syncRequestDraft()
     }
+    function syncRequestDraft(){
+      const cap=options[model.value];if(!cap)return
+      try{
+        const fields={};$('#parameters').querySelectorAll('[name]').forEach(el=>fields[el.name]=el.value)
+        const materials={};$('#parameters').querySelectorAll('[data-material]').forEach(el=>materials[el.dataset.material]=parseMaterialText(el.value))
+        for(const [kind,files] of Object.entries(uploads))materials[kind]=[...(materials[kind]||[]),...files.map(file=>file.material)]
+        const payload=buildRequest(cap,fields.operation,fields,materials),text=JSON.stringify(payload,null,2)
+        if(!requestDirty)$('#media-request').value=text
+        codes[0].textContent=pretty(payload)
+      }catch{}
+    }
+    $('#media-request').addEventListener('input',()=>{requestDirty=true;$('#debug-error').textContent=''})
     const api=async(path,method='GET',payload,headers={})=>{
       const url=new URL(path,location.origin);if(url.origin!==location.origin)throw Error('只允许请求本站 API')
       const started=performance.now();appendLog('请求',{method,path,request:payload})
@@ -292,6 +447,7 @@ async function start() {
       const list=$('#parameters').querySelector(`[data-upload-list="${kind}"]`);if(!list)return
       list.innerHTML=(uploads[kind]||[]).map((file,index)=>`<li><span>${index+1}. ${escape(file.name)} · ${(file.size/1048576).toFixed(2)} MiB</span><button type="button" data-remove="${index}">移除</button></li>`).join('')
       list.querySelectorAll('[data-remove]').forEach(button=>button.onclick=()=>{uploads[kind].splice(Number(button.dataset.remove),1);renderUploads(kind)})
+      syncRequestDraft()
     }
     async function collectRequest(){
       const cap=options[model.value],fields={},materials={}
@@ -302,8 +458,9 @@ async function start() {
       $('#parameters').querySelectorAll('[data-material]').forEach(el=>materials[el.dataset.material]=parseMaterialText(el.value))
       for(const [kind,files] of Object.entries(uploads))materials[kind]=[...(materials[kind]||[]),...files.map(file=>file.material)]
       for(const [kind,refs] of Object.entries(materials)){const limit=inputMaterialsFor(cap)[kind]?.max_count;if(limit>0&&refs.length>limit)throw Error(`${kind} 最多支持 ${limit} 个素材`)}
-      const payload=buildRequest(cap,fields.operation,fields,materials)
+      let payload=buildRequest(cap,fields.operation,fields,materials)
       if(fields.operation==='image_edit'&&!materials.image?.length)throw Error('图片编辑必须提供参考图')
+      if(requestDirty){try{payload=JSON.parse($('#media-request').value);if(!payload||Array.isArray(payload)||typeof payload!=='object')throw Error('请求 JSON 必须是对象')}catch(error){throw Error(`请求 JSON 无效：${error.message}`)}}
       codes[0].textContent=pretty(payload)
       return {cap,fields,payload}
 
@@ -343,30 +500,34 @@ async function start() {
     if(!credential){notice('请填写中转 API Key，即可加载可调用模型。',true);return}
     loadingModels=true;$('#load').disabled=true;notice('正在验证 Key 并加载模型…')
     try{
-      const r=await fetch('/v1/media/capabilities',{headers:{Authorization:'Bearer '+credential},credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(30000)})
-      const p=await r.json();if(version!==loadEpoch||credential!==key)return
-      if(!r.ok)throw Error(p.error?.message||p.message||`模型读取失败（${r.status}）`)
-      profiles=Array.isArray(p.models)?p.models:[]
-      notice(profiles.length?`已加载 ${profiles.length} 组模型能力，可选择模型并先做免费参数校验。`:'此 Key 暂无可用模型，请检查分组、模型启用状态及渠道定价。',!profiles.length)
+      const headers={Authorization:'Bearer '+credential,Accept:'application/json'}
+      const requestOptions={headers,credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(30000)}
+      const [mediaResult,modelResult,geminiResult]=await Promise.allSettled([fetch('/v1/media/capabilities',requestOptions),fetch('/v1/models',requestOptions),fetch('/v1beta/models',requestOptions)])
+      if(version!==loadEpoch||credential!==key)return
+      const read=async result=>result.status==='fulfilled'&&result.value.ok?result.value.json():null
+      const [mediaCatalog,modelCatalog,geminiCatalog]=await Promise.all([read(mediaResult),read(modelResult),read(geminiResult)])
+      profiles=Array.isArray(mediaCatalog?.models)?mediaCatalog.models:[]
+      generalModels=parseGeneralModels(modelCatalog,geminiCatalog)
+      const count=new Set([...profiles.map(item=>item.model),...generalModels.map(item=>item.model)]).size
+      notice(count?`已加载 ${count} 个可用模型及其接口能力。选择模型后，可预览媒体计费或发送同步、流式请求。`:'此 Key 暂无可用模型。请检查 API Key、分组权限和模型开放状态。',!count)
     }catch(e){if(version===loadEpoch){profiles=[];notice(e.message,true)}}
     finally{if(version===loadEpoch){loadingModels=false;$('#load').disabled=false;if(tab==='在线调试'&&!running)debug()}}
   }
   $('#key').oninput=()=>{
     if(pending&&key){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}
-    key=$('#key').value.trim().replace(/^Bearer\s+/i,'');profiles=[];++loadEpoch;clearTimeout(loadTimer)
+    key=$('#key').value.trim().replace(/^Bearer\s+/i,'');profiles=[];generalModels=[];++loadEpoch;clearTimeout(loadTimer)
     if(key)loadTimer=setTimeout(loadModels,450)
     else{loadingModels=false;$('#load').disabled=false;notice('请填写中转 API Key 后加载模型。');if(tab==='在线调试')debug()}
   }
   $('#show-key').onclick=()=>{$('#key').type=$('#key').type==='password'?'text':'password';$('#show-key').textContent=$('#key').type==='password'?'显示':'隐藏'}
   $('#load').onclick=()=>{clearTimeout(loadTimer);loadModels()}
-  $('#copy-all').onclick=()=>copy(fullMarkdown(sections))
-  $('#export').onclick=()=>{const url=URL.createObjectURL(new Blob([fullMarkdown(sections)],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='词元互联媒体接口文档.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-  $('#theme').onclick=()=>{document.body.classList.toggle('dark');$('#theme').textContent=document.body.classList.contains('dark')?'☀ 浅色':'☾ 深色'}
+  $('#theme').onclick=()=>{const dark=!document.body.classList.contains('dark');document.body.classList.toggle('dark',dark);document.documentElement.classList.toggle('dark',dark);$('#theme').textContent=dark?'☀ 浅色':'☾ 深色'}
   $('#menu').onclick=()=>$('aside').classList.toggle('open')
+  $('#doc-search').oninput=()=>{docSearch=$('#doc-search').value.trim().toLowerCase();renderNavigation()}
   $('.tabs').onclick=e=>{if(e.target.matches('button')){if(running){notice('请先停止等待或等待本轮查询完成。');return}tab=e.target.textContent;view()}}
-  function navigate(){if(running){notice('任务正在查询，请先停止等待。');return}const hash=decodeURIComponent(location.hash.slice(1));category=categories.find(c=>c.id===hash||c.sections.includes(hash))||categories[0];view();$('aside').classList.remove('open');if(hash!==category.id)document.getElementById(hash)?.scrollIntoView()}
+  function navigate(){if(running){notice('任务正在查询，请先停止等待。');return}const hash=decodeURIComponent(location.hash.slice(1));const page=allSections().find(section=>section.id===hash);if(page){activeSectionID=page.id;category=categoryForSection(page.id)}else{category=categories.find(item=>item.id===hash)||categories[0];activeSectionID=category.sections[0]||'guide'}tab=category.ops.length?'接口文档':'文档';view();$('aside').classList.remove('open')}
   window.addEventListener('hashchange',navigate)
-  window.addEventListener('pagehide',()=>{key='';$('#key').value='';epoch++;objectURLs.forEach(url=>URL.revokeObjectURL(url))})
+  window.addEventListener('pagehide',()=>{key='';$('#key').value='';epoch++;parentThemeObserver?.disconnect();objectURLs.forEach(url=>URL.revokeObjectURL(url))})
   navigate()
   fetch('/api/v1/model-plaza',{credentials:'omit',signal:AbortSignal.timeout(15000)}).then(r=>r.ok?r.json():null).then(catalog=>{
     if(key||!catalog?.data?.groups)return
