@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -84,6 +85,17 @@ func (s *Store) PublicTask(ctx context.Context, t StoredTask) (Task, error) {
 		return Task{}, e
 	}
 	public := publicTaskValue(t, artifacts)
+	// The worker records upstream completion before downloading and validating the video.
+	// Clients can stop polling on completed, so publish it after the video is available.
+	if public.Status == "completed" && t.Snapshot.Capability.MediaType == "video" &&
+		(t.Settlement == "held" || t.Settlement == "pending_usage") &&
+		!slices.ContainsFunc(artifacts, func(artifact Artifact) bool {
+			return artifact.Type == "video" && artifact.Available
+		}) {
+		public.Status = "in_progress"
+		public.Progress = 99
+		public.CompletedAt = nil
+	}
 	var raw []byte
 	e = s.DB.QueryRowContext(ctx, `SELECT details FROM media_ledger_entries WHERE operation_key=$1`, t.ID+":finalize").Scan(&raw)
 	if e != nil && e != sql.ErrNoRows {

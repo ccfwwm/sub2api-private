@@ -1,5 +1,5 @@
 {
-  "version": "v1.3.31",
+  "version": "v1.3.32",
   "status": "recorded",
   "acceptance_state": "isolated-regression-tested; production-acceptance-pending; prior-real-channel-evidence-historical-only",
   "previous_production_verified_at": "2026-11-01T20:36:54Z",
@@ -7,9 +7,9 @@
   "new_paid_submissions": 0,
   "requests_attempted": 0,
   "credentials_recorded": false,
-  "environment": "The candidate combines the public-page motion update with managed media retries and an account circuit breaker. Automated tests use isolated provider fixtures, PostgreSQL and Redis.",
+  "environment": "The candidate adds a public video status fix to v1.3.31, which includes the public-page motion update and managed media retries with an account circuit breaker. Automated tests use isolated fixtures.",
   "source_release": "v1.3.26",
-  "reuse_scope": "The database migration inventory matches v1.3.30. Historical channel results retain their original versions and dates.",
+  "reuse_scope": "The database migration inventory matches v1.3.31. Historical channel results retain their original versions and dates.",
   "prior_cases_source_release": "v1.3.19",
   "reused_for_release": true,
   "cases": [
