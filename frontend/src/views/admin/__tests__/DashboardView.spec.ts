@@ -125,6 +125,7 @@ describe('admin DashboardView', () => {
     getUserUsageTrend.mockResolvedValueOnce({ trend: [{ date: '2026-01-01', user_id: 2, username: 'spender', email: '', requests: 1, tokens: 10, cost: 5, actual_cost: 5 }] })
     const wrapper = mount(DashboardView, {
       global: { stubs: {
+        RouterLink: true,
         AppLayout: { template: '<div><slot /></div>' }, LoadingSpinner: true,
         Icon: true, DateRangePicker: true, Select: true, ModelDistributionChart: true,
         TokenUsageTrend: true
@@ -135,7 +136,9 @@ describe('admin DashboardView', () => {
     await wrapper.findAll('button').find(button => button.text() === 'admin.dashboard.actualSpending')!.trigger('click')
     expect(getUserUsageTrend).toHaveBeenCalledWith(expect.objectContaining({ metric: 'actual_cost', limit: 12 }))
     await flushPromises()
-    const chart = wrapper.findComponent({ name: 'Line' })
+    await vi.dynamicImportSettled()
+    await flushPromises()
+    const chart = wrapper.getComponent({ name: 'Line' })
     expect(chart.props('data').datasets[0].data).toEqual([5])
     expect(chart.props('options').scales.y.ticks.callback(5)).toBe('$5.00')
     resolveTokens({ trend: [{ date: '2026-01-01', user_id: 1, username: 'tokens', email: '', requests: 1, tokens: 100, cost: 1, actual_cost: 1 }] })
@@ -143,10 +146,11 @@ describe('admin DashboardView', () => {
     expect(chart.props('data').datasets[0].data).toEqual([5])
   })
 
-  it('uses last 24 hours as default dashboard range', async () => {
-    mount(DashboardView, {
+  it('uses last 24 hours by default and loads spending ranking on demand', async () => {
+    const wrapper = mount(DashboardView, {
       global: {
         stubs: {
+          RouterLink: true,
           AppLayout: { template: '<div><slot /></div>' },
           LoadingSpinner: true,
           Icon: true,
@@ -170,5 +174,11 @@ describe('admin DashboardView', () => {
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
+    expect(getUserSpendingRanking).not.toHaveBeenCalled()
+    wrapper.getComponent({ name: 'ModelDistributionChart' }).vm.$emit('ranking-open')
+    await flushPromises()
+    expect(getUserSpendingRanking).toHaveBeenCalledTimes(1)
+    wrapper.getComponent({ name: 'ModelDistributionChart' }).vm.$emit('ranking-open')
+    expect(getUserSpendingRanking).toHaveBeenCalledTimes(1)
   })
 })

@@ -20,6 +20,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useTheme } from '@/composables/useTheme'
 import { useI18n } from 'vue-i18n'
 import {
   Chart as ChartJS,
@@ -54,9 +55,7 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const { isDark: isDarkMode } = useTheme()
 
 const chartColors = computed(() => ({
   text: isDarkMode.value ? '#e5e7eb' : '#374151',

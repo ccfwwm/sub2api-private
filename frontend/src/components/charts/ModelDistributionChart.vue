@@ -88,7 +88,7 @@
                 ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
                 : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             "
-            @click="activeView = 'spending_ranking'"
+            @click="showSpendingRanking"
           >
             {{ t('admin.dashboard.viewSpendingRanking') }}
           </button>
@@ -332,12 +332,18 @@ const emit = defineEmits<{
   'update:metric': [value: DistributionMetric]
   'update:source': [value: ModelSource]
   'ranking-click': [item: UserSpendingRankingItem]
+  'ranking-open': []
 }>()
 
 const enableRankingView = computed(() => props.enableRankingView)
 const showAccountCost = computed(() => props.showAccountCost)
 const distributionColspan = computed(() => showAccountCost.value ? 6 : 5)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
+
+function showSpendingRanking() {
+  activeView.value = 'spending_ranking'
+  emit('ranking-open')
+}
 
 const chartColors = [
   '#3b82f6',

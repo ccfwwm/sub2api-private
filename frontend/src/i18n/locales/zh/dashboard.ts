@@ -1,5 +1,8 @@
 export default {
   dashboard: {
+    loadFailed: '暂时无法加载用量概览。',
+    userOverview: '我的 API 用量概览',
+    adminOverview: 'API 网关运营概览',
     title: '仪表盘',
     welcomeMessage: '欢迎回来！这是您账户的概览。',
     balance: '余额',

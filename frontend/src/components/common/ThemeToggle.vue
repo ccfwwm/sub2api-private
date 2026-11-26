@@ -5,26 +5,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useTheme } from '@/composables/useTheme'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
-const isDark = ref(document.documentElement.classList.contains('dark'))
+const { isDark, toggleTheme } = useTheme()
 const label = computed(() => t(isDark.value ? 'home.switchToLight' : 'home.switchToDark'))
-
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
 </script>
 
 <style scoped>
 .theme-toggle {
   display: grid;
-  width: 40px;
-  height: 40px;
+  cursor: pointer;
+  width: var(--theme-toggle-size, 40px);
+  height: var(--theme-toggle-size, 40px);
   flex-shrink: 0;
   place-items: center;
   border: 1px solid transparent;

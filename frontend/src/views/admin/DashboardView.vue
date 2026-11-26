@@ -1,6 +1,10 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="space-y-5">
+      <DashboardHero :title="t('dashboard.adminOverview')">
+        <router-link v-if="adminSettings.opsMonitoringEnabled" to="/admin/ops"><Icon name="chart" size="sm" />{{ t('nav.ops') }}</router-link>
+        <router-link to="/admin/accounts"><Icon name="server" size="sm" />{{ t('nav.accounts') }}</router-link>
+      </DashboardHero>
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <LoadingSpinner />
@@ -8,7 +12,7 @@
 
       <template v-else-if="stats">
         <!-- Row 1: Core Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="dashboard-overview grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 xl:grid-cols-4">
           <!-- Total API Keys -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -96,7 +100,7 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="dashboard-overview grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 xl:grid-cols-4">
           <!-- Today Tokens -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -298,7 +302,7 @@
           </div>
 
           <!-- Charts Grid -->
-          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div class="console-chart-slot grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ModelDistributionChart
               :model-stats="modelStats"
               :enable-ranking-view="true"
@@ -312,6 +316,7 @@
               :start-date="startDate"
               :end-date="endDate"
               @ranking-click="goToUserUsage"
+              @ranking-open="onRankingOpen"
             />
             <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
           </div>
@@ -328,7 +333,7 @@
                 </button>
               </div>
             </div>
-            <div class="h-64">
+            <div class="console-chart-slot h-64">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
                 <LoadingSpinner size="md" />
               </div>
@@ -348,9 +353,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
+import { useTheme } from '@/composables/useTheme'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
@@ -363,45 +370,36 @@ import type {
   UserSpendingRankingItem
 } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import DashboardHero from '@/components/layout/DashboardHero.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
-import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
-import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-)
+const ModelDistributionChart = defineAsyncComponent({
+  loader: () => import('@/components/charts/ModelDistributionChart.vue'),
+  loadingComponent: LoadingSpinner
+})
+const TokenUsageTrend = defineAsyncComponent({
+  loader: () => import('@/components/charts/TokenUsageTrend.vue'),
+  loadingComponent: LoadingSpinner
+})
+const Line = defineAsyncComponent({
+  loader: () => import('@/components/charts/DashboardTrendLine.vue'),
+  loadingComponent: LoadingSpinner
+})
 
 const appStore = useAppStore()
+const adminSettings = useAdminSettingsStore()
 const router = useRouter()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const stats = ref<DashboardStats | null>(null)
-const loading = ref(false)
+const loading = ref(true)
 const chartsLoading = ref(false)
 const userTrendLoading = ref(false)
 const rankingLoading = ref(false)
+let rankingRequested = false
 const rankingError = ref(false)
 
 // Chart data
@@ -445,9 +443,7 @@ const granularityOptions = computed(() => [
 ])
 
 // Dark mode detection
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const { isDark: isDarkMode } = useTheme()
 
 // Chart colors
 const chartColors = computed(() => ({
@@ -751,11 +747,17 @@ const loadUserSpendingRanking = async () => {
   }
 }
 
+function onRankingOpen() {
+  if (rankingLoading.value || (rankingRequested && !rankingError.value)) return
+  rankingRequested = true
+  void loadUserSpendingRanking()
+}
+
 const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
     loadUsersTrend(),
-    loadUserSpendingRanking()
+    rankingRequested ? loadUserSpendingRanking() : undefined
   ])
 }
 
@@ -763,7 +765,7 @@ const loadChartData = async () => {
   await Promise.all([
     loadDashboardSnapshot(false),
     loadUsersTrend(),
-    loadUserSpendingRanking()
+    rankingRequested ? loadUserSpendingRanking() : undefined
   ])
 }
 

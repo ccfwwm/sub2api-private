@@ -121,7 +121,10 @@ export default defineConfig(({ mode }) => {
             }
 
             // UI 工具库（较大，单独分离）
-            if (id.includes('/@vueuse/') || id.includes('/xlsx/')) {
+            if (id.includes('/xlsx/')) {
+              return 'vendor-export'
+            }
+            if (id.includes('/@vueuse/')) {
               return 'vendor-ui'
             }
 

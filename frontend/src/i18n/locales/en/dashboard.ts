@@ -1,5 +1,8 @@
 export default {
   dashboard: {
+    loadFailed: 'The usage overview could not be loaded.',
+    userOverview: 'My API usage overview',
+    adminOverview: 'API gateway overview',
     title: 'Dashboard',
     welcomeMessage: "Welcome back! Here's an overview of your account.",
     balance: 'Balance',
