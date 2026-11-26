@@ -1051,6 +1051,9 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	// TextRoutingMode controls the shared text routing policy (off, observe, enforce).
+	TextRoutingMode       string `mapstructure:"text_routing_mode"`
+	TextRoutingPercent    int    `mapstructure:"text_routing_percent"`
 	MediaFailoverMode     string `mapstructure:"media_failover_mode"`
 	MediaFailoverGroupIDs string `mapstructure:"media_failover_group_ids"`
 	// MinOutputTokens is the minimum max_output_tokens used when
@@ -2600,6 +2603,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_ws.scheduler_score_weights.session_sticky", 3.0)
 	// OpenAI HTTP upstream protocol strategy
 	viper.SetDefault("gateway.openai_http2.enabled", true)
+	viper.SetDefault("gateway.text_routing_mode", "off")
+	viper.SetDefault("gateway.text_routing_percent", 100)
 	viper.SetDefault("gateway.media_failover_mode", "off")
 	viper.SetDefault("gateway.media_failover_group_ids", "")
 	viper.SetDefault("gateway.openai_http2.allow_proxy_fallback_to_http1", true)
@@ -2821,6 +2826,14 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	switch c.Gateway.TextRoutingMode {
+	case "", "off", "observe", "enforce":
+	default:
+		return fmt.Errorf("gateway.text_routing_mode must be off, observe, or enforce")
+	}
+	if c.Gateway.TextRoutingPercent < 0 || c.Gateway.TextRoutingPercent > 100 {
+		return fmt.Errorf("gateway.text_routing_percent must be between 0 and 100")
+	}
 	if c.Gateway.MinOutputTokens < 16 {
 		return fmt.Errorf("gateway.min_output_tokens must be at least 16")
 	}

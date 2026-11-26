@@ -1,6 +1,11 @@
 package service
 
-import "context"
+import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
+)
 
 // HTTPUpstreamProfile marks HTTP upstream requests that need provider-specific
 // transport policy.
@@ -16,6 +21,29 @@ const (
 type httpUpstreamProfileContextKey struct{}
 type httpUpstreamDisableRedirectsContextKey struct{}
 type httpUpstreamPublicHostsOnlyContextKey struct{}
+type textInferenceContextKey struct{}
+
+// WithTextInference marks a gateway request whose API response must stay on the
+// gateway. Explicitly setting false also excludes mixed routes used for media.
+func WithTextInference(ctx context.Context, enabled bool) context.Context {
+	return context.WithValue(ctx, textInferenceContextKey{}, enabled)
+}
+
+func IsTextInference(ctx context.Context) bool {
+	return ctx != nil && ctx.Value(textInferenceContextKey{}) == true
+}
+
+// TextInferenceRedirectErrorResponse converts a redirect that the gateway
+// cannot follow into the regular upstream failover path.
+func TextInferenceRedirectErrorResponse(req *http.Request) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Status:     "502 Bad Gateway",
+		Header:     http.Header{"Content-Type": {"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"type":"upstream_error","code":"upstream_redirect_rejected","message":"Upstream redirected the inference request"}}`)),
+		Request:    req,
+	}
+}
 
 // WithHTTPUpstreamProfile injects an upstream transport profile into ctx.
 func WithHTTPUpstreamProfile(ctx context.Context, profile HTTPUpstreamProfile) context.Context {

@@ -211,7 +211,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	promptCacheKey = strings.TrimSpace(promptCacheKey)
 	compatPromptCacheInjected := false
 	if promptCacheKey == "" && !isResponsesShape && (account.UsesOpenAICodexProtocol() || account.IsOpenAIApiKey()) && shouldAutoInjectPromptCacheKeyForCompat(upstreamModel) {
-		promptCacheKey = deriveCompatPromptCacheKey(&chatReq, upstreamModel)
+		promptCacheKey = prefixAffinityPromptKey(ctx, account, upstreamModel, deriveCompatPromptCacheKey(&chatReq, upstreamModel))
 		compatPromptCacheInjected = promptCacheKey != ""
 		if compatPromptCacheInjected && account.IsOpenAIApiKey() {
 			promptCacheKey = isolateOpenAISessionID(getAPIKeyIDFromContext(c), promptCacheKey)

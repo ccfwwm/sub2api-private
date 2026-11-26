@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 const defaultBackupPartSizeBytes int64 = 4 * 1024 * 1024 * 1024
@@ -58,7 +59,7 @@ func splitBackupFile(srcPath string, partSize int64) (parts []localBackupPart, e
 
 	remaining := info.Size()
 	for index := 1; remaining > 0; index++ {
-		partFile, createErr := os.CreateTemp("", "sub2api-backup-part-*")
+		partFile, createErr := os.CreateTemp(filepath.Dir(srcPath), "sub2api-backup-part-*")
 		if createErr != nil {
 			return nil, fmt.Errorf("create backup part: %w", createErr)
 		}

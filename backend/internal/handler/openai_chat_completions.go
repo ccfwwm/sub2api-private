@@ -159,7 +159,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	defer inflightRelease()
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
+	prepareTextRoute(c, h.cfg, sessionHash, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
+	if apiKey.GroupID != nil {
+		ctx := service.WithPrefixAffinity(c.Request.Context(), *apiKey.GroupID, apiKey.ID, requestPlatform,
+			EndpointChatCompletions, forwardModel, body, promptCacheKey != "")
+		c.Request = c.Request.WithContext(ctx)
+	}
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -246,6 +252,14 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
+		textAttempt, textAdmitted := service.BeginTextRouteAttempt(c.Request.Context(), account, forwardModel)
+		if !textAdmitted {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			failedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		forwardStart := time.Now()
 
 		forwardBody := body
@@ -267,6 +281,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, reqModel, err != nil, cyberBlockBodyChat, clientRequestedUsageFields(c, channelMapping, reqModel, ""), service.HashUsageRequestPayload(body))
 
+		finishTextRoute(c, textAttempt, err == nil && result != nil && openAIForwardSucceededForScheduling(result), err)
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
 		responseLatencyMs := forwardDurationMs
@@ -346,14 +361,14 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, reqModel, false, nil), false, nil, err)
 					}
-					if !failoverErr.ShouldRetryNextAccount() {
+					if !failoverErr.ShouldRetryNextAccount() || !service.TextRouteAllowsReplay(c.Request.Context()) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
 					// Pool mode: retry on the same account
 					if failoverErr.RetryableOnSameAccount {
 						retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
-						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
+						if allowTextSameAccountRetry(c.Request.Context(), failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
 							sameAccountRetryCount[account.ID]++
 							retryDelay := sameAccountRetryDelayFor(failoverErr, sameAccountRetryCount[account.ID])
 							reqLog.Warn("openai_chat_completions.pool_mode_same_account_retry",
@@ -416,6 +431,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, reqModel, false, result), true, nil)
 		}
 
+		h.gatewayService.RecordChatPrefixAffinity(c.Request.Context(), apiKey.GroupID, account, result, resolveOpenAIUpstreamEndpoint(c, account, result))
 		submitChatUsage(result)
 		reqLog.Debug("openai_chat_completions.request_completed",
 			zap.Int64("account_id", account.ID),

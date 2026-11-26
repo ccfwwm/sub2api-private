@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -288,8 +289,29 @@ func InboundEndpointMiddleware() gin.HandlerFunc {
 		if path == "" {
 			path = c.FullPath()
 		}
-		c.Set(ctxKeyInboundEndpoint, NormalizeInboundEndpoint(path))
+		endpoint := NormalizeInboundEndpoint(path)
+		c.Set(ctxKeyInboundEndpoint, endpoint)
+		if c.Request != nil && c.Request.Method == http.MethodPost && isTextInferenceEndpoint(endpoint, path) {
+			c.Request = c.Request.WithContext(service.WithTextInference(c.Request.Context(), true))
+		}
 		c.Next()
+	}
+}
+
+func isTextInferenceEndpoint(endpoint, path string) bool {
+	path = strings.TrimRight(path, "/")
+	if path == "/chat/completions" {
+		return true
+	}
+	switch endpoint {
+	case EndpointResponses, EndpointResponsesCompact, EndpointChatCompletions:
+		return true
+	case EndpointMessages:
+		return strings.HasSuffix(path, EndpointMessages)
+	case EndpointGeminiModels:
+		return strings.HasSuffix(path, ":generateContent") || strings.HasSuffix(path, ":streamGenerateContent")
+	default:
+		return false
 	}
 }
 

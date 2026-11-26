@@ -12,6 +12,16 @@ func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL 
 	if s.pluginManager != nil {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
+			if err == nil && response != nil && IsTextInference(request.Context()) &&
+				response.StatusCode >= 300 && response.StatusCode < 400 {
+				if response.Body != nil {
+					_ = response.Body.Close()
+				}
+				return TextInferenceRedirectErrorResponse(request), nil
+			}
+			if response != nil && IsTextInference(request.Context()) {
+				response.Header.Del("Location")
+			}
 			return response, err
 		}
 	}

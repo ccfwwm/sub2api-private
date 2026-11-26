@@ -108,6 +108,7 @@ func RegisterGatewayRoutes(
 		if h.Media != nil && h.Media.TrySubmit(c, operation) {
 			return
 		}
+		h.Media.AttachRouting(c)
 		switch getGroupPlatform(c) {
 		case service.PlatformOpenAI:
 			h.OpenAIGateway.Images(c)

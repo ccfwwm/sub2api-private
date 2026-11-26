@@ -112,6 +112,8 @@ func (d *PgDumper) Restore(ctx context.Context, data io.Reader) error {
 		"-p", fmt.Sprintf("%d", d.cfg.Port),
 		"-U", d.cfg.User,
 		"-d", d.cfg.DBName,
+		"-X",
+		"--set=ON_ERROR_STOP=1",
 		"--single-transaction",
 	}
 

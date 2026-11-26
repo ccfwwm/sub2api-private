@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,7 @@ func TestSplitBackupFile_ReassemblesExactBytes(t *testing.T) {
 	var got bytes.Buffer
 	for i, part := range parts {
 		require.Equal(t, i+1, part.Index)
+		require.Equal(t, filepath.Dir(src), filepath.Dir(part.Path))
 		require.LessOrEqual(t, part.SizeBytes, int64(5))
 		data, readErr := os.ReadFile(part.Path)
 		require.NoError(t, readErr)
