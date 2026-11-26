@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ type SubmissionRoutes struct {
 
 type SubmissionRoute struct {
 	AccountID      int64      `json:"account_id"`
+	Priority       int        `json:"priority,omitempty"`
 	Origin         string     `json:"origin"`
 	Capability     Capability `json:"capability"`
 	Cost           *PriceCard `json:"cost,omitempty"`
@@ -32,22 +34,24 @@ type SubmissionRoute struct {
 }
 
 type SubmissionAttempt struct {
-	AccountID int64               `json:"account_id"`
-	Epoch     int64               `json:"lease_epoch"`
-	StartedAt time.Time           `json:"started_at"`
-	Outcome   string              `json:"outcome"`
-	Status    int                 `json:"upstream_status,omitempty"`
-	Code      string              `json:"upstream_code,omitempty"`
-	Reason    string              `json:"reason,omitempty"`
-	RequestID string              `json:"upstream_request_id,omitempty"`
-	Terminal  *SubmissionTerminal `json:"terminal,omitempty"`
+	AccountID      int64               `json:"account_id"`
+	Epoch          int64               `json:"lease_epoch"`
+	IdempotencyKey string              `json:"idempotency_key,omitempty"`
+	StartedAt      time.Time           `json:"started_at"`
+	Outcome        string              `json:"outcome"`
+	Status         int                 `json:"upstream_status,omitempty"`
+	Code           string              `json:"upstream_code,omitempty"`
+	Reason         string              `json:"reason,omitempty"`
+	RequestID      string              `json:"upstream_request_id,omitempty"`
+	Terminal       *SubmissionTerminal `json:"terminal,omitempty"`
 }
 
 type SubmissionTerminal struct {
-	Outcome string `json:"outcome"`
-	Status  int    `json:"upstream_status"`
-	Code    string `json:"upstream_code,omitempty"`
-	Reason  string `json:"reason,omitempty"`
+	Outcome    string `json:"outcome"`
+	UpstreamID string `json:"upstream_id,omitempty"`
+	Status     int    `json:"upstream_status"`
+	Code       string `json:"upstream_code,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 func (r SubmissionRoute) target(group int64, operation string) RouteTarget {
@@ -61,7 +65,7 @@ func (r SubmissionRoute) assign(snapshot *Snapshot) {
 
 func freezeSubmissionRoute(snapshot Snapshot, account Account) SubmissionRoute {
 	return SubmissionRoute{
-		AccountID: account.ID, Origin: RouteOrigin(account.BaseURL, account.Platform), Capability: snapshot.Capability,
+		AccountID: account.ID, Priority: account.Priority, Origin: RouteOrigin(account.BaseURL, account.Platform), Capability: snapshot.Capability,
 		Cost: snapshot.Cost, CostRule: snapshot.CostRule, CostMultiplier: snapshot.CostMultiplier,
 	}
 }
@@ -179,6 +183,11 @@ func (e *Engine) createRoutedTask(ctx context.Context, cap Capability, operation
 			}
 		}
 	}
+	// Keep the selected capability first for explicit profile and pricing
+	// selection. Order its compatible backups by account priority.
+	slices.SortStableFunc(snapshot.Routing.Candidates[1:], func(a, b SubmissionRoute) int {
+		return cmp.Compare(a.Priority, b.Priority)
+	})
 	id := NewTaskID()
 	var admission error
 	var retry time.Duration
@@ -308,14 +317,22 @@ func (e *Engine) processRoutedSubmission(ctx context.Context, task StoredTask) e
 		return e.alternateOrFinish(ctx, task, route, request, UpstreamResult{Status: "failed", UpstreamStatusCode: http.StatusTooManyRequests,
 			Diagnostic: "Media route is cooling down", RetryAfter: delay})
 	}
-	routing.Attempts = append(routing.Attempts, SubmissionAttempt{AccountID: account.ID, Epoch: task.Epoch, StartedAt: time.Now().UTC(), Outcome: "submitting"})
+	account.IdempotencyKey = task.ID
+	if len(routing.Attempts) > 0 {
+		// Shared provider origins may deduplicate across credentials. Each
+		// backup needs a distinct key that its read-only recovery can reuse.
+		account.IdempotencyKey += "-a" + strconv.FormatInt(account.ID, 10)
+	}
+	routing.Attempts = append(routing.Attempts, SubmissionAttempt{
+		AccountID: account.ID, Epoch: task.Epoch, IdempotencyKey: account.IdempotencyKey,
+		StartedAt: time.Now().UTC(), Outcome: "submitting",
+	})
 	if err = e.Store.beginRoutedSubmission(ctx, task); err != nil {
 		e.Routes.Finish(ctx, target, owner, "", 0, false)
 		return err
 	}
 	receiptKey := "submission-" + strconv.FormatInt(task.Epoch, 10)
 	account.RouteSubmission = true
-	account.IdempotencyKey = task.ID
 	var submission Submission
 	var receiptMu sync.Mutex
 	account.ObserveSubmission = func(receipt Submission) error {
@@ -338,18 +355,17 @@ func (e *Engine) processRoutedSubmission(ctx context.Context, task StoredTask) e
 		return writeErr
 	}
 	result, err := e.Adapter.Submit(ctx, task.Snapshot.Capability, request, account)
-	canSwitch := err == nil && result.Rejected && result.Failover != "" && !result.Accepted && result.ID == "" && len(result.Artifacts) == 0
-	var scope RejectionScope
-	if canSwitch {
-		scope = result.Failover
-		if result.RetryAfter <= 0 {
-			result.RetryAfter = 30 * time.Second
-		}
-	}
-	// An asynchronous recovery probe is still testing the route after it gets
-	// a job ID. Release it on a terminal poll or let its Redis lease expire.
+	canSwitch := err == nil && result.Rejected && result.Failover != "" && !result.Accepted && result.ID == "" && !result.PartialOutput && len(result.Artifacts) == 0
+	// Accepting an async job keeps any recovery probe active until a poll
+	// confirms how generation ended.
 	if err != nil || !result.Accepted || result.ID == "" || result.Status != "in_progress" {
-		e.Routes.Finish(ctx, target, owner, scope, result.RetryAfter, result.Accepted)
+		outcome := RouteNeutral
+		if canSwitch {
+			outcome = RouteFailed
+		} else if err == nil && result.Status == "completed" && len(result.Artifacts) > 0 {
+			outcome = RouteSucceeded
+		}
+		e.Routes.Observe(ctx, target, owner, outcome, result.RetryAfter)
 	}
 	attempt := &routing.Attempts[len(routing.Attempts)-1]
 	attempt.Outcome = result.Status
@@ -370,69 +386,99 @@ func (e *Engine) processRoutedSubmission(ctx context.Context, task StoredTask) e
 	return e.completeProcessing(ctx, task, account, result, err)
 }
 
-func (e *Engine) recordRoutedTerminal(task StoredTask, account Account, result *UpstreamResult) (RouteTarget, string, RejectionScope) {
+// A failed job is eligible for replay only when the provider explicitly
+// attributes that job's failure to an upstream service or account condition.
+func retryableMediaJobFailure(task StoredTask, result UpstreamResult) bool {
+	if task.UpstreamID == "" || result.ID != task.UpstreamID || result.Status != "failed" ||
+		result.UpstreamStatusCode < http.StatusOK || result.UpstreamStatusCode >= http.StatusMultipleChoices ||
+		result.PartialOutput || len(result.Artifacts) != 0 {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(result.UpstreamCode))
+	message := strings.ToLower(strings.TrimSpace(result.UpstreamMessage))
+	if strings.Contains(message, "content policy") || strings.Contains(message, "safety policy") {
+		return false
+	}
+	switch code {
+	case "overloaded", "overloaded_error", "capacity_exhausted", "upstream_overloaded", "no_capacity",
+		"rate_limit_exceeded", "service_busy", "service_unavailable", "upstream_unavailable", "server_error", "internal_error", "internal_server_error",
+		"upstream_channel_unavailable", "upstream_timeout", "account_disabled", "insufficient_quota":
+		return true
+	case "fail_to_fetch_task":
+		return strings.Contains(message, "capacity") || strings.Contains(message, "负载已饱和")
+	case "generation_failed", "video_generation_failed", "image_generation_failed", "audio_generation_failed":
+		return strings.HasPrefix(message, "upstream channel is temporarily unavailable")
+	default:
+		return false
+	}
+}
+
+func (e *Engine) handleRoutedPoll(ctx context.Context, task StoredTask, account Account, result *UpstreamResult) (bool, error) {
 	routing := task.Snapshot.Routing
 	if routing == nil || len(routing.Attempts) == 0 || task.UpstreamID == "" ||
 		result.UpstreamStatusCode < http.StatusOK || result.UpstreamStatusCode >= http.StatusMultipleChoices ||
 		(result.ID != "" && result.ID != task.UpstreamID) ||
-		(result.Status != "failed" && result.Status != "completed") {
-		return RouteTarget{}, "", ""
+		(result.Status != "failed" && result.Status != "completed" && result.Status != "in_progress") {
+		return false, nil
 	}
 	attempt := &routing.Attempts[len(routing.Attempts)-1]
 	if attempt.AccountID != task.AccountID || attempt.Terminal != nil {
-		return RouteTarget{}, "", ""
+		return false, nil
 	}
-	attempt.Terminal = &SubmissionTerminal{Outcome: result.Status, Status: result.UpstreamStatusCode,
-		Code: sanitizeMediaDiagnostic(result.UpstreamCode), Reason: sanitizeMediaDiagnostic(result.Diagnostic)}
+	if result.Status != "in_progress" {
+		attempt.Terminal = &SubmissionTerminal{Outcome: result.Status, UpstreamID: task.UpstreamID, Status: result.UpstreamStatusCode,
+			Code: sanitizeMediaDiagnostic(result.UpstreamCode), Reason: sanitizeMediaDiagnostic(result.Diagnostic)}
+	}
 	if !e.Routes.Enabled(task.Identity.GroupID) {
-		return RouteTarget{}, "", ""
+		return false, nil
 	}
 	for _, route := range routing.Candidates {
 		if route.AccountID != task.AccountID || route.Origin != RouteOrigin(account.BaseURL, account.Platform) {
 			continue
 		}
-		var scope RejectionScope
-		if result.Status == "failed" && result.ID == task.UpstreamID && len(result.Artifacts) == 0 &&
-			strings.EqualFold(strings.TrimSpace(result.UpstreamCode), "video_generation_failed") &&
-			strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.UpstreamMessage)), "upstream channel is temporarily unavailable.") {
-			// The provider explicitly identifies a channel failure. Use it only
-			// for new requests, as the accepted job may have incurred a cost.
-			scope = RejectionOrigin
-			if result.RetryAfter <= 0 {
-				result.RetryAfter = 30 * time.Second
-			}
+		outcome := RouteNeutral
+		if retryableMediaJobFailure(task, *result) {
+			outcome = RouteFailed
+		} else if result.Status == "completed" && len(result.Artifacts) > 0 {
+			outcome = RouteSucceeded
+		} else if result.Status == "in_progress" {
+			outcome = RouteRunning
 		}
-		return route.target(task.Identity.GroupID, task.Snapshot.Request.Operation), fmt.Sprintf("%s:%d", task.ID, attempt.Epoch), scope
+		target := route.target(task.Identity.GroupID, task.Snapshot.Request.Operation)
+		owner := fmt.Sprintf("%s:%d", task.ID, attempt.Epoch)
+		e.Routes.Observe(ctx, target, owner, outcome, result.RetryAfter)
+		if outcome != RouteFailed || !task.canRetryAcceptedJob() {
+			return false, nil
+		}
+		var request Request
+		if err := e.Blobs.ReadJSON(stringValue(task.Snapshot.Request.Parameters["request_blob"]), &request); err != nil {
+			slog.WarnContext(ctx, "media_retry_request_unavailable", "task_id", task.ID, "account_id", task.AccountID)
+			return false, nil
+		}
+		return e.switchSubmissionRoute(ctx, task, route, request, result)
 	}
-	return RouteTarget{}, "", ""
+	return false, nil
 }
 
 func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current SubmissionRoute, request Request, result UpstreamResult) error {
+	changed, err := e.switchSubmissionRoute(ctx, task, current, request, &result)
+	if changed || err != nil {
+		return err
+	}
+	return e.completeProcessing(ctx, task, Account{}, result, nil)
+}
+
+func (e *Engine) switchSubmissionRoute(ctx context.Context, task StoredTask, current SubmissionRoute, request Request, result *UpstreamResult) (bool, error) {
 	routing := task.Snapshot.Routing
 	var retry time.Duration
 	if len(routing.Attempts) < MaxSubmissionAttempts {
 		caps, _, err := e.configuration(ctx, task.Identity.GroupID)
 		if err != nil {
-			return err
+			return false, err
 		}
 		routes := slices.Clone(routing.Candidates)
-		triedOrigins := map[string]bool{current.Origin: true}
-		for _, attempt := range routing.Attempts {
-			for _, route := range routes {
-				if route.AccountID == attempt.AccountID {
-					triedOrigins[route.Origin] = true
-					break
-				}
-			}
-		}
 		slices.SortStableFunc(routes, func(a, b SubmissionRoute) int {
-			if triedOrigins[a.Origin] == triedOrigins[b.Origin] {
-				return 0
-			}
-			if triedOrigins[a.Origin] {
-				return 1
-			}
-			return -1
+			return cmp.Compare(a.Priority, b.Priority)
 		})
 		for _, route := range routes {
 			if route.AccountID == current.AccountID || slices.ContainsFunc(routing.Attempts, func(attempt SubmissionAttempt) bool {
@@ -457,9 +503,9 @@ func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current
 			}
 			path, writeErr := e.Blobs.WriteJSON(task.ID, fmt.Sprintf("request-%d-%d", task.Epoch, route.AccountID), prepared)
 			if writeErr != nil {
-				return writeErr
+				return false, writeErr
 			}
-			err = e.Store.requeueOnRoute(ctx, task, route, path, result)
+			err = e.Store.requeueOnRoute(ctx, task, route, path, prepared.Quantities, *result)
 			if mediaAdmissionFailure(err) {
 				_ = os.Remove(path)
 				retry = earlierRetry(retry, time.Second)
@@ -469,7 +515,7 @@ func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current
 				slog.InfoContext(ctx, "media_submission_switched", "task_id", task.ID, "group_id", task.Identity.GroupID,
 					"from_account_id", task.AccountID, "to_account_id", route.AccountID, "attempts", len(routing.Attempts), "upstream_status", result.UpstreamStatusCode)
 			}
-			return err
+			return err == nil, err
 		}
 	}
 	if retry > 0 {
@@ -477,5 +523,5 @@ func (e *Engine) alternateOrFinish(ctx context.Context, task StoredTask, current
 	}
 	slog.InfoContext(ctx, "media_submission_routes_exhausted", "task_id", task.ID, "group_id", task.Identity.GroupID,
 		"account_id", task.AccountID, "attempts", len(routing.Attempts), "upstream_status", result.UpstreamStatusCode)
-	return e.completeProcessing(ctx, task, Account{}, result, nil)
+	return false, nil
 }

@@ -72,7 +72,7 @@ func NewMediaHandler(db *sql.DB, cfg *config.Config, accounts service.AccountRep
 		if concurrency < 1 {
 			concurrency = 1
 		}
-		return media.Account{ID: id, Concurrency: concurrency, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
+		return media.Account{ID: id, Priority: a.Priority, Concurrency: concurrency, BaseURL: base, Key: key, Platform: a.Platform, Allowed: allowed && a.IsSchedulable(), CostMultiplier: strconv.FormatFloat(a.BillingRateMultiplier(), 'f', -1, 64)}, nil
 	}
 	invalidate := func(identity media.Identity) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

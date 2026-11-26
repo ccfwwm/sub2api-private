@@ -82,3 +82,44 @@ func (h *mediaRouteHealth) Finish(ctx context.Context, keys []string, owner stri
 	}
 	return finishMediaRoutes.Run(ctx, h.redis, keys, owner, status).Err()
 }
+
+var observeMediaRoute = redis.NewScript(`
+local key = KEYS[1]
+local owner, outcome = ARGV[1], ARGV[2]
+local probe = key .. ':probe'
+local owns_probe = redis.call('GET', probe) == owner
+if outcome == 'running' then
+  if owns_probe then redis.call('PEXPIRE', probe, 210000) end
+  return 0
+end
+local streak = key .. ':failures'
+local open = redis.call('EXISTS', key) == 1
+local delay = tonumber(ARGV[3])
+if outcome == 'failed' or outcome == 'succeeded' then
+  -- A poll can run again if the worker loses its lease before the SQL update.
+  if not redis.call('SET', key .. ':observed:' .. owner, '1', 'NX', 'EX', 86400) then
+    return 0
+  end
+end
+if owns_probe then redis.call('DEL', probe) end
+if outcome == 'succeeded' then
+  if not open or owns_probe then redis.call('DEL', key, streak) end
+  return 0
+end
+if open and not owns_probe then return 0 end
+if outcome == 'failed' then
+  if not open and redis.call('INCR', streak) < 3 then return 0 end
+elseif owns_probe then
+  delay = 30000
+else
+  return 0
+end
+local t = redis.call('TIME')
+local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
+redis.call('SET', key, tostring(now + delay), 'PX', delay + 86400000)
+return 1
+`)
+
+func (h *mediaRouteHealth) Observe(ctx context.Context, key, owner string, outcome media.RouteOutcome, delay time.Duration) error {
+	return observeMediaRoute.Run(ctx, h.redis, []string{key}, owner, string(outcome), delay.Milliseconds()).Err()
+}

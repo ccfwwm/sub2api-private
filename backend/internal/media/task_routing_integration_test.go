@@ -66,8 +66,14 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 				currentMode := mode
 				currentTaskID := taskID
 				callsMu.Unlock()
-				if request.Header.Get("Idempotency-Key") != currentTaskID {
-					t.Error("task idempotency key changed")
+				wantKey := currentTaskID
+				if model == "upstream-model-1" {
+					wantKey += fmt.Sprintf("-a%d", accounts[1])
+				} else if model == "upstream-model-2" {
+					wantKey += fmt.Sprintf("-a%d", accounts[2])
+				}
+				if request.Header.Get("Idempotency-Key") != wantKey {
+					t.Error("wrong idempotency key for account attempt")
 				}
 				w.Header().Set("Content-Type", "application/json")
 				switch currentMode {
@@ -79,7 +85,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 					_, _ = fmt.Fprint(w, `{"id":"failed-after-acceptance","status":"failed"}`)
 					return
 				}
-				if model != "upstream-model-2" || currentMode == "exhausted" {
+				if model != "upstream-model-1" || currentMode == "exhausted" {
 					w.WriteHeader(http.StatusTooManyRequests)
 					_, _ = fmt.Fprint(w, `{"error":{"code":"fail_to_fetch_task","message":"upstream capacity exhausted"}}`)
 					return
@@ -99,7 +105,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 				if id == accounts[2] {
 					base = strings.Replace(base, "127.0.0.1", "localhost", 1)
 				}
-				return media.Account{ID: id, BaseURL: base, Allowed: group == snap.Identity.GroupID, Key: "fixture"}, nil
+				return media.Account{ID: id, Priority: map[int64]int{accounts[0]: 1, accounts[1]: 10, accounts[2]: 20}[id], BaseURL: base, Allowed: group == snap.Identity.GroupID, Key: "fixture"}, nil
 			}
 			createEngine := func() *media.Engine {
 				engine := media.NewEngine(store, blobs, lookup, nil)
@@ -109,7 +115,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 				price := saleCardForIntegration(capability, snap.SaleRule, snap.Identity.GroupID)
 				price.Operation = operation
 				engine.Config = func(context.Context, int64) ([]media.Capability, []media.PriceCard, error) {
-					return caps, []media.PriceCard{price}, nil
+					return []media.Capability{caps[0], caps[2], caps[1]}, []media.PriceCard{price}, nil
 				}
 				return engine
 			}
@@ -136,7 +142,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			task, err = store.GetTask(ctx, task.ID)
 			require.NoError(t, err)
 			require.Equal(t, "queued", task.State)
-			require.Equal(t, accounts[2], task.AccountID)
+			require.Equal(t, accounts[1], task.AccountID)
 			require.Len(t, task.Snapshot.Routing.Attempts, 1)
 			require.Equal(t, "rejected", task.Snapshot.Routing.Attempts[0].Outcome)
 			engine.Stop()
@@ -154,7 +160,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 			callsMu.Lock()
 			sentModels := append([]string(nil), calls...)
 			callsMu.Unlock()
-			require.Equal(t, []string{"upstream-model-0", "upstream-model-2"}, sentModels)
+			require.Equal(t, []string{"upstream-model-0", "upstream-model-1"}, sentModels)
 			require.Len(t, task.Snapshot.Routing.Attempts, 2)
 			var reserves int
 			require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_ledger_entries WHERE task_id=$1 AND kind='reserve'`, task.ID).Scan(&reserves))
@@ -208,7 +214,7 @@ func TestManagedMediaFailoverKeepsTaskAndLedger(t *testing.T) {
 	}
 }
 
-func TestManagedMediaTerminalChannelFailureRoutesNewTasksToBackup(t *testing.T) {
+func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.T) {
 	db := testDB(t)
 	snapshot := fixture(t, db, "10")
 	defer cleanupMediaTasks(t, db, snapshot.Identity.UserID)
@@ -239,7 +245,7 @@ func TestManagedMediaTerminalChannelFailureRoutesNewTasksToBackup(t *testing.T) 
 			return
 		}
 		id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
-		if policyFailure.Load() {
+		if strings.HasPrefix(id, "backup-") || policyFailure.Load() {
 			_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","error":{"code":"content_policy_violation","message":"Content policy refusal"}}`, id)
 			return
 		}
@@ -293,34 +299,51 @@ func TestManagedMediaTerminalChannelFailureRoutesNewTasksToBackup(t *testing.T) 
 		require.NoError(t, getErr)
 		return updated
 	}
-	first := process(create("original"))
-	require.Equal(t, "primary-1", first.UpstreamID)
-	first = process(first)
-	require.Equal(t, "primary-1", first.UpstreamID)
-	require.Equal(t, "failed", first.State)
-	require.Equal(t, "released", first.Settlement)
-	require.Equal(t, "1.00000000", first.Released)
-	require.Contains(t, first.Diagnostic, "retry_after_seconds=60")
-	require.Len(t, first.Snapshot.Routing.Attempts, 1)
-	attempt := first.Snapshot.Routing.Attempts[0]
-	require.Equal(t, "in_progress", attempt.Outcome)
-	require.NotNil(t, attempt.Terminal)
-	require.Equal(t, "video_generation_failed", attempt.Terminal.Code)
-	require.Equal(t, first.ID, create("original").ID)
-	require.EqualValues(t, 1, primaryPosts.Load())
+	for i := range 3 {
+		key := fmt.Sprintf("original-%d", i)
+		first := process(create(key))
+		primaryJob := fmt.Sprintf("primary-%d", i+1)
+		require.Equal(t, primaryJob, first.UpstreamID)
+		queued := process(first)
+		require.Equal(t, first.ID, queued.ID)
+		require.Equal(t, backup, queued.AccountID)
+		require.Empty(t, queued.UpstreamID)
+		require.Empty(t, queued.ResultPath)
+		require.Equal(t, "queued", queued.State)
+		require.Equal(t, "held", queued.Settlement)
+		require.Equal(t, "1.00000000", queued.Reserved)
+		require.Len(t, queued.Snapshot.Routing.Attempts, 1)
+		attempt := queued.Snapshot.Routing.Attempts[0]
+		require.Equal(t, "in_progress", attempt.Outcome)
+		require.NotNil(t, attempt.Terminal)
+		require.Equal(t, "video_generation_failed", attempt.Terminal.Code)
+		require.Equal(t, primaryJob, attempt.Terminal.UpstreamID)
+		require.Equal(t, first.ID, create(key).ID)
+
+		second := process(queued)
+		require.Equal(t, fmt.Sprintf("backup-%d", i+1), second.UpstreamID)
+		require.NotEqual(t, attempt.IdempotencyKey, second.Snapshot.Routing.Attempts[1].IdempotencyKey)
+		second = process(second)
+		require.Equal(t, "failed", second.State)
+		require.Equal(t, "released", second.Settlement)
+		require.Equal(t, "1.00000000", second.Released)
+		require.Len(t, second.Snapshot.Routing.Attempts, 2)
+		var reserves int
+		require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_ledger_entries WHERE task_id=$1 AND kind='reserve'`, first.ID).Scan(&reserves))
+		require.Equal(t, 1, reserves)
+	}
+	require.EqualValues(t, 3, primaryPosts.Load())
+	require.EqualValues(t, 3, backupPosts.Load())
 
 	redisServer.SetTime(now.Add(31 * time.Second))
-	second := process(create("independent"))
-	require.Equal(t, backup, second.AccountID)
-	require.Equal(t, "backup-1", second.UpstreamID)
-	require.EqualValues(t, 1, backupPosts.Load())
-
+	require.Equal(t, backup, create("while-open").AccountID)
 	redisServer.SetTime(now.Add(61 * time.Second))
 	probe := process(create("recovery-probe"))
-	require.Equal(t, "primary-2", probe.UpstreamID)
+	require.Equal(t, "primary-4", probe.UpstreamID)
 	require.Equal(t, backup, create("while-probing").AccountID)
 	policyFailure.Store(true)
 	probe = process(probe)
 	require.Equal(t, "released", probe.Settlement)
-	require.Equal(t, primary, create("after-policy-failure").AccountID)
+	require.Len(t, probe.Snapshot.Routing.Attempts, 1)
+	require.Equal(t, backup, create("after-inconclusive-probe").AccountID)
 }

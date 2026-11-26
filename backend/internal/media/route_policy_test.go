@@ -69,3 +69,31 @@ func TestMediaSubmissionDoesNotReplayUncertainAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestRetryableMediaJobFailureRequiresBoundJobAndProviderError(t *testing.T) {
+	for _, tc := range []struct {
+		name, id, code, message string
+		httpStatus              int
+		artifacts, want         bool
+	}{
+		{"video channel failure", "job-1", "video_generation_failed", "Upstream channel is temporarily unavailable.", 200, false, true},
+		{"audio server failure", "job-1", "internal_error", "", 200, false, true},
+		{"image capacity", "job-1", "capacity_exhausted", "", 200, false, true},
+		{"ambiguous failure", "job-1", "video_generation_failed", "Generation failed.", 200, false, false},
+		{"policy refusal", "job-1", "content_policy_violation", "", 200, false, false},
+		{"invalid input", "job-1", "invalid_request_error", "", 200, false, false},
+		{"partial delivery", "job-1", "internal_error", "", 200, true, false},
+		{"different job", "job-2", "internal_error", "", 200, false, false},
+		{"missing job ID", "", "internal_error", "", 200, false, false},
+		{"poll transport failure", "job-1", "internal_error", "", 503, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := UpstreamResult{ID: tc.id, Status: "failed", UpstreamStatusCode: tc.httpStatus,
+				UpstreamCode: tc.code, UpstreamMessage: tc.message}
+			if tc.artifacts {
+				result.Artifacts = []Artifact{{Key: "partial-output"}}
+			}
+			require.Equal(t, tc.want, retryableMediaJobFailure(StoredTask{UpstreamID: "job-1"}, result))
+		})
+	}
+}

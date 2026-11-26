@@ -462,6 +462,12 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 	// The task ID is durable and unique across worker restarts. Reuse it for the
 	// upstream submission and the read-only recovery lookup.
 	account.IdempotencyKey = t.ID
+	if routing := t.Snapshot.Routing; routing != nil && len(routing.Attempts) > 0 {
+		attempt := routing.Attempts[len(routing.Attempts)-1]
+		if attempt.AccountID == t.AccountID && attempt.IdempotencyKey != "" {
+			account.IdempotencyKey = attempt.IdempotencyKey
+		}
+	}
 	var result UpstreamResult
 	if t.State != "submitting" && t.ResultPath != "" {
 		var object map[string]any
@@ -498,6 +504,15 @@ func (e *Engine) Process(ctx context.Context, t StoredTask) error {
 		return e.settleTask(ctx, t, "failure")
 	} else if t.UpstreamID != "" {
 		result, err = e.Adapter.Poll(ctx, t, account)
+		if err == nil && result.ID != "" && result.ID != t.UpstreamID {
+			return e.deferTask(ctx, t, "Upstream query returned a different job")
+		}
+		if err == nil {
+			changed, routeErr := e.handleRoutedPoll(ctx, t, account, &result)
+			if changed || routeErr != nil {
+				return routeErr
+			}
+		}
 	} else {
 		return e.deferTask(ctx, t, "Acceptance requires operator reconciliation")
 	}
@@ -527,17 +542,9 @@ func (e *Engine) completeProcessing(ctx context.Context, t StoredTask, account A
 			result.Status = "submitting"
 		}
 	}
-	target, probeOwner, scope := e.recordRoutedTerminal(t, account, &result)
 	// Completion and its response persist before downloading; a crash resumes here.
 	if err = e.Store.Progress(ctx, t, result, path); err != nil {
 		return err
-	}
-	if probeOwner != "" {
-		e.Routes.Finish(ctx, target, probeOwner, scope, result.RetryAfter, scope == "")
-		if scope != "" {
-			slog.InfoContext(ctx, "media_generation_route_cooldown", "task_id", t.ID, "group_id", t.Identity.GroupID,
-				"account_id", t.AccountID, "upstream_code", result.UpstreamCode, "retry_after_seconds", retrySeconds(result.RetryAfter))
-		}
 	}
 	current, err := e.Store.GetTask(ctx, t.ID)
 	if err != nil {

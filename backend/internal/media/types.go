@@ -231,6 +231,7 @@ type UpstreamResult struct {
 	UpstreamRequestID      string
 	UpstreamStatusCode     int
 	Response               json.RawMessage
+	PartialOutput          bool
 	Artifacts              []Artifact
 	Quantities             map[string][]string
 	Accepted               bool
@@ -240,6 +241,7 @@ type UpstreamResult struct {
 	Failover               RejectionScope
 }
 type Account struct {
+	Priority               int
 	ObserveSubmission      func(Submission) error `json:"-"`
 	CostMultiplier         string
 	ID                     int64

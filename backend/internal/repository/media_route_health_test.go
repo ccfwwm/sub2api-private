@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/media"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -48,4 +49,58 @@ func TestMediaRouteCooldownAllowsOneSharedRecoveryProbe(t *testing.T) {
 	wait, err = health.RetryIn(ctx, keys)
 	require.NoError(t, err)
 	require.Zero(t, wait)
+}
+
+func TestMediaAccountCircuitUsesDistinctConsecutiveFailures(t *testing.T) {
+	server := miniredis.RunT(t)
+	now := time.Unix(1000, 0)
+	server.SetTime(now)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	health := NewMediaRouteHealth(client)
+	ctx := t.Context()
+	key := "media:route:account:1"
+	keys := []string{key}
+	observe := func(attempt string, outcome media.RouteOutcome) {
+		t.Helper()
+		require.NoError(t, health.Observe(ctx, key, attempt, outcome, time.Minute))
+	}
+	retryIn := func() time.Duration {
+		t.Helper()
+		delay, err := health.RetryIn(ctx, keys)
+		require.NoError(t, err)
+		return delay
+	}
+	observe("earlier", media.RouteFailed)
+	observe("initial-success", media.RouteSucceeded)
+	observe("job-1", media.RouteFailed)
+	observe("job-1", media.RouteFailed)
+	observe("job-2", media.RouteFailed)
+	observe("policy-refusal", media.RouteNeutral)
+	require.Zero(t, retryIn())
+	observe("job-3", media.RouteFailed)
+	require.Equal(t, time.Minute, retryIn())
+	observe("finishing-old-job", media.RouteSucceeded)
+	require.Equal(t, time.Minute, retryIn())
+
+	server.SetTime(now.Add(time.Minute))
+	delay, err := health.Acquire(ctx, keys, "failed-probe")
+	require.NoError(t, err)
+	require.Zero(t, delay)
+	require.Positive(t, retryIn())
+	server.FastForward(3 * time.Minute)
+	observe("failed-probe", media.RouteRunning)
+	server.FastForward(time.Minute)
+	require.Positive(t, retryIn())
+	observe("failed-probe", media.RouteFailed)
+	require.Equal(t, time.Minute, retryIn())
+
+	server.SetTime(now.Add(2 * time.Minute))
+	delay, err = health.Acquire(ctx, keys, "successful-probe")
+	require.NoError(t, err)
+	require.Zero(t, delay)
+	observe("successful-probe", media.RouteSucceeded)
+	require.Zero(t, retryIn())
+	observe("new-failure", media.RouteFailed)
+	require.Zero(t, retryIn())
 }

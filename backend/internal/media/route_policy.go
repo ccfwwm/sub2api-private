@@ -19,11 +19,21 @@ const (
 	RejectionOrigin  RejectionScope = "origin"
 )
 
+type RouteOutcome string
+
+const (
+	RouteNeutral   RouteOutcome = "neutral"
+	RouteRunning   RouteOutcome = "running"
+	RouteFailed    RouteOutcome = "failed"
+	RouteSucceeded RouteOutcome = "succeeded"
+)
+
 type RouteHealth interface {
 	RetryIn(context.Context, []string) (time.Duration, error)
 	Acquire(context.Context, []string, string) (time.Duration, error)
 	Finish(context.Context, []string, string, bool) error
 	Reject(context.Context, string, time.Duration) error
+	Observe(context.Context, string, string, RouteOutcome, time.Duration) error
 }
 
 type RoutePolicy struct {
@@ -114,4 +124,16 @@ func (p *RoutePolicy) Finish(ctx context.Context, t RouteTarget, owner string, s
 		_ = p.Health.Reject(ctx, t.key(scope), delay)
 	}
 	_ = p.Health.Finish(ctx, t.keys(), owner, accepted)
+}
+
+// Observe records one definitive outcome per attempt. A provider Retry-After
+// can extend the cooldown after the account circuit opens.
+func (p *RoutePolicy) Observe(ctx context.Context, t RouteTarget, owner string, outcome RouteOutcome, delay time.Duration) {
+	if p == nil || p.Health == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
+	defer cancel()
+	delay = max(delay, time.Minute)
+	_ = p.Health.Observe(ctx, t.key(RejectionAccount), owner, outcome, delay)
 }

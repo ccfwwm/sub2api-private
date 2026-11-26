@@ -678,7 +678,14 @@ func (s *Store) beginRoutedSubmission(ctx context.Context, task StoredTask) erro
 		AND coalesce(upstream_id,'')='' AND accepted=0 AND captured=0`, routing, task.ID, task.Epoch, task.AccountID))
 }
 
-func (s *Store) requeueOnRoute(ctx context.Context, task StoredTask, route SubmissionRoute, path string, rejected UpstreamResult) error {
+func (t StoredTask) canRetryAcceptedJob() bool {
+	accepted, acceptedErr := number(t.Accepted)
+	captured, capturedErr := number(t.Captured)
+	return t.State == "in_progress" && t.Settlement == "held" &&
+		acceptedErr == nil && accepted.IsZero() && capturedErr == nil && captured.IsZero()
+}
+
+func (s *Store) requeueOnRoute(ctx context.Context, task StoredTask, route SubmissionRoute, path string, quantities map[string][]string, result UpstreamResult) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -688,9 +695,12 @@ func (s *Store) requeueOnRoute(ctx context.Context, task StoredTask, route Submi
 	if err != nil {
 		return err
 	}
-	if current.Epoch != task.Epoch || current.AccountID != task.AccountID || current.State != "submitting" ||
-		current.Settlement != "held" || current.UpstreamID != "" || current.LeaseUntil == nil ||
-		!current.LeaseUntil.After(time.Now()) || rejected.Accepted || rejected.ID != "" || len(rejected.Artifacts) > 0 {
+	newSubmission := current.State == "submitting" && current.UpstreamID == "" &&
+		!result.Accepted && result.ID == "" && !result.PartialOutput && len(result.Artifacts) == 0
+	failedJob := current.canRetryAcceptedJob() && retryableMediaJobFailure(current, result)
+	if current.Epoch != task.Epoch || current.AccountID != task.AccountID || current.UpstreamID != task.UpstreamID ||
+		current.Settlement != "held" || current.LeaseUntil == nil || !current.LeaseUntil.After(time.Now()) ||
+		(!newSubmission && !failedJob) {
 		return fail(409, "stale_lease", "Media submission can no longer be moved")
 	}
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("media-account:%d", route.AccountID)); err != nil {
@@ -726,10 +736,17 @@ func (s *Store) requeueOnRoute(ctx context.Context, task StoredTask, route Submi
 	if err != nil {
 		return err
 	}
+	if quantities == nil {
+		quantities = map[string][]string{}
+	}
+	inputQuantities, err := json.Marshal(quantities)
+	if err != nil {
+		return err
+	}
 	err = requireOne(tx.ExecContext(ctx, `UPDATE media_tasks SET account_id=$1,snapshot=$2,state='queued',next_poll_at=now(),
-		lease_until=NULL,diagnostic='',version=version+1 WHERE id=$3 AND lease_epoch=$4 AND lease_until>now()
-		AND state='submitting' AND settlement_state='held' AND coalesce(upstream_id,'')='' AND accepted=0 AND captured=0`,
-		route.AccountID, snapshot, task.ID, task.Epoch))
+		lease_until=NULL,upstream_id=NULL,result_path=NULL,completed_at=NULL,quantities=$5,diagnostic='',version=version+1
+		WHERE id=$3 AND lease_epoch=$4 AND lease_until>now() AND settlement_state='held' AND accepted=0 AND captured=0`,
+		route.AccountID, snapshot, task.ID, task.Epoch, inputQuantities))
 	if err != nil {
 		return err
 	}
