@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"container/heap"
 	"context"
 	"errors"
@@ -565,6 +566,9 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, false, nil
 	}
 	escapeCfg := s.service.openAIStickyEscapeConfig()
+	if TextRouteEnforced(ctx) {
+		escapeCfg.enabled = false
+	}
 	if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape && !req.DisableStickyEscape {
 		slog.Info("sticky_escape_triggered",
 			"account_id", accountID,
@@ -1454,8 +1458,8 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			filterStats.exclude("platform_mismatch")
 			continue
 		}
-		if s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel) {
-			filterStats.exclude("runtime_blocked")
+		if !textRouteCandidateAllowed(ctx, account, req.RequestedModel) || s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel) {
+			filterStats.exclude(cmp.Or(nativeMediaRouteBlockReason(ctx, account), "runtime_blocked"))
 			continue
 		}
 		// require_privacy_set is a group-scoped eligibility gate. Do not mutate the
@@ -1782,7 +1786,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 	if req.RequirePrivacySet && !account.IsPrivacySet() {
 		return false, "privacy_not_set"
 	}
-	if s != nil && s.service != nil && s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel) {
+	if s != nil && s.service != nil && (!textRouteCandidateAllowed(ctx, account, req.RequestedModel) || s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel)) {
 		return false, "runtime_blocked"
 	}
 	if s != nil && s.service != nil && s.service.isOpenAIProxyStreamQuarantined(ctx, account) {
@@ -2176,7 +2180,27 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	previousResponseCanMove bool,
 	useUpstreamTokenCost bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	if preferred, ok := preferIndependentNativeMedia(ctx); ok {
+		selection, decision, err := s.selectAccountWithSchedulerBySize(preferred, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) && !errors.Is(err, ErrNoAvailableCompactAccounts) {
+			return selection, decision, err
+		}
+	}
+	if preferred, ok := preferIndependentTextRoute(ctx, excludedIDs); ok {
+		selection, decision, err := s.selectAccountWithSchedulerBySize(preferred, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) && !errors.Is(err, ErrNoAvailableCompactAccounts) {
+			return selection, decision, err
+		}
+	}
 	selection, decision, err := s.selectAccountWithSchedulerBySize(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+	if err == nil {
+		if alternate := textStickyWaitExclusions(ctx, selection, excludedIDs); alternate != nil {
+			borrowed, borrowDecision, borrowErr := s.selectAccountWithSchedulerBySize(ctx, groupID, previousResponseID, sessionHash, requestedModel, alternate, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+			if borrowErr == nil && borrowed != nil && borrowed.Acquired {
+				return borrowed, borrowDecision, nil
+			}
+		}
+	}
 	if err == nil || openAIProxyStreamQuarantineBypassed(ctx) {
 		return selection, decision, err
 	}
@@ -2484,7 +2508,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 			stickyAccountID = accountID
 		}
 	}
-	stickyWeighted := s.isOpenAIAdvancedSchedulerStickyWeightedEnabled(ctx)
+	stickyWeighted := !TextRouteEnforced(ctx) && s.isOpenAIAdvancedSchedulerStickyWeightedEnabled(ctx)
 	subscriptionPriority := s.isOpenAIAdvancedSchedulerSubscriptionPriorityEnabled(ctx)
 	stickyPreviousAccountID := int64(0)
 	if stickyWeighted && previousResponseCanMove && strings.TrimSpace(previousResponseID) != "" && platform == PlatformOpenAI {

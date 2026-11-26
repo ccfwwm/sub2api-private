@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	mathrand "math/rand"
@@ -98,6 +99,31 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 // metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 // sub2apiUserID: 系统用户 ID，用于二维亲和调度
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+	if preferred, ok := preferIndependentNativeMedia(ctx); ok {
+		selection, err := s.selectAccountWithLoadAwareness(preferred, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) {
+			return selection, err
+		}
+	}
+	if preferred, ok := preferIndependentTextRoute(ctx, excludedIDs); ok {
+		selection, err := s.selectAccountWithLoadAwareness(preferred, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+		if err == nil || !errors.Is(err, ErrNoAvailableAccounts) {
+			return selection, err
+		}
+	}
+	selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+	if err == nil {
+		if alternate := textStickyWaitExclusions(ctx, selection, excludedIDs); alternate != nil {
+			borrowed, borrowErr := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, alternate, metadataUserID, sub2apiUserID)
+			if borrowErr == nil && borrowed != nil && borrowed.Acquired {
+				return borrowed, nil
+			}
+		}
+	}
+	return selection, err
+}
+
+func (s *GatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
 	for id := range excludedIDs {
@@ -137,6 +163,15 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		if accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash); err == nil {
 			stickyAccountID = accountID
 			stickySource = "cache"
+		}
+	}
+
+	if prefix := prefixAffinityInContext(ctx); prefix != nil && stickyAccountID == 0 && sessionHash != "" && cfg.LoadBatchEnabled && s.concurrencyService != nil && group != nil {
+		stickyAccountID = prefix.read(ctx, s.cache, groupID, group.Platform, requestedModel, s.accountRepo.GetByID, func(account *Account, rule PrefixAffinityRule) bool {
+			return account.GetMappedModel(requestedModel) == rule.UpstreamModel
+		})
+		if stickyAccountID > 0 {
+			stickySource = "prompt_prefix"
 		}
 	}
 
@@ -1169,7 +1204,7 @@ func (s *GatewayService) isAccountSchedulableForModelSelection(ctx context.Conte
 	if account == nil {
 		return false
 	}
-	return account.IsSchedulableForModelWithContext(ctx, requestedModel)
+	return textRouteCandidateAllowed(ctx, account, requestedModel) && account.IsSchedulableForModelWithContext(ctx, requestedModel)
 }
 
 // isAccountInGroup checks if the account belongs to the specified group.

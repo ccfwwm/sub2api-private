@@ -194,6 +194,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		APIKeyID:  apiKey.ID,
 	}
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	prepareTextRoute(c, h.cfg, sessionHash, body)
+	requestCtx = c.Request.Context()
 
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
@@ -294,6 +296,14 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 		}
+		textAttempt, textAdmitted := service.BeginTextRouteAttempt(requestCtx, account, reqModel)
+		if !textAdmitted {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			fs.FailedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
 		if shouldUseAntigravityCompat(account) {
@@ -310,6 +320,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			result, err = h.gatewayService.ForwardAsResponses(requestCtx, c, account, forwardBody, parsedReq)
 		}
 
+		finishTextRoute(c, textAttempt, err == nil && result != nil && !result.ClientDisconnect, err)
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}

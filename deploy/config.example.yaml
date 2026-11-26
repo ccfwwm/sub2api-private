@@ -235,7 +235,11 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
-  # Set "enforce" to enable managed media retries. Empty group IDs cover all media groups.
+  # Shared HTTP text routing. "observe" records cooldowns without changing
+  # selection. "enforce" enables the policy for the configured session share.
+  text_routing_mode: off
+  text_routing_percent: 100
+  # Enable media failover with "enforce". Empty group IDs enable it for all groups.
   media_failover_mode: "off"
   media_failover_group_ids: ""
   # Minimum max_output_tokens when converting Chat Completions or Anthropic requests to Responses (minimum 16, default 128)

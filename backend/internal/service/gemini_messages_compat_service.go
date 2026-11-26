@@ -1277,6 +1277,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
 	var checkedPolicy *ErrorPolicyResult
 	maxAttempts := s.geminiMaxAttemptsPerAccount()
+	if nativeMediaRoutingActive(ctx) {
+		maxAttempts = 1
+	}
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
@@ -1519,7 +1522,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 					Message:            upstreamMsg,
 					Detail:             upstreamDetail,
 				})
-				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: evBody, RetryableOnSameAccount: true}
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseHeaders: resp.Header.Clone(), ResponseBody: evBody, RetryableOnSameAccount: true}
 			}
 		}
 		if s.shouldFailoverGeminiUpstreamError(resp.StatusCode) {
@@ -1546,7 +1549,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: evBody}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseHeaders: resp.Header.Clone(), ResponseBody: evBody}
 		}
 
 		return nil, s.writeGeminiNativeUpstreamError(c, account, resp, respBody, requestID, isOAuth)
@@ -2236,7 +2239,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					finished:         finishReason != "",
 				}, nil
 			}
-			return nil, fmt.Errorf("stream read error: %w", err)
+			return nil, markTextRouteStreamFailure(fmt.Errorf("stream read error: %w", err))
 		}
 
 		if !strings.HasPrefix(line, "data:") {
