@@ -10,6 +10,7 @@ import tarfile
 LEGACY_MEMBERS = (
     "manage.py",
     "controller.py",
+    "docs_contract.py",
     "media_migrate.py",
     "install-manager.sh",
     "SERVER-MANAGEMENT.md",

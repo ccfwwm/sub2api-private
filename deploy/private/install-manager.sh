@@ -4,10 +4,10 @@ set -eu
 test "$(id -u)" = 0
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 umask 077
-release_id=$(cat manage.py controller.py media_migrate.py auto_deploy.py capacity_collect.py capacity_report.py docker-compose.capacity.yml | sha256sum | cut -c1-16)
+release_id=$(cat manage.py controller.py docs_contract.py media_migrate.py auto_deploy.py capacity_collect.py capacity_report.py docker-compose.capacity.yml | sha256sum | cut -c1-16)
 destination="/root/sub2api-ops/releases/$release_id"
 install -d -m 700 "$destination" /root/sub2api-ops/state/releases
-install -m 600 manage.py controller.py media_migrate.py auto_deploy.py capacity_collect.py capacity_report.py "$destination/"
+install -m 600 manage.py controller.py docs_contract.py media_migrate.py auto_deploy.py capacity_collect.py capacity_report.py "$destination/"
 install -m 600 docker-compose.capacity.yml "$destination/"
 install -m 600 SERVER-MANAGEMENT.md /root/sub2api-ops/README.md
 printf '#!/bin/sh\nexec /usr/bin/python3 %s/manage.py "$@"\n' "$destination" > /root/sub2api-manage.tmp
