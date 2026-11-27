@@ -226,31 +226,63 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 	require.NoError(t, err)
 	capability := snapshot.Capability
 	capability.Enabled, capability.Status = true, "enabled"
+	capability.Model, capability.UpstreamModel = "gemini-omni-1.2-flash", "gemini-omni-1.2-flash"
 	capability.Operations, capability.Formats = []string{"video"}, []string{"json"}
-	capability.TemplateRef = &media.TemplateRef{ID: "video-reference-arrays", Version: 1}
+	capability.Duration = media.Duration{Mode: "range", Min: ptr(3), Max: ptr(15), Default: ptr(15)}
+	capability.TemplateRef = &media.TemplateRef{ID: "foxrouter-video-base64-image-strings", Version: 1}
 	capability.Limits.MaxRequestBytes, capability.Limits.ObservationSeconds = ptr(int64(1<<20)), ptr(600)
 	alternate := capability
 	alternate.ID, alternate.AccountIDs = "backup-video", []int64{backup}
+	alternate.TemplateRef = &media.TemplateRef{ID: "video-reference-arrays", Version: 1}
+	alternate.Duration.Default = ptr(10)
 
 	var primaryPosts, backupPosts atomic.Int32
 	var policyFailure atomic.Bool
+	video := mp4Fixture(t)
+	reference := "data:image/png;base64," + pngFixture(t)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
-			if strings.HasPrefix(r.Host, "127.0.0.1:") {
+			var body struct {
+				Duration        int      `json:"duration"`
+				Images          []string `json:"images"`
+				ReferenceImages []string `json:"reference_images"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if body.Duration != 15 {
+				t.Errorf("wrong frozen duration: %d", body.Duration)
+			}
+			if strings.HasPrefix(r.Host, "localhost:") {
+				if len(body.Images) != 1 || body.Images[0] != reference {
+					t.Error("primary did not receive its reference image")
+				}
 				_, _ = fmt.Fprintf(w, `{"id":"primary-%d","status":"queued"}`, primaryPosts.Add(1))
 			} else {
+				if len(body.ReferenceImages) != 1 || body.ReferenceImages[0] != reference {
+					t.Error("backup did not receive the same reference image in its own format")
+				}
 				_, _ = fmt.Fprintf(w, `{"id":"backup-%d","status":"queued"}`, backupPosts.Add(1))
 			}
 			return
 		}
 		id := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+		if id == "content" {
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write(video)
+			return
+		}
+		if id == "backup-3" {
+			_, _ = fmt.Fprintf(w, `{"id":%q,"status":"completed"}`, id)
+			return
+		}
 		if strings.HasPrefix(id, "backup-") || policyFailure.Load() {
 			_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","error":{"code":"content_policy_violation","message":"Content policy refusal"}}`, id)
 			return
 		}
 		w.Header().Set("Retry-After", "60")
-		_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","error":{"code":"video_generation_failed","message":"Upstream channel is temporarily unavailable. Please retry later or route to another channel."}}`, id)
+		_, _ = fmt.Fprintf(w, `{"id":%q,"status":"failed","progress":100,"error":{"code":"video_generation_failed","message":"Upstream video generation service temporarily unavailable for requested model"}}`, id)
 	}))
 	defer upstream.Close()
 	redisServer := miniredis.RunT(t)
@@ -263,7 +295,7 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 	require.NoError(t, err)
 	engine := media.NewEngine(store, blobs, func(id, group int64) (media.Account, error) {
 		base := upstream.URL
-		if id == backup {
+		if id == primary {
 			base = strings.Replace(base, "127.0.0.1", "localhost", 1)
 		}
 		return media.Account{ID: id, BaseURL: base, Key: "fixture", Allowed: group == snapshot.Identity.GroupID}, nil
@@ -277,7 +309,7 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 		return []media.Capability{capability, alternate}, []media.PriceCard{price}, nil
 	}
 	ctx := t.Context()
-	input := map[string]any{"model": capability.Model, "prompt": "fixture", "seconds": 30}
+	input := map[string]any{"model": capability.Model, "prompt": "fixture", "images": []any{reference}, "ratio": "9:16", "resolution": "1080p"}
 	selected, err := engine.SelectCapability(ctx, capability.Model, "video", input, nil, snapshot.Identity)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
@@ -285,6 +317,7 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 		t.Helper()
 		task, createErr := engine.Create(ctx, *selected, "video", input, nil, snapshot.Identity, key)
 		require.NoError(t, createErr)
+		require.Len(t, task.Snapshot.Routing.Candidates, 2)
 		return task
 	}
 	process := func(task media.StoredTask) media.StoredTask {
@@ -312,6 +345,8 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 		require.Equal(t, "queued", queued.State)
 		require.Equal(t, "held", queued.Settlement)
 		require.Equal(t, "1.00000000", queued.Reserved)
+		require.Equal(t, []string{"1"}, queued.Quantities["accepted_input_images"])
+		require.NotContains(t, queued.Quantities, "upstream_progress")
 		require.Len(t, queued.Snapshot.Routing.Attempts, 1)
 		attempt := queued.Snapshot.Routing.Attempts[0]
 		require.Equal(t, "in_progress", attempt.Outcome)
@@ -324,9 +359,19 @@ func TestManagedMediaTerminalFailureRetriesAndOpensCircuitAfterThree(t *testing.
 		require.Equal(t, fmt.Sprintf("backup-%d", i+1), second.UpstreamID)
 		require.NotEqual(t, attempt.IdempotencyKey, second.Snapshot.Routing.Attempts[1].IdempotencyKey)
 		second = process(second)
-		require.Equal(t, "failed", second.State)
-		require.Equal(t, "released", second.Settlement)
-		require.Equal(t, "1.00000000", second.Released)
+		if i == 2 {
+			require.Equal(t, "completed", second.State)
+			require.Equal(t, "settled", second.Settlement, second.Diagnostic)
+			require.Equal(t, "1.00000000", second.Captured)
+			artifacts, artifactErr := store.Artifacts(ctx, second.ID)
+			require.NoError(t, artifactErr)
+			require.Len(t, artifacts, 1)
+			require.True(t, artifacts[0].Available)
+		} else {
+			require.Equal(t, "failed", second.State)
+			require.Equal(t, "released", second.Settlement)
+			require.Equal(t, "1.00000000", second.Released)
+		}
 		require.Len(t, second.Snapshot.Routing.Attempts, 2)
 		var reserves int
 		require.NoError(t, db.QueryRow(`SELECT count(*) FROM media_ledger_entries WHERE task_id=$1 AND kind='reserve'`, first.ID).Scan(&reserves))

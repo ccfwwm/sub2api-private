@@ -93,7 +93,28 @@ func sameSubmissionRequest(first, candidate Request) bool {
 func candidateInput(req Request) map[string]any {
 	input := cloneObject(req.Incoming)
 	delete(input, "public_profile_id")
+	if req.Duration != "" && input["seconds"] == nil && input["duration"] == nil {
+		input["seconds"] = req.Duration
+	}
 	return input
+}
+
+func normalizeSubmissionRoute(cap Capability, original Request, input map[string]any) (Request, error) {
+	next, err := NormalizeUploads(cap, original.Operation, input, original.Uploads)
+	if err != nil {
+		return next, err
+	}
+	// These quantities come from the original request's validated references.
+	// Compare references below before using the quantities for another account.
+	for _, field := range []string{"accepted_input_audio_duration", "accepted_input_video_duration", "accepted_input_image_duration", "accepted_input_images", "task_count"} {
+		if quantity, present := original.Quantities[field]; present {
+			next.Quantities[field] = quantity
+		}
+	}
+	if !sameSubmissionRequest(original, next) || !fitsMediaSpecifications(cap, next) {
+		return next, fail(409, "media_profile_incompatible", "Backup route changes request specifications")
+	}
+	return next, nil
 }
 
 func sameSale(first, candidate Snapshot) bool {
@@ -152,20 +173,8 @@ func (e *Engine) createRoutedTask(ctx context.Context, cap Capability, operation
 			!mediaRequestFits(alternative, baseInput, uploads) {
 			continue
 		}
-		prepared, normalizeErr := NormalizeUploads(alternative, operation, baseInput, uploads)
+		prepared, normalizeErr := normalizeSubmissionRoute(alternative, req, baseInput)
 		if normalizeErr != nil {
-			continue
-		}
-		prepared.Quantities["task_count"] = []string{"1"}
-		for _, kind := range []string{"accepted_input_audio_duration", "accepted_input_video_duration"} {
-			if measured, present := req.Quantities[kind]; present {
-				prepared.Quantities[kind] = measured
-			}
-		}
-		if measured, present := req.Quantities["accepted_input_images"]; present && prepared.InputImages == req.InputImages {
-			prepared.Quantities["accepted_input_images"] = measured
-		}
-		if !sameSubmissionRequest(req, prepared) || !fitsMediaSpecifications(alternative, prepared) {
 			continue
 		}
 		for _, id := range alternative.AccountIDs {
@@ -267,12 +276,16 @@ func (e *Engine) prepareSubmissionRoute(ctx context.Context, original Request, c
 	if current.AccountID == route.AccountID && current.Capability.ID == route.Capability.ID {
 		return original, nil
 	}
-	next, err := e.PrepareRequest(ctx, route.Capability, original.Operation, candidateInput(original), original.Uploads)
+	next, err := normalizeSubmissionRoute(route.Capability, original, candidateInput(original))
 	if err != nil {
 		return next, err
 	}
-	if !sameSubmissionRequest(original, next) {
-		return next, fail(409, "media_profile_incompatible", "Backup route changes request specifications")
+	if route.Capability.Template != nil {
+		wire, err := BuildTemplateRequest(ctx, e.Adapter.Client, route.Capability, next)
+		if err != nil {
+			return next, err
+		}
+		next.Wire = &wire
 	}
 	next.Incoming, next.Uploads = original.Incoming, original.Uploads
 	return next, nil
@@ -407,7 +420,10 @@ func retryableMediaJobFailure(task StoredTask, result UpstreamResult) bool {
 	case "fail_to_fetch_task":
 		return strings.Contains(message, "capacity") || strings.Contains(message, "负载已饱和")
 	case "generation_failed", "video_generation_failed", "image_generation_failed", "audio_generation_failed":
-		return strings.HasPrefix(message, "upstream channel is temporarily unavailable")
+		return strings.HasPrefix(message, "upstream channel is temporarily unavailable") ||
+			strings.HasPrefix(message, "upstream video generation service temporarily unavailable") ||
+			strings.HasPrefix(message, "upstream image generation service temporarily unavailable") ||
+			strings.HasPrefix(message, "upstream audio generation service temporarily unavailable")
 	default:
 		return false
 	}

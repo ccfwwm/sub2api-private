@@ -43,10 +43,8 @@ func (t videoReferenceTransport) RoundTrip(r *http.Request) (*http.Response, err
 	return t.base.RoundTrip(r)
 }
 
-// Exercises both new wire formats through durable reservation, asynchronous
-// worker submission, polling, artifact download/probe and settlement. No
-// supplier calls are made.
-func TestVideoFormatsDurableEndToEnd(t *testing.T) {
+func mp4Fixture(t *testing.T) []byte {
+	t.Helper()
 	for _, tool := range []string{"ffmpeg", "ffprobe"} {
 		_, err := exec.LookPath(tool)
 		require.NoError(t, err, "install media test prerequisites")
@@ -56,6 +54,14 @@ func TestVideoFormatsDurableEndToEnd(t *testing.T) {
 	require.NoError(t, err, string(output))
 	video, err := os.ReadFile(file)
 	require.NoError(t, err)
+	return video
+}
+
+// Exercises both new wire formats through durable reservation, asynchronous
+// worker submission, polling, artifact download/probe and settlement. No
+// supplier calls are made.
+func TestVideoFormatsDurableEndToEnd(t *testing.T) {
+	video := mp4Fixture(t)
 	var pngBytes bytes.Buffer
 	require.NoError(t, png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 32, 32))))
 	for _, format := range []string{"yunfei_multimodal", "v6k_url"} {
