@@ -33,11 +33,11 @@ export const categories = [
   { id:'tasks', title:'任务查询与错误处理', sections:['start','models','tasks','errors','clients'], ops:[] },
 ]
 export const navigationGroups = [
-  { title:'快速上手', sections:['cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config','why-aicodeme','about-aicodeme'] },
+  { title:'快速上手', sections:['guide','cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config','why-aicodeme','about-aicodeme'] },
   { title:'客户端配置与接入选型', sections:['claude-api-cn','chatgpt-cn','cline-roo-config','cursor-openai-compatible','api-relay-selection','openai-compatible'] },
   { title:'常见报错与排查', sections:['api-key-401','api-404-html','model-not-exist','chatgpt-model-not-found','api-errors','balance-query','errors'] },
   { title:'图片接口接入', sections:['image-api','banana-image-api'] },
-  { title:'文本与图片接口', sections:['guide','text-api','gpt-text','gpt-edit','gpt-result','gemini','gemini-result'] },
+  { title:'文本与图片接口', sections:['text-api','gpt-text','gpt-edit','gpt-result','gemini','gemini-result'] },
   { title:'视频与音频接口', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
   { title:'模型、任务与客户端', sections:['start','models','tasks','clients'] },
 ]
@@ -169,14 +169,37 @@ export function buildRequest(cap, operation, fields, materials={}) {
 const escape = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b64_json'||(key==='data'&&/^[A-Za-z0-9+/\r\n]+={0,2}$/.test(value))||value.startsWith('data:')||value.length>4000)?`[编码内容已省略，${value.length} 字符]`:value,2)
 
+const normalizeSearch = text => text.normalize('NFKC').toLowerCase().trim()
+
+export function filterDocumentation(index, query) {
+  const terms = normalizeSearch(query).split(/\s+/).filter(Boolean)
+  if (!terms.length) return { ids: [], filtering: false }
+  const ids = index.filter(({ text }) => terms.every(term => text.includes(term))).map(({ id }) => id)
+  return { ids, filtering: ids.length > 0 }
+}
+
 async function start() {
   const [sections,generalSections,knowledgeSections]=await Promise.all([fetch(new URL('./content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./general-content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./knowledge-content.json',import.meta.url)).then(response=>response.json())])
   let category=categories[0],activeSectionID=category.sections[0],tab='文档',profiles=[],generalModels=[],key='',pending=parsePendingRecovery(localStorage.getItem('media-docs.pending-task.v1')||''),running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0,docSearch=''
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu">☰ 词元互联 · 接口文档</button><div class="portal-grid"><aside><a class="brand" href="/" target="_top">词元互联</a><label class="nav-search">搜索文档<input id="doc-search" type="search" placeholder="搜索教程、错误码、接口" aria-label="搜索文档"></label><nav aria-label="文档目录"></nav><div class="aside-foot"><span id="api-version">接口文档</span><button id="theme">☾ 深色</button><p>调试 Key 仅保存在本页内存。关闭页面后清除。</p></div></aside><main><header><div><span class="eyebrow">开发者文档</span><h1></h1></div><div id="header-controls"><div class="tools"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="调试时输入 API Key" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">加载可用模型</button></div><div class="notice" role="status" id="notice">在线调试时填写 API Key。</div></div></header><div class="tabs" role="tablist"></div><div class="content-grid"><article></article><nav id="page-toc" aria-label="本页目录"></nav></div><footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer></main></div>`
+  root.innerHTML=`<button class="mobile-menu" id="menu" type="button" aria-controls="document-sidebar" aria-expanded="false">☰ 词元互联 · 接口文档</button><div class="portal-grid"><aside id="document-sidebar"><a class="brand" href="/" target="_top">词元互联</a><form class="nav-search" role="search" aria-label="文档搜索" autocomplete="off">
+      <label for="doc-search">搜索文档</label>
+      <div class="nav-search-field">
+        <input id="doc-search" name="documentation-query" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="教程、错误码、接口" aria-controls="document-navigation" aria-describedby="doc-search-status">
+        <button id="doc-search-clear" type="button" aria-label="清除搜索" hidden>清除</button>
+      </div>
+      <p id="doc-search-status" role="status" hidden></p>
+    </form><nav id="document-navigation" aria-label="文档目录"></nav><div class="aside-foot"><span id="api-version">接口文档</span><button id="theme">☾ 深色</button><p>调试 Key 仅保存在本页内存。关闭页面后清除。</p></div></aside><main><header><div><span class="eyebrow">开发者文档</span><h1 tabindex="-1"></h1></div><div id="header-controls" hidden><div class="tools"><input id="key" type="hidden" autocomplete="off" spellcheck="false" placeholder="调试时输入 API Key" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">加载可用模型</button></div><div class="notice" role="status" id="notice">在线调试时填写 API Key。</div></div></header><div class="tabs" role="tablist"></div><div class="content-grid"><article></article><nav id="page-toc" aria-label="本页目录"></nav></div><footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer></main></div>`
   const $=s=>root.querySelector(s)
+  const search = $('#doc-search')
+  const clearSearchButton = $('#doc-search-clear')
+  const searchStatus = $('#doc-search-status')
+  const navigation = $('#document-navigation')
+  const menu = $('#menu')
+  const sidebar = $('#document-sidebar')
+  const isAutofilled = input => input.matches(':autofill')
   let parentThemeObserver=null
   if(new URLSearchParams(location.search).get('embedded')==='1'){
     const syncTheme=()=>{
@@ -192,24 +215,43 @@ async function start() {
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
   const allSections=()=>[...knowledgeSections,...generalSections,...sections]
+  const sectionsByID = new Map(allSections().map(section => [section.id, section]))
+  const directory = navigationGroups.map(group => ({
+    title: group.title,
+    items: group.sections.map(id => sectionsByID.get(id)).filter(Boolean),
+  }))
+  const searchIndex = directory.flatMap(group => group.items.map(section => ({
+    id: section.id,
+    text: normalizeSearch([group.title, section.id, section.title, section.navTitle, section.subtitle, JSON.stringify(section.blocks)].join(' ')),
+  })))
   const selectedSections=()=>allSections().filter(section=>section.id===activeSectionID)
   const categoryForSection=id=>categories.find(item=>item.sections.includes(id))||categories[0]
   const code=b=>`<div class="code"><div class="code-title"><span>${escape(b.label)}</span><button data-copy>复制</button></div><pre><code>${escape(b.text)}</code></pre></div>`
   const block=b=>b.kind==='heading'?`<h3>${escape(b.text)}</h3>`:b.kind==='text'?`<p>${escape(b.text)}</p>`:b.kind==='endpoint'?`<div class="endpoint"><b>${escape(b.method)}</b><code>${escape(API_ORIGIN+b.path)}</code></div>`:b.kind==='code'?code(b):`<div class="table"><table><thead><tr>${b.headers.map(x=>`<th>${escape(x)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r=>`<tr>${r.map(c=>`<td>${escape(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
   function renderNavigation() {
-    const docs=allSections()
-    $('nav').innerHTML=navigationGroups.map(group=>{
-      const items=group.sections.map(id=>docs.find(section=>section.id===id)).filter(Boolean)
-        .filter(section=>!docSearch||`${section.title} ${section.subtitle} ${JSON.stringify(section.blocks)}`.toLowerCase().includes(docSearch))
-      if(!items.length)return ''
-      return `<details class="nav-group" open><summary>${escape(group.title)}</summary><div>${items.map(section=>`<a href="#${section.id}" class="${section.id===activeSectionID?'active':''}">${escape(section.navTitle||section.title)}</a>`).join('')}</div></details>`
-    }).join('')||'<p class="nav-empty">没有匹配的文档</p>'
+    const query = normalizeSearch(docSearch)
+    const { ids, filtering } = filterDocumentation(searchIndex, query)
+    const matches = new Set(ids)
+    searchStatus.hidden = !query
+    searchStatus.textContent = query
+      ? filtering ? `找到 ${ids.length} 篇文档` : '没有匹配结果，已显示完整目录。'
+      : ''
+    clearSearchButton.hidden = !search.value
+    navigation.innerHTML = directory.map(group => {
+      const items = filtering ? group.items.filter(section => matches.has(section.id)) : group.items
+      if (!items.length) return ''
+      return `<details class="nav-group" open><summary>${escape(group.title)}</summary><div>${items.map(section => {
+        const selected = section.id === activeSectionID
+        return `<a href="#${escape(section.id)}"${selected ? ' class="active" aria-current="page"' : ''}>${escape(section.navTitle || section.title)}</a>`
+      }).join('')}</div></details>`
+    }).join('')
   }
   function view() {
     const page=selectedSections()[0]
     $('h1').textContent=page?.title||category.title; document.title=(page?.title||category.title)+' · 词元互联'
     $('#page-toc').hidden=tab==='在线调试'
     $('#header-controls').hidden=tab!=='在线调试'
+    if (tab === '在线调试' && $('#key').type === 'hidden') $('#key').type = 'password'
     renderNavigation()
     const tabs=category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
     if(!tabs.includes(tab))tab=tabs[0]
@@ -513,7 +555,11 @@ async function start() {
     }catch(e){if(version===loadEpoch){profiles=[];notice(e.message,true)}}
     finally{if(version===loadEpoch){loadingModels=false;$('#load').disabled=false;if(tab==='在线调试'&&!running)debug()}}
   }
-  $('#key').oninput=()=>{
+  $('#key').oninput=event=>{
+    if (!event.isTrusted || document.activeElement !== $('#key') || isAutofilled($('#key'))) {
+      $('#key').value = key
+      return
+    }
     if(pending&&key){$('#key').value=key;notice('已有任务，完成核对前请使用原 Key。',true);return}
     key=$('#key').value.trim().replace(/^Bearer\s+/i,'');profiles=[];generalModels=[];++loadEpoch;clearTimeout(loadTimer)
     if(key)loadTimer=setTimeout(loadModels,450)
@@ -522,10 +568,76 @@ async function start() {
   $('#show-key').onclick=()=>{$('#key').type=$('#key').type==='password'?'text':'password';$('#show-key').textContent=$('#key').type==='password'?'显示':'隐藏'}
   $('#load').onclick=()=>{clearTimeout(loadTimer);loadModels()}
   $('#theme').onclick=()=>{const dark=!document.body.classList.contains('dark');document.body.classList.toggle('dark',dark);document.documentElement.classList.toggle('dark',dark);$('#theme').textContent=dark?'☀ 浅色':'☾ 深色'}
-  $('#menu').onclick=()=>$('aside').classList.toggle('open')
-  $('#doc-search').oninput=()=>{docSearch=$('#doc-search').value.trim().toLowerCase();renderNavigation()}
+  function setMenu(open) {
+    sidebar.classList.toggle('open', open)
+    menu.setAttribute('aria-expanded', String(open))
+  }
+  menu.onclick = () => setMenu(!sidebar.classList.contains('open'))
+  search.form.onsubmit = event => event.preventDefault()
+  function resetSearch(focus = false) {
+    docSearch = search.value = ''
+    renderNavigation()
+    if (focus) search.focus()
+  }
+  function restoreSearch() {
+    if (search.value !== docSearch) search.value = docSearch
+  }
+  search.onfocus = restoreSearch
+  search.onblur = restoreSearch
+  search.oninput = event => {
+    if (!event.isTrusted || document.activeElement !== search || isAutofilled(search)) {
+      restoreSearch()
+      return
+    }
+    docSearch = search.value
+    renderNavigation()
+    navigation.scrollTop = 0
+  }
+  clearSearchButton.onclick = () => resetSearch(true)
+  sidebar.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return
+    if (search.value) {
+      event.preventDefault()
+      resetSearch(true)
+    } else if (sidebar.classList.contains('open')) {
+      setMenu(false)
+      menu.focus()
+    }
+  })
+  let focusArticle = false
+  navigation.addEventListener('click', event => {
+    const link = event.target.closest('a[href]')
+    if (!link || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+    if (running) {
+      event.preventDefault()
+      notice('任务正在查询，请先停止等待。')
+      return
+    }
+    focusArticle = event.detail === 0 || sidebar.classList.contains('open')
+    if (link.hash === location.hash) {
+      event.preventDefault()
+      navigate()
+    }
+  })
   $('.tabs').onclick=e=>{if(e.target.matches('button')){if(running){notice('请先停止等待或等待本轮查询完成。');return}tab=e.target.textContent;view()}}
-  function navigate(){if(running){notice('任务正在查询，请先停止等待。');return}const hash=decodeURIComponent(location.hash.slice(1));const page=allSections().find(section=>section.id===hash);if(page){activeSectionID=page.id;category=categoryForSection(page.id)}else{category=categories.find(item=>item.id===hash)||categories[0];activeSectionID=category.sections[0]||'guide'}tab=category.ops.length?'接口文档':'文档';view();$('aside').classList.remove('open')}
+  function navigate() {
+    if (running) { notice('任务正在查询，请先停止等待。'); return }
+    let hash = location.hash.slice(1)
+    try { hash = decodeURIComponent(hash) } catch {}
+    const previous = activeSectionID
+    const page = sectionsByID.get(hash)
+    category = page ? categoryForSection(page.id) : categories.find(item => item.id === hash) || categories[0]
+    activeSectionID = page?.id || category.sections[0]
+    tab = category.ops.length ? '接口文档' : '文档'
+    const wasSearching = Boolean(docSearch)
+    docSearch = search.value = ''
+    view()
+    setMenu(false)
+    if (wasSearching) navigation.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' })
+    if (focusArticle) $('h1').focus({ preventScroll: true })
+    if (focusArticle || previous !== activeSectionID) window.scrollTo(0, 0)
+    focusArticle = false
+  }
   window.addEventListener('hashchange',navigate)
   window.addEventListener('pagehide',()=>{key='';$('#key').value='';epoch++;parentThemeObserver?.disconnect();objectURLs.forEach(url=>URL.revokeObjectURL(url))})
   navigate()

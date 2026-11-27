@@ -2,6 +2,19 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, endpointForStreaming, fullMarkdown, inputMaterialsFor, loadDocsVersion, navigationGroups, optionValues, parseErrorMessage, parseGeneralModels, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
+import {filterDocumentation} from './app.mjs'
+
+test('documentation search accepts multiple terms and preserves the directory for unmatched input', () => {
+  const index = [
+    { id: 'codex', text: 'codex cli 配置教程 openai responses' },
+    { id: 'claude', text: 'claude code 配置教程 401' },
+    { id: 'errors', text: '常见报错 404 网页内容' },
+  ]
+  assert.deepEqual(filterDocumentation(index, ' 配置教程　ＣＯＤＥＸ '), { ids: ['codex'], filtering: true })
+  assert.deepEqual(filterDocumentation(index, '网页 ４０４'), { ids: ['errors'], filtering: true })
+  assert.deepEqual(filterDocumentation(index, 'saved-login@example.invalid'), { ids: [], filtering: false })
+  assert.deepEqual(filterDocumentation(index, '　'), { ids: [], filtering: false })
+})
 
 test('public requests preserve all references without selecting a supplier protocol', () => {
   const cap={model:'video',profile_id:'profile',request_format:'v6k_url',materials:{image:{reference_field:'images'}}}

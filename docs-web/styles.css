@@ -15,7 +15,12 @@ a{color:var(--accent-strong)}
 aside{position:sticky;top:0;display:flex;height:100dvh;flex-direction:column;padding:24px 16px 16px;border-right:1px solid var(--line);background:var(--side);overflow:auto}
 .brand{display:block;padding:1px 8px 20px;font-size:20px;font-weight:750;letter-spacing:-.025em;text-decoration:none;color:var(--ink)}
 .nav-search{display:flex;flex-direction:column;gap:6px;padding:0 4px 16px;color:var(--muted);font-size:12px}
-.nav-search input{height:36px;padding:7px 10px;font-size:13px}
+.nav-search-field{display:flex;align-items:center;gap:6px}
+.nav-search input{flex:1;min-width:0;height:36px;padding:7px 9px;font-size:13px}
+.nav-search input::-webkit-search-cancel-button{display:none}
+.nav-search button{flex:none;min-height:36px;padding:4px 7px;font-size:12px}
+.nav-search p{margin:0;line-height:1.5}
+#document-navigation{display:block;min-height:0;overflow-y:auto;padding:3px 4px 8px;scrollbar-width:thin;overscroll-behavior:contain}
 nav{display:grid;gap:4px}
 nav a{display:block;padding:9px 11px;border-radius:7px;text-decoration:none;color:var(--muted);font-size:13px;transition:background-color .18s,color .18s}
 nav a:hover,nav a.active{background:var(--tint);color:var(--accent-strong);font-weight:600}
@@ -26,7 +31,6 @@ nav a:hover,nav a.active{background:var(--tint);color:var(--accent-strong);font-
 .nav-group:not([open]) summary::before{transform:rotate(-90deg)}
 .nav-group>div{display:grid;gap:2px;padding:1px 0 6px 8px}
 .nav-group>div a{padding:7px 9px 7px 13px;font-size:12px;line-height:1.4}
-.nav-empty{padding:8px;color:var(--muted);font-size:12px}
 .aside-foot{margin-top:auto;padding:16px 9px 0;border-top:1px solid var(--line);color:var(--muted);font-size:11px;overflow-wrap:anywhere}
 .aside-foot button{margin-top:12px;padding:5px 9px;font-size:12px}
 .aside-foot p{margin:10px 0 0}
@@ -106,7 +110,7 @@ input[type=file]::file-selector-button{margin-right:10px;padding:6px 9px;border:
 .material-drop-zone.drag-over{border-color:var(--accent);background:var(--tint)}
 footer{max-width:1460px;margin:38px auto 0;padding-top:17px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
 body.embedded .portal-grid{min-height:100%;grid-template-columns:210px minmax(0,1fr)}
-body.embedded aside{position:sticky;width:auto;height:100%;min-height:100%;padding:15px 10px}
+body.embedded aside{position:sticky;width:auto;padding:15px 10px}
 body.embedded main{padding:15px 22px 40px}
 body.embedded header{gap:18px}
 body.embedded header>div:last-child{width:min(630px,64%)}
