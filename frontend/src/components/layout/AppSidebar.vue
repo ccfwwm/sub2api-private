@@ -690,7 +690,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
-    { path: '/media-docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
+    { path: '/docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/media-tasks', label: t('nav.mediaTasks'), icon: BatchImageIcon },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -724,7 +724,7 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
-const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => !['/model-plaza?embedded=1','/media-docs','/media-capabilities'].includes(item.path))))
+const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false).filter(item => !['/model-plaza?embedded=1','/docs','/media-capabilities'].includes(item.path))))
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {
@@ -816,7 +816,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/model-plaza?embedded=1', label: t('nav.modelPlaza'), icon: ChannelIcon, featureFlag: flagModelPlaza },
     { path: '/media-capabilities', label: t('nav.mediaCapabilities'), icon: BatchImageIcon },
-    { path: '/media-docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
+    { path: '/docs', label: t('nav.interfaceDocs'), icon: BatchImageIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

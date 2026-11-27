@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, endpointForStreaming, fullMarkdown, inputMaterialsFor, loadDocsVersion, navigationGroups, optionValues, parseErrorMessage, parseGeneralModels, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
+import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, documentationSections, docsVersionBadge, endpointFor, endpointForStreaming, fullMarkdown, inputMaterialsFor, loadDocsVersion, navigationGroups, optionValues, parseErrorMessage, parseGeneralModels, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
 import {documentationLink,filterDocumentation,renderDocumentationBlock,sectionMarkdown} from './app.mjs'
 
@@ -47,8 +47,8 @@ test('configuration and troubleshooting navigation resolves every page from its 
   const knowledge=JSON.parse(await readFile(new URL('./knowledge-content.json',import.meta.url),'utf8'))
   const general=JSON.parse(await readFile(new URL('./general-content.json',import.meta.url),'utf8'))
   const media=JSON.parse(await readFile(new URL('../docs/multimodal/imagevideo-content.json',import.meta.url),'utf8'))
-  const ids=new Set([...knowledge,...general,...media].map(section=>section.id))
-  assert.ok(navigationGroups.some(group=>group.title==='快速上手'))
+  const ids=new Set(documentationSections([...knowledge,...general,...media]).map(section=>section.id))
+  assert.deepEqual(navigationGroups[0],{title:'快速上手',sections:['guide']})
   assert.ok(navigationGroups.some(group=>group.title==='使用场景与选型'))
   assert.equal(navigationGroups.at(-1).title,'常见报错与故障排查')
   assert.ok(navigationGroups.at(-1).sections.includes('api-404-html'))
@@ -60,15 +60,27 @@ test('configuration and troubleshooting navigation resolves every page from its 
   assert.ok(knowledge.find(section=>section.id==='chatgpt-model-not-found').blocks.some(block=>block.text?.includes('wire_api = "responses"')))
   assert.ok(knowledge.find(section=>section.id==='cc-switch-config').blocks.some(block=>block.kind==='heading'&&block.text==='常见问题'))
   assert.match(knowledge.find(section=>section.id==='api-404-html').title,/404/)
-  assert.match(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/https:\/\/code\.aicodeme\.xyz\/v1\/chat\/completions/)
-  assert.doesNotMatch(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/\n\+/)
+  const guide=general.find(section=>section.id==='guide')
+  assert.deepEqual(guide.blocks.filter(block=>block.kind==='heading').slice(0,4).map(block=>block.text),[
+    '注册并登录','充值并确认到账','创建 API Key','在线测试第一条请求',
+  ])
+  const onboarding=sectionMarkdown(guide)
+  for(const path of ['/register','/login','/purchase','/orders','/keys','/usage']) {
+    assert.ok(onboarding.includes(API_ORIGIN+path),path)
+  }
+  assert.match(onboarding,/\[文本在线调试\]\(#try-api\)/)
+  for(const block of guide.blocks.filter(block=>block.kind==='code')) {
+    assert.match(block.text,/https:\/\/code\.aicodeme\.xyz\/v1\/chat\/completions/)
+    assert.match(block.text,/AICODEME_API_KEY/)
+  }
+  assert.doesNotMatch(fullMarkdown([...knowledge,...general,...media]),/模型清单与选择|## 模型清单/)
   assert.doesNotMatch(fullMarkdown([...knowledge,...general,...media]),/apikl\.ai|code\.aicodeme\.cn/)
 })
 
 test('all 28 guides have full article bodies and their links resolve to published sections',async()=>{
   const catalog=JSON.parse(await readFile(new URL('./knowledge-content.json',import.meta.url),'utf8'))
   const guides=catalog.filter(page=>page.slug)
-  const ids=new Set(navigationGroups.flatMap(group=>group.sections))
+  const ids=new Set([...navigationGroups.flatMap(group=>group.sections),'try-api'])
   assert.equal(guides.length,28)
   assert.equal(new Set(guides.map(page=>page.slug)).size,guides.length)
   for(const page of guides){
@@ -101,24 +113,24 @@ test('rich content renders escaped markup and rejects unsafe links',()=>{
 })
 
 test('documentation sidebar version follows public settings and has a safe fallback', async()=>{
-  assert.equal(docsVersionBadge('v1.3.18'),'MEDIA API · v1.3.18')
-  assert.equal(docsVersionBadge('1.3.18'),'MEDIA API · v1.3.18')
-  assert.equal(docsVersionBadge('<script>'),'MEDIA API')
+  assert.equal(docsVersionBadge('v1.3.18'),'文档 · v1.3.18')
+  assert.equal(docsVersionBadge('1.3.18'),'文档 · v1.3.18')
+  assert.equal(docsVersionBadge('<script>'),'文档')
   assert.equal(await loadDocsVersion(async(url,options)=>{
     assert.match(url,/\/api\/v1\/settings\/public$/)
     assert.equal(options.credentials,'omit')
     return {ok:true,json:async()=>({data:{version:'v1.3.18'}})}
-  }),'MEDIA API · v1.3.18')
+  }),'文档 · v1.3.18')
   const attempted=[]
   assert.equal(await loadDocsVersion(async url=>{
     attempted.push(url)
     return url.startsWith('https://local.example')
       ? {ok:false,json:async()=>({})}
       : {ok:true,json:async()=>({data:{version:'1.3.18'}})}
-  },'https://local.example'),'MEDIA API · v1.3.18')
+  },'https://local.example'),'文档 · v1.3.18')
   assert.equal(attempted[0],'https://local.example/api/v1/settings/public')
   assert.equal(attempted[1],`${API_ORIGIN}/api/v1/settings/public`)
-  assert.equal(await loadDocsVersion(async()=>{throw new Error('offline')}),'MEDIA API')
+  assert.equal(await loadDocsVersion(async()=>{throw new Error('offline')}),'文档')
 })
 
 test('managed music uses the asynchronous task path and does not request SSE',async()=>{
@@ -181,7 +193,7 @@ test('published document and export share one source without old branding',async
   assert.match(markdown,/\/v1\/images\/edits/)
   assert.match(markdown,/4096/)
   assert.doesNotMatch(markdown,/yunfei\.best|v6k\.top|待验证|坤肉AI|云飞/)
-  for(const section of content)assert.match(markdown,new RegExp(section.title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
+  for(const section of documentationSections(content))assert.match(markdown,new RegExp(section.title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
 })
 
 test('async task labels distinguish local acceptance from upstream acceptance and show billing',()=>{

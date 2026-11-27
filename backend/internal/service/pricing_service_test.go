@@ -868,6 +868,29 @@ func TestDefaultPricingIncludesGemini4HydrogenRates(t *testing.T) {
 	require.Contains(t, pricingSvc.ListModelNamesByProvider("gemini"), "gemini-4-hydrogen")
 }
 
+func TestBundledGeminiPricingAddsModelsMissingFromRemote(t *testing.T) {
+	svc := &PricingService{cfg: &config.Config{}}
+	svc.cfg.Pricing.FallbackFile = filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json")
+	svc.pricingData = svc.mergeFallbackPricingData(nil)
+
+	neon := svc.GetModelPricing("models/gemini-4-neon")
+	require.NotNil(t, neon)
+	require.Equal(t, "gemini", neon.LiteLLMProvider)
+	require.InDelta(t, 3e-6, neon.InputCostPerToken, 1e-15)
+	require.InDelta(t, 15e-6, neon.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 0.15e-6, neon.CacheReadInputTokenCost, 1e-15)
+	require.InDelta(t, 5.4e-6, neon.InputCostPerTokenPriority, 1e-15)
+	require.InDelta(t, 27e-6, neon.OutputCostPerTokenPriority, 1e-15)
+	require.InDelta(t, 0.27e-6, neon.CacheReadInputTokenCostPriority, 1e-15)
+	require.Zero(t, neon.CacheStorageCostPerTokenPerHour)
+
+	tts := svc.GetModelPricing("gemini-3.1-flash-tts-preview")
+	require.NotNil(t, tts)
+	require.Equal(t, "audio_speech", tts.Mode)
+	require.InDelta(t, 1e-6, tts.InputCostPerToken, 1e-15)
+	require.InDelta(t, 20e-6, tts.OutputCostPerToken, 1e-15)
+}
+
 func TestDefaultPricingIncludesGrok47FastRates(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
 	require.NoError(t, err)

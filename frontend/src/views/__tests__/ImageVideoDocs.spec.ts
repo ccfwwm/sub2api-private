@@ -1,14 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import ImageVideoDocsView from '../public/ImageVideoDocsView.vue'
+import { describe, expect, it } from 'vitest'
 import { imagevideoMarkdown, imagevideoModels, imagevideoSections, sectionMarkdown, groupMarkdown } from '@/data/imagevideoDocs'
 
 describe('Public media docs', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.unstubAllEnvs()
-    localStorage.removeItem('media-docs-theme')
-  })
   it('uses 28 exact unique models and validates JSON and cURL JSON bodies', () => {
     expect(imagevideoModels).toHaveLength(28)
     expect(new Set(imagevideoModels.map(m => m.id)).size).toBe(28)
@@ -54,16 +47,5 @@ describe('Public media docs', () => {
     const frames = examples.find(block => block.kind === 'code' && block.label === '首尾帧请求')!
     if (frames.kind !== 'code') throw new Error('Missing frame request')
     expect(JSON.parse(frames.text).images.map((image: { role: string }) => image.role)).toEqual(['first_frame', 'last_frame'])
-  })
-  it.each([true, false])('opens standalone docs as the top-level page (dev=%s), preserving links', (dev) => {
-    vi.stubEnv('DEV', dev)
-    const replace = vi.fn()
-    vi.stubGlobal('window', { location: { search: '?from=home', hash: '#gpt-edit', replace } })
-    const w = mount(ImageVideoDocsView)
-    const destination = (dev ? '/media-docs/index.html' : '/docs/imagevideo') + '?from=home#gpt-edit'
-    expect(w.find('iframe').exists()).toBe(false)
-    expect(replace).toHaveBeenCalledWith(destination)
-    expect(w.get('a').attributes('href')).toBe(destination)
-    w.unmount()
   })
 })

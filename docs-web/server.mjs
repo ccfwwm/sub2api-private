@@ -23,9 +23,10 @@ createServer(async (request, response) => {
     return
   }
 
-  let pathname
+  let url, pathname
   try {
-    pathname = decodeURIComponent(new URL(request.url || '/', 'http://localhost').pathname)
+    url = new URL(request.url || '/', 'http://localhost')
+    pathname = decodeURIComponent(url.pathname)
   } catch {
     response.writeHead(400).end('bad request\n')
     return
@@ -39,10 +40,14 @@ createServer(async (request, response) => {
     }catch{response.writeHead(503).end()}
     return
   }
-  // Nginx strips /docs/; direct container checks retain it.
-  pathname=pathname.replace(/^\/docs\//,'/')
-  if (pathname === '/imagevideo') pathname='/index.html'
-  if (pathname === '/imagevideo/') {response.writeHead(302,{'location':'/docs/imagevideo','cache-control':'no-store'}).end();return}
+  if (pathname === '/docs/' || /^\/(?:docs\/)?imagevideo\/?$/.test(pathname)) {
+    const destination = url.searchParams.get('embedded') === '1' ? '/docs/index.html' : '/docs'
+    response.writeHead(308, { location: destination + url.search, 'cache-control': 'no-store' }).end()
+    return
+  }
+
+  // The proxy may retain or strip the /docs/ prefix.
+  pathname = pathname === '/' || pathname === '/docs' ? '/index.html' : pathname.replace(/^\/docs\//, '/')
   const file = resolve(root, `.${pathname}`)
   if (file !== root && !file.startsWith(root + sep)) {
     response.writeHead(404).end('not found\n')

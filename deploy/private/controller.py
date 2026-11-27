@@ -699,7 +699,7 @@ class Controller:
             if docs["Image"] != expected_docs_id or not docs["State"].get("Running"):
                 raise ValueError("running documentation image does not match requested digest")
             self.wait_command(["docker", "exec", docs_name, "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/health"], 60)
-            html = run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/imagevideo"]).decode(errors="replace")
+            html = run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/index.html"]).decode(errors="replace")
             knowledge = json.loads(run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/docs/knowledge-content.json"]))
             legacy = json.loads(run(["curl", "-fsS", "--max-time", "10", "http://127.0.0.1:8082/api/v1/public-docs/imagevideo"]))
             from docs_contract import validate_docs_contract

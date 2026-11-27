@@ -11,10 +11,18 @@ vi.mock('@/api/setup', () => ({ getSetupStatus: vi.fn() }))
 describe('admin media route', () => {
   it('exposes capabilities and in-app documentation without login', async () => {
     const { default: router } = await import('@/router')
-    for (const path of ['/media-capabilities', '/media-docs']) {
+    for (const path of ['/media-capabilities', '/docs']) {
       const route=router.getRoutes().find(r=>r.path===path)
       expect(route?.meta.requiresAuth).toBe(false)
       expect(route?.redirect).toBeUndefined()
+    }
+    expect(router.resolve('/docs').meta.titleKey).toBe('nav.interfaceDocs')
+    for (const path of ['/media-docs', '/docs/imagevideo']) {
+      const legacy = router.resolve(path + '?from=home#gpt-edit')
+      const redirect = legacy.matched.at(-1)?.redirect
+      expect(typeof redirect).toBe('function')
+      if (typeof redirect !== 'function') throw new Error('Missing documentation redirect')
+      expect(router.resolve(redirect(legacy, legacy)).fullPath).toBe('/docs?from=home#gpt-edit')
     }
   })
   it('makes personal media history available to authenticated ordinary users', async () => {

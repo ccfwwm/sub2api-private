@@ -25,7 +25,7 @@
         <div class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
           <LocaleSwitcher />
           <router-link to="/media-capabilities" class="text-sm font-medium px-2">{{ t('nav.mediaCapabilities') }}</router-link>
-          <router-link to="/media-docs" class="text-sm font-medium px-2">{{ t('nav.imagevideoDocs') }}</router-link>
+          <router-link to="/docs" class="text-sm font-medium px-2">{{ t('nav.imagevideoDocs') }}</router-link>
           <a
             v-if="docUrl"
             :href="docUrl"

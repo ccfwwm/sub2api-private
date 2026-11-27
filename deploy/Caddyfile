@@ -12,7 +12,7 @@
 api.sub2api.com {
 	# Documentation is an independently replaceable static container.  Keep the
 	# API routes on the main service so publication only changes database JSON.
-	handle_path /docs/* {
+	handle /docs/* {
 		reverse_proxy sub2api-docs-web:8080
 	}
 

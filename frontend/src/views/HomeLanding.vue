@@ -12,7 +12,7 @@
           <a href="#gateway-flow">{{ t('home.flow.navigation') }}</a>
           <router-link to="/media-capabilities">{{ t('home.landing.media') }}</router-link>
           <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('home.landing.developerDocs') }}</a>
-          <router-link v-else to="/media-docs">{{ t('nav.imagevideoDocs') }}</router-link>
+          <router-link v-else to="/docs">{{ t('nav.imagevideoDocs') }}</router-link>
           <a href="#science">ZeroWall Science</a>
         </nav>
         <div class="landing-header-actions">
@@ -129,7 +129,7 @@
       <div class="landing-shell landing-footer-inner">
         <span>&copy; {{ currentYear }} {{ siteName }}</span>
         <nav :aria-label="t('home.landing.footerNavigation')">
-          <router-link to="/media-docs">{{ t('nav.imagevideoDocs') }}</router-link>
+          <router-link to="/docs">{{ t('nav.imagevideoDocs') }}</router-link>
           <a :href="scienceUrl" target="_blank" rel="noopener noreferrer">ZeroWall Science <Icon name="externalLink" size="xs" aria-hidden="true" /></a>
         </nav>
       </div>

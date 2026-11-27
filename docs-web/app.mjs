@@ -4,10 +4,14 @@ export function parseErrorMessage(body) {
   try{const data=JSON.parse(body);return data?.error?.message||data?.message||body.slice(0,400)}catch{return String(body).slice(0,400)||'请求失败'}
 }
 export const API_ORIGIN = 'https://code.aicodeme.xyz'
+const DOCS_URL = API_ORIGIN + '/docs'
+const DOCS_ALIASES = new Map([['models','text-api'],['try-api','text-api']])
+
+export const documentationSections = sections => sections.filter(section => section.id !== 'models')
 export function docsVersionBadge(version) {
   const value=typeof version==='string'?version.trim():''
-  if(!/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value))return 'MEDIA API'
-  return `MEDIA API · ${value.startsWith('v')?value:`v${value}`}`
+  if(!/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value))return '文档'
+  return `文档 · ${value.startsWith('v')?value:`v${value}`}`
 }
 export async function loadDocsVersion(fetcher=globalThis.fetch,origin=globalThis.location?.origin) {
   if(typeof fetcher!=='function')return docsVersionBadge()
@@ -18,25 +22,25 @@ export async function loadDocsVersion(fetcher=globalThis.fetch,origin=globalThis
       if(!response.ok)continue
       const payload=await response.json()
       const badge=docsVersionBadge(payload?.data?.version)
-      if(badge!=='MEDIA API')return badge
+      if(badge!=='文档')return badge
     } catch {}
   }
   return docsVersionBadge()
 }
 export const categories = [
-  { id:'guide', title:'快速接入', sections:['guide'], ops:[] },
+  { id:'guide', title:'注册、登录、创建 API Key 与首次调用', sections:['guide'], ops:[] },
   { id:'text', title:'文本与对话', sections:['text-api'], ops:['chat_completions','responses','messages','gemini_content','systemone'] },
   { id:'gpt-image', title:'OpenAI协议生图', sections:['gpt-text','gpt-edit','gpt-result'], ops:['image','image_edit'] },
   { id:'gemini-image', title:'Gemini协议生图', sections:['gemini','gemini-result'], ops:['gemini_image'] },
   { id:'video', title:'视频生成', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference'], ops:['video'] },
   { id:'audio', title:'音乐与语音', sections:['audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'], ops:['audio','chat_music','speech'] },
-  { id:'tasks', title:'任务查询与错误处理', sections:['start','models','tasks','errors','clients'], ops:[] },
+  { id:'tasks', title:'任务查询与错误处理', sections:['start','tasks','errors','clients'], ops:[] },
 ]
 export const navigationGroups = [
-  { title:'快速上手', sections:['guide','openai-compatible','start','models'] },
+  { title:'快速上手', sections:['guide'] },
   { title:'客户端配置', sections:['cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','cursor-openai-compatible','cline-roo-config','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config'] },
-  { title:'文本与图片接口', sections:['text-api','image-api','gpt-text','gpt-edit','gpt-result','banana-image-api','gemini','gemini-result'] },
-  { title:'视频与音频接口', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
+  { title:'文本与图片接口', sections:['text-api','openai-compatible','image-api','gpt-text','gpt-edit','gpt-result','banana-image-api','gemini','gemini-result'] },
+  { title:'多媒体接口', sections:['start','grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
   { title:'任务、用量与示例', sections:['tasks','balance-query','clients'] },
   { title:'使用场景与选型', sections:['claude-api-cn','chatgpt-cn','api-relay-selection','why-aicodeme','about-aicodeme'] },
   { title:'常见报错与故障排查', sections:['api-errors','api-key-401','api-404-html','model-not-exist','chatgpt-model-not-found','errors'] },
@@ -108,7 +112,7 @@ export function sectionMarkdown(section) {
     return b.text
   }).join('\n\n')
 }
-export const fullMarkdown = sections => '# 词元互联接口文档\n\n根地址：'+API_ORIGIN+'\n\n'+sections.map(sectionMarkdown).join('\n\n')
+export const fullMarkdown = sections => '# 词元互联文档\n\n根地址：'+API_ORIGIN+'\n\n'+documentationSections(sections).map(sectionMarkdown).join('\n\n')
 export function endpointFor(operation, model) {
   return {image:'/v1/images/generations',image_edit:'/v1/images/edits',video:'/v1/videos',audio:'/v1/audio/generations',speech:'/v1/audio/speech',chat_music:'/v1/chat/completions',gemini_image:`/v1beta/models/${encodeURIComponent(model)}:generateContent`,chat_completions:'/v1/chat/completions',responses:'/v1/responses',messages:'/v1/messages',gemini_content:`/v1beta/models/${encodeURIComponent(model)}:generateContent`,systemone:'/v1/systemone'}[operation]
 }
@@ -262,7 +266,7 @@ function fitEmbeddedConsole() {
   try {
     const frame = window.frameElement
     const host = frame?.ownerDocument
-    if (!host || !/^\/media-docs\/?$/.test(host.location.pathname) ||
+    if (!host || !/^\/(?:docs|media-docs)\/?$/.test(host.location.pathname) ||
         !frame.matches('.console-shell main.console-main > div > iframe')) return
     const id = 'aicodeme-docs-console-layout'
     if (!host.getElementById(id)) {
@@ -394,7 +398,7 @@ async function start() {
   root.innerHTML=`<button class="mobile-menu" id="menu" type="button" aria-controls="document-sidebar" aria-expanded="false">文档目录</button>
     <div class="portal-grid">
     <aside id="document-sidebar">
-    <a class="brand" href="/" target="_top">词元互联</a>
+    <a class="brand" href="/docs" target="_top">词元互联文档</a>
     <form class="nav-search" role="search" aria-label="文档搜索" autocomplete="off">
       <div class="nav-search-field">
         <input id="doc-search" name="documentation-query" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="搜索文档" aria-label="搜索文档" aria-controls="document-navigation" aria-describedby="doc-search-status">
@@ -403,7 +407,7 @@ async function start() {
       <p id="doc-search-status" role="status" hidden></p>
     </form>
     <nav id="document-navigation" aria-label="文档目录" tabindex="0"></nav>
-    <div class="aside-foot"><span id="api-version">接口文档</span><button id="theme" type="button">☾ 深色</button></div>
+    <div class="aside-foot"><span id="api-version">文档</span><button id="theme" type="button">☾ 深色</button></div>
     </aside>
     <div id="resize-directory" class="column-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="document-sidebar" aria-label="调整文档目录宽度" title="拖动调整文档目录宽度，双击恢复默认"></div>
     <main>
@@ -423,7 +427,7 @@ async function start() {
       </nav>
       <div id="resize-page-toc" class="column-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="page-toc" aria-label="调整本页目录宽度" title="拖动调整本页目录宽度，双击恢复默认"></div>
       <article></article>
-      <footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer>
+      <footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="${new URL('./examples/imagevideo.py',import.meta.url).pathname}" download>Python 示例</a> · <a href="${new URL('./examples/imagevideo.mjs',import.meta.url).pathname}" download>JavaScript 示例</a></footer>
     </main></div>`
   const $=s=>root.querySelector(s)
   const search = $('#doc-search')
@@ -437,7 +441,7 @@ async function start() {
   const tocLinks = $('#page-toc-links')
   const tocToggle = $('#page-toc-toggle')
   const resizeColumns = initColumnResizing($('.portal-grid'),main,$('#resize-directory'),$('#resize-page-toc'))
-  const closedGroups = new Set()
+  const closedGroups = new Set(navigationGroups.slice(1).map(group=>group.title))
   let tocEntries = [], currentChapter = null, chapterFrame = 0
   const isAutofilled = input => input.matches(':autofill')
   let parentThemeObserver=null
@@ -462,7 +466,7 @@ async function start() {
     catch{button.textContent='复制失败'}
     setTimeout(()=>{button.textContent=label;button.removeAttribute('aria-disabled')},1600)
   }
-  const allSections=()=>[...knowledgeSections,...generalSections,...sections]
+  const allSections=()=>documentationSections([...knowledgeSections,...generalSections,...sections])
   const sectionsByID = new Map(allSections().map(section => [section.id, section]))
   const aliases = new Map(knowledgeSections.filter(section=>section.slug).map(section=>[section.slug,section]))
   const directory = navigationGroups.map(group => ({
@@ -584,7 +588,8 @@ async function start() {
     const guide=activeSectionID==='guide'||Boolean(page?.lead)
     main.classList.toggle('reading-guide',guide)
     $('#page-group').textContent=groupBySection.get(activeSectionID)||''
-    $('h1').textContent=page?.title||category.title; document.title=(page?.title||category.title)+' · 词元互联'
+    $('h1').textContent=page?.title||category.title
+    document.title=(activeSectionID==='guide'?'文档':page?.title||category.title)+' · 词元互联'
     $('#header-controls').hidden=tab!=='在线调试'
     if (tab === '在线调试' && $('#key').type === 'hidden') $('#key').type = 'password'
     const tabs=guide?['文档']:category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
@@ -603,7 +608,7 @@ async function start() {
     const headings=blocks.flatMap(({block,id})=>block.kind==='heading'?[{id,text:headingText(block),level:block.level}]:[])
     renderPageToc(headings)
     if(!page)return
-    if(guide)$('#share-guide').onclick=event=>copyArticle(event.currentTarget,`${API_ORIGIN}/media-docs/#${page.id}`)
+    if(guide)$('#share-guide').onclick=event=>copyArticle(event.currentTarget,`${DOCS_URL}${page.id==='guide'?'':'#'+page.id}`)
     $('#copy-group').onclick=event=>copyArticle(event.currentTarget,sectionMarkdown(page))
     $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>{
       const code=button.closest('.code').querySelector('code')
@@ -974,10 +979,10 @@ async function start() {
     let hash = location.hash.slice(1)
     try { hash = decodeURIComponent(hash) } catch {}
     const previous = activeSectionID
-    const page = sectionsByID.get(hash) || aliases.get(hash)
+    const page = sectionsByID.get(DOCS_ALIASES.get(hash) || hash) || aliases.get(hash)
     category = page ? categoryForSection(page.id) : categories.find(item => item.id === hash) || categories[0]
     activeSectionID = page?.id || category.sections[0]
-    tab = category.ops.length ? '接口文档' : '文档'
+    tab = hash==='try-api' ? '在线调试' : category.ops.length ? '接口文档' : '文档'
     const wasSearching = Boolean(docSearch)
     docSearch = search.value = ''
     if (wasSearching || !navigation.firstElementChild) renderNavigation()

@@ -1,23 +1,227 @@
 [
   {
     "id": "guide",
-    "title": "快速接入",
-    "subtitle": "使用词元互联 API Key 调用当前分组开放的模型。",
+    "title": "注册、登录、创建 API Key 与首次调用",
+    "lead": [
+      "从注册账号到验证第一条请求。已有账号和余额，可以直接创建 API Key。"
+    ],
     "blocks": [
-      { "kind": "heading", "text": "连接信息" },
-      { "kind": "endpoint", "method": "BASE URL", "path": "" },
-      { "kind": "text", "text": "所有接口使用 https://code.aicodeme.xyz 作为根地址。请求需要携带 API Key，模型名称从当前 Key 可用的模型列表中选择。" },
-      { "kind": "heading", "text": "鉴权" },
-      { "kind": "code", "language": "http", "label": "请求头", "text": "Authorization: Bearer YOUR_API_KEY\nContent-Type: application/json" },
-      { "kind": "heading", "text": "发送第一条文本请求" },
-      { "kind": "endpoint", "method": "POST", "path": "/v1/chat/completions" },
-      { "kind": "code", "language": "json", "label": "cURL", "text": "curl https://code.aicodeme.xyz/v1/chat/completions \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"YOUR_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}'" },
-      { "kind": "heading", "text": "同步、流式与异步" },
-      { "kind": "text", "text": "Chat Completions、Responses、Anthropic Messages 和 Gemini generateContent 可按各自接口选择即时响应或流式响应。图片异步任务使用 /v1/images/generations/async 或 /v1/images/edits/async 查询 /v1/images/tasks/{task_id}。视频和托管媒体生成通过对应任务接口查询进度与结果。每个接口支持的模式以本页调试器中可选模式为准。" },
-      { "kind": "heading", "text": "请求建议" },
-      { "kind": "table", "headers": ["步骤", "说明"], "rows": [["选择模型", "先调用 GET /v1/models，使用返回的模型名称。"], ["提交前检查", "校验模型、请求格式和素材限制。媒体任务可使用调试器中的免费估价预览。"], ["处理异步响应", "保存服务返回的任务 ID 和轮询地址，按接口返回的状态继续查询。"], ["保护密钥", "不要将 API Key 放入公开代码库或客户端日志。"]] },
-      { "kind": "heading", "text": "请求失败" },
-      { "kind": "text", "text": "错误响应通常包含 error.type、error.message 和 HTTP 状态码。检查 API Key、分组权限、模型名称、接口请求格式和素材格式后再重试。若提交超时且未确认是否受理，不要自动重复提交付费生成请求。" }
+      {
+        "kind": "heading",
+        "text": "注册并登录"
+      },
+      {
+        "kind": "paragraph",
+        "content": [
+          "打开",
+          [
+            "a",
+            "https://code.aicodeme.xyz/register",
+            "注册页"
+          ],
+          "，填写邮箱和密码，按页面提示完成邮件验证。已注册的用户可直接",
+          [
+            "a",
+            "https://code.aicodeme.xyz/login",
+            "登录控制台"
+          ],
+          "。"
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "充值并确认到账"
+      },
+      {
+        "kind": "list",
+        "content": [
+          "ol",
+          [
+            "li",
+            "登录后打开",
+            [
+              "a",
+              "https://code.aicodeme.xyz/purchase",
+              "充值"
+            ],
+            "，选择金额和页面提供的支付方式。核对实际支付金额和预计到账余额，再创建订单并完成支付。"
+          ],
+          [
+            "li",
+            "支付后核对账户余额。若余额暂未更新，先到",
+            [
+              "a",
+              "https://code.aicodeme.xyz/orders",
+              "我的订单"
+            ],
+            "查看支付状态，避免重复付款。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "创建 API Key"
+      },
+      {
+        "kind": "list",
+        "content": [
+          "ol",
+          [
+            "li",
+            "进入",
+            [
+              "a",
+              "https://code.aicodeme.xyz/keys",
+              "API 密钥"
+            ],
+            "，点击「创建密钥」，填写便于辨认的名称，例如「首次测试」。"
+          ],
+          [
+            "li",
+            "选择能调用文本模型的可用分组，保存并复制新建的完整 Key。分组决定这把 Key 可以调用哪些模型。"
+          ]
+        ]
+      },
+      {
+        "kind": "callout",
+        "content": [
+          "API Key 用于请求鉴权。请妥善保存，避免粘贴到公开代码库、聊天记录或截图中。"
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "在线测试第一条请求"
+      },
+      {
+        "kind": "list",
+        "content": [
+          "ol",
+          [
+            "li",
+            "打开",
+            [
+              "a",
+              "#try-api",
+              "文本在线调试"
+            ],
+            "，粘贴刚创建的 API Key，点击「加载可用模型」。"
+          ],
+          [
+            "li",
+            "选择加载成功的文本模型及对应接口，响应方式选择「同步 JSON」，提示词填入",
+            [
+              "code",
+              "Reply with OK."
+            ],
+            "。勾选费用确认后点击「发送请求」。"
+          ],
+          [
+            "li",
+            "响应中出现模型回复即表示调用成功。到",
+            [
+              "a",
+              "https://code.aicodeme.xyz/usage",
+              "使用记录"
+            ],
+            "查看本次调用的模型、用量和费用。"
+          ]
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "在代码或客户端中调用"
+      },
+      {
+        "kind": "paragraph",
+        "content": [
+          "OpenAI 兼容客户端的 Base URL 填",
+          [
+            "code",
+            "https://code.aicodeme.xyz/v1"
+          ],
+          "，API Key 填上一步生成的值。直接发送 HTTP 请求时使用下面的完整地址。"
+        ]
+      },
+      {
+        "kind": "paragraph",
+        "content": [
+          "以下示例使用 Chat Completions。先在终端设置环境变量",
+          [
+            "code",
+            "AICODEME_API_KEY"
+          ],
+          "，再把",
+          [
+            "code",
+            "YOUR_MODEL"
+          ],
+          "换成在线调试中支持该协议的模型 ID。"
+        ]
+      },
+      {
+        "kind": "code",
+        "language": "bash",
+        "label": "macOS / Linux",
+        "text": "export AICODEME_API_KEY=\"在此填入你的 API Key\"\ncurl https://code.aicodeme.xyz/v1/chat/completions \\\n  -H \"Authorization: Bearer $AICODEME_API_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  --data '{\"model\":\"YOUR_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK.\"}],\"stream\":false}'"
+      },
+      {
+        "kind": "code",
+        "language": "powershell",
+        "label": "Windows PowerShell",
+        "text": "$env:AICODEME_API_KEY = \"在此填入你的 API Key\"\n$request = @{\n  Uri = 'https://code.aicodeme.xyz/v1/chat/completions'\n  Method = 'Post'\n  Headers = @{ Authorization = \"Bearer $env:AICODEME_API_KEY\" }\n  ContentType = 'application/json'\n  Body = '{\"model\":\"YOUR_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK.\"}],\"stream\":false}'\n}\n(Invoke-RestMethod @request).choices[0].message.content"
+      },
+      {
+        "kind": "paragraph",
+        "content": [
+          "收到 HTTP 200 后，可从",
+          [
+            "code",
+            "choices[0].message.content"
+          ],
+          "读取文本。使用 Codex、Claude Code 或其他客户端时，查看左侧对应配置教程。"
+        ]
+      },
+      {
+        "kind": "heading",
+        "text": "首次调用失败时"
+      },
+      {
+        "kind": "table",
+        "headers": [
+          "现象",
+          "先检查"
+        ],
+        "rows": [
+          [
+            "401 或提示密钥无效",
+            "复制完整 Key，确认密钥启用且没有多余空格。"
+          ],
+          [
+            "余额不足",
+            "确认充值到账，并查看 Key 本身是否设置了额度上限。"
+          ],
+          [
+            "提示模型不存在或不可用",
+            "用同一把 Key 重新加载在线调试选项，确认模型 ID 和接口协议匹配。"
+          ],
+          [
+            "404 或收到 HTML",
+            "核对 API 地址，OpenAI 兼容 Base URL 只带一层 /v1。"
+          ]
+        ]
+      },
+      {
+        "kind": "paragraph",
+        "content": [
+          "更多排查方法见",
+          [
+            "a",
+            "#api-errors",
+            "常见 API 报错"
+          ],
+          "。"
+        ]
+      }
     ]
   },
   {

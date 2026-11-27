@@ -514,7 +514,7 @@ class Manager:
             if docs['Config']['Image'] != docs_target or not docs['State']['Running']:
                 raise ValueError('running documentation image differs from requested image')
             self.c.wait_command(['docker', 'exec', docs_name, 'wget', '-q', '-T', '5', '-O', '/dev/null', 'http://127.0.0.1:8080/health'], 60)
-            html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
+            html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/index.html']).decode(errors='replace')
             knowledge = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/knowledge-content.json']))
             legacy = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/api/v1/public-docs/imagevideo']))
             from docs_contract import validate_docs_contract
@@ -523,7 +523,7 @@ class Manager:
         if 'docs-web' in target.get('services', {}) and self.docs_proxy_enabled and self.nginx_vhost.is_file():
             html = run(['curl', '-kfsS', '--max-time', '10', '--resolve',
                         'code.aicodeme.xyz:443:127.0.0.1',
-                        'https://code.aicodeme.xyz/docs/imagevideo']).decode(errors='replace')
+                        'https://code.aicodeme.xyz/docs/index.html']).decode(errors='replace')
             from docs_contract import validate_docs_portal_html
             validate_docs_portal_html(html)
 

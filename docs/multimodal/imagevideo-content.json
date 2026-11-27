@@ -2,8 +2,8 @@
   {
     "id": "start",
     "group": "开始使用",
-    "navTitle": "认证与快速调用",
-    "title": "快速开始",
+    "navTitle": "多媒体鉴权与调用",
+    "title": "多媒体鉴权与调用",
     "subtitle": "一个 API Key，连接图片、视频与音乐创作。",
     "blocks": [
       {

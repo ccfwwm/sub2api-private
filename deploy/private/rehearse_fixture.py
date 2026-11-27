@@ -88,7 +88,7 @@ def main():
             if docs_image:
                 run(c.compose() + ['up', '-d', '--no-deps', 'docs-web'])
                 c.wait_command(['curl', '-fsS', '--max-time', '5', 'http://127.0.0.1:8082/health'], 60)
-                html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/imagevideo']).decode(errors='replace')
+                html = run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/index.html']).decode(errors='replace')
                 knowledge = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/docs/knowledge-content.json']))
                 legacy = json.loads(run(['curl', '-fsS', '--max-time', '10', 'http://127.0.0.1:8082/api/v1/public-docs/imagevideo']))
                 validate_docs_contract(html, knowledge, legacy)
