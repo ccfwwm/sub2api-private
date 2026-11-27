@@ -10,6 +10,23 @@ vi.mock('vue-i18n', async original => ({
 enableAutoUnmount(afterEach)
 
 describe('monitor probe config', () => {
+  it('switches request mode without losing policy and hides it for image probes', async () => {
+    const modelValue = monitorProbeDefaults({ probe_config: { defaults: { prompt: 'ping' } } })
+    const wrapper = mount(ProbeConfig, { props: { provider: 'openai', modelValue } })
+    const select = wrapper.get<HTMLSelectElement>('[data-testid="probe-request-mode"]')
+    expect(select.element.value).toBe('sync')
+    await select.setValue('stream')
+    const streaming = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as typeof modelValue
+    expect(streaming.probe_config).toMatchObject({ request_mode: 'stream', defaults: { prompt: 'ping' } })
+    await wrapper.setProps({ modelValue: streaming })
+    expect(select.element.value).toBe('stream')
+    await wrapper.get('[data-testid="probe-type"]').setValue('image')
+    const image = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as typeof modelValue
+    expect(image.probe_config?.request_mode).toBeUndefined()
+    await wrapper.setProps({ modelValue: image })
+    expect(wrapper.find('[data-testid="probe-request-mode"]').exists()).toBe(false)
+  })
+
   it('keeps old settings as text and requires new consent when switching probe types', async () => {
     expect(monitorProbeDefaults()).toMatchObject({ probe_type: 'text', image_probe_schedule_enabled: false, custom_response_require_non_empty: true })
     const wrapper = mount(ProbeConfig, { props: { provider: 'openai', modelValue: monitorProbeDefaults({ image_probe_schedule_enabled: true }) } })

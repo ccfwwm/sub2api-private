@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,8 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // monitorHTTPClient 共享一个 http.Client，避免每次检测重建 transport。
@@ -370,7 +371,33 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 		return "", "", 0, err
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
-	full := joinURL(endpoint, monitorRequestPath(provider, endpoint, adapter, model))
+	path := monitorRequestPath(provider, endpoint, adapter, model)
+	var requestMode string
+	if opts != nil {
+		requestMode = opts.ProbeConfig.RequestMode
+	}
+	stream := requestMode == MonitorRequestModeStream
+	if provider == MonitorProviderGemini {
+		if stream {
+			path = strings.TrimSuffix(path, ":generateContent") + ":streamGenerateContent?alt=sse"
+		}
+		if requestMode != "" {
+			body, err = sjson.DeleteBytes(body, "stream")
+		}
+	} else if requestMode != "" {
+		body, err = sjson.SetBytes(body, "stream", stream)
+	}
+	if err != nil {
+		return "", "", 0, fmt.Errorf("set probe request mode: %w", err)
+	}
+	full := joinURL(endpoint, path)
+	if stream {
+		headers["Accept"] = "text/event-stream"
+		return doMonitorStreamRequest(ctx, full, body, headers, provider, apiMode)
+	}
+	if requestMode == MonitorRequestModeSync {
+		headers["Accept"] = "application/json"
+	}
 	respBytes, status, err := doMonitorRequest(ctx, http.MethodPost, full, body, headers)
 	if err != nil {
 		return "", "", status, err
@@ -786,6 +813,16 @@ func doMonitorRequest(ctx context.Context, method, fullURL string, payload []byt
 type monitorTimeoutKey struct{}
 
 func doMonitorRequestWithClient(ctx context.Context, client *http.Client, method, fullURL string, payload []byte, headers map[string]string, maxBytes int64) ([]byte, int, error) {
+	resp, err := openMonitorResponse(ctx, client, method, fullURL, payload, headers)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := readMonitorResponse(resp.Body, maxBytes)
+	return body, resp.StatusCode, err
+}
+
+func openMonitorResponse(ctx context.Context, client *http.Client, method, fullURL string, payload []byte, headers map[string]string) (*http.Response, error) {
 	if timeout, ok := ctx.Value(monitorTimeoutKey{}).(time.Duration); ok {
 		clone := *client
 		clone.Timeout = timeout
@@ -793,7 +830,7 @@ func doMonitorRequestWithClient(ctx context.Context, client *http.Client, method
 	}
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, bytes.NewReader(payload))
 	if err != nil {
-		return nil, 0, fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	if len(payload) > 0 {
 		req.Header.Set("Content-Type", "application/json")
@@ -805,18 +842,20 @@ func doMonitorRequestWithClient(ctx context.Context, client *http.Client, method
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	return resp, nil
+}
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+func readMonitorResponse(body io.Reader, maxBytes int64) ([]byte, error) {
+	respBody, err := io.ReadAll(io.LimitReader(body, maxBytes+1))
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("read body: %w", err)
+		return nil, fmt.Errorf("read body: %w", err)
 	}
 	if int64(len(respBody)) > maxBytes {
-		return nil, resp.StatusCode, fmt.Errorf("probe response exceeds size limit")
+		return nil, fmt.Errorf("probe response exceeds size limit")
 	}
-	return respBody, resp.StatusCode, nil
+	return respBody, nil
 }
 
 // monitorRequestPath 返回探测请求路径。智谱按 endpoint 区分：

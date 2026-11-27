@@ -9,6 +9,7 @@ type MonitorProbePolicy struct {
 }
 
 type MonitorProbeConfig struct {
-	Defaults MonitorProbePolicy            `json:"defaults"`
-	Models   map[string]MonitorProbePolicy `json:"models,omitempty"`
+	RequestMode string                        `json:"request_mode,omitempty"`
+	Defaults    MonitorProbePolicy            `json:"defaults"`
+	Models      map[string]MonitorProbePolicy `json:"models,omitempty"`
 }

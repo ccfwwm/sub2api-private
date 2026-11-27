@@ -8,6 +8,18 @@
         <option value="custom">{{ t('probeConfig.custom') }}</option>
       </select>
     </label>
+    <label v-if="modelValue.probe_type === 'text' && supportsStreaming" class="input-label">
+      {{ t('probeConfig.requestMode') }}
+      <select
+        class="input"
+        data-testid="probe-request-mode"
+        :value="modelValue.probe_config?.request_mode ?? 'sync'"
+        @change="setRequestMode(($event.target as HTMLSelectElement).value as MonitorRequestMode)"
+      >
+        <option value="sync">{{ t('probeConfig.sync') }}</option>
+        <option value="stream">{{ t('probeConfig.stream') }}</option>
+      </select>
+    </label>
     <template v-if="modelValue.probe_type !== 'text'">
       <p class="text-xs text-amber-600 dark:text-amber-400">{{ t('probeConfig.manualHint') }}</p>
       <label class="flex items-center gap-2 text-sm">
@@ -45,7 +57,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { MonitorProbeSettings, Provider } from '@/api/admin/channelMonitor'
+import type { MonitorProbeSettings, MonitorRequestMode, Provider } from '@/api/admin/channelMonitor'
 
 const props = defineProps<{ modelValue: MonitorProbeSettings; provider: Provider }>()
 const emit = defineEmits<{
@@ -55,13 +67,23 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const supportsImages = computed(() => ['openai', 'gemini', 'grok'].includes(props.provider))
+const supportsStreaming = computed(() => ['openai', 'anthropic', 'gemini', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax'].includes(props.provider))
 const bodyText = ref('')
 const bodyError = ref(false)
 
 function set(key: keyof MonitorProbeSettings, value: unknown) {
   const next = { ...props.modelValue, [key]: value }
-  if (key === 'probe_type' && value !== props.modelValue.probe_type) next.image_probe_schedule_enabled = false
+  if (key === 'probe_type' && value !== props.modelValue.probe_type) {
+    next.image_probe_schedule_enabled = false
+    if (value !== 'text' && next.probe_config?.request_mode) {
+      next.probe_config = { ...next.probe_config, request_mode: undefined }
+    }
+  }
   emit('update:modelValue', next)
+}
+function setRequestMode(requestMode: MonitorRequestMode) {
+  const config = props.modelValue.probe_config ?? { defaults: {} }
+  set('probe_config', { ...config, request_mode: requestMode })
 }
 function commitBody() {
   try {

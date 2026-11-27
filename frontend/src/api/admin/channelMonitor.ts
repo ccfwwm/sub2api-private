@@ -20,13 +20,18 @@ export type Provider =
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error' | 'pending'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses'
+export type MonitorRequestMode = 'sync' | 'stream'
 export interface MonitorProbePolicy {
   prompt?: string
   normal_latency_ms?: number
   request_timeout_ms?: number
   observation_timeout_ms?: number
 }
-export interface MonitorProbeConfig { defaults: MonitorProbePolicy; models?: Record<string, MonitorProbePolicy> }
+export interface MonitorProbeConfig {
+  request_mode?: MonitorRequestMode
+  defaults: MonitorProbePolicy
+  models?: Record<string, MonitorProbePolicy>
+}
 export interface MonitorDataQuality {
   sample_count_7d?: number
   sample_count_15d?: number

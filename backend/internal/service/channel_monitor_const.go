@@ -82,6 +82,9 @@ const (
 	MonitorCheckModeQuota      = "quota"
 	MonitorCheckModeQuotaProbe = "quota_probe"
 
+	MonitorRequestModeSync   = "sync"
+	MonitorRequestModeStream = "stream"
+
 	// MonitorDefaultQuotaModel 是 quota 模式监控未显式指定模型时占位的虚拟模型名
 	// （primary_model 列 NotEmpty，用 "quota" 让历史行/时间线机制无需特判）。
 	MonitorDefaultQuotaModel = "quota"

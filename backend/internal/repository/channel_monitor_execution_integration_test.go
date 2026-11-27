@@ -17,7 +17,7 @@ func TestChannelMonitorAtomicReceiptAndPolicy(t *testing.T) {
 	ctx := context.Background()
 	repo := NewChannelMonitorRepository(integrationEntClient, integrationDB).(*channelMonitorRepository)
 	prompt := "中文测试"
-	m := &service.ChannelMonitor{Name: "atomic-monitor", Provider: service.MonitorProviderOpenAI, Endpoint: "https://example.com", APIKey: "encrypted", PrimaryModel: "model", IntervalSeconds: 60, ProbeConfig: domain.MonitorProbeConfig{Models: map[string]domain.MonitorProbePolicy{"model": {Prompt: &prompt}}}}
+	m := &service.ChannelMonitor{Name: "atomic-monitor", Provider: service.MonitorProviderOpenAI, Endpoint: "https://example.com", APIKey: "encrypted", PrimaryModel: "model", IntervalSeconds: 60, ProbeConfig: domain.MonitorProbeConfig{RequestMode: service.MonitorRequestModeStream, Models: map[string]domain.MonitorProbePolicy{"model": {Prompt: &prompt}}}}
 	require.NoError(t, repo.Create(ctx, m))
 	t.Cleanup(func() { _ = repo.Delete(ctx, m.ID) })
 	loaded, err := repo.GetByID(ctx, m.ID)

@@ -1,6 +1,9 @@
 export default {
   "type": "Probe type",
   "text": "Text",
+  "requestMode": "Request mode",
+  "sync": "Synchronous",
+  "stream": "Streaming (SSE)",
   "image": "Image generation",
   "custom": "Custom endpoint",
   "manualHint": "Manual runs by default. Enabling periodic probes accepts possible upstream charges.",

@@ -1,6 +1,9 @@
 export default {
   "type": "探测类型",
   "text": "文本",
+  "requestMode": "请求方式",
+  "sync": "同步",
+  "stream": "流式（SSE）",
   "image": "图片生成",
   "custom": "自定义接口",
   "manualHint": "默认仅手动运行。启用周期检测表示接受请求可能产生的上游费用。",

@@ -54,6 +54,15 @@ func resolveMonitorPolicy(c domain.MonitorProbeConfig, model, kind string) resol
 
 func validateMonitorPolicy(c domain.MonitorProbeConfig, provider, probeType string, models []string, body map[string]any) error {
 	invalid := func(s string) error { return infraerrors.BadRequest("CHANNEL_MONITOR_INVALID_PROBE_CONFIG", s) }
+	switch c.RequestMode {
+	case "", MonitorRequestModeSync:
+	case MonitorRequestModeStream:
+		if _, ok := providerAdapters[provider]; !ok || defaultMonitorProbeType(probeType) != MonitorProbeTypeText {
+			return invalid("stream request mode requires a supported text probe")
+		}
+	default:
+		return invalid("request_mode must be sync or stream")
+	}
 	raw, err := json.Marshal(c)
 	if err != nil || len(raw) > 64<<10 || len(c.Models) > 20 {
 		return invalid("probe_config exceeds size or model limit")

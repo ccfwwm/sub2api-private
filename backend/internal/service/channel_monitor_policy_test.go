@@ -51,6 +51,16 @@ func TestMonitorPolicyThresholdAndOverrides(t *testing.T) {
 	require.Error(t, validateMonitorPolicy(c, MonitorProviderOpenAI, "image", []string{"model"}, nil))
 }
 
+func TestMonitorPolicyValidatesStreamingProbeMode(t *testing.T) {
+	stream := domain.MonitorProbeConfig{RequestMode: MonitorRequestModeStream}
+	require.Equal(t, stream, cloneMonitorPolicy(stream))
+	require.NoError(t, validateMonitorPolicy(stream, MonitorProviderOpenAI, "", []string{"model"}, nil))
+	require.Error(t, validateMonitorPolicy(stream, MonitorProviderOpenAI, "image", []string{"model"}, nil))
+	require.Error(t, validateMonitorPolicy(stream, MonitorProviderOpenAI, "custom", []string{"model"}, nil))
+	require.Error(t, validateMonitorPolicy(stream, MonitorProviderImageVideo, "", []string{"model"}, nil))
+	require.Error(t, validateMonitorPolicy(domain.MonitorProbeConfig{RequestMode: "invalid"}, MonitorProviderOpenAI, "", []string{"model"}, nil))
+}
+
 type receiptTestRepo struct {
 	ChannelMonitorRepository
 	monitor *ChannelMonitor
@@ -79,17 +89,19 @@ func TestMonitorReceiptRetryDoesNotResubmit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			posts++
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"alive"}}]}`))
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"alive\"}}]}\n\ndata: [DONE]\n\n"))
 		}
 	}))
 	defer server.Close()
 	prompt := "Say alive"
-	repo := &receiptTestRepo{fail: true, monitor: &ChannelMonitor{ID: 123, Provider: MonitorProviderOpenAI, Endpoint: server.URL, APIKey: "OLD:test", PrimaryModel: "model", ProbeConfig: domain.MonitorProbeConfig{Defaults: domain.MonitorProbePolicy{Prompt: &prompt}}}}
+	repo := &receiptTestRepo{fail: true, monitor: &ChannelMonitor{ID: 123, Provider: MonitorProviderOpenAI, Endpoint: server.URL, APIKey: "OLD:test", PrimaryModel: "model", ProbeConfig: domain.MonitorProbeConfig{RequestMode: MonitorRequestModeStream, Defaults: domain.MonitorProbePolicy{Prompt: &prompt}}}}
 	s := NewChannelMonitorService(repo, &duplicateChannelMonitorEncryptor{})
 	s.SetRuntimeReader(mediaCancellationRuntimeReader{})
 	results, err := s.RunCheck(context.Background(), 123)
 	require.Error(t, err)
 	require.Len(t, results, 1)
+	require.Equal(t, MonitorStatusOperational, results[0].Status)
 	require.Equal(t, 1, posts)
 	repo.fail = false
 	replayed, err := s.RunCheck(context.Background(), 123)

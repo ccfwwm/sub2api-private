@@ -184,6 +184,23 @@ describe('MonitorFormDialog linked account selector', () => {
     expect(monitorUpdate.mock.calls[1][1]).toMatchObject({ probe_type: 'image', image_probe_schedule_enabled: true })
   })
 
+  it('loads a saved streaming probe and can switch it back to sync', async () => {
+    const wrapper = mountDialog(makeMonitor({
+      api_mode: 'responses',
+      probe_config: { request_mode: 'stream', defaults: { prompt: 'Say OK' } },
+    }))
+    await flushPromises()
+    const requestMode = wrapper.get<HTMLSelectElement>('[data-testid="probe-request-mode"]')
+    expect(requestMode.element.value).toBe('stream')
+    await requestMode.setValue('sync')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({
+      api_mode: 'responses',
+      probe_config: { request_mode: 'sync', defaults: { prompt: 'Say OK' } },
+    }))
+  })
+
   it('saves custom method, path, headers and body without requiring a model', async () => {
     const wrapper = mountDialog(makeMonitor({ primary_model: '', extra_headers: { 'X-Probe': 'value' } }))
     await flushPromises()
@@ -422,18 +439,20 @@ describe('MonitorFormDialog linked account selector', () => {
   })
 
   // P2-7(c)：create 绝不发 0（后端会把 0 存成 &0 触发外键违约），保持 null。
-  it('keeps account_id null when creating a probe monitor', async () => {
+  it('creates a streaming probe monitor without a linked account', async () => {
     const wrapper = mountDialog()
     await flushPromises()
 
     await wrapper.findAll('input[type="text"]')[0].setValue('my monitor')
     await wrapper.get('[data-testid="monitor-primary-model"]').setValue('claude-sonnet-4-5')
+    await wrapper.get('[data-testid="probe-request-mode"]').setValue('stream')
     await wrapper.get('#channel-monitor-form').trigger('submit')
     await flushPromises()
 
     expect(monitorCreate).toHaveBeenCalledWith(expect.objectContaining({
       check_mode: 'probe',
       account_id: null,
+      probe_config: expect.objectContaining({ request_mode: 'stream' }),
     }))
   })
 })
