@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {API_ORIGIN, buildRequest, categories, dataURLToMaterial, docsVersionBadge, endpointFor, endpointForStreaming, fullMarkdown, inputMaterialsFor, loadDocsVersion, navigationGroups, optionValues, parseErrorMessage, parseGeneralModels, parseMaterialText, parsePendingRecovery, previewRequestTimeoutMs, profilesForCategory, requestTimeoutMs, serializePendingRecovery, taskBillingSummary, taskPhaseLabel} from './app.mjs'
 import {readFile} from 'node:fs/promises'
-import {filterDocumentation} from './app.mjs'
+import {documentationLink,filterDocumentation,renderDocumentationBlock,sectionMarkdown} from './app.mjs'
 
 test('documentation search accepts multiple terms and preserves the directory for unmatched input', () => {
   const index = [
@@ -49,18 +49,52 @@ test('configuration and troubleshooting navigation resolves every page from its 
   const media=JSON.parse(await readFile(new URL('../docs/multimodal/imagevideo-content.json',import.meta.url),'utf8'))
   const ids=new Set([...knowledge,...general,...media].map(section=>section.id))
   assert.ok(navigationGroups.some(group=>group.title==='快速上手'))
-  assert.ok(navigationGroups.some(group=>group.title==='客户端配置与接入选型'))
-  assert.ok(navigationGroups.some(group=>group.title==='常见报错与排查'))
-  assert.ok(navigationGroups.find(group=>group.title==='常见报错与排查').sections.includes('api-404-html'))
+  assert.ok(navigationGroups.some(group=>group.title==='国内使用与选型'))
+  assert.ok(navigationGroups.find(group=>group.title==='常见报错与接入').sections.includes('api-404-html'))
   for(const group of navigationGroups)for(const id of group.sections)assert.ok(ids.has(id),`${id} should have a rendered document`)
   assert.match(knowledge.find(section=>section.id==='api-key-401').title,/401/)
   assert.match(JSON.stringify(knowledge.find(section=>section.id==='api-key-401')),/x-goog-api-key/)
   assert.ok(knowledge.find(section=>section.id==='chatgpt-model-not-found').blocks.some(block=>block.text?.includes('wire_api = "responses"')))
-  assert.ok(knowledge.find(section=>section.id==='cc-switch-config').blocks.some(block=>block.text==='CC Switch 常见问题'))
+  assert.ok(knowledge.find(section=>section.id==='cc-switch-config').blocks.some(block=>block.kind==='heading'&&block.text==='常见问题'))
   assert.match(knowledge.find(section=>section.id==='api-404-html').title,/404/)
   assert.match(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/https:\/\/code\.aicodeme\.xyz\/v1\/chat\/completions/)
   assert.doesNotMatch(general.find(section=>section.id==='guide').blocks.find(block=>block.label==='cURL').text,/\n\+/)
   assert.doesNotMatch(fullMarkdown([...knowledge,...general,...media]),/apikl\.ai|code\.aicodeme\.cn/)
+})
+
+test('all 28 guides have full article bodies and their links resolve to published sections',async()=>{
+  const catalog=JSON.parse(await readFile(new URL('./knowledge-content.json',import.meta.url),'utf8'))
+  const guides=catalog.filter(page=>page.slug)
+  const ids=new Set(navigationGroups.flatMap(group=>group.sections))
+  assert.equal(guides.length,28)
+  assert.equal(new Set(guides.map(page=>page.slug)).size,guides.length)
+  for(const page of guides){
+    assert.ok(page.lead.length&&page.blocks.length>=6,page.id)
+    for(const [,id] of JSON.stringify(page).matchAll(/"a","#([a-z0-9-]+)"/g))assert.ok(ids.has(id),`${page.id}: ${id}`)
+  }
+  const desktop=guides.find(page=>page.id==='codex-desktop')
+  const article=sectionMarkdown(desktop)
+  assert.match(article,/Microsoft|微软商店/)
+  assert.match(article,/9PLM9XGG6VKS/)
+  assert.match(article,/https:\/\/code\.aicodeme\.xyz\/v1/)
+  assert.match(article,/### 常见问题与报错/)
+  const config=guides.find(page=>page.id==='codex-config')
+  assert.ok(config.blocks.some(block=>block.kind==='code'&&block.text.includes('setx OPENAI_API_KEY')))
+  assert.ok(config.blocks.filter(block=>block.kind==='code').length>=10)
+})
+
+test('rich content renders escaped markup and rejects unsafe links',()=>{
+  const callout=renderDocumentationBlock({kind:'callout',content:[
+    '<script>', ['strong','重点'], ['code','/v1'], ['a','javascript:alert(1)','bad'], ['a','#codex-config','教程'],
+  ]})
+  assert.match(callout,/&lt;script&gt;<strong>重点<\/strong><code>\/v1<\/code>bad<a href="#codex-config">教程<\/a>/)
+  assert.doesNotMatch(callout,/javascript:/)
+  assert.equal(documentationLink('https://user:password@example.org'),'')
+  assert.equal(documentationLink('//example.org'),'')
+  const sample=renderDocumentationBlock({kind:'code',label:'Bash',text:'curl "https://example.org"\n  # note'},'',true)
+  assert.equal((sample.match(/class="code-line"/g)||[]).length,2)
+  assert.match(sample,/class="code-string"/)
+  assert.match(sample,/class="code-comment"/)
 })
 
 test('documentation sidebar version follows public settings and has a safe fallback', async()=>{

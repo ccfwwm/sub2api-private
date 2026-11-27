@@ -34,19 +34,75 @@ export const categories = [
 ]
 export const navigationGroups = [
   { title:'快速上手', sections:['guide','cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config','why-aicodeme','about-aicodeme'] },
-  { title:'客户端配置与接入选型', sections:['claude-api-cn','chatgpt-cn','cline-roo-config','cursor-openai-compatible','api-relay-selection','openai-compatible'] },
-  { title:'常见报错与排查', sections:['api-key-401','api-404-html','model-not-exist','chatgpt-model-not-found','api-errors','balance-query','errors'] },
-  { title:'图片接口接入', sections:['image-api','banana-image-api'] },
+  { title:'常见报错与接入', sections:['openai-compatible','api-key-401','model-not-exist','chatgpt-model-not-found','cline-roo-config','api-errors','balance-query','image-api','banana-image-api','api-404-html','errors'] },
+  { title:'国内使用与选型', sections:['claude-api-cn','chatgpt-cn','api-relay-selection','cursor-openai-compatible'] },
   { title:'文本与图片接口', sections:['text-api','gpt-text','gpt-edit','gpt-result','gemini','gemini-result'] },
   { title:'视频与音频接口', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
   { title:'模型、任务与客户端', sections:['start','models','tasks','clients'] },
 ]
+const inlineTags = new Set(['strong','em','code'])
+const listTags = new Set(['ul','ol','li','p'])
+
+export function documentationLink(href) {
+  if(typeof href!=='string')return ''
+  if(/^#[a-z0-9-]+$/.test(href))return href
+  try {
+    const url=new URL(href)
+    return url.protocol==='https:'&&!url.username&&!url.password?url.href:''
+  } catch { return '' }
+}
+
+function inlineMarkup(nodes, markdown=false) {
+  return nodes.map(node=>{
+    if(typeof node==='string')return markdown?node:escape(node)
+    const [tag,...children]=node
+    if(tag==='br')return markdown?'  \n':'<br>'
+    if(tag==='a') {
+      const url=documentationLink(children[0]),label=inlineMarkup(children.slice(1),markdown)
+      return !url?label:markdown?`[${label}](${url})`:`<a href="${escape(url)}"${url.startsWith('#')?'':' target="_blank" rel="noopener noreferrer"'}>${label}</a>`
+    }
+    const value=inlineMarkup(children,markdown)
+    if(markdown&&tag==='code') {
+      const fence='`'.repeat(1+Math.max(0,...[...value.matchAll(/`+/g)].map(match=>match[0].length)))
+      return `${fence}${value.includes('`')?' ':''}${value}${value.includes('`')?' ':''}${fence}`
+    }
+    if(markdown&&tag==='strong')return `**${value}**`
+    if(markdown&&tag==='em')return `*${value}*`
+    return !markdown&&inlineTags.has(tag)?`<${tag}>${value}</${tag}>`:value
+  }).join('')
+}
+
+function listMarkup(node, markdown=false, depth=0) {
+  const [tag,...children]=node
+  if(!listTags.has(tag))return ''
+  if(tag==='p')return markdown?inlineMarkup(children,true):`<p>${inlineMarkup(children)}</p>`
+  if(tag==='li') {
+    const parts=children.map(child=>Array.isArray(child)&&listTags.has(child[0])?listMarkup(child,markdown,depth+1):inlineMarkup([child],markdown))
+    return markdown?parts.join('').trim():`<li>${parts.join('')}</li>`
+  }
+  const items=children.filter(child=>Array.isArray(child)&&child[0]==='li')
+  if(!markdown)return `<${tag}>${items.map(item=>listMarkup(item)).join('')}</${tag}>`
+  const indent='  '.repeat(Math.max(0,depth-1))
+  return (depth>1?'\n':'')+items.map((item,index)=>`${indent}${tag==='ol'?`${index+1}.`:'-'} ${listMarkup(item,true,depth)}`).join('\n')
+}
+
+const plainText = nodes => nodes.map(node=>typeof node==='string'?node:plainText(node.slice(node[0]==='a'?2:1))).join('')
+const headingText = block => block.content?plainText(block.content):block.text
+const cellMarkup = (cell,markdown=false) => Array.isArray(cell)?inlineMarkup(cell,markdown):markdown?String(cell):escape(cell)
+
 export function sectionMarkdown(section) {
-  const row = cells => '| '+cells.map(v=>String(v).replaceAll('|','\\|').replaceAll('\n','<br>')).join(' | ')+' |'
-  return `## ${section.title}\n\n${section.subtitle}\n\n`+section.blocks.map(b=>{
-    if(b.kind==='heading') return '### '+b.text
+  const row = cells => '| '+cells.map(v=>cellMarkup(v,true).replaceAll('|','\\|').replaceAll('\n','<br>')).join(' | ')+' |'
+  const intro=section.lead?inlineMarkup(section.lead,true):section.subtitle
+  return `## ${section.title}\n\n${intro||''}\n\n`+section.blocks.map(b=>{
+    if(b.kind==='heading') return `${b.level===3?'####':'###'} ${b.content?inlineMarkup(b.content,true):b.text}`
+    if(b.kind==='paragraph') return inlineMarkup(b.content,true)
+    if(b.kind==='callout') return `> ${inlineMarkup(b.content,true)}`
+    if(b.kind==='list') return listMarkup(b.content,true)
     if(b.kind==='endpoint') return `**${b.method}** ${API_ORIGIN}${b.path}`
-    if(b.kind==='code') return `### ${b.label}\n\n\`\`\`${b.language}\n${b.text}\n\`\`\``
+    if(b.kind==='code') {
+      const fence='`'.repeat(1+Math.max(2,...[...b.text.matchAll(/`{3,}/g)].map(match=>match[0].length)))
+      return `### ${b.label}\n\n${fence}${b.language}\n${b.text}\n${fence}`
+    }
     if(b.kind==='table') return [row(b.headers),row(b.headers.map(()=>'---')),...b.rows.map(row)].join('\n')
     return b.text
   }).join('\n\n')
@@ -167,6 +223,29 @@ export function buildRequest(cap, operation, fields, materials={}) {
   return p
 }
 const escape = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+function codeLine(line) {
+  return line.split(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?:^|\s)#.*$)/g).map((part,index)=>
+    index%2?`<span class="${part.trimStart().startsWith('#')?'code-comment':'code-string'}">${escape(part)}</span>`:escape(part)
+  ).join('')
+}
+
+export function renderDocumentationBlock(block, headingID='', rich=false) {
+  if(block.kind==='heading') {
+    const tag=block.level===2?'h2':'h3'
+    return `<${tag} id="${escape(headingID)}" class="hash-anchor">${block.content?inlineMarkup(block.content):escape(block.text)}</${tag}>`
+  }
+  if(block.kind==='text')return `<p>${escape(block.text)}</p>`
+  if(block.kind==='paragraph')return `<p>${inlineMarkup(block.content)}</p>`
+  if(block.kind==='list')return listMarkup(block.content)
+  if(block.kind==='callout')return `<div class="guide-callout"><div>${inlineMarkup(block.content)}</div></div>`
+  if(block.kind==='endpoint')return `<div class="endpoint"><b>${escape(block.method)}</b><code>${escape(API_ORIGIN+block.path)}</code></div>`
+  if(block.kind==='code') {
+    const content=rich?block.text.split('\n').map(line=>`<span class="code-line">${codeLine(line)}</span>`).join(''):escape(block.text)
+    return `<div class="code"><div class="code-title"><span>${escape(block.label)}</span><button type="button" data-copy>复制</button></div><pre><code>${content}</code></pre></div>`
+  }
+  if(block.kind==='table')return `<div class="table" tabindex="0" role="region" aria-label="文档表格"><table><thead><tr>${block.headers.map(cell=>`<th scope="col">${cellMarkup(cell)}</th>`).join('')}</tr></thead><tbody>${block.rows.map(row=>`<tr>${row.map(cell=>`<td>${cellMarkup(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  return ''
+}
 const pretty=v=>JSON.stringify(v,(key,value)=>typeof value==='string'&&(key==='b64_json'||(key==='data'&&/^[A-Za-z0-9+/\r\n]+={0,2}$/.test(value))||value.startsWith('data:')||value.length>4000)?`[编码内容已省略，${value.length} 字符]`:value,2)
 
 const normalizeSearch = text => text.normalize('NFKC').toLowerCase().trim()
@@ -214,20 +293,27 @@ async function start() {
   loadDocsVersion().then(label=>{const badge=$('#api-version');if(badge)badge.textContent=label})
   const notice=(message,error=false)=>{$('#notice').textContent=message;$('#notice').classList.toggle('error',error)}
   const copy=async text=>{try{await navigator.clipboard.writeText(text);notice('已复制')}catch{notice('复制失败，请手动选择内容',true)}}
+  const copyArticle=async (button,text)=>{
+    if(button.getAttribute('aria-disabled')==='true')return
+    const label=button.textContent
+    button.setAttribute('aria-disabled','true')
+    try{await navigator.clipboard.writeText(text);button.textContent='已复制'}
+    catch{button.textContent='复制失败'}
+    setTimeout(()=>{button.textContent=label;button.removeAttribute('aria-disabled')},1600)
+  }
   const allSections=()=>[...knowledgeSections,...generalSections,...sections]
   const sectionsByID = new Map(allSections().map(section => [section.id, section]))
+  const aliases = new Map(knowledgeSections.filter(section=>section.slug).map(section=>[section.slug,section]))
   const directory = navigationGroups.map(group => ({
     title: group.title,
     items: group.sections.map(id => sectionsByID.get(id)).filter(Boolean),
   }))
   const searchIndex = directory.flatMap(group => group.items.map(section => ({
     id: section.id,
-    text: normalizeSearch([group.title, section.id, section.title, section.navTitle, section.subtitle, JSON.stringify(section.blocks)].join(' ')),
+    text: normalizeSearch([group.title, section.id, section.slug, section.title, section.navTitle, section.lead?plainText(section.lead):section.subtitle, JSON.stringify(section.blocks)].join(' ')),
   })))
-  const selectedSections=()=>allSections().filter(section=>section.id===activeSectionID)
   const categoryForSection=id=>categories.find(item=>item.sections.includes(id))||categories[0]
-  const code=b=>`<div class="code"><div class="code-title"><span>${escape(b.label)}</span><button data-copy>复制</button></div><pre><code>${escape(b.text)}</code></pre></div>`
-  const block=b=>b.kind==='heading'?`<h3>${escape(b.text)}</h3>`:b.kind==='text'?`<p>${escape(b.text)}</p>`:b.kind==='endpoint'?`<div class="endpoint"><b>${escape(b.method)}</b><code>${escape(API_ORIGIN+b.path)}</code></div>`:b.kind==='code'?code(b):`<div class="table"><table><thead><tr>${b.headers.map(x=>`<th>${escape(x)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r=>`<tr>${r.map(c=>`<td>${escape(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  const code=b=>renderDocumentationBlock({...b,kind:'code'})
   function renderNavigation() {
     const query = normalizeSearch(docSearch)
     const { ids, filtering } = filterDocumentation(searchIndex, query)
@@ -247,27 +333,38 @@ async function start() {
     }).join('')
   }
   function view() {
-    const page=selectedSections()[0]
+    const page=sectionsByID.get(activeSectionID)
+    const guide=activeSectionID==='guide'||Boolean(page?.lead)
+    $('main').classList.toggle('reading-guide',guide)
     $('h1').textContent=page?.title||category.title; document.title=(page?.title||category.title)+' · 词元互联'
     $('#page-toc').hidden=tab==='在线调试'
     $('#header-controls').hidden=tab!=='在线调试'
     if (tab === '在线调试' && $('#key').type === 'hidden') $('#key').type = 'password'
     renderNavigation()
-    const tabs=category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
+    const tabs=guide?['文档']:category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
     if(!tabs.includes(tab))tab=tabs[0]
+    $('.tabs').hidden=guide
     $('.tabs').innerHTML=tabs.map(t=>`<button role="tab" aria-selected="${t===tab}" class="${t===tab?'active':''}">${t}</button>`).join('')
     if(tab==='在线调试') {debug();return}
     const blocks=(page?.blocks||[]).map((block,index)=>({block,id:`page-heading-${index}`})).filter(({block})=>{
-      if(tab==='文档'||tab==='接口文档')return block.kind!=='code'||block.language==='http'
+      if(tab==='文档'||tab==='接口文档')return guide||block.kind!=='code'||block.language==='http'
       if(tab==='代码示例')return block.kind==='code'
       return block.kind==='code'&&(tab==='输出示例'?block.language==='json':block.language!=='json'&&block.language!=='http')
     })
-    $('article').innerHTML=page?`<section id="page-top" class="hash-anchor"><h2>${escape(page.title)}</h2><p class="page-subtitle">${escape(page.subtitle)}</p>${blocks.map(({block:item,id})=>item.kind==='heading'?`<h3 id="${id}" class="hash-anchor">${escape(item.text)}</h3>`:block(item)).join('')}<div class="buttons"><button id="copy-group">复制本页 Markdown</button></div></section>`:''
-    const headings=blocks.flatMap(({block,id})=>block.kind==='heading'?[{id,text:block.text}]:[])
-    $('#page-toc').innerHTML=`<strong>本页目录</strong><button data-toc-target="page-top">${escape(page?.navTitle||page?.title||'')}</button>${headings.map(item=>`<button data-toc-target="${item.id}">${escape(item.text)}</button>`).join('')}`
+    const metadata=guide?`<div class="guide-meta"><button id="share-guide" type="button">复制本页链接</button>${page.updated?`<time datetime="${escape(page.updated)}">更新于 ${escape(page.updated)}</time>`:''}</div>`:''
+    const intro=page?.lead?inlineMarkup(page.lead):escape(page?.subtitle)
+    $('article').innerHTML=page?`<section id="page-top" class="hash-anchor">${metadata}<p class="page-subtitle">${intro}</p>${blocks.map(({block,id})=>renderDocumentationBlock(block,id,guide)).join('')}<div class="buttons"><button id="copy-group" type="button">复制本页 Markdown</button></div></section>`:''
+    const headings=blocks.flatMap(({block,id})=>block.kind==='heading'?[{id,text:headingText(block),level:block.level}]:[])
+    $('#page-toc').innerHTML=`<strong>本页目录</strong><button data-toc-target="page-top">${escape(page?.navTitle||page?.title||'')}</button>${headings.map(item=>`<button data-toc-target="${item.id}"${item.level===3?' class="toc-subheading"':''}>${escape(item.text)}</button>`).join('')}`
     $('#page-toc').onclick=event=>{const target=event.target.closest('[data-toc-target]');if(target)document.getElementById(target.dataset.tocTarget)?.scrollIntoView({behavior:'smooth',block:'start'})}
-    $('#copy-group').onclick=()=>copy(page?sectionMarkdown(page):'')
-    $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>copy(button.closest('.code').querySelector('code').textContent))
+    if(!page)return
+    if(guide)$('#share-guide').onclick=event=>copyArticle(event.currentTarget,`${API_ORIGIN}/media-docs/#${page.id}`)
+    $('#copy-group').onclick=event=>copyArticle(event.currentTarget,sectionMarkdown(page))
+    $('article').querySelectorAll('[data-copy]').forEach(button=>button.onclick=()=>{
+      const code=button.closest('.code').querySelector('code')
+      const lines=guide?[...code.querySelectorAll('.code-line')]:[]
+      copyArticle(button,guide?lines.map(line=>line.textContent).join('\n'):code.textContent)
+    })
   }
   const filtered=()=>category.id==='text'?generalModels:profilesForCategory(profiles,category)
   function debugText() {
@@ -625,7 +722,7 @@ async function start() {
     let hash = location.hash.slice(1)
     try { hash = decodeURIComponent(hash) } catch {}
     const previous = activeSectionID
-    const page = sectionsByID.get(hash)
+    const page = sectionsByID.get(hash) || aliases.get(hash)
     category = page ? categoryForSection(page.id) : categories.find(item => item.id === hash) || categories[0]
     activeSectionID = page?.id || category.sections[0]
     tab = category.ops.length ? '接口文档' : '文档'
