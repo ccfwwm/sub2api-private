@@ -33,12 +33,13 @@ export const categories = [
   { id:'tasks', title:'任务查询与错误处理', sections:['start','models','tasks','errors','clients'], ops:[] },
 ]
 export const navigationGroups = [
-  { title:'快速上手', sections:['guide','cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config','why-aicodeme','about-aicodeme'] },
-  { title:'常见报错与接入', sections:['openai-compatible','api-key-401','model-not-exist','chatgpt-model-not-found','cline-roo-config','api-errors','balance-query','image-api','banana-image-api','api-404-html','errors'] },
-  { title:'国内使用与选型', sections:['claude-api-cn','chatgpt-cn','api-relay-selection','cursor-openai-compatible'] },
-  { title:'文本与图片接口', sections:['text-api','gpt-text','gpt-edit','gpt-result','gemini','gemini-result'] },
+  { title:'快速上手', sections:['guide','openai-compatible','start','models'] },
+  { title:'客户端配置', sections:['cc-switch-config','nodejs-environment','codex-config','codex-cli','codex-desktop','codex-import','claude-code-config','claude-code-usage','gemini-api-cli','cursor-openai-compatible','cline-roo-config','trae-solo-config','workbuddy-config','openclaw-config','hermes-agent-config'] },
+  { title:'文本与图片接口', sections:['text-api','image-api','gpt-text','gpt-edit','gpt-result','banana-image-api','gemini','gemini-result'] },
   { title:'视频与音频接口', sections:['grok-video-submit','grok-video-image','grok-video-result','omni-video-submit','omni-video-result','veo-text','veo-result','other-video','video-reference','audio-chat','audio-submit','audio-compat','audio-task-flow','audio-speech'] },
-  { title:'模型、任务与客户端', sections:['start','models','tasks','clients'] },
+  { title:'任务、用量与示例', sections:['tasks','balance-query','clients'] },
+  { title:'使用场景与选型', sections:['claude-api-cn','chatgpt-cn','api-relay-selection','why-aicodeme','about-aicodeme'] },
+  { title:'常见报错与故障排查', sections:['api-errors','api-key-401','api-404-html','model-not-exist','chatgpt-model-not-found','errors'] },
 ]
 const inlineTags = new Set(['strong','em','code'])
 const listTags = new Set(['ul','ol','li','p'])
@@ -232,7 +233,7 @@ function codeLine(line) {
 export function renderDocumentationBlock(block, headingID='', rich=false) {
   if(block.kind==='heading') {
     const tag=block.level===2?'h2':'h3'
-    return `<${tag} id="${escape(headingID)}" class="hash-anchor">${block.content?inlineMarkup(block.content):escape(block.text)}</${tag}>`
+    return `<${tag} id="${escape(headingID)}" class="hash-anchor" tabindex="-1">${block.content?inlineMarkup(block.content):escape(block.text)}</${tag}>`
   }
   if(block.kind==='text')return `<p>${escape(block.text)}</p>`
   if(block.kind==='paragraph')return `<p>${inlineMarkup(block.content)}</p>`
@@ -263,14 +264,38 @@ async function start() {
   const objectURLs=new Set()
   if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
-  root.innerHTML=`<button class="mobile-menu" id="menu" type="button" aria-controls="document-sidebar" aria-expanded="false">☰ 词元互联 · 接口文档</button><div class="portal-grid"><aside id="document-sidebar"><a class="brand" href="/" target="_top">词元互联</a><form class="nav-search" role="search" aria-label="文档搜索" autocomplete="off">
-      <label for="doc-search">搜索文档</label>
+  root.innerHTML=`<button class="mobile-menu" id="menu" type="button" aria-controls="document-sidebar" aria-expanded="false">文档目录</button>
+    <div class="portal-grid">
+    <aside id="document-sidebar">
+    <a class="brand" href="/" target="_top">词元互联</a>
+    <form class="nav-search" role="search" aria-label="文档搜索" autocomplete="off">
       <div class="nav-search-field">
-        <input id="doc-search" name="documentation-query" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="教程、错误码、接口" aria-controls="document-navigation" aria-describedby="doc-search-status">
+        <input id="doc-search" name="documentation-query" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="搜索文档" aria-label="搜索文档" aria-controls="document-navigation" aria-describedby="doc-search-status">
         <button id="doc-search-clear" type="button" aria-label="清除搜索" hidden>清除</button>
       </div>
       <p id="doc-search-status" role="status" hidden></p>
-    </form><nav id="document-navigation" aria-label="文档目录"></nav><div class="aside-foot"><span id="api-version">接口文档</span><button id="theme">☾ 深色</button><p>调试 Key 仅保存在本页内存。关闭页面后清除。</p></div></aside><main><header><div><span class="eyebrow">开发者文档</span><h1 tabindex="-1"></h1></div><div id="header-controls" hidden><div class="tools"><input id="key" type="hidden" autocomplete="off" spellcheck="false" placeholder="调试时输入 API Key" aria-label="API Key"><button id="show-key">显示</button><button id="load" class="primary">加载可用模型</button></div><div class="notice" role="status" id="notice">在线调试时填写 API Key。</div></div></header><div class="tabs" role="tablist"></div><div class="content-grid"><article></article><nav id="page-toc" aria-label="本页目录"></nav></div><footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer></main></div>`
+    </form>
+    <nav id="document-navigation" aria-label="文档目录" tabindex="0"></nav>
+    <div class="aside-foot"><span id="api-version">接口文档</span><button id="theme" type="button">☾ 深色</button></div>
+    </aside>
+    <main>
+      <header>
+        <div><span id="page-group" class="eyebrow"></span><h1 tabindex="-1"></h1></div>
+        <div id="header-controls" hidden><div class="tools">
+          <input id="key" type="hidden" autocomplete="off" spellcheck="false" placeholder="调试时输入 API Key" aria-label="API Key">
+          <button id="show-key" type="button">显示</button><button id="load" class="primary" type="button">加载可用模型</button>
+        </div><div class="notice" role="status" id="notice">在线调试时填写 API Key。</div>
+        <p class="key-note">API Key 仅保存在本页内存，关闭页面后清除。</p></div>
+      </header>
+      <div class="tabs" role="tablist"></div>
+      <nav id="page-toc" aria-label="本页目录" hidden>
+        <strong class="toc-label">本页目录</strong>
+        <button id="page-toc-toggle" type="button" class="toc-toggle" aria-expanded="false" aria-controls="page-toc-links">本页目录</button>
+        <div id="page-toc-links" role="group" aria-label="章节" tabindex="0"></div>
+      </nav>
+      <article></article>
+      <footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer>
+    </main></div>`
   const $=s=>root.querySelector(s)
   const search = $('#doc-search')
   const clearSearchButton = $('#doc-search-clear')
@@ -278,6 +303,12 @@ async function start() {
   const navigation = $('#document-navigation')
   const menu = $('#menu')
   const sidebar = $('#document-sidebar')
+  const main = $('main')
+  const pageToc = $('#page-toc')
+  const tocLinks = $('#page-toc-links')
+  const tocToggle = $('#page-toc-toggle')
+  const closedGroups = new Set()
+  let tocEntries = [], currentChapter = null, chapterFrame = 0
   const isAutofilled = input => input.matches(':autofill')
   let parentThemeObserver=null
   if(new URLSearchParams(location.search).get('embedded')==='1'){
@@ -306,14 +337,26 @@ async function start() {
   const aliases = new Map(knowledgeSections.filter(section=>section.slug).map(section=>[section.slug,section]))
   const directory = navigationGroups.map(group => ({
     title: group.title,
-    items: group.sections.map(id => sectionsByID.get(id)).filter(Boolean),
+    items: group.sections.map(id => sectionsByID.get(id)).filter(Boolean).map(section => {
+      const [provider] = section.title.split(' · ')
+      const label = section.navTitle || section.title
+      return {section,label:provider === section.title || label.startsWith(provider) ? label : `${provider} · ${label}`}
+    }),
   }))
-  const searchIndex = directory.flatMap(group => group.items.map(section => ({
+  const groupBySection = new Map(directory.flatMap(group => group.items.map(({section}) => [section.id,group.title])))
+  const searchIndex = directory.flatMap(group => group.items.map(({section,label}) => ({
     id: section.id,
-    text: normalizeSearch([group.title, section.id, section.slug, section.title, section.navTitle, section.lead?plainText(section.lead):section.subtitle, JSON.stringify(section.blocks)].join(' ')),
+    text: normalizeSearch([group.title, section.id, section.slug, section.title, label, section.lead?plainText(section.lead):section.subtitle, JSON.stringify(section.blocks)].join(' ')),
   })))
   const categoryForSection=id=>categories.find(item=>item.sections.includes(id))||categories[0]
   const code=b=>renderDocumentationBlock({...b,kind:'code'})
+  function revealInDirectory(scroller,item) {
+    if (!item?.getClientRects().length) return
+    const bounds = scroller.getBoundingClientRect()
+    const row = item.getBoundingClientRect()
+    if(row.top < bounds.top + 6) scroller.scrollTop += row.top - bounds.top - 6
+    else if(row.bottom > bounds.bottom - 6) scroller.scrollTop += row.bottom - bounds.bottom + 6
+  }
   function renderNavigation() {
     const query = normalizeSearch(docSearch)
     const { ids, filtering } = filterDocumentation(searchIndex, query)
@@ -324,28 +367,100 @@ async function start() {
       : ''
     clearSearchButton.hidden = !search.value
     navigation.innerHTML = directory.map(group => {
-      const items = filtering ? group.items.filter(section => matches.has(section.id)) : group.items
+      const items = filtering ? group.items.filter(({section}) => matches.has(section.id)) : group.items
       if (!items.length) return ''
-      return `<details class="nav-group" open><summary>${escape(group.title)}</summary><div>${items.map(section => {
+      const open = filtering || !closedGroups.has(group.title)
+      return `<details class="nav-group"${open?' open':''}><summary>${escape(group.title)}</summary><div>${items.map(({section,label}) => {
         const selected = section.id === activeSectionID
-        return `<a href="#${escape(section.id)}"${selected ? ' class="active" aria-current="page"' : ''}>${escape(section.navTitle || section.title)}</a>`
+        return `<a href="#${escape(section.id)}"${selected ? ' class="active" aria-current="page"' : ''}>${escape(label)}</a>`
       }).join('')}</div></details>`
     }).join('')
   }
+
+  function selectDocumentInNavigation() {
+    const selected = navigation.querySelector('.active')
+    selected?.classList.remove('active')
+    selected?.removeAttribute('aria-current')
+    const current = navigation.querySelector(`a[href="#${CSS.escape(activeSectionID)}"]`)
+    if(!current) return
+    const group = current.closest('details')
+    group.open = true
+    closedGroups.delete(groupBySection.get(activeSectionID))
+    current.classList.add('active')
+    current.setAttribute('aria-current','page')
+    revealInDirectory(navigation,current)
+  }
+
+  function syncCurrentChapter() {
+    const offset = parseFloat(getComputedStyle(tocEntries[0].heading).scrollMarginTop) + 8
+    let current = tocEntries[0].button
+    for (const {heading,button} of tocEntries) {
+      if (heading.getBoundingClientRect().top > offset) break
+      current = button
+    }
+    if(window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+      current = tocEntries.at(-1).button
+    }
+    if(current === currentChapter) return
+    currentChapter?.removeAttribute('aria-current')
+    currentChapter = current
+    current.setAttribute('aria-current','location')
+    revealInDirectory(tocLinks,current)
+  }
+
+  function scheduleChapterSync() {
+    if (chapterFrame || !tocEntries.length) return
+    chapterFrame = requestAnimationFrame(() => {
+      chapterFrame = 0
+      if (tocEntries.length) syncCurrentChapter()
+    })
+  }
+
+  function renderPageToc(headings) {
+    tocToggle.setAttribute('aria-expanded','false')
+    currentChapter = null
+    pageToc.hidden = !headings.length
+    main.classList.toggle('has-page-toc',!pageToc.hidden)
+    tocLinks.innerHTML = headings.map(({id,text,level}) =>
+      `<button type="button" data-toc-target="${id}"${level===3?' class="toc-subheading"':''}>${escape(text)}</button>`
+    ).join('')
+    tocLinks.scrollTop = 0
+    tocEntries = [...tocLinks.children].map(button => ({heading:document.getElementById(button.dataset.tocTarget),button}))
+    if (tocEntries.length) syncCurrentChapter()
+  }
+
+  tocToggle.onclick = () => {
+    const open = tocToggle.getAttribute('aria-expanded') !== 'true'
+    tocToggle.setAttribute('aria-expanded',String(open))
+    if (open) revealInDirectory(tocLinks,currentChapter)
+  }
+
+  tocLinks.onclick = event => {
+    const button = event.target.closest('[data-toc-target]')
+    if (!button) return
+    const heading = document.getElementById(button.dataset.tocTarget)
+    const inline = tocToggle.getClientRects().length > 0
+    if (inline) tocToggle.setAttribute('aria-expanded','false')
+    if (inline || event.detail === 0) heading.focus({preventScroll:true})
+    heading.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'})
+  }
+
+  window.addEventListener('scroll',scheduleChapterSync,{passive:true})
+  window.addEventListener('resize',scheduleChapterSync)
+
   function view() {
     const page=sectionsByID.get(activeSectionID)
     const guide=activeSectionID==='guide'||Boolean(page?.lead)
-    $('main').classList.toggle('reading-guide',guide)
+    main.classList.toggle('reading-guide',guide)
+    $('#page-group').textContent=groupBySection.get(activeSectionID)||''
     $('h1').textContent=page?.title||category.title; document.title=(page?.title||category.title)+' · 词元互联'
-    $('#page-toc').hidden=tab==='在线调试'
     $('#header-controls').hidden=tab!=='在线调试'
     if (tab === '在线调试' && $('#key').type === 'hidden') $('#key').type = 'password'
-    renderNavigation()
     const tabs=guide?['文档']:category.ops.length?['接口文档','输入示例','输出示例','在线调试']:['文档','代码示例']
     if(!tabs.includes(tab))tab=tabs[0]
     $('.tabs').hidden=guide
     $('.tabs').innerHTML=tabs.map(t=>`<button role="tab" aria-selected="${t===tab}" class="${t===tab?'active':''}">${t}</button>`).join('')
-    if(tab==='在线调试') {debug();return}
+    if(tab==='在线调试') {renderPageToc([]);debug();return}
     const blocks=(page?.blocks||[]).map((block,index)=>({block,id:`page-heading-${index}`})).filter(({block})=>{
       if(tab==='文档'||tab==='接口文档')return guide||block.kind!=='code'||block.language==='http'
       if(tab==='代码示例')return block.kind==='code'
@@ -355,8 +470,7 @@ async function start() {
     const intro=page?.lead?inlineMarkup(page.lead):escape(page?.subtitle)
     $('article').innerHTML=page?`<section id="page-top" class="hash-anchor">${metadata}<p class="page-subtitle">${intro}</p>${blocks.map(({block,id})=>renderDocumentationBlock(block,id,guide)).join('')}<div class="buttons"><button id="copy-group" type="button">复制本页 Markdown</button></div></section>`:''
     const headings=blocks.flatMap(({block,id})=>block.kind==='heading'?[{id,text:headingText(block),level:block.level}]:[])
-    $('#page-toc').innerHTML=`<strong>本页目录</strong><button data-toc-target="page-top">${escape(page?.navTitle||page?.title||'')}</button>${headings.map(item=>`<button data-toc-target="${item.id}"${item.level===3?' class="toc-subheading"':''}>${escape(item.text)}</button>`).join('')}`
-    $('#page-toc').onclick=event=>{const target=event.target.closest('[data-toc-target]');if(target)document.getElementById(target.dataset.tocTarget)?.scrollIntoView({behavior:'smooth',block:'start'})}
+    renderPageToc(headings)
     if(!page)return
     if(guide)$('#share-guide').onclick=event=>copyArticle(event.currentTarget,`${API_ORIGIN}/media-docs/#${page.id}`)
     $('#copy-group').onclick=event=>copyArticle(event.currentTarget,sectionMarkdown(page))
@@ -668,12 +782,14 @@ async function start() {
   function setMenu(open) {
     sidebar.classList.toggle('open', open)
     menu.setAttribute('aria-expanded', String(open))
+    if(open && !docSearch) revealInDirectory(navigation,navigation.querySelector('[aria-current="page"]'))
   }
   menu.onclick = () => setMenu(!sidebar.classList.contains('open'))
   search.form.onsubmit = event => event.preventDefault()
   function resetSearch(focus = false) {
     docSearch = search.value = ''
     renderNavigation()
+    revealInDirectory(navigation,navigation.querySelector('[aria-current="page"]'))
     if (focus) search.focus()
   }
   function restoreSearch() {
@@ -703,6 +819,11 @@ async function start() {
   })
   let focusArticle = false
   navigation.addEventListener('click', event => {
+    const summary = event.target.closest('summary')
+    if (summary && !docSearch) {
+      if (summary.parentElement.open) closedGroups.add(summary.textContent)
+      else closedGroups.delete(summary.textContent)
+    }
     const link = event.target.closest('a[href]')
     if (!link || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
     if (running) {
@@ -728,11 +849,13 @@ async function start() {
     tab = category.ops.length ? '接口文档' : '文档'
     const wasSearching = Boolean(docSearch)
     docSearch = search.value = ''
+    if (wasSearching || !navigation.firstElementChild) renderNavigation()
+    selectDocumentInNavigation()
+    if (focusArticle || previous !== activeSectionID) window.scrollTo({top:0,behavior:'instant'})
     view()
     setMenu(false)
-    if (wasSearching) navigation.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' })
     if (focusArticle) $('h1').focus({ preventScroll: true })
-    if (focusArticle || previous !== activeSectionID) window.scrollTo(0, 0)
+    scheduleChapterSync()
     focusArticle = false
   }
   window.addEventListener('hashchange',navigate)
