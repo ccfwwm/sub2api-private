@@ -16,6 +16,9 @@ class DocumentationFixtureTests(unittest.TestCase):
     def test_accepts_configuration_articles_and_compatible_legacy_response(self):
         validate_docs_contract(self.html, self.knowledge, self.legacy)
 
+    def test_accepts_the_public_docs_title(self):
+        validate_docs_contract('<title>文档 · 词元互联</title>', self.knowledge, self.legacy)
+
     def test_requires_configuration_articles(self):
         with self.assertRaisesRegex(ValueError, 'configuration documentation'):
             validate_docs_contract(self.html, [{'id': 'cc-switch-config'}], self.legacy)

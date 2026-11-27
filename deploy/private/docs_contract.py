@@ -2,7 +2,11 @@
 
 
 def validate_docs_portal_html(html):
-    if '词元互联 · 接口文档' not in html:
+    titles = (
+        '<title>文档 · 词元互联</title>',
+        '<title>词元互联 · 接口文档</title>',
+    )
+    if not any(title in html for title in titles):
         raise ValueError('documentation route content check failed')
 
 
