@@ -91,16 +91,16 @@ func collectMonitorStreamFrame(frame openAICompatSSEFrame, provider, apiMode str
 	case provider == MonitorProviderOpenAI && apiMode == MonitorAPIModeResponses:
 		switch kind {
 		case "response.output_text.delta":
-			text.WriteString(event.Get("delta").String())
+			_, _ = text.WriteString(event.Get("delta").String())
 		case "response.output_text.done":
-			finalText.WriteString(event.Get("text").String())
+			_, _ = finalText.WriteString(event.Get("text").String())
 		case "response.completed", "response.done":
 			if status := event.Get("response.status").String(); status != "" && status != "completed" {
 				return false, errors.New("stream probe: upstream did not complete the response")
 			}
 			if final := extractOpenAIResponsesText([]byte(event.Get("response").Raw)); strings.TrimSpace(final) != "" {
 				text.Reset()
-				text.WriteString(final)
+				_, _ = text.WriteString(final)
 			}
 			return true, nil
 		}
@@ -108,11 +108,11 @@ func collectMonitorStreamFrame(frame openAICompatSSEFrame, provider, apiMode str
 		switch kind {
 		case "content_block_start":
 			if event.Get("content_block.type").String() == "text" {
-				text.WriteString(event.Get("content_block.text").String())
+				_, _ = text.WriteString(event.Get("content_block.text").String())
 			}
 		case "content_block_delta":
 			if event.Get("delta.type").String() == "text_delta" {
-				text.WriteString(event.Get("delta.text").String())
+				_, _ = text.WriteString(event.Get("delta.text").String())
 			}
 		case "message_stop":
 			return true, nil
@@ -124,7 +124,7 @@ func collectMonitorStreamFrame(frame openAICompatSSEFrame, provider, apiMode str
 		candidate := event.Get("candidates.0")
 		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
 			if !part.Get("thought").Bool() {
-				text.WriteString(part.Get("text").String())
+				_, _ = text.WriteString(part.Get("text").String())
 			}
 			return true
 		})
@@ -137,7 +137,7 @@ func collectMonitorStreamFrame(frame openAICompatSSEFrame, provider, apiMode str
 		}
 	default:
 		choice := event.Get("choices.0")
-		text.WriteString(choice.Get("delta.content").String())
+		_, _ = text.WriteString(choice.Get("delta.content").String())
 		switch choice.Get("finish_reason").String() {
 		case "":
 		case "content_filter":
