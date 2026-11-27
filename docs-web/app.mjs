@@ -258,11 +258,138 @@ export function filterDocumentation(index, query) {
   return { ids, filtering: ids.length > 0 }
 }
 
+function fitEmbeddedConsole() {
+  try {
+    const frame = window.frameElement
+    const host = frame?.ownerDocument
+    if (!host || !/^\/media-docs\/?$/.test(host.location.pathname) ||
+        !frame.matches('.console-shell main.console-main > div > iframe')) return
+    const id = 'aicodeme-docs-console-layout'
+    if (!host.getElementById(id)) {
+      const style = host.createElement('style')
+      style.id = id
+      // The console shell mounts the independently deployed document in a padded card.
+      style.textContent = `
+        .console-shell > div:has(> main.console-main > div > iframe[data-docs-workspace]) {
+          display: grid;
+          grid-template-rows: auto minmax(0, 1fr);
+          height: 100dvh;
+        }
+        main.console-main:has(> div > iframe[data-docs-workspace]) { padding: 0; min-width: 0; min-height: 0; }
+        main.console-main > div:has(> iframe[data-docs-workspace]) { height: 100%; }
+        main.console-main > div > iframe[data-docs-workspace] {
+          display: block;
+          height: 100% !important;
+          min-height: 0 !important;
+          border: 0;
+          border-radius: 0;
+        }
+      `
+      host.head.append(style)
+    }
+    frame.setAttribute('data-docs-workspace','')
+  } catch {}
+}
+
+function initColumnResizing(layout, main, leftDivider, rightDivider) {
+  const key = 'media-docs.column-widths.v1'
+  const desktop = matchMedia('(min-width:681px)')
+  const threeColumns = matchMedia('(min-width:1120px)')
+  const limits = {left:{min:208,max:520,fraction:.15},right:{min:176,max:460,fraction:.13}}
+  const handles = {left:leftDivider,right:rightDivider}
+  const preferred = {}
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || '{}')
+    for (const side of Object.keys(handles)) {
+      if (Number.isFinite(stored?.[side]) && stored[side] >= limits[side].min && stored[side] <= limits[side].max) preferred[side] = stored[side]
+    }
+  } catch {}
+  const save = () => { try { localStorage.setItem(key,JSON.stringify(preferred)) } catch {} }
+  const clamp = (value,min,max) => Math.max(min,Math.min(value,max))
+  const defaultSize = (side,width) => {
+    const {fraction} = limits[side]
+    return side==='left' ? clamp(Math.round(width*fraction),236,360) : clamp(Math.round(width*fraction),208,320)
+  }
+  const current = {}
+  const maximum = {}
+  let drag = null
+
+  function update() {
+    if (!desktop.matches) return
+    const width = layout.clientWidth
+    const showRight = threeColumns.matches && main.classList.contains('has-page-toc')
+    const space = width - (showRight ? 496 + 24 : 370 + 12)
+    const {left,right} = limits
+    const leftMax = Math.max(left.min,Math.min(left.max,Math.floor(width*.37),space - (showRight ? right.min : 0)))
+    current.left = clamp(preferred.left ?? defaultSize('left',width),left.min,leftMax)
+    if (showRight) {
+      maximum.right = Math.max(right.min,Math.min(right.max,Math.floor(width*.34),space - current.left))
+      current.right = clamp(preferred.right ?? defaultSize('right',width),right.min,maximum.right)
+    }
+    maximum.left = showRight ? Math.min(leftMax,space - current.right) : leftMax
+    for (const side of showRight ? ['left','right'] : ['left']) {
+      layout.style.setProperty(`--${side}-column`,`${current[side]}px`)
+      handles[side].setAttribute('aria-valuemin',limits[side].min)
+      handles[side].setAttribute('aria-valuemax',maximum[side])
+      handles[side].setAttribute('aria-valuenow',current[side])
+      handles[side].setAttribute('aria-valuetext',`${current[side]} 像素`)
+    }
+  }
+
+  function setWidth(side,width) {
+    preferred[side] = clamp(Math.round(width),limits[side].min,maximum[side])
+    update()
+  }
+
+  for (const [side,handle] of Object.entries(handles)) {
+    const direction = side==='left' ? 1 : -1
+    const reset = () => { delete preferred[side]; update(); save() }
+    handle.addEventListener('dblclick',reset)
+    handle.addEventListener('keydown',event=>{
+      let width
+      if (event.key==='ArrowLeft') width = current[side] - direction * (event.shiftKey ? 40 : 12)
+      else if (event.key==='ArrowRight') width = current[side] + direction * (event.shiftKey ? 40 : 12)
+      else if (event.key==='Home') width = limits[side].min
+      else if (event.key==='End') width = maximum[side]
+      else if (event.key!=='Enter') return
+      event.preventDefault()
+      if (width === undefined) reset()
+      else { setWidth(side,width); save() }
+    })
+    handle.addEventListener('pointerdown',event=>{
+      if (drag || !event.isPrimary || event.button!==0) return
+      handle.focus({preventScroll:true})
+      handle.setPointerCapture(event.pointerId)
+      drag = {handle,pointer:event.pointerId,x:event.clientX,width:current[side]}
+      layout.classList.add('resizing-columns')
+      handle.classList.add('dragging')
+      event.preventDefault()
+    })
+    handle.addEventListener('pointermove',event=>{
+      if (drag?.handle!==handle || drag.pointer!==event.pointerId) return
+      const delta = event.clientX - drag.x
+      if (delta) drag.moved = true
+      if (drag.moved) setWidth(side,drag.width + direction*delta)
+    })
+    handle.addEventListener('lostpointercapture',event=>{
+      if (drag?.handle!==handle || drag.pointer!==event.pointerId) return
+      if (drag.moved) save()
+      drag = null
+      layout.classList.remove('resizing-columns')
+      handle.classList.remove('dragging')
+    })
+  }
+  window.addEventListener('resize',update)
+  update()
+  return update
+}
+
 async function start() {
+  const embedded = new URLSearchParams(location.search).get('embedded')==='1'
+  if(embedded) fitEmbeddedConsole()
   const [sections,generalSections,knowledgeSections]=await Promise.all([fetch(new URL('./content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./general-content.json',import.meta.url)).then(response=>response.json()),fetch(new URL('./knowledge-content.json',import.meta.url)).then(response=>response.json())])
   let category=categories[0],activeSectionID=category.sections[0],tab='文档',profiles=[],generalModels=[],key='',pending=parsePendingRecovery(localStorage.getItem('media-docs.pending-task.v1')||''),running=false,epoch=0,activeController=null,wakePoll=null,loadingModels=false,loadTimer=null,loadEpoch=0,docSearch=''
   const objectURLs=new Set()
-  if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded')
   const root=document.querySelector('#app')
   root.innerHTML=`<button class="mobile-menu" id="menu" type="button" aria-controls="document-sidebar" aria-expanded="false">文档目录</button>
     <div class="portal-grid">
@@ -278,6 +405,7 @@ async function start() {
     <nav id="document-navigation" aria-label="文档目录" tabindex="0"></nav>
     <div class="aside-foot"><span id="api-version">接口文档</span><button id="theme" type="button">☾ 深色</button></div>
     </aside>
+    <div id="resize-directory" class="column-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="document-sidebar" aria-label="调整文档目录宽度" title="拖动调整文档目录宽度，双击恢复默认"></div>
     <main>
       <header>
         <div><span id="page-group" class="eyebrow"></span><h1 tabindex="-1"></h1></div>
@@ -293,6 +421,7 @@ async function start() {
         <button id="page-toc-toggle" type="button" class="toc-toggle" aria-expanded="false" aria-controls="page-toc-links">本页目录</button>
         <div id="page-toc-links" role="group" aria-label="章节" tabindex="0"></div>
       </nav>
+      <div id="resize-page-toc" class="column-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="page-toc" aria-label="调整本页目录宽度" title="拖动调整本页目录宽度，双击恢复默认"></div>
       <article></article>
       <footer>词元互联 · API 根地址 <a href="${API_ORIGIN}">${API_ORIGIN}</a> · <a href="./examples/imagevideo.py" download>Python 示例</a> · <a href="./examples/imagevideo.mjs" download>JavaScript 示例</a></footer>
     </main></div>`
@@ -307,11 +436,12 @@ async function start() {
   const pageToc = $('#page-toc')
   const tocLinks = $('#page-toc-links')
   const tocToggle = $('#page-toc-toggle')
+  const resizeColumns = initColumnResizing($('.portal-grid'),main,$('#resize-directory'),$('#resize-page-toc'))
   const closedGroups = new Set()
   let tocEntries = [], currentChapter = null, chapterFrame = 0
   const isAutofilled = input => input.matches(':autofill')
   let parentThemeObserver=null
-  if(new URLSearchParams(location.search).get('embedded')==='1'){
+  if(embedded){
     const syncTheme=()=>{
       let dark=document.documentElement.classList.contains('dark')
       try{dark=parent.document.documentElement.classList.contains('dark')}catch{}
@@ -421,6 +551,7 @@ async function start() {
     currentChapter = null
     pageToc.hidden = !headings.length
     main.classList.toggle('has-page-toc',!pageToc.hidden)
+    resizeColumns()
     tocLinks.innerHTML = headings.map(({id,text,level}) =>
       `<button type="button" data-toc-target="${id}"${level===3?' class="toc-subheading"':''}>${escape(text)}</button>`
     ).join('')
